@@ -1,11 +1,13 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient } from '../api/mock';
 import { useLibraryStore } from '../stores/library';
 import { useSearchStore } from '../stores/search';
-import { ALL_FONTS_VIEW } from '../stores/preview';
+import type { SearchRequest } from '../api/types';
+import { SEARCH_DEBOUNCE_MS } from '../stores/search';
+import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useViewsStore } from '../stores/views';
 import WallCountLine from './WallCountLine.vue';
 
@@ -100,5 +102,98 @@ describe('the count line above the wall', () => {
     await flushPromises();
     expect(w.find('.menu').exists()).toBe(false);
     expect(document.activeElement).toBe(w.get('button.change').element);
+  });
+});
+
+describe('the count line with your own text (E43.1)', () => {
+  const SERBIAN = 'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos.';
+  const ENGLISH = 'The quick brown fox jumps over the lazy dog, twice and then once more.';
+
+  /** A search that finds 212 families, and 148 of them with a text-coverage rule on top. */
+  async function mountOwn(rows = false) {
+    // The preview settings are saved: start every test from the defaults.
+    localStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const client = createMockClient();
+    const search = client.search.bind(client);
+    const asked: SearchRequest[] = [];
+    client.search = async (req) => {
+      asked.push(structuredClone(req));
+      return { ...(await search(req)), total: req.rule ? 148 : 212 };
+    };
+    setClient(client);
+    await useLibraryStore().load();
+    wrapper = mount(WallCountLine, {
+      props: { view: ALL_FONTS_VIEW, rows },
+      global: { plugins: [pinia] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    return { w: wrapper, store: useSearchStore(), preview: usePreviewStore(), asked };
+  }
+
+  const type = async (preview: ReturnType<typeof usePreviewStore>, text: string) => {
+    preview.update(ALL_FONTS_VIEW, { sample: 'custom', customText: text });
+    await flushPromises();
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    await flushPromises();
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  it('reads "N of M families render your text completely" for text past Basic Latin', async () => {
+    vi.useFakeTimers();
+    const { w, store, preview, asked } = await mountOwn();
+    store.setFilters({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
+    await flushPromises();
+    await type(preview, SERBIAN);
+    expect(w.get('[role="status"]').text()).toBe('148 of 212 families render your text completely');
+    expect(w.get('[data-testid="renders-text"]').text()).toBe('148 of 212 families');
+    // The count is the same search with the text as a rule on top: the language filter stays.
+    const cover = asked.filter((r) => r.rule).pop()!;
+    expect(cover.filters).toEqual({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
+    expect(cover.rule).toEqual({
+      op: 'and',
+      rules: [{ kind: 'filters', filters: { supports: { kind: 'text', text: SERBIAN } } }],
+    });
+  });
+
+  it('keeps the plain count for Basic Latin text, and asks for no cover count', async () => {
+    vi.useFakeTimers();
+    const { w, preview, asked } = await mountOwn();
+    await type(preview, ENGLISH);
+    expect(w.find('[data-testid="renders-text"]').exists()).toBe(false);
+    expect(w.get('[role="status"]').text()).toMatch(/^\d+ families$/);
+    expect(asked.filter((r) => r.rule).map((r) => JSON.stringify(r))).toEqual([]);
+  });
+
+  it('drops the cover count when the text goes back to Basic Latin', async () => {
+    vi.useFakeTimers();
+    const { w, preview } = await mountOwn();
+    await type(preview, SERBIAN);
+    expect(w.find('[data-testid="renders-text"]').exists()).toBe(true);
+    await type(preview, ENGLISH);
+    expect(w.find('[data-testid="renders-text"]').exists()).toBe(false);
+  });
+
+  it('counts only your own text, not a stock sample', async () => {
+    vi.useFakeTimers();
+    const { w, preview } = await mountOwn();
+    preview.update(ALL_FONTS_VIEW, { sample: 'pangram', customText: SERBIAN });
+    await flushPromises();
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    await flushPromises();
+    expect(w.find('[data-testid="renders-text"]').exists()).toBe(false);
+  });
+
+  it('names the body size and line height of the reading rows, and only there', async () => {
+    const { w, preview } = await mountOwn(true);
+    expect(w.get('[data-testid="body-size"]').text()).toBe('Body size 17 px · line height 1.45');
+    preview.update(ALL_FONTS_VIEW, { bodySizePx: 20, bodyLineHeight: 1.6 });
+    await flushPromises();
+    expect(w.get('[data-testid="body-size"]').text()).toBe('Body size 20 px · line height 1.6');
+    await w.setProps({ rows: false });
+    expect(w.find('[data-testid="body-size"]').exists()).toBe(false);
   });
 });

@@ -1,17 +1,25 @@
 <script setup lang="ts">
 // The line above the wall: how many families there are, which filters gave them, the one
 // selected row with its state, and how they are sorted, with a menu to change that. The API
-// does the sorting.
-import { computed, nextTick, ref, useId } from 'vue';
+// does the sorting. With your own text past Basic Latin on the wall it says how many of the
+// families render it completely (E43.1; the API checks the coverage), and the reading rows
+// add their body size and line height.
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { errorMessage, t, type MessageKey } from '../i18n';
 import { columnById, SORT_COLUMNS, type ColumnId } from '../list/columns';
 import { rowStateLabel, styleName } from '../list/rows';
 import { useActiveFilters } from '../search/activeFilters';
+import { beyondBasicLatin } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
+import { usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
 import { useViewsStore } from '../stores/views';
 
-const props = defineProps<{ view: string }>();
+const props = defineProps<{
+  view: string;
+  /** The wall shows its reading rows (E43.1): the line names their body size. */
+  rows?: boolean;
+}>();
 
 const search = useSearchStore();
 const fontList = useFontListStore();
@@ -31,6 +39,27 @@ const selectedName = computed(() => {
 const familyCount = computed(() => (search.hits ? search.total : fontList.families.length));
 /** Nothing to count before the first answer, or in an empty library (its empty state says so). */
 const shown = computed(() => search.hits !== null || fontList.families.length > 0);
+
+const preview = usePreviewStore();
+const settings = computed(() => preview.settingsFor(props.view));
+/** Your own text, when it has characters some faces may lack; else empty. */
+const coverText = computed(() => {
+  const s = settings.value;
+  const text = s.sample === 'custom' ? s.customText.trim() : '';
+  return beyondBasicLatin(text) ? text : '';
+});
+watch(coverText, (text) => search.setCoverText(text), { immediate: true });
+onBeforeUnmount(() => search.setCoverText(''));
+/** How many of the families render your text completely; null when not counted. */
+const covering = computed(() =>
+  coverText.value && search.coverText === coverText.value ? search.coverTotal : null,
+);
+const bodyText = computed(() =>
+  t('home.bodySize', {
+    size: settings.value.bodySizePx,
+    lineHeight: settings.value.bodyLineHeight,
+  }),
+);
 
 const sort = computed(() => views.tableFor(props.view).sort);
 const typing = computed(() => search.query.trim() !== '');
@@ -85,6 +114,12 @@ function onFocusOut(e: FocusEvent): void {
       <template v-if="selecting">{{
         t('home.selected', { count: fontList.selectedCount })
       }}</template>
+      <template v-else-if="shown && covering !== null">
+        <strong data-testid="renders-text">{{
+          t('home.rendersText.count', { covered: covering, count: familyCount })
+        }}</strong>
+        {{ t('home.rendersText.tail', { count: familyCount }) }}
+      </template>
       <template v-else-if="shown">
         <strong>{{ t('home.families', { count: familyCount }) }}</strong>
         <template v-for="label in labels" :key="label"> · {{ label }}</template>
@@ -95,6 +130,7 @@ function onFocusOut(e: FocusEvent): void {
       <span aria-hidden="true">·</span>
       <span data-testid="selected-row-state">{{ rowStateLabel(selectedRow) }}</span>
     </p>
+    <p v-if="rows" class="body" data-testid="body-size">{{ bodyText }}</p>
     <div class="sort" @keydown.esc.stop="close">
       <span>{{ sortText }}</span> ·
       <button
@@ -181,6 +217,11 @@ function onFocusOut(e: FocusEvent): void {
   color: var(--fm-fg);
   font-weight: 500;
   text-overflow: ellipsis;
+}
+.body {
+  flex: none;
+  margin: 0;
+  white-space: nowrap;
 }
 .sort {
   position: relative;

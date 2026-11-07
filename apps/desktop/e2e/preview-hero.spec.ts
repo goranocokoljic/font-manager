@@ -96,7 +96,8 @@ test.describe('the preview row', () => {
       ['Pangram', '2', false, 183],
       ['Alphabet', '2', true, 204],
       ['Numerals', '4', false, 184],
-      ['Paragraph', '2', true, 184],
+      // E43.1: reading rows, the meta line on top and the text at 17 px / 1.45 (board 3).
+      ['Paragraph', '2', true, 161],
     ] as const;
     for (const [name, columns, live, height] of looks) {
       await chip(page, name).click();

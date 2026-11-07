@@ -1414,7 +1414,8 @@ function passes(
     (q.embedding == null || q.embedding === d.license.embedding) &&
     (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
     (q.webOk == null || q.webOk === mockWebUse(d.license).ok) &&
-    (supports?.kind !== 'languages' || supports.codes.every(covers))
+    (supports?.kind !== 'languages' || supports.codes.every(covers)) &&
+    (supports?.kind !== 'text' || mockCoverage(d, supports.text, false).complete)
   );
 }
 

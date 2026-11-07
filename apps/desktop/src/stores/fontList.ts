@@ -152,6 +152,40 @@ export const useFontListStore = defineStore('fontList', () => {
     held = null;
   }
 
+  /**
+   * Where each layout of a view was left (E43.1: the wall and its reading rows), so a switch
+   * back lands on the same pixel. It counts while the layout lays out the same way and the
+   * family at the top is the same; a scroll in between moves the anchor, and the anchor wins.
+   */
+  const layoutLeftAt = new Map<
+    string,
+    { top: number; linePx: number; perLine: number; rows: number; anchorIndex: number }
+  >();
+  /** Layout `key` is leaving at `top`. */
+  function layoutLeft(key: string, top: number, linePx: number, perLine: number): void {
+    layoutLeftAt.set(key, {
+      top,
+      linePx,
+      perLine,
+      rows: rows.value.length,
+      anchorIndex: anchorIndex.value,
+    });
+  }
+  /** The place layout `key` was left at, for these lines; null when it no longer counts. */
+  function layoutScrollTop(key: string, linePx: number, perLine: number): number | null {
+    const at = layoutLeftAt.get(key);
+    if (
+      !at ||
+      at.linePx !== linePx ||
+      at.perLine !== perLine ||
+      at.rows !== rows.value.length ||
+      at.anchorIndex !== anchorIndex.value
+    ) {
+      return null;
+    }
+    return at.top;
+  }
+
   function expand(id: FamilyId): void {
     expanded.add(id);
     void library.facesOf(id).catch(() => undefined);
@@ -263,6 +297,8 @@ export const useFontListStore = defineStore('fontList', () => {
     anchor,
     anchorIndex,
     setAnchor,
+    layoutLeft,
+    layoutScrollTop,
     holdScroll,
     viewLeft,
     heldScrollTop,

@@ -371,3 +371,54 @@ describe('PreviewSizeSlider', () => {
     ).toBe(true);
   });
 });
+
+describe('PreviewControls in paragraph mode (E43.1)', () => {
+  const LONG =
+    'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos, a onda i drugi štos za kraj.';
+  const chip = (w: ReturnType<typeof mountControls>['wrapper'], name: string) =>
+    w.findAll('.chip').find((c) => c.text() === name)!;
+
+  it('typing your own long text presses the Paragraph chip; a short one keeps Word', async () => {
+    const { wrapper, store } = controls();
+    await field(wrapper).setValue('Ljubazni');
+    expect(chip(wrapper, 'Word').attributes('aria-pressed')).toBe('true');
+    expect(chip(wrapper, 'Paragraph').attributes('aria-pressed')).toBe('false');
+    await field(wrapper).setValue(LONG);
+    expect(store.settingsFor('all').preset).toBe('word');
+    expect(chip(wrapper, 'Paragraph').attributes('aria-pressed')).toBe('true');
+    expect(chip(wrapper, 'Word').attributes('aria-pressed')).toBe('false');
+  });
+
+  it('the size and line height fields set the body size of the rows, not the wall size', async () => {
+    const { wrapper, store } = controls('all', { sizeRange: { min: 24, max: 120, step: 1 } });
+    await field(wrapper).setValue(LONG);
+    const size = wrapper.get('input[aria-label="Size in pixels"]');
+    expect((size.element as HTMLInputElement).value).toBe('17');
+    // The body's bounds, not the wall's 24–120: 5 clamps to 10.
+    (size.element as HTMLInputElement).value = '5';
+    await size.trigger('change');
+    expect(store.settingsFor('all').bodySizePx).toBe(10);
+    await size.setValue('20');
+    await wrapper.get('input[aria-label="Line height"]').setValue('1.6');
+    expect(store.settingsFor('all')).toMatchObject({
+      bodySizePx: 20,
+      bodyLineHeight: 1.6,
+      sizePx: 28,
+      lineHeight: 1.2,
+    });
+  });
+
+  it('on the wall the same fields keep setting the wall size', async () => {
+    const { wrapper, store } = controls('all', { sizeRange: { min: 24, max: 120, step: 1 } });
+    await field(wrapper).setValue('Ljubazni');
+    await wrapper.get('input[aria-label="Size in pixels"]').setValue('60');
+    expect(store.settingsFor('all')).toMatchObject({ sizePx: 60, bodySizePx: 17 });
+  });
+
+  it('names the body size in the Paragraph hint', async () => {
+    const { wrapper, store } = controls();
+    store.update('all', { bodySizePx: 19 });
+    await chip(wrapper, 'Paragraph').trigger('click');
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('body text at 19 px');
+  });
+});

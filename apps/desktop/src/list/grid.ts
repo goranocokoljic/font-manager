@@ -140,6 +140,72 @@ export const WALL_PRESETS: Record<
   },
 };
 
+/**
+ * Paragraph mode (E43.1, board `3-wall-text.png`): your own text longer than this many
+ * characters turns the wall into reading rows, as the Paragraph preset does.
+ */
+export const PARAGRAPH_TEXT_MIN = 80;
+
+/** The body line height of the reading rows, by default. */
+export const PARAGRAPH_LINE_HEIGHT = 1.45;
+
+/**
+ * The layout the wall shows: the preset's, or the reading rows of Paragraph for your own
+ * text past `PARAGRAPH_TEXT_MIN` characters. Only your own text: a stock text (a long
+ * pangram, the alphabet) keeps its preset's board.
+ */
+export function wallLayout(preset: WallPreset, sample: string, customText: string): WallPreset {
+  if (preset === 'paragraph') return 'paragraph';
+  return sample === 'custom' && [...customText.trim()].length > PARAGRAPH_TEXT_MIN
+    ? 'paragraph'
+    : preset;
+}
+
+/** The reading rows' measures in CSS px: the meta line on top, then the text. */
+export const ROWS = {
+  /** Two columns at most, one where two would be narrower than `minWidth`. */
+  columnsMax: 2,
+  /** The narrowest row: about 45 characters of 17 px text, a comfortable measure. */
+  minWidth: 440,
+  /** Padding on every side, inside the hairline. */
+  paddingPx: 18,
+  /** The family name and its meta: a 12 px line. */
+  metaPx: 12,
+  metaLinePx: 16,
+  /** Space between the meta line and the text. */
+  metaGapPx: 8,
+  /** The most lines of text a row shows. */
+  linesMax: 6,
+  /** The advance to plan for per character, in em: a little over a text face's, for a mono. */
+  emPerChar: 0.6,
+} as const;
+
+/** Reading rows per line in a viewport `width` px wide; at least one, at most two. */
+export const rowsColumns = (width: number) =>
+  Math.min(
+    ROWS.columnsMax,
+    gridColumns(width - 2 * WALL.inset + WALL.gap, ROWS.minWidth + WALL.gap),
+  );
+
+/**
+ * The lines every row gives its text: enough for `text` at `bodyPx` in `width` px (a guess
+ * at `ROWS.emPerChar`), from one to `ROWS.linesMax`. Rows of a line have one height, so the
+ * list stays virtualized; a row whose face sets the text shorter keeps the room under it.
+ */
+export function rowsLines(text: string, width: number, bodyPx: number): number {
+  const chars = [...text.trim()].length;
+  if (!chars || width <= 0 || bodyPx <= 0) return 1;
+  const lines = Math.ceil((chars * ROWS.emPerChar * bodyPx) / width);
+  return Math.min(ROWS.linesMax, Math.max(1, lines));
+}
+
+/** A reading row's height: hairlines, padding, the meta line and `lines` of text. */
+export const rowsCardHeight = (lines: number, bodyPx: number, lineHeight: number) =>
+  2 * (ROWS.paddingPx + 1) +
+  ROWS.metaLinePx +
+  ROWS.metaGapPx +
+  Math.ceil(lines * bodyPx * lineHeight);
+
 /** The specimen's text size for the slider's `sizePx` in `preset`. */
 export function wallSpecimenPx(sizePx: number, preset: WallPreset = 'word'): number {
   const { scale } = WALL_PRESETS[preset];
