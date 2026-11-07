@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { WALL_FAMILIES, WALL_FAMILY_BASE } from '../src/api/mockWall';
-import { axesRow, openSection, sectionPanel } from './family-page';
+import { axesRow, hero, openSection, sectionPanel } from './family-page';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -88,6 +88,15 @@ const colors = (el: Locator) =>
     return { color: s.color, background: s.backgroundColor };
   });
 
+/** The passage shows, in the face the hero shows: never hidden, never a fallback font. */
+async function expectShownInTheFace(page: Page, el: Locator) {
+  await expect(el).toBeVisible();
+  await expect(el).not.toHaveClass(/loading/);
+  await expect(hero(page)).not.toHaveClass(/loading/);
+  const face = await hero(page).evaluate((n) => getComputedStyle(n).fontFamily);
+  await expect(el).toHaveCSS('font-family', face);
+}
+
 test.describe('the three columns', () => {
   test('the same passage at 12, 17 and 24 px with their labels, line height 1.45', async ({
     page,
@@ -108,6 +117,7 @@ test.describe('the three columns', () => {
       await expect(passage(page, px)).toHaveCSS('font-size', `${px}px`);
       await expect(passage(page, px)).toHaveCSS('line-height', `${px * 1.45}px`);
       await expect(passage(page, px)).toHaveText(STOCK_PASSAGE);
+      await expectShownInTheFace(page, passage(page, px));
     }
   });
 
@@ -281,6 +291,7 @@ test.describe('paper and ink', () => {
     const block = page.getByTestId('family-text-ink');
     await expect(inkPassage(page)).toHaveCSS('font-size', '17px');
     await expect(inkPassage(page)).toHaveText(STOCK_PASSAGE);
+    await expectShownInTheFace(page, inkPassage(page));
     for (const name of ['Paper', 'Ink'] as const) {
       await ground(page, name).click();
       const sheet = await colors(section(page));
