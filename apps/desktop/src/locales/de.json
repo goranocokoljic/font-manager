@@ -824,10 +824,15 @@
   "features": {
     "noFace": "Wähle einen Schnitt, um seine Features zu sehen.",
     "none": "Dieser Schnitt hat keine OpenType-Features.",
-    "hint": "Schalter ändern die Vorschau dieses Schnitts.",
-    "cssLabel": "Features",
     "list": "OpenType-Features",
-    "automatic": "Automatisch angewendet"
+    "automatic": "Automatisch angewendet",
+    "pageHint": "Eingeschaltete Features gelten für jede Vorschau auf dieser Seite.",
+    "copySwitched": {
+      "one": "CSS für {count} eingeschaltetes kopieren",
+      "other": "CSS für {count} eingeschaltete kopieren"
+    },
+    "more": { "one": "{count} weiteres", "other": "{count} weitere" },
+    "rare": "Seltene Features"
   },
   "palettes": {
     "title": "Farbpalette",

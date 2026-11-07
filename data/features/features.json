@@ -12,7 +12,7 @@
     { "tag": "blwm", "name": "Below-base mark positioning", "group": "automatic", "sample": "कि र्क क्र" },
     { "tag": "blws", "name": "Below-base substitutions", "group": "automatic", "sample": "कि र्क क्र" },
     { "tag": "c2pc", "name": "Petite capitals from capitals", "group": "capitals", "sample": "PETITE CAPITALS" },
-    { "tag": "c2sc", "name": "Small capitals from capitals", "group": "capitals", "sample": "SMALL CAPITALS" },
+    { "tag": "c2sc", "name": "Small capitals from capitals", "group": "capitals", "sample": "Small Capitals" },
     { "tag": "calt", "name": "Contextual alternates", "group": "stylistic", "sample": "a->b ==" },
     { "tag": "case", "name": "Case-sensitive forms", "group": "capitals", "sample": "(H-O) [a]" },
     { "tag": "ccmp", "name": "Glyph composition and decomposition", "group": "automatic", "sample": "é ñ ü" },

@@ -10,6 +10,8 @@ const props = defineProps<{
   text: string;
   /** The `font-variation-settings` value. */
   variation: string;
+  /** The `font-feature-settings` value: the features switched on the page (E42.6). */
+  features?: string;
 }>();
 
 const family = useHeldFace(toRef(props, 'face'));
@@ -19,7 +21,11 @@ const family = useHeldFace(toRef(props, 'face'));
   <span
     class="family-sample"
     :class="{ loading: !family }"
-    :style="{ fontFamily: family ? `'${family}'` : undefined, fontVariationSettings: variation }"
+    :style="{
+      fontFamily: family ? `'${family}'` : undefined,
+      fontVariationSettings: variation,
+      fontFeatureSettings: features,
+    }"
     >{{ text }}</span
   >
 </template>
