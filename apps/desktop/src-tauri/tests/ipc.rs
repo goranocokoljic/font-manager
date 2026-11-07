@@ -460,11 +460,11 @@ fn tags_favorites_and_ratings_are_edited_and_filter_over_ipc() {
 fn sample_texts_round_trip_through_fm_api() {
     let req = SampleTextRequest {
         faces: vec![FaceId(1), FaceId(7)],
-        text: "Źdźbło".into(),
+        text: "Źź ł".into(),
     };
     let got: Vec<SampleText> = invoke_with(
         "sample_texts",
-        serde_json::json!({ "req": { "faces": [1, 7], "text": "Źdźbło" } }),
+        serde_json::json!({ "req": { "faces": [1, 7], "text": "Źź ł" } }),
     )
     .unwrap()
     .unwrap()

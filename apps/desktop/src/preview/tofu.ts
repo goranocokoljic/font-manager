@@ -39,13 +39,6 @@ export function specimenRuns(text: string, missing: readonly string[]): Specimen
   return runs;
 }
 
-/** Whether the face draws at least one letter or digit of `text`. */
-export function drawsAny(text: string, missing: readonly string[]): boolean {
-  const lacks = new Set(missing);
-  for (const c of text) if (/[\p{L}\p{N}]/u.test(c) && !lacks.has(c)) return true;
-  return false;
-}
-
 /** What a specimen shows for a sample and the API's answer for it. */
 export interface Specimen {
   /** The text to draw. */
@@ -60,9 +53,9 @@ export interface Specimen {
 
 /**
  * The specimen of a face for `sample`, given the API's `answer` (absent until it
- * arrives). A face that draws some of the sample shows the sample, its missing
- * characters as tofu. A face that draws none of its letters or digits keeps the
- * API's fallback text (E4.5), unless `keepSample`: a page that shows the text the
+ * arrives). The API (`fm_core::sample::preview_sample`) decides: the sample with the
+ * characters the face lacks, drawn here as tofu, or the face's own text (E4.5) for a
+ * face that maps none of its letters. With `keepSample` a page that shows the text the
  * user chose (the family page, Quick Look, Studio) always shows it, as tofu if need be.
  */
 export function specimenOf(
@@ -71,13 +64,10 @@ export function specimenOf(
   keepSample = false,
 ): Specimen {
   const missing = answer?.missing ?? [];
-  if (!answer || !missing.length) {
-    const fallback = answer?.fallback ?? null;
-    return { text: answer?.text ?? sample, fallback, missing, tofu: [] };
-  }
-  if (!keepSample && answer.fallback && !drawsAny(sample, missing))
+  if (!answer) return { text: sample, fallback: null, missing, tofu: [] };
+  if (answer.fallback && !keepSample)
     return { text: answer.text, fallback: answer.fallback, missing, tofu: [] };
-  return { text: sample, fallback: null, missing, tofu: missing };
+  return { text: answer.fallback ? sample : answer.text, fallback: null, missing, tofu: missing };
 }
 
 /** "6 glyphs missing · š đ č ć ž": the count, then the first characters. */

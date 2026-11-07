@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SampleText } from '../api/types';
-import { drawsAny, missingLine, specimenOf, specimenRuns, tofuLabel } from './tofu';
+import { missingLine, specimenOf, specimenRuns, tofuLabel } from './tofu';
 
 const SERBIAN = 'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos.';
 const LACKS = ['ž', 'č', 'đ', 'ć', 'š'];
@@ -49,17 +49,6 @@ describe('specimenRuns', () => {
   });
 });
 
-describe('drawsAny', () => {
-  it('is true when one letter or digit is drawn', () => {
-    expect(drawsAny('ab', ['a'])).toBe(true);
-    expect(drawsAny('1ž', ['ž'])).toBe(true);
-  });
-
-  it('is false when only spaces and punctuation are left', () => {
-    expect(drawsAny('ab, c.', ['a', 'b', 'c'])).toBe(false);
-  });
-});
-
 describe('specimenOf', () => {
   it('shows the sample until the answer arrives', () => {
     expect(specimenOf('Ag', undefined)).toEqual({
@@ -74,17 +63,28 @@ describe('specimenOf', () => {
     expect(specimenOf(SERBIAN, answer({}))).toMatchObject({ text: SERBIAN, tofu: [] });
   });
 
-  it('shows the sample with tofu, not the fallback, when the face draws some of it', () => {
+  it('draws the missing characters of a sample the API keeps as tofu', () => {
+    const got = answer({ missing: LACKS });
+    expect(specimenOf(SERBIAN, got)).toEqual({
+      text: SERBIAN,
+      fallback: null,
+      missing: LACKS,
+      tofu: LACKS,
+    });
+  });
+
+  it('follows the API: a fallback answer is shown whole, never re-decided here', () => {
+    // The sample has letters the face maps; the API still chose a fallback.
     const got = answer({
       text: 'abcdefghijklmnopqrstuvwxyz',
       fallback: { kind: 'script', script: 'Latn' },
       missing: LACKS,
     });
     expect(specimenOf(SERBIAN, got)).toEqual({
-      text: SERBIAN,
-      fallback: null,
+      text: 'abcdefghijklmnopqrstuvwxyz',
+      fallback: { kind: 'script', script: 'Latn' },
       missing: LACKS,
-      tofu: LACKS,
+      tofu: [],
     });
   });
 
