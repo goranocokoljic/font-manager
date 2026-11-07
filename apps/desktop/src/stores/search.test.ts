@@ -276,3 +276,35 @@ describe('the renders-your-text switch (E43.3)', () => {
     expect(store.coverTotal).not.toBeNull();
   });
 });
+
+describe('the switch interrupting a search (E43.3 review COR-1)', () => {
+  const TEXT = 'čađavog štos';
+  const settle = () => new Promise((done) => setTimeout(done, 150));
+
+  it('still recounts when the switch drops a search that was going to recount', async () => {
+    // A client that answers a little later, as the Tauri IPC does.
+    const mock = createMockClient({ extraFaces: 2, stylesPerFamily: 4 });
+    const search = mock.search.bind(mock);
+    mock.search = (req) => new Promise((done) => setTimeout(() => done(search(req)), 5));
+    const store = await setup(mock);
+    store.setCoverText(TEXT);
+    await settle();
+    store.setHideMissing(true);
+    await settle();
+    requests = [];
+
+    // The drawer's Clear: the filters change, then the switch goes off before the answer.
+    store.setFilters({ classification: ['mono'] });
+    store.setHideMissing(false);
+    await settle();
+    const counts = requests.filter((r) => r.page?.limit === 1);
+    expect(counts.length).toBeGreaterThan(0);
+    expect(counts.every((r) => r.filters?.classification?.[0] === 'mono')).toBe(true);
+    const base = await search({
+      query: '',
+      filters: { classification: ['mono'] },
+      page: { offset: 0, limit: 1 },
+    });
+    expect(store.coverBase).toBe((await base).total);
+  });
+});

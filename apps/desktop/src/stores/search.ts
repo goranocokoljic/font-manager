@@ -60,6 +60,11 @@ export const useSearchStore = defineStore('search', () => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by every search; answers to an older one are dropped. */
   let generation = 0;
+  /**
+   * A search changed the results and the cover counts are not redone yet. A newer search
+   * that drops it (the switch's `run(false)`) still owes the recount.
+   */
+  let recountOwed = false;
 
   /** The switch hides the families that cannot render `coverText` now. */
   const hiding = computed(() => hideMissing.value && coverText.value !== '');
@@ -98,6 +103,7 @@ export const useSearchStore = defineStore('search', () => {
    * counts: the switch changes what the list shows, not how many render the text.
    */
   async function run(recount = true): Promise<void> {
+    if (recount) recountOwed = true;
     clearTimeout(timer);
     timer = undefined;
     const mine = ++generation;
@@ -133,7 +139,7 @@ export const useSearchStore = defineStore('search', () => {
     } catch (e) {
       if (mine === generation) error.value = e as ApiError;
     }
-    if (mine === generation && recount) await runCover();
+    if (mine === generation && recountOwed) await runCover();
   }
 
   /**
@@ -147,6 +153,8 @@ export const useSearchStore = defineStore('search', () => {
     clearTimeout(coverTimer);
     coverTimer = undefined;
     const mine = ++coverGeneration;
+    // This count reads the query and filters as they are now: it pays what a search owed.
+    recountOwed = false;
     const text = coverText.value;
     if (!text) {
       coverTotal.value = null;
