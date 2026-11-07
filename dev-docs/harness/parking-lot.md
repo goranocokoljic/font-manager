@@ -380,3 +380,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.6 #457] dev-docs/harness/parking-lot.md:204 — a parked note still points at InspectorFeatures.vue:176, which E42.6 deleted; the UiSwitch it describes is still used.
 - [E42.6 #457] apps/desktop/src/components/ui/UiSwitch.vue:13 — the off switch outline (`--fm-border-strong` on `--fm-surface-2`) in the light theme may fall under 3:1; needs measuring.
 - [E42.6 #457] apps/desktop/src/views/FamilyView.vue — the page has two buttons named "Reset" (hero axes and features); not new.
+- [E42.7 #458] apps/desktop/src/locales/de.json:497 — German strings mix formal "Ihre" (textHint, a catalog toast) with the informal "du/deiner" used elsewhere.
+- [E42.7 #458] apps/desktop/src/stores/catalogs.ts:153 — a failed `listCatalogs` leaves `catalogs` empty with only `error` set, so a caller like the Pairings "Browse catalogs" returns to the library with no catalog and no message.
