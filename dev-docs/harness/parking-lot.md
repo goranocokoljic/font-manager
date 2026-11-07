@@ -385,3 +385,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.8 #459] crates/fm-core/src/index/faces.rs:206 — `file_size` is clamped to `u32::MAX`, so a file over 4 GB reads as about 4,294.97 MB in the Info section's Files row.
 - [E42.8 #459] apps/desktop/src/components/InspectorInfo.vue:123 — the `part="all"` branch (About, License, Technical details) is now mounted only by InspectorInfo.test.ts and duplicates what FamilyInfo and FamilyTechnical render.
 - [E42.8 #459] crates/fm-core/src/similar.rs:105 — `x_height_ratio` there means x-height over cap height, while the UI's `xHeightRatio` means x-height over the em; the shared name can mislead.
+- [E42.9 #460] apps/desktop/src/search/chips.ts:259 — `chosenLanguages` returns [] for a non-language `supports` filter, so `toggleLanguage` (and `withLanguage`) replace a text supports filter instead of adding to it.
+- [E42.9 #460] apps/desktop/src/components/GlyphCoverage.vue:29 — `isComplete` counts a 0/0 language as complete, unlike the rail's `completeLanguages`, so the two can disagree on such a preset.

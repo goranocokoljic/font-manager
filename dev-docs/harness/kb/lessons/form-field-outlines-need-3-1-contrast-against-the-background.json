@@ -6,15 +6,16 @@
   "rationale": "E5.9 (#72): the new Settings inputs used `--fm-border` (#d4d4d4 on #fff, #3a3a3c on #1c1c1e ≈ 1.5:1), so empty fields were not discoverable (WCAG 1.4.11).",
   "severity": "must",
   "status": "active",
-  "occurrences": 2,
+  "occurrences": 3,
   "source_issues": [
     72,
-    83
+    83,
+    460
   ],
   "file_globs": [
     "apps/desktop/src/**/*.vue",
     "apps/desktop/src/styles/**/*.css"
   ],
   "first_seen": "2026-10-17T16:33:14.180Z",
-  "last_seen": "2026-10-18T14:13:31.983Z"
+  "last_seen": "2026-11-07T16:30:21.482Z"
 }
