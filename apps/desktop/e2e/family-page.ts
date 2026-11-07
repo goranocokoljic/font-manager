@@ -38,7 +38,7 @@ export async function openSection(
 
 /** Opens the Developer expander at the end of the rail. */
 export async function openDeveloper(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: 'Developer', exact: true }).click();
+  await page.getByRole('button', { name: 'Technical details', exact: true }).click();
   const part = page.locator('#fm-family-developer');
   await expect(part.getByTestId('css-snippet')).toBeVisible();
   return part;

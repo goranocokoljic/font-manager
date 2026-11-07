@@ -31,7 +31,7 @@ async function moveWghtAndTurnOnSmcp(page: Page, wght: string) {
 const developer = (page: Page) => page.locator('#fm-family-developer');
 const snippet = (page: Page) => developer(page).getByTestId('css-snippet');
 
-test('the Developer part ends the rail and reads normal while nothing changed', async ({
+test('the Technical details part ends the rail and reads normal while nothing changed', async ({
   page,
 }) => {
   await open(page);
@@ -40,7 +40,7 @@ test('the Developer part ends the rail and reads normal while nothing changed', 
     .locator('> *')
     .last()
     .locator('xpath=preceding-sibling::button[1]');
-  await expect(toggle).toHaveText('Developer');
+  await expect(toggle).toHaveText('Technical details');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await openDeveloper(page);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -62,7 +62,7 @@ test('the copied snippet is what the selected row applies', async ({ page, conte
     'font-variation-settings: "wght" 650;\nfont-feature-settings: "smcp" 1;',
   );
   await developer(page).getByRole('button', { name: 'Copy the CSS snippet' }).click();
-  await expect(developer(page).getByRole('status')).toHaveText('Copied');
+  await expect(developer(page).getByTestId('css-status')).toHaveText('Copied');
   // The Windows clipboard gives the line break back as CRLF.
   const copied = (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
   expect(copied).toBe('font-variation-settings: "wght" 650;\nfont-feature-settings: "smcp" 1;');
@@ -97,7 +97,7 @@ test('the snippet follows the sliders and switches while it is open', async ({ p
 
 test('the Developer expander works from the keyboard and Copy is reachable', async ({ page }) => {
   await open(page);
-  const toggle = page.getByRole('button', { name: 'Developer', exact: true });
+  const toggle = page.getByRole('button', { name: 'Technical details', exact: true });
   await toggle.focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -111,7 +111,7 @@ test('the Developer expander works from the keyboard and Copy is reachable', asy
   await page.keyboard.press('Tab');
   await expect(copy).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(developer(page).getByRole('status')).toHaveText('Could not copy');
+  await expect(developer(page).getByTestId('css-status')).toHaveText('Could not copy');
 
   await toggle.focus();
   await page.keyboard.press('Enter');

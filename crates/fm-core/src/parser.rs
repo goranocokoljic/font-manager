@@ -100,6 +100,13 @@ pub struct ParsedFace {
     pub license: Option<String>,
     /// License URL (name ID 14).
     pub license_url: Option<String>,
+    /// Description (name ID 10). No serde default, like `color`: a
+    /// `face.parsed` written before this field fails to load, so the next scan
+    /// reads the file again and fills it.
+    pub description: Option<String>,
+    /// The tags of the tables in the font's table directory, in directory
+    /// order (`GSUB`, `OS/2`, `cmap`). No serde default, as `description`.
+    pub tables: Vec<String>,
     /// `OS/2.usWeightClass`; `None` without an OS/2 table.
     pub weight: Option<u16>,
     /// `OS/2.usWidthClass`; `None` without an OS/2 table.
@@ -164,6 +171,8 @@ impl ParsedFace {
             typographic_subfamily: None,
             postscript_name: None,
             full_name: None,
+            description: None,
+            tables: Vec::new(),
             version: None,
             foundry: None,
             vendor_id: None,
@@ -437,6 +446,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
     // absent; for a truncated file that is damage, not absence.
     let len = font.data().len() as u64;
     for record in font.table_directory().table_records() {
+        face.tables.push(record.tag().to_string());
         if u64::from(record.offset()) + u64::from(record.length()) > len {
             problems.push(format!("The {} table is cut off.", record.tag()));
         }
@@ -461,6 +471,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         face.copyright = string(StringId::COPYRIGHT_NOTICE);
         face.license = string(StringId::LICENSE_DESCRIPTION);
         face.license_url = string(StringId::LICENSE_URL);
+        face.description = string(StringId::DESCRIPTION);
     }
 
     if let Some(os2) = present(font.os2(), "OS/2", &mut problems) {
@@ -884,6 +895,40 @@ mod tests {
         assert_eq!(
             parse(&read("google-repo/castoro/Castoro[wght].ttf")).format,
             Some(FontFormat::Ttf)
+        );
+    }
+
+    #[test]
+    fn the_description_comes_from_name_id_10_and_is_absent_when_the_font_has_none() {
+        let face = single("fontshare/bebas-neue/BebasNeue-Regular.otf");
+        assert_eq!(
+            face.description.as_deref(),
+            Some("Designed by Ryoichi Tsunekawa from Dharma Type in 2010.")
+        );
+        let face = &parse(&read("derived/agdasima/agdasima.ttc")).faces[0];
+        assert_eq!(face.description, None);
+    }
+
+    #[test]
+    fn the_table_list_is_the_table_directory_of_the_face() {
+        let otf = single("fontshare/bebas-neue/BebasNeue-Regular.otf");
+        assert!(otf.tables.iter().any(|t| t == "CFF "), "{:?}", otf.tables);
+        assert!(!otf.tables.iter().any(|t| t == "glyf"), "{:?}", otf.tables);
+        let ttf = single("google-repo/castoro/Castoro[wght].ttf");
+        for tag in ["glyf", "name", "OS/2", "cmap"] {
+            assert!(
+                ttf.tables.iter().any(|t| t == tag),
+                "{tag}: {:?}",
+                ttf.tables
+            );
+        }
+        assert!(!ttf.tables.iter().any(|t| t == "CFF "), "{:?}", ttf.tables);
+        // Each face of a collection lists its own directory.
+        let ttc = parse(&read("derived/agdasima/agdasima.ttc"));
+        assert!(
+            ttc.faces
+                .iter()
+                .all(|f| f.tables.iter().any(|t| t == "glyf"))
         );
     }
 

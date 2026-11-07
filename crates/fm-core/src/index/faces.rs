@@ -256,6 +256,8 @@ impl Index {
             code_point_count,
             family_notes,
             palettes,
+            description: text(|p| &p.description),
+            tables: parsed.map(|p| p.tables.clone()).unwrap_or_default(),
             face: row.summary,
         })
     }

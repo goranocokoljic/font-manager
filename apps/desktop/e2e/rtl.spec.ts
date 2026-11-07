@@ -136,7 +136,6 @@ test.describe('in right-to-left chrome', () => {
     await page.keyboard.press('Enter');
     const inspector = await showSection(page, 'Info');
     await expect(inspector.locator('h2 bdi')).toHaveText(/^Frank רוחל /);
-    await inspector.getByRole('button', { name: 'Technical details' }).click();
     await expect(inspector.getByRole('button', { name: /^Copy path/ }).locator('bdi')).toHaveText(
       '/Users/demo/Fonts/עברית/FrankRuhl-Regular.ttf',
     );

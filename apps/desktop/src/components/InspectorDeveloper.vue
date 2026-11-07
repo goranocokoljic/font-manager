@@ -77,7 +77,7 @@ watch(
     <p v-if="faceId === null" class="placeholder">{{ t('developer.noFace') }}</p>
     <template v-else>
       <InspectorTabHead :hint="t('developer.hint')">
-        <span class="status" role="status">
+        <span class="status" role="status" data-testid="css-status">
           <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
           <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
         </span>

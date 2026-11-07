@@ -169,16 +169,16 @@ test('every inspector part has its home on the family page', async ({ page }) =>
   );
   await page.goto('/?mockColor=1#/family/8?face=8');
   const info = await showSection(page, 'Info');
-  // Palettes, License and Notes are in Info with the facts.
+  // Palettes, the Licence group and Notes are in Info with the facts (E42.8).
   await expect(info.getByRole('radiogroup', { name: 'Color palette' })).toBeVisible();
-  await expect(info.getByRole('region', { name: 'License' })).toBeVisible();
+  await expect(info.getByRole('region', { name: 'Licence' })).toBeVisible();
   await expect(info.getByRole('textbox', { name: 'Notes', exact: true })).toBeVisible();
   await expect(info.getByRole('textbox', { name: 'Family notes' })).toBeVisible();
   await expect((await showSection(page, 'Characters')).getByRole('searchbox')).toBeVisible();
   await expect(
     (await showSection(page, 'Features')).getByRole('button', { name: /Copy CSS/ }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Developer', exact: true }).click();
+  await page.getByRole('button', { name: 'Technical details', exact: true }).click();
   await expect(page.locator('#fm-family-developer').getByTestId('css-snippet')).toBeVisible();
 
   await page.goto('/#/family/1?face=1');

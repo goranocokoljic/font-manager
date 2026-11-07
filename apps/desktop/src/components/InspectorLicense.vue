@@ -3,7 +3,7 @@
 // seats, purchase date and an attached receipt. The form only collects the
 // values; the API checks them, copies the receipt and stores the declaration
 // for every face of the family.
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { LicenseType, ReceiptChange, ReceiptPlace } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useSelectionStore } from '../stores/selection';
@@ -65,6 +65,14 @@ watch(
   () => (open.value = declared.value),
   { immediate: true },
 );
+
+/** Opens the form and puts the focus in its first field: the family page's "Your record" link (E42.8). */
+async function openForm(): Promise<void> {
+  open.value = true;
+  await nextTick();
+  document.getElementById('fm-license-type')?.focus();
+}
+defineExpose({ openForm });
 
 function save(receipt: ReceiptChange = { kind: 'keep' }): void {
   void selection.declareLicense({ ...fields(), receipt });
