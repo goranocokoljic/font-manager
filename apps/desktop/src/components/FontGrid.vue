@@ -19,6 +19,12 @@
 // family or opens a style. While the grid moves fast (E35.8, `list/settle.ts`) cards
 // ask for no thumbnails or faces and show their empty frame; once it settles, the
 // cards on screen ask.
+//
+// Paragraph mode (E43.1, board `3-wall-text.png`): the Paragraph preset, or your own text
+// past 80 characters, lays the wall out as reading rows: at most two per line, the family
+// name and its meta in a 12 px line on top, the text under it at the body size of the
+// Preview options (17 px / 1.45 by default), 18 px padding, the cards' chrome. A line's
+// rows share a height, so the list stays virtualized.
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
@@ -30,6 +36,9 @@ import { dragKeys } from '../list/drag';
 import {
   gridRange,
   lineCount,
+  rowsCardHeight,
+  rowsColumns,
+  rowsLines,
   specimenBox,
   specimenRenderPx,
   specimenScale,
@@ -39,7 +48,7 @@ import {
   wallCardHeight,
   wallCardWidth,
   wallColumns,
-  wallLinePx,
+  wallLayout,
   wallSize,
   wallSpecimenPx,
   wrappedLines,
@@ -52,7 +61,13 @@ import { useFontListStore } from '../stores/fontList';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { usePalettesStore } from '../stores/palettes';
-import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import {
+  ALL_FONTS_VIEW,
+  DEFAULT_PREVIEW,
+  usePreviewStore,
+  type PreviewSettings,
+} from '../stores/preview';
+import { sampleTextFor } from '../preview/sampleText';
 import { deviceScale, useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
 import { t } from '../i18n';
 import { weightRangeText } from '../list/columns';
@@ -86,6 +101,7 @@ const fontSwitch = useFontSwitchStore();
 const library = useLibraryStore();
 const thumbnails = useThumbnailsStore();
 const palettes = usePalettesStore();
+const previewStore = usePreviewStore();
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -141,14 +157,33 @@ watch(
 );
 onBeforeUnmount(() => clearTimeout(reflowTimer));
 
-const preset = computed(() => props.preview.preset);
-/** The specimen's size now: the slider, scaled by the preset. */
-const specimenPx = computed(() => wallSpecimenPx(sizePx.value, preset.value));
+/** The layout: the preset's, or the reading rows for your own long text (E43.1). */
+const preset = computed(() =>
+  wallLayout(props.preview.preset, props.preview.sample, props.preview.customText),
+);
+/** Paragraph mode: the reading rows. */
+const rows = computed(() => preset.value === 'paragraph');
+/** The specimen's size now: the slider, scaled by the preset; the body size in the rows. */
+const specimenPx = computed(() =>
+  rows.value ? props.preview.bodySizePx : wallSpecimenPx(sizePx.value, preset.value),
+);
 const wrapped = computed(() => WALL_PRESETS[preset.value].wrapped);
 
-const linePx = computed(() => wallLinePx(layoutPx.value, preset.value));
-const columns = computed(() => wallColumns(width.value, layoutPx.value, preset.value));
+const columns = computed(() =>
+  rows.value ? rowsColumns(width.value) : wallColumns(width.value, layoutPx.value, preset.value),
+);
 const cardWidth = computed(() => wallCardWidth(width.value, columns.value));
+/** The text of the reading rows, for the lines they give it. */
+const rowsText = computed(() => sampleTextFor(props.preview, '', previewStore.pangramText));
+const rowsLineCount = computed(() =>
+  rowsLines(rowsText.value, Math.max(0, cardWidth.value - 2 * WALL.paddingPx), specimenPx.value),
+);
+const cardHeight = computed(() =>
+  rows.value
+    ? rowsCardHeight(rowsLineCount.value, specimenPx.value, props.preview.bodyLineHeight)
+    : wallCardHeight(layoutPx.value, preset.value),
+);
+const linePx = computed(() => cardHeight.value + WALL.gap);
 const count = computed(() => list.rows.length);
 const range = computed(() =>
   gridRange(
@@ -173,9 +208,31 @@ const anchor = useScrollAnchor(
 /** No cards before the first measure: they would glide from the fallback width's places. */
 const measured = ref(false);
 
+/** The layout's key for the place it was left at: the wall, or its reading rows. */
+const layoutKey = computed(() => (rows.value ? 'rows' : 'wall'));
+
+/**
+ * The pixel this layout came back to, until the user scrolls: the first layout after the
+ * mount (the real width replacing the fallback) scrolls to the anchor's line, and must
+ * land here again.
+ */
+let layoutTop: number | null = null;
+
+/** Back from the other layout without a scroll there: the very pixel this one was left at. */
+function restoreLayout(): void {
+  const el = viewport.value;
+  if (!el) return;
+  layoutTop = list.layoutScrollTop(layoutKey.value, linePx.value, columns.value);
+  if (layoutTop === null || el.scrollTop === layoutTop) return;
+  el.scrollTop = layoutTop;
+  motion.jumped(el.scrollTop);
+}
+
 onMounted(() => {
   measure();
   anchor.restore();
+  measure();
+  restoreLayout();
   measure();
   measured.value = true;
   if (typeof ResizeObserver !== 'undefined' && viewport.value) {
@@ -183,7 +240,11 @@ onMounted(() => {
     observer.observe(viewport.value);
   }
 });
-onBeforeUnmount(() => observer?.disconnect());
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  const el = viewport.value;
+  if (el) list.layoutLeft(layoutKey.value, el.scrollTop, linePx.value, columns.value);
+});
 
 // The slider or a resize moves every card: keep the anchor family on top. The render needs
 // the window of the new scroll position; the viewport can only scroll there once the
@@ -198,6 +259,7 @@ watch(
   [linePx, columns],
   () => {
     anchor.restore();
+    if (layoutTop !== null) restoreLayout();
     measure();
   },
   { flush: 'post' },
@@ -205,6 +267,7 @@ watch(
 
 function onScroll(): void {
   measure();
+  if (layoutTop !== null && Math.abs(scrollTop.value - layoutTop) >= 1) layoutTop = null;
   motion.scrolled(scrollTop.value);
   anchor.track(scrollTop.value);
 }
@@ -272,14 +335,25 @@ const textWidth = computed(
       preset.value,
     ).width,
 );
-/** The room a specimen has right now. */
-const box = computed(() => specimenBox(cardWidth.value, layoutPx.value, preset.value));
 /** The line height and the lines of a wrapped specimen. */
-const wrapLineHeight = computed(
-  () => WALL_PRESETS[preset.value].lineHeight ?? props.preview.lineHeight,
+const wrapLineHeight = computed(() =>
+  rows.value
+    ? props.preview.bodyLineHeight
+    : (WALL_PRESETS[preset.value].lineHeight ?? props.preview.lineHeight),
+);
+/** The room a specimen has right now. */
+const box = computed(() =>
+  rows.value
+    ? {
+        width: Math.max(0, cardWidth.value - 2 * WALL.paddingPx),
+        height: rowsLineCount.value * specimenPx.value * wrapLineHeight.value,
+      }
+    : specimenBox(cardWidth.value, layoutPx.value, preset.value),
 );
 const wrapLines = computed(() =>
-  wrappedLines(box.value.height, specimenPx.value, wrapLineHeight.value),
+  rows.value
+    ? rowsLineCount.value
+    : wrappedLines(box.value.height, specimenPx.value, wrapLineHeight.value),
 );
 
 /** A thumbnail, the size it was rendered at, and the sample it was cut from. */
@@ -345,7 +419,7 @@ function cardStyle(index: number) {
   const line = Math.floor(index / cols);
   return {
     width: `${cardWidth.value}px`,
-    height: `${wallCardHeight(layoutPx.value, preset.value)}px`,
+    height: `${cardHeight.value}px`,
     top: `${WALL.gap + line * linePx.value}px`,
     insetInlineStart: `${WALL.inset + (index % cols) * (cardWidth.value + WALL.gap)}px`,
   };
@@ -433,11 +507,12 @@ function onToggle(row: ListRow): void {
   <div
     ref="viewport"
     class="viewport"
-    :class="surfaceClass"
+    :class="[surfaceClass, { rows }]"
     :style="viewportStyle"
     :data-surface="preview.surface"
     :data-columns="columns"
     :data-preset="preset"
+    :data-layout="layoutKey"
     role="listbox"
     tabindex="0"
     :aria-label="t('grid.label')"
@@ -678,6 +753,27 @@ function onToggle(row: ListRow): void {
 .viewport:focus .slot.cursor .twisty,
 .twisty.open {
   opacity: 1;
+}
+/* Paragraph mode (E43.1): the meta line on top in 12 px, the text under it from the start. */
+.rows .card {
+  /* ROWS.paddingPx in list/grid.ts. */
+  padding: 18px;
+}
+.rows .meta {
+  order: -1;
+  /* ROWS.metaLinePx and ROWS.metaGapPx. */
+  block-size: 16px;
+  margin-block: 0 8px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.rows .detail {
+  margin-inline-start: 0;
+}
+.rows :deep(.live) {
+  flex: none;
+  align-items: flex-start;
+  height: auto;
 }
 .note {
   color: var(--fm-warning);

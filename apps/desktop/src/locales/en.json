@@ -302,6 +302,11 @@
       "one": "{count} family",
       "other": "{count} families"
     },
+    "rendersText": {
+      "count": { "one": "{covered} of {count} family", "other": "{covered} of {count} families" },
+      "tail": { "one": "renders your text completely", "other": "render your text completely" }
+    },
+    "bodySize": "Body size {size} px · line height {lineHeight}",
     "viewMode": "View mode",
     "modes": {
       "list": "List",

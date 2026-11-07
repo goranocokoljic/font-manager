@@ -302,6 +302,14 @@
       "one": "{count} Familie",
       "other": "{count} Familien"
     },
+    "rendersText": {
+      "count": {
+        "one": "{covered} von {count} Familie",
+        "other": "{covered} von {count} Familien"
+      },
+      "tail": { "one": "zeigt Ihren Text vollständig", "other": "zeigen Ihren Text vollständig" }
+    },
+    "bodySize": "Fließtext {size} px · Zeilenhöhe {lineHeight}",
     "viewMode": "Ansichtsmodus",
     "modes": {
       "list": "Liste",

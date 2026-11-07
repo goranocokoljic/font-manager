@@ -39,6 +39,13 @@ export const useSearchStore = defineStore('search', () => {
   const total = ref(0);
   const error = ref<ApiError | null>(null);
   const languages = shallowRef<LanguagePreset[]>([]);
+  /** The text the count line checks the results against (E43.1); empty for none. */
+  const coverText = ref('');
+  /** How many of the results render `coverText` completely; null while unknown or off. */
+  const coverTotal = ref<number | null>(null);
+  let coverTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Bumped by every cover count; answers to an older one are dropped. */
+  let coverGeneration = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by every search; answers to an older one are dropped. */
   let generation = 0;
@@ -99,6 +106,55 @@ export const useSearchStore = defineStore('search', () => {
     } catch (e) {
       if (mine === generation) error.value = e as ApiError;
     }
+    if (mine === generation) await runCover();
+  }
+
+  /**
+   * Counts the families of the current results that render `coverText` completely: the
+   * same search with a text-coverage rule on top, so the query and every filter (a
+   * language filter included) still apply. The API does the coverage.
+   */
+  async function runCover(): Promise<void> {
+    clearTimeout(coverTimer);
+    coverTimer = undefined;
+    const mine = ++coverGeneration;
+    const text = coverText.value;
+    if (!text) {
+      coverTotal.value = null;
+      return;
+    }
+    const q = query.value.trim();
+    try {
+      const page = await useClient().search({
+        query: q,
+        filters: filters.value,
+        rule: {
+          op: 'and',
+          rules: [{ kind: 'filters', filters: { supports: { kind: 'text', text } } }],
+        },
+        page: { offset: 0, limit: 1 },
+      });
+      if (mine === coverGeneration) coverTotal.value = page.total;
+    } catch {
+      // No count is better than a wrong one: the line shows the plain family count.
+      if (mine === coverGeneration) coverTotal.value = null;
+    }
+  }
+
+  /**
+   * The text to count the results against; empty turns the count off. Typing waits for the
+   * next key as the search box does.
+   */
+  function setCoverText(next: string): void {
+    if (next === coverText.value) return;
+    coverText.value = next;
+    clearTimeout(coverTimer);
+    if (!next) {
+      coverGeneration++;
+      coverTotal.value = null;
+      return;
+    }
+    coverTimer = setTimeout(() => void runCover(), SEARCH_DEBOUNCE_MS);
   }
 
   /** The box changed: searches once typing pauses for `SEARCH_DEBOUNCE_MS`. */
@@ -154,11 +210,14 @@ export const useSearchStore = defineStore('search', () => {
     total,
     error,
     languages,
+    coverText,
+    coverTotal,
     active,
     matchingFaces,
     run,
     setText,
     setFilters,
+    setCoverText,
     clear,
     loadLanguages,
     saveAsSmartCollection,

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import type { Density, LanguagePreset, SizeBasis } from '../api/types';
 import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
-import type { WallPreset } from '../list/grid';
+import { PARAGRAPH_LINE_HEIGHT, PARAGRAPH_PX, type WallPreset } from '../list/grid';
 import {
   FALLBACK_LANGUAGE,
   isLanguageCode,
@@ -42,6 +42,8 @@ export const ALL_FONTS_VIEW = 'all';
 /** Bounds of the numeric settings. Size matches `PreviewRequest.size_px` (8–300). */
 export const SIZE = { min: 8, max: 300, step: 1 } as const;
 export const LINE_HEIGHT = { min: 0.8, max: 3, step: 0.05 } as const;
+/** Body size of the reading rows (E43.1), in CSS px. */
+export const BODY_SIZE = { min: 10, max: 40, step: 1 } as const;
 /** Tracking (letter spacing) in em. */
 export const TRACKING = { min: -0.2, max: 1, step: 0.01 } as const;
 /** Longest custom text kept, in UTF-16 code units. */
@@ -75,6 +77,10 @@ export interface PreviewSettings {
   metrics: boolean;
   /** Shows the sample text as outlines: stroke, no fill (E16.1). */
   outline: boolean;
+  /** The text size of the wall's reading rows (E43.1), in CSS px. */
+  bodySizePx: number;
+  /** The line height of the wall's reading rows (E43.1). */
+  bodyLineHeight: number;
 }
 
 export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
@@ -92,6 +98,8 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   autoSize: 'off',
   metrics: false,
   outline: false,
+  bodySizePx: PARAGRAPH_PX,
+  bodyLineHeight: PARAGRAPH_LINE_HEIGHT,
 });
 
 const ALIGNMENTS: readonly Alignment[] = ['start', 'center', 'end'];
@@ -146,6 +154,8 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     autoSize: pick(r.autoSize, AUTO_SIZES, d.autoSize),
     metrics: typeof r.metrics === 'boolean' ? r.metrics : d.metrics,
     outline: typeof r.outline === 'boolean' ? r.outline : d.outline,
+    bodySizePx: clampSetting(r.bodySizePx, BODY_SIZE, d.bodySizePx),
+    bodyLineHeight: clampSetting(r.bodyLineHeight, LINE_HEIGHT, d.bodyLineHeight),
   };
 }
 

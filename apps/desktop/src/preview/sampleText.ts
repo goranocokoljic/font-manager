@@ -117,3 +117,9 @@ export function sampleTextFor(
       return name;
   }
 }
+
+/**
+ * True when `text` has a character past Basic Latin (U+0000–U+007F): then not every face
+ * may render it, and the wall's count line says how many do (E43.1).
+ */
+export const beyondBasicLatin = (text: string) => /\P{ASCII}/u.test(text);

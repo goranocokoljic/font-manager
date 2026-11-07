@@ -7,7 +7,7 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
-import { PARAGRAPH_PX, type WallPreset } from '../list/grid';
+import { wallLayout, type WallPreset } from '../list/grid';
 import { useActions } from '../stores/commands';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
@@ -17,6 +17,7 @@ import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
 import {
+  BODY_SIZE,
   LINE_HEIGHT,
   SIZE,
   TRACKING,
@@ -116,6 +117,13 @@ function leaveField(): void {
 
 const chips: readonly WallPreset[] = WALL_PRESET_IDS;
 
+/**
+ * The wall's layout now (E43.1): your own long text shows the reading rows, so the
+ * Paragraph chip is the one pressed and the size and line height fields are the body's.
+ */
+const layout = computed(() => wallLayout(s.value.preset, s.value.sample, s.value.customText));
+const rows = computed(() => layout.value === 'paragraph');
+
 /** The note at the field's end: what the text on the wall is. */
 const hint = computed(() => {
   switch (s.value.sample) {
@@ -126,7 +134,7 @@ const hint = computed(() => {
     case 'numerals':
       return t('preview.hints.numerals');
     case 'paragraph':
-      return t('preview.hints.paragraph', { size: PARAGRAPH_PX });
+      return t('preview.hints.paragraph', { size: s.value.bodySizePx });
     default:
       return props.fontCount === undefined
         ? ''
@@ -138,19 +146,33 @@ function set(patch: Partial<PreviewSettings>): void {
   store.update(props.view, patch);
 }
 
-type NumberKey = 'sizePx' | 'lineHeight' | 'trackingEm';
-const size = computed(() => props.sizeRange ?? SIZE);
+type NumberKey = 'sizePx' | 'lineHeight' | 'trackingEm' | 'bodySizePx' | 'bodyLineHeight';
+/** The size field's range: the reading rows' body size, else the view mode's or the default. */
+const size = computed(() => (rows.value ? BODY_SIZE : (props.sizeRange ?? SIZE)));
 const BOUNDS = computed(() => ({
-  sizePx: size.value,
+  sizePx: props.sizeRange ?? SIZE,
   lineHeight: LINE_HEIGHT,
   trackingEm: TRACKING,
+  bodySizePx: BODY_SIZE,
+  bodyLineHeight: LINE_HEIGHT,
 }));
-/** The size the slider shows: a saved size outside the view mode's range shows at its end. */
+/** The size the field shows: a saved size outside the view mode's range shows at its end. */
 const shownSize = computed(() =>
-  Math.min(size.value.max, Math.max(size.value.min, s.value.sizePx)),
+  Math.min(
+    size.value.max,
+    Math.max(size.value.min, rows.value ? s.value.bodySizePx : s.value.sizePx),
+  ),
 );
+const shownLineHeight = computed(() => (rows.value ? s.value.bodyLineHeight : s.value.lineHeight));
 /** The number fields' setting keys, so the template holds no key literals. */
-const KEY = { size: 'sizePx', lineHeight: 'lineHeight', tracking: 'trackingEm' } as const;
+const KEY = computed(
+  () =>
+    ({
+      size: rows.value ? 'bodySizePx' : 'sizePx',
+      lineHeight: rows.value ? 'bodyLineHeight' : 'lineHeight',
+      tracking: 'trackingEm',
+    }) as const,
+);
 
 /**
  * While typing, only a value inside the bounds applies (so "1" on the way to "12" does
@@ -229,7 +251,7 @@ function colorFrom(e: Event): string {
           :key="p"
           type="button"
           class="chip"
-          :aria-pressed="s.preset === p"
+          :aria-pressed="layout === p"
           @click="store.applyPreset(view, p)"
         >
           {{ t(`preview.presets.${p}`) }}
@@ -311,7 +333,7 @@ function colorFrom(e: Event): string {
           :min="LINE_HEIGHT.min"
           :max="LINE_HEIGHT.max"
           :step="LINE_HEIGHT.step"
-          :model-value="s.lineHeight"
+          :model-value="shownLineHeight"
           @update:model-value="typed(KEY.lineHeight, $event, false)"
           @commit="typed(KEY.lineHeight, $event, true)"
         />

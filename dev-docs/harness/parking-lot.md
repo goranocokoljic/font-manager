@@ -387,3 +387,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.8 #459] crates/fm-core/src/similar.rs:105 — `x_height_ratio` there means x-height over cap height, while the UI's `xHeightRatio` means x-height over the em; the shared name can mislead.
 - [E42.9 #460] apps/desktop/src/search/chips.ts:259 — `chosenLanguages` returns [] for a non-language `supports` filter, so `toggleLanguage` (and `withLanguage`) replace a text supports filter instead of adding to it.
 - [E42.9 #460] apps/desktop/src/components/GlyphCoverage.vue:29 — `isComplete` counts a 0/0 language as complete, unlike the rail's `completeLanguages`, so the two can disagree on such a preset.
+- [E43.1 #465] apps/desktop/src/components/PreviewControls.vue:139 — the field hint still reads "renders in N fonts" next to the new "N of M families render your text completely" count; E43.2 owns that hint.
+- [E43.1 #465] apps/desktop/src/stores/library.ts:169 — a `libraryChanged` event does not re-run an active search directly; `search.total`/`hits` follow only through the `library.families` watcher in the search store.

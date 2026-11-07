@@ -43,7 +43,8 @@ import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
 import { errorMessage, t } from '../i18n';
 import { DENSITIES } from '../list/density';
-import { WALL_SIZE } from '../list/grid';
+import { WALL_SIZE, wallLayout } from '../list/grid';
+import FmFade from '../motion/FmFade.vue';
 import type { ListRow } from '../list/rows';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
@@ -111,6 +112,34 @@ watch(
   { immediate: true },
 );
 const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
+/**
+ * The wall shows its reading rows (E43.1): the Paragraph preset, or your own long text. The
+ * switch is a view switch of the motion table: the wall and the rows crossfade.
+ */
+const wallRows = computed(() => {
+  const s = preview.settingsFor(ALL_FONTS_VIEW);
+  return mode.value === 'grid' && wallLayout(s.preset, s.sample, s.customText) === 'paragraph';
+});
+/**
+ * A crossfade, not a fade out and in: the leaving list keeps its place over the new one
+ * while both fade, so the switch takes the table's 200 ms once. The leaving list is gone for
+ * assistive tech and the keyboard at once.
+ */
+function pinLeaving(el: Element): void {
+  const e = el as HTMLElement;
+  const { offsetTop, offsetLeft, offsetWidth, offsetHeight } = e;
+  Object.assign(e.style, {
+    position: 'absolute',
+    top: `${offsetTop}px`,
+    left: `${offsetLeft}px`,
+    width: `${offsetWidth}px`,
+    height: `${offsetHeight}px`,
+    pointerEvents: 'none',
+  });
+  // Only the new list is there for a screen reader or a key.
+  e.setAttribute('aria-hidden', 'true');
+  e.inert = true;
+}
 // The label of each is `home.modes.<mode>`.
 const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall', 'layout'];
 const modeOptions = computed(() =>
@@ -648,7 +677,7 @@ async function openFace(face: FaceId): Promise<void> {
             :font-count="search.total"
             @leave="focusList"
           />
-          <WallCountLine :view="ALL_FONTS_VIEW" />
+          <WallCountLine :view="ALL_FONTS_VIEW" :rows="wallRows" />
           <ActivationNotice />
           <template v-if="fontList.families.length && mode === 'table'">
             <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
@@ -677,12 +706,17 @@ async function openFace(face: FaceId): Promise<void> {
               @settled="layoutSettled"
             />
           </template>
-          <FontGrid
+          <FmFade
             v-else-if="fontList.families.length && mode === 'grid'"
-            :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-            @cursor-face="showFace"
-            @open="openRow"
-          />
+            @before-leave="pinLeaving"
+          >
+            <FontGrid
+              :key="wallRows ? 'rows' : 'wall'"
+              :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+              @cursor-face="showFace"
+              @open="openRow"
+            />
+          </FmFade>
           <FontWaterfall
             v-else-if="fontList.families.length && mode === 'waterfall'"
             :preview="preview.settingsFor(ALL_FONTS_VIEW)"
@@ -758,6 +792,7 @@ async function openFace(face: FaceId): Promise<void> {
 
 <style scoped>
 .browse {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;

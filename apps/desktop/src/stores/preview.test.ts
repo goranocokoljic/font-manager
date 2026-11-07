@@ -289,3 +289,21 @@ describe('preview store', () => {
     });
   });
 });
+
+describe('the reading rows body (E43.1)', () => {
+  it('defaults to 17 px / 1.45', () => {
+    expect(normalizePreview({})).toMatchObject({ bodySizePx: 17, bodyLineHeight: 1.45 });
+  });
+
+  it('keeps a saved body size and line height inside their bounds', () => {
+    expect(normalizePreview({ bodySizePx: 22, bodyLineHeight: 1.6 })).toMatchObject({
+      bodySizePx: 22,
+      bodyLineHeight: 1.6,
+    });
+    expect(normalizePreview({ bodySizePx: 4, bodyLineHeight: 9 })).toMatchObject({
+      bodySizePx: 10,
+      bodyLineHeight: 3,
+    });
+    expect(normalizePreview({ bodySizePx: 'big' }).bodySizePx).toBe(17);
+  });
+});

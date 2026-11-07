@@ -6,7 +6,16 @@ import type { Component } from 'vue';
 import { setClient, useClient, type FmClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
 import type { PreviewRequest } from '../api/types';
-import { specimenBox, WALL, wallCardWidth, wallColumns, wallLinePx } from '../list/grid';
+import {
+  rowsCardHeight,
+  rowsColumns,
+  rowsLines,
+  specimenBox,
+  WALL,
+  wallCardWidth,
+  wallColumns,
+  wallLinePx,
+} from '../list/grid';
 import { familyKey, type ListRow } from '../list/rows';
 import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
 import { FRAME_MS, SETTLE_MS } from '../list/settle';
@@ -513,6 +522,106 @@ describe('FontWaterfall metrics, outline and tracking (E16.1)', () => {
     await fall.setProps({ preview: { ...DEFAULT_PREVIEW } });
     expect(fall.find('[data-line]').exists()).toBe(false);
     expect(fall.find('.sample.outline').exists()).toBe(false);
+  });
+});
+
+describe('paragraph mode (E43.1)', () => {
+  /** 86 characters, past Basic Latin. */
+  const LONG =
+    'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos, a onda i drugi štos za kraj.';
+  const own = (text: string, extra: Partial<typeof DEFAULT_PREVIEW> = {}) => ({
+    ...DEFAULT_PREVIEW,
+    sample: 'custom' as const,
+    customText: text,
+    ...extra,
+  });
+  /** The rows' line in the 800 px fallback viewport, for `text` at `px` / `lh`. */
+  const rowsLine = (text: string, px = 17, lh = 1.45) => {
+    const cols = rowsColumns(FALLBACK_WIDTH);
+    const lines = rowsLines(text, wallCardWidth(FALLBACK_WIDTH, cols) - 2 * WALL.paddingPx, px);
+    return {
+      cols,
+      height: rowsCardHeight(lines, px, lh),
+      line: rowsCardHeight(lines, px, lh) + WALL.gap,
+    };
+  };
+
+  it('your own text past 80 characters lays the wall out as reading rows at the body size', async () => {
+    expect([...LONG].length).toBeGreaterThan(80);
+    await load({ extraFaces: 4 });
+    renders.length = 0;
+    const grid = await mountView(FontGrid, { preview: own(LONG) });
+    const viewport = grid.get('[role="listbox"]');
+    expect(viewport.attributes('data-layout')).toBe('rows');
+    expect(viewport.classes()).toContain('rows');
+    const { cols, height } = rowsLine(LONG);
+    expect(viewport.attributes('data-columns')).toBe(String(cols));
+    const card = grid.findAll('[role="option"]')[0]!;
+    expect(card.attributes('style')).toContain(`height: ${height}px`);
+    const live = card.get('[data-testid="card-live-text"]');
+    expect(live.classes()).toContain('wrap');
+    expect((live.element as HTMLElement).style.fontSize).toBe('17px');
+    expect((live.element as HTMLElement).style.lineHeight).toBe('1.45');
+    expect(live.text()).toBe(LONG);
+    // The name and its meta are in the card with the text.
+    expect(card.get('[data-family-name]').text()).not.toBe('');
+    expect(renders).toHaveLength(0);
+  });
+
+  it('keeps the wall for 80 characters of your own text', async () => {
+    await load({ extraFaces: 4 });
+    const grid = await mountView(FontGrid, { preview: own('ž'.repeat(80)) });
+    expect(grid.get('[role="listbox"]').attributes('data-layout')).toBe('wall');
+    expect(grid.get('[role="listbox"]').classes()).not.toContain('rows');
+  });
+
+  it('the Paragraph preset is the reading rows too', async () => {
+    await load({ extraFaces: 4 });
+    const grid = await mountView(FontGrid, {
+      preview: { ...DEFAULT_PREVIEW, preset: 'paragraph', sample: 'paragraph' },
+    });
+    expect(grid.get('[role="listbox"]').attributes('data-layout')).toBe('rows');
+  });
+
+  it('the Preview options body size and line height apply', async () => {
+    await load({ extraFaces: 4 });
+    const grid = await mountView(FontGrid, {
+      preview: own(LONG, { bodySizePx: 22, bodyLineHeight: 1.6, sizePx: 90 }),
+    });
+    const card = grid.findAll('[role="option"]')[0]!;
+    const live = card.get('[data-testid="card-live-text"]').element as HTMLElement;
+    expect(live.style.fontSize).toBe('22px');
+    expect(live.style.lineHeight).toBe('1.6');
+    expect(card.attributes('style')).toContain(`height: ${rowsLine(LONG, 22, 1.6).height}px`);
+  });
+
+  it('switching back lands the wall on the pixel it left', async () => {
+    await load({ extraFaces: 200 });
+    const list = useFontListStore();
+    const wall = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW } });
+    const left = 10 * LINE + 37;
+    await scrollTo(wall, '[role="listbox"]', left);
+    const top = list.anchor;
+    wall.unmount();
+    const rows = await mountView(FontGrid, { preview: own(LONG) });
+    // The rows open at the wall's family, one row a line.
+    expect(viewportOf(rows, '[role="listbox"]').scrollTop).toBe(20 * rowsLine(LONG).line);
+    expect(list.anchor).toBe(top);
+    rows.unmount();
+    const back = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW } });
+    expect(viewportOf(back, '[role="listbox"]').scrollTop).toBe(left);
+  });
+
+  it('a scroll in the rows moves the wall to the family now at the top instead', async () => {
+    await load({ extraFaces: 200 });
+    const wall = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW } });
+    await scrollTo(wall, '[role="listbox"]', 10 * LINE + 37);
+    wall.unmount();
+    const rows = await mountView(FontGrid, { preview: own(LONG) });
+    await scrollTo(rows, '[role="listbox"]', 60 * rowsLine(LONG).line);
+    rows.unmount();
+    const back = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW } });
+    expect(viewportOf(back, '[role="listbox"]').scrollTop).toBe(30 * LINE);
   });
 });
 

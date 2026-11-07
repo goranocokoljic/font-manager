@@ -11,7 +11,14 @@ import {
   specimenScale,
   specimenText,
   SPECIMEN_TEXT_MAX,
+  PARAGRAPH_LINE_HEIGHT,
   PARAGRAPH_PX,
+  PARAGRAPH_TEXT_MIN,
+  ROWS,
+  rowsCardHeight,
+  rowsColumns,
+  rowsLines,
+  wallLayout,
   WALL,
   WALL_PRESETS,
   wallSpecimenPx,
@@ -204,5 +211,57 @@ describe('the wall presets (E41.2)', () => {
       wallCardHeight(60, 'pangram') - WALL.chromePx,
     );
     expect(wallLinePx(60, 'alphabet')).toBe(wallCardHeight(60, 'alphabet') + WALL.gap);
+  });
+});
+
+describe('paragraph mode (E43.1)', () => {
+  const long =
+    'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos, pa onda još jedan i još jedan.';
+
+  it('switches your own text past 80 characters to the reading rows', () => {
+    expect([...long].length).toBeGreaterThan(PARAGRAPH_TEXT_MIN);
+    expect(wallLayout('word', 'custom', long)).toBe('paragraph');
+    expect(wallLayout('pangram', 'custom', long)).toBe('paragraph');
+  });
+
+  it('keeps the wall at 80 characters and below, counted in characters', () => {
+    const eighty = 'ž'.repeat(PARAGRAPH_TEXT_MIN);
+    expect(wallLayout('word', 'custom', eighty)).toBe('word');
+    expect(wallLayout('word', 'custom', `${eighty}ž`)).toBe('paragraph');
+    // Surrounding spaces are not text.
+    expect(wallLayout('word', 'custom', `  ${eighty}  `)).toBe('word');
+  });
+
+  it('keeps a stock text in its preset however long', () => {
+    expect(wallLayout('alphabet', 'alphabet', long)).toBe('alphabet');
+    expect(wallLayout('pangram', 'pangram', long)).toBe('pangram');
+  });
+
+  it('the Paragraph preset is always the reading rows', () => {
+    expect(wallLayout('paragraph', 'custom', 'short')).toBe('paragraph');
+    expect(wallLayout('paragraph', 'paragraph', '')).toBe('paragraph');
+  });
+
+  it('lays rows out in two columns at most, one in a narrow window', () => {
+    expect(rowsColumns(1208)).toBe(2);
+    // The 1,280 px window less the sidebar.
+    expect(rowsColumns(1030)).toBe(2);
+    expect(rowsColumns(3000)).toBe(2);
+    expect(rowsColumns(768)).toBe(1);
+  });
+
+  it('gives the rows the lines the text needs, one to six', () => {
+    expect(rowsLines('short', 500, 17)).toBe(1);
+    // 58 characters at 17 px: 592 px of text, two lines in 534 px.
+    expect(rowsLines('x'.repeat(58), 534, 17)).toBe(2);
+    expect(rowsLines('x'.repeat(5000), 534, 17)).toBe(ROWS.linesMax);
+    expect(rowsLines('', 534, 17)).toBe(1);
+  });
+
+  it('a row is 18 px padding, a 16 px meta line and the text at body size', () => {
+    // 2 × (18 + 1) + 16 + 8 + ceil(17 × 1.45)
+    expect(rowsCardHeight(1, 17, PARAGRAPH_LINE_HEIGHT)).toBe(87);
+    expect(rowsCardHeight(2, 17, PARAGRAPH_LINE_HEIGHT)).toBe(112);
+    expect(rowsCardHeight(1, 20, 1.5)).toBe(92);
   });
 });

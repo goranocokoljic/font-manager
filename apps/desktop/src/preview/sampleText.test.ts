@@ -3,6 +3,7 @@ import type { FaceSummary } from '../api/types';
 import { mockFaces } from '../api/mock';
 import {
   ALPHABET,
+  beyondBasicLatin,
   LOREM,
   NUMERALS,
   PARAGRAPH,
@@ -101,5 +102,16 @@ describe('sampleTextFor', () => {
     );
     expect(sampleTextFor(s('pangram'), 'Lora', pangram)).toBe('Sphinx of black quartz');
     expect(sampleTextFor(s('numerals'), 'Lora', pangram)).toBe(NUMERALS);
+  });
+});
+
+describe('beyondBasicLatin (E43.1)', () => {
+  it('is true only for a character past U+007F', () => {
+    expect(beyondBasicLatin('The quick brown fox, 0123 ~ !')).toBe(false);
+    expect(beyondBasicLatin('\u007f')).toBe(false);
+    expect(beyondBasicLatin('\u0080')).toBe(true);
+    expect(beyondBasicLatin('hoće')).toBe(true);
+    expect(beyondBasicLatin('日本')).toBe(true);
+    expect(beyondBasicLatin('')).toBe(false);
   });
 });
