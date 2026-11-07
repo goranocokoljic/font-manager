@@ -326,19 +326,13 @@ pub(in crate::index) fn cutoff(conn: &Connection, days: Option<u32>) -> FmResult
 }
 
 impl Index {
-    /// The faces in each smart collection now. A smart collection whose
-    /// rule leads back to itself, or names an unknown language, holds none.
-    pub(in crate::index) fn smart_face_counts(&self) -> FmResult<HashMap<CollectionId, u32>> {
-        let rules = load_rules(&self.conn)?;
-        if rules.values().all(|(_, rule)| rule.is_none()) {
-            return Ok(HashMap::new());
-        }
-        self.refresh_search_cache()?;
-        let cache = self.search_cache.borrow();
-        // In id order: a rule names collections that existed before it, so
-        // their results are usually known by then. A rule that failed to
-        // compile is never known: a rule naming it compiles it again and
-        // fails the same way, as a search by it does.
+    /// Every smart collection in id order, with its compiled rule; `None`
+    /// for one whose rule failed to compile. In id order, a rule names
+    /// collections that existed before it, so their results are usually
+    /// known by then. A rule that failed to compile is never known: a rule
+    /// naming it compiles it again and fails the same way, as a search by it
+    /// does.
+    fn compile_smart(&self, rules: &Rules) -> FmResult<(Vec<CollectionId>, Vec<Option<Member>>)> {
         let mut smart: Vec<CollectionId> = rules
             .iter()
             .filter(|(_, (_, rule))| rule.is_some())
@@ -348,7 +342,7 @@ impl Index {
         let mut known: HashMap<CollectionId, usize> = HashMap::new();
         let mut members: Vec<Option<Member>> = Vec::with_capacity(smart.len());
         for (at, id) in smart.iter().enumerate() {
-            match Member::compile_with(&self.conn, &rules, &known, *id) {
+            match Member::compile_with(&self.conn, rules, &known, *id) {
                 Ok(member) => {
                     known.insert(*id, at);
                     members.push(Some(member));
@@ -357,6 +351,50 @@ impl Index {
                 Err(e) => return Err(e),
             }
         }
+        Ok((smart, members))
+    }
+
+    /// The smart collections that hold at least one of `faces` now, in id
+    /// order (E42.9: the family page's "Used in"). A face the library does
+    /// not show is in none.
+    pub(in crate::index) fn smart_collections_holding(
+        &self,
+        faces: &[u32],
+    ) -> FmResult<Vec<CollectionId>> {
+        let rules = load_rules(&self.conn)?;
+        if faces.is_empty() || rules.values().all(|(_, rule)| rule.is_none()) {
+            return Ok(Vec::new());
+        }
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let (smart, members) = self.compile_smart(&rules)?;
+        let mut held = vec![false; members.len()];
+        let mut done: Vec<bool> = Vec::with_capacity(members.len());
+        for row in cache.rows.iter().filter(|r| faces.contains(&r.id)) {
+            done.clear();
+            for (holds, member) in held.iter_mut().zip(&members) {
+                let inside = member.as_ref().is_some_and(|m| m.holds(row, &done));
+                *holds |= inside;
+                done.push(inside);
+            }
+        }
+        Ok(smart
+            .into_iter()
+            .zip(held)
+            .filter_map(|(id, holds)| holds.then_some(id))
+            .collect())
+    }
+
+    /// The faces in each smart collection now. A smart collection whose
+    /// rule leads back to itself, or names an unknown language, holds none.
+    pub(in crate::index) fn smart_face_counts(&self) -> FmResult<HashMap<CollectionId, u32>> {
+        let rules = load_rules(&self.conn)?;
+        if rules.values().all(|(_, rule)| rule.is_none()) {
+            return Ok(HashMap::new());
+        }
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let (smart, members) = self.compile_smart(&rules)?;
         // Every rule runs on each row in turn, so a rule naming an earlier
         // collection reads that collection's result for the row; the rows
         // are shared out over the cores.

@@ -7,8 +7,10 @@ import type { FaceId, FamilyId } from '../api/types';
 import { familyKey } from '../list/rows';
 import { withViewTransition } from '../motion';
 import { useFamilyPageStore } from '../stores/familyPage';
+import { useFamilyRailStore, withLanguage } from '../stores/familyRail';
 import { useFontListStore } from '../stores/fontList';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import { useSearchStore } from '../stores/search';
 
 /** The name FamilyView's hero carries in its stylesheet. */
 export const SHARED_SPECIMEN = 'fm-family-specimen';
@@ -60,6 +62,8 @@ export function useFamilyNavigation() {
   const page = useFamilyPageStore();
   const list = useFontListStore();
   const preview = usePreviewStore();
+  const rail = useFamilyRailStore();
+  const search = useSearchStore();
 
   /** Pushes the family page from the library, on `face` when a style was the one chosen. */
   async function open(family: FamilyId, face?: FaceId): Promise<void> {
@@ -100,12 +104,16 @@ export function useFamilyNavigation() {
   /**
    * Back to the library. A page opened from there pops, so the list's URL and selection come
    * back as they were; a deep link has nothing to pop and replaces itself with the library.
+   * With the rail's language filter chosen, the wall shows only the fonts that cover it.
    */
   async function back(): Promise<void> {
     const family = page.id;
+    // "Show only fonts that can do …" in the rail (E42.9): the wall comes back filtered.
+    const language = rail.takeWallLanguage();
     await transition(CLOSING, async () => {
       if (cameFromLibrary()) await pop();
       else await router.replace({ name: 'home' });
+      if (language) search.setFilters(withLanguage(search.filters, language));
       await nextTick();
       if (family === null) return;
       const specimen = specimenOf(family);

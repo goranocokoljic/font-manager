@@ -2848,7 +2848,32 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       })[0]!.id;
       const years = list.flatMap((f) => find(f.id)!.copyright?.match(/\b\d{4}\b/g) ?? []);
       const year = years.length ? Math.min(...years.map(Number)) : null;
-      return { summary: summaryOf(id), designer, faces: list, defaultFace, year } satisfies Family;
+      // As fm-core: every collection that holds a face of the family, in id order.
+      const holding = collections
+        .filter((c) =>
+          list.some((f) => {
+            try {
+              return inCollection(find(f.id)!, c.id, []);
+            } catch {
+              return false; // a rule that leads back to itself holds nothing
+            }
+          }),
+        )
+        .map((c) => c.id)
+        .sort((a, b) => a - b);
+      return {
+        summary: summaryOf(id),
+        designer,
+        faces: list,
+        defaultFace,
+        year,
+        collections: holding,
+        // As fm-core: each file once.
+        ...((files) => ({
+          fileCount: files.size,
+          fileBytes: [...files.values()].reduce((a, b) => a + b, 0),
+        }))(new Map(list.map((f) => [find(f.id)!.path, find(f.id)!.fileSize]))),
+      } satisfies Family;
     },
     search: async (req) => {
       const query = req.query ?? '';

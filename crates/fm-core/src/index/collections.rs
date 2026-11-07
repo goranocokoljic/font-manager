@@ -361,6 +361,38 @@ impl Index {
         Ok(true)
     }
 
+    /// The collections, manual and smart, that hold at least one of `faces`
+    /// now, in id order (E42.9). A face in no collection, or one the library
+    /// does not show, adds none.
+    pub fn collections_holding(&self, faces: &[FaceId]) -> FmResult<Vec<CollectionId>> {
+        let ids: Vec<u32> = faces.iter().map(|f| f.0).collect();
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT DISTINCT cf.collection_id
+                 FROM collection_face AS cf
+                 JOIN face ON face.id = cf.face_id
+                 JOIN font_file ON font_file.id = face.file_id
+                 JOIN source ON source.id = font_file.source_id
+                 WHERE cf.face_id = ?1 AND font_file.gone = 0 AND source.paused = 0",
+            )
+            .map_err(|e| db_error(&e))?;
+        let mut out: Vec<CollectionId> = Vec::new();
+        for id in &ids {
+            let rows = stmt
+                .query_map([id], |row| row.get::<_, u32>(0))
+                .map_err(|e| db_error(&e))?;
+            for row in rows {
+                out.push(CollectionId(row.map_err(|e| db_error(&e))?));
+            }
+        }
+        drop(stmt);
+        out.extend(self.smart_collections_holding(&ids)?);
+        out.sort_unstable();
+        out.dedup();
+        Ok(out)
+    }
+
     /// Adds faces, and every face of whole families, to a manual collection.
     /// A face already in it stays once; it stays in its other collections.
     pub fn add_to_collection(&mut self, req: &CollectionFacesRequest) -> FmResult<Collection> {

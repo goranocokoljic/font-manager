@@ -1226,6 +1226,21 @@ export type Family = {
 	defaultFace?: FaceId | null,
 	/**  The earliest year the copyright of a face states (E42.2). */
 	year?: number | null,
+	/**
+	 *  The collections, manual and smart, that hold at least one face of the
+	 *  family now, in id order (E42.9: the family page's "Used in").
+	 */
+	collections?: CollectionId[],
+	/**
+	 *  The font files its faces are in; a collection file counts once
+	 *  (E42.9: the rail's "Format").
+	 */
+	fileCount?: number,
+	/**
+	 *  The size of those files in bytes, each counted once; `u32::MAX` when
+	 *  larger (E42.9).
+	 */
+	fileBytes?: number,
 };
 
 /**  Whether a family's faces are active. */

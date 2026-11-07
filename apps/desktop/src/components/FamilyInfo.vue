@@ -8,7 +8,7 @@
 import { computed, ref } from 'vue';
 import type { Axis, FaceDetail, FamilySummary } from '../api/types';
 import { formatNumber, t } from '../i18n';
-import { dateText } from '../list/columns';
+import { dateText, fileSizeText } from '../list/columns';
 import { SPECIMEN_TEXT, metricsSpecimen, xHeightRatio } from '../preview/metricsSpecimen';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
@@ -78,22 +78,13 @@ const record = computed(() => {
 const form = ref<InstanceType<typeof InspectorLicense> | null>(null);
 
 // Files
-/** "1.1 MB", "46 kB": decimal units, as the file managers of all three systems show them. */
-function size(bytes: number): string {
-  const mb = bytes >= 1_000_000;
-  return formatNumber(mb ? bytes / 1_000_000 : bytes / 1000, {
-    style: 'unit',
-    unit: mb ? 'megabyte' : 'kilobyte',
-    maximumFractionDigits: 1,
-  });
-}
 const format = computed(() => {
   const face = d.value?.face;
   if (!face) return null;
   return joined([
     t(`info.formats.${face.format}`),
     face.isVariable ? t('family.info.variable') : null,
-    size(d.value!.fileSize),
+    fileSizeText(d.value!.fileSize),
   ]);
 });
 const added = computed(() => (props.summary ? dateText(props.summary.added) : null));

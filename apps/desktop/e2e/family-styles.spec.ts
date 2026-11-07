@@ -324,10 +324,9 @@ test.describe('pinned instances', () => {
     await expect(page.getByRole('menuitem')).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('menu')).toHaveCount(0);
-    // The pin is the last row, so the next stop is the rail, not the top of the page.
-    await expect(
-      page.getByRole('button', { name: 'Technical details', exact: true }),
-    ).toBeFocused();
+    // The pin is the last row, so the next stop is the rail (its first control, E42.9), not
+    // the top of the page.
+    await expect(page.getByTestId('family-rail').locator('button').first()).toBeFocused();
 
     await more.click();
     await expect(page.getByRole('menuitem')).toBeFocused();

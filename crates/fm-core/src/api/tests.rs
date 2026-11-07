@@ -520,6 +520,110 @@ fn families_filter_by_a_manual_or_smart_collection_and_an_unknown_one_is_not_fou
 }
 
 #[test]
+fn a_family_lists_the_manual_and_smart_collections_that_hold_it() {
+    let (lib, _, _) = Lib::scanned("api-family-collections");
+    let all = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..ListFamiliesRequest::default()
+        })
+        .expect("all")
+        .items;
+    let variable = all
+        .iter()
+        .find(|f| f.is_variable)
+        .expect("a variable family");
+    let fixed = all
+        .iter()
+        .find(|f| !f.is_variable)
+        .expect("a static family");
+    let held = |id| lib.api.get_family(id).expect("family").collections;
+    assert!(held(fixed.id).is_empty(), "in no collection yet");
+
+    let manual = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Picks".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+            color: None,
+        })
+        .expect("manual");
+    let smart = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Variable".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            rule_group: None,
+            color: None,
+        })
+        .expect("smart");
+    // The last face of the family is enough: the family is in it.
+    let last = lib
+        .api
+        .get_family(fixed.id)
+        .expect("family")
+        .faces
+        .last()
+        .expect("a face")
+        .id;
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: manual.id,
+            faces: vec![last],
+            families: Vec::new(),
+        })
+        .expect("added");
+    assert_eq!(held(fixed.id), [manual.id]);
+    assert_eq!(held(variable.id), [smart.id]);
+
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: manual.id,
+            faces: Vec::new(),
+            families: vec![variable.id],
+        })
+        .expect("added");
+    assert_eq!(
+        held(variable.id),
+        [manual.id, smart.id],
+        "once each, in id order"
+    );
+
+    lib.api.delete_collection(manual.id).expect("deleted");
+    assert!(
+        held(fixed.id).is_empty(),
+        "a deleted collection holds nothing"
+    );
+}
+
+#[test]
+fn a_family_counts_its_files_once_and_sums_their_sizes() {
+    let (lib, _, _) = Lib::scanned("api-family-files");
+    let archivo = lib
+        .api
+        .get_family(lib.family("Archivo").id)
+        .expect("family");
+    let mut sizes = std::collections::HashMap::new();
+    for face in &archivo.faces {
+        let d = lib.api.get_face(face.id).expect("face");
+        sizes.insert(d.path, d.file_size);
+    }
+    assert_eq!(archivo.file_count as usize, sizes.len());
+    assert_eq!(archivo.file_bytes, sizes.values().sum::<u32>());
+    assert!(archivo.file_bytes > 0);
+}
+
+#[test]
 fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     let (lib, _, _) = Lib::scanned("api-family");
     let archivo = lib.family("Archivo");
