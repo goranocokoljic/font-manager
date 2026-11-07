@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MOCK_LAYOUT_BOUNDS, MOCK_LAYOUT_PRESETS, mockFaces } from '../api/mock';
+import { setClient } from '../api/client';
+import { MOCK_LAYOUT_BOUNDS, MOCK_LAYOUT_PRESETS, createMockClient, mockFaces } from '../api/mock';
 import type { Layout, TextBlock } from '../api/types';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import FontLayout from './FontLayout.vue';
@@ -383,5 +384,45 @@ describe('FontLayout with a 10-block layout (E12.2)', () => {
     expect(target.attributes('aria-describedby')).toBe(hint.attributes('id'));
     w.unmount();
     setFaceLoader(undefined);
+  });
+});
+
+describe('FontLayout tofu (E43.4)', () => {
+  it('draws the characters a block face lacks as boxes, per block face', async () => {
+    setActivePinia(createPinia());
+    setClient(createMockClient());
+    setFaceLoader(
+      new FaceLoader<FakeFace>({
+        fonts: new FakeSet(),
+        create: (family, source) => new FakeFace(family, source),
+        url: (f) => `fmfont://localhost/${f}`,
+      }),
+    );
+    // Inter maps Cyrillic; Legacy Grotesk maps basic Latin only.
+    const inter = mockFaces.find((f) => f.face.familyName === 'Inter')!.face;
+    const legacy = mockFaces.find((f) => f.face.familyName === 'Legacy Grotesk')!.face;
+    const two: Layout = {
+      preset: null,
+      name: 'Two',
+      blocks: [
+        { ...block, text: 'Love Љубав' },
+        { ...block, text: 'Love Љубав' },
+      ],
+    };
+    const w = mount(FontLayout, {
+      props: { layout: two, face: inter, blockFaces: [null, legacy] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    const [first, second] = w.findAll('[data-testid="layout-block"]');
+    expect(first!.findAll('[role="img"]')).toHaveLength(0);
+    expect(first!.text()).toBe('Love Љубав');
+    expect(second!.findAll('[role="img"]').map((b) => b.attributes('aria-label'))).toEqual(
+      ['Љ', 'у', 'б', 'а', 'в'].map((c) => `missing glyph ${c}`),
+    );
+    expect(second!.text()).toBe('Love');
+    w.unmount();
+    setFaceLoader(undefined);
+    setClient(undefined);
   });
 });

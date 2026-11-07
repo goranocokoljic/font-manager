@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Quick look (Space, from the spec's keyboard model): the face under the list's
 // cursor in a large preview over the list, in the list's sample text. Live text in
-// the webview, through the shared face loader, like the list rows.
+// the webview, through the shared face loader, like the list rows. A character a line
+// needs that the face lacks is drawn as tofu (E43.4), never in a fallback font.
 //
 // A modal dialog: the focus starts on Close and stays in the sheet, plain keys do
 // not reach the list's shortcuts, and Space, Escape or Close return the focus to
@@ -12,6 +13,9 @@ import { t } from '../i18n';
 import UiIconButton from './ui/UiIconButton.vue';
 import { sheetReturnTarget } from '../keyboard/returnFocus';
 import { useFaceLoader } from '../preview/faceLoader';
+import { useSpecimen } from '../preview/useSpecimen';
+import SpecimenText from './SpecimenText';
+import MissingGlyphs from './MissingGlyphs.vue';
 import {
   LETTERS,
   LOREM,
@@ -65,6 +69,11 @@ const font = computed(() =>
   family.value ? `"${family.value}", var(--fm-preview-fallback, system-ui), sans-serif` : undefined,
 );
 const alphabet = `${LETTERS}  ${NUMERALS} ${SYMBOLS}`;
+const faceId = () => props.face.id;
+const sampleShown = useSpecimen(faceId, () => text.value);
+const alphabetShown = useSpecimen(faceId, () => alphabet);
+const nameShown = useSpecimen(faceId, () => name.value);
+const loremShown = useSpecimen(faceId, () => LOREM);
 const SIZES = [12, 14, 18, 24, 36];
 
 // The list cursor follows the arrows; the sheet shows whatever face it lands on.
@@ -144,15 +153,24 @@ function onFocusIn(e: FocusEvent): void {
         />
       </header>
       <div class="body" :style="{ fontFamily: font }">
-        <p class="sample" dir="auto">{{ text }}</p>
-        <p class="alphabet" dir="auto">{{ alphabet }}</p>
+        <p class="sample" dir="auto">
+          <SpecimenText :text="text" :missing="sampleShown.tofu" />
+        </p>
+        <MissingGlyphs v-if="sampleShown.tofu.length" class="missing" :missing="sampleShown.tofu" />
+        <p class="alphabet" dir="auto">
+          <SpecimenText :text="alphabet" :missing="alphabetShown.tofu" />
+        </p>
         <ul class="ladder">
           <li v-for="size in SIZES" :key="size" dir="auto">
             <span class="size" aria-hidden="true">{{ size }}</span>
-            <span class="line" :style="{ fontSize: size + 'px' }">{{ name }}</span>
+            <span class="line" :style="{ fontSize: size + 'px' }"
+              ><SpecimenText :text="name" :missing="nameShown.tofu"
+            /></span>
           </li>
         </ul>
-        <p class="paragraph" dir="auto">{{ LOREM }}</p>
+        <p class="paragraph" dir="auto">
+          <SpecimenText :text="LOREM" :missing="loremShown.tofu" />
+        </p>
       </div>
       <p id="fm-quick-look-hint" class="hint">{{ t('quickLook.hint') }}</p>
     </div>
@@ -204,6 +222,11 @@ h2 {
   font-size: clamp(48px, 7vw, 104px);
   line-height: 1.1;
   overflow-wrap: anywhere;
+}
+/* In the UI font: the body is set in the face. */
+.missing {
+  font-family: var(--fm-font-ui);
+  font-size: var(--fm-text-sm);
 }
 .alphabet {
   margin: 0;

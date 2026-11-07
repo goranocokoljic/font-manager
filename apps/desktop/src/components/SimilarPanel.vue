@@ -11,6 +11,7 @@ import { computed, nextTick, ref, watch, watchEffect, onMounted } from 'vue';
 import type { FaceId, FaceSummary, SimilarFace } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { sampleText } from '../preview/sampleText';
+import { specimenOf } from '../preview/tofu';
 import { usePreviewStore, type PreviewSettings } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
 import { scorePercent, useSimilarStore } from '../stores/similar';
@@ -63,9 +64,7 @@ const source = computed(() => {
   return {
     face,
     name: nameOf(face),
-    text: got?.text ?? sample,
-    fallback: got?.fallback ?? null,
-    missing: got?.missing ?? [],
+    ...specimenOf(sample, got),
   };
 });
 
@@ -95,9 +94,7 @@ const items = computed(() =>
       more: extra ? t('similar.moreStyles', { count: extra }) : '',
       percent: scorePercent(r.score) ?? 0,
       why: r.reasons.filter((x) => !sharedReasons.value.has(x)).join(', '),
-      text: got?.text ?? sample,
-      fallback: got?.fallback ?? null,
-      missing: got?.missing ?? [],
+      ...specimenOf(sample, got),
     };
   }),
 );

@@ -1,6 +1,7 @@
 // What each rendered row previews, shared by the list, grid and waterfall views:
 // a style row its face, a family row its first shown face; the text is the API's
-// answer for the view's sample (the sample, or a fallback the face covers). A
+// answer for the view's sample (the sample, its missing characters as tofu (E43.4), or a
+// fallback the face covers when it draws none of the sample, `preview/tofu.ts`). A
 // virtual style's row previews its face at the style's coordinates. With auto size on
 // (E16.2), each row also carries its face's size factor; the factors of the rows on
 // screen are asked for in one call. With the metrics overlay on (E16.1), each row also
@@ -10,6 +11,7 @@
 import { watchEffect } from 'vue';
 import type { AxisValue, FaceSummary, Metrics, SampleFallback } from '../api/types';
 import { sampleText } from '../preview/sampleText';
+import { specimenOf } from '../preview/tofu';
 import { useFaceMetricsStore } from '../stores/faceMetrics';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -27,6 +29,8 @@ export interface RowPreview {
   text: string;
   fallback: SampleFallback | null;
   missing: string[];
+  /** The characters `text` draws as tofu (E43.4); empty for a fallback text. */
+  tofu: string[];
   /** A virtual style's coordinates; absent for every other row. */
   variations?: AxisValue[];
   /** What the view's size is multiplied by: the auto size factor, 1 when auto size is off. */
@@ -66,15 +70,16 @@ export function useRowPreviews(
   function previewOf(row: ListRow): RowPreview {
     const face = faceOf(row);
     const sample = face ? sampleText(preview(), face, previews.pangramText) : '';
-    const got = face ? samples.get(face.id, sample) : undefined;
+    const shown = specimenOf(sample, face ? samples.get(face.id, sample) : undefined);
     const basis = autoSize ? preview().autoSize : 'off';
     const lines = face && metrics && preview().metrics ? faceMetrics.get(face.id) : undefined;
     return {
       face,
       sample,
-      text: got?.text ?? sample,
-      fallback: got?.fallback ?? null,
-      missing: got?.missing ?? [],
+      text: shown.text,
+      fallback: shown.fallback,
+      missing: shown.missing,
+      tofu: shown.tofu,
       sizeFactor: face && basis !== 'off' ? sizes.get(face.id, basis) : 1,
       ...(lines ? { metrics: lines } : {}),
       ...(row.kind === 'face' && row.virtual ? { variations: row.virtual.coordinates } : {}),

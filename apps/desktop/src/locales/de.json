@@ -1012,6 +1012,13 @@
       "active": "Aktiv"
     }
   },
+  "tofu": {
+    "glyph": "fehlende Glyphe {char}",
+    "missing": {
+      "one": "{count} Glyphe fehlt · {chars}",
+      "other": "{count} Glyphen fehlen · {chars}"
+    }
+  },
   "list": {
     "label": "Schriftliste",
     "inQuickCollection": ", in der Schnellsammlung",

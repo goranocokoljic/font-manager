@@ -28,6 +28,9 @@ import { ACTIONS, yieldsToFocus } from '../keyboard/keymap';
 import { FmFade } from '../motion';
 import { useHeldFace } from '../preview/useHeldFace';
 import { sampleText } from '../preview/sampleText';
+import { useSpecimen } from '../preview/useSpecimen';
+import SpecimenText from '../components/SpecimenText';
+import MissingGlyphs from '../components/MissingGlyphs.vue';
 import { useWeightScrub } from '../preview/useWeightScrub';
 import { variationSettings } from '../preview/variations';
 import { useAxesStore } from '../stores/axes';
@@ -164,6 +167,12 @@ const specimen = computed(() => {
     sampleText(preview.settingsFor(ALL_FONTS_VIEW), page.face, preview.pangramText)
   );
 });
+
+/** The hero's text with the characters the face lacks as tofu (E43.4). */
+const heroSpecimen = useSpecimen(
+  () => page.face?.id,
+  () => specimen.value,
+);
 
 const scrubAxis = computed(() => {
   const axis = shown.value?.axes.find((a) => a.tag === 'wght');
@@ -406,8 +415,13 @@ onBeforeUnmount(() => {
             @pointerup="scrub.onPointerEnd"
             @pointercancel="scrub.onPointerEnd"
           >
-            {{ specimen }}
+            <SpecimenText :text="specimen" :missing="heroSpecimen.tofu" />
           </p>
+          <MissingGlyphs
+            v-if="heroSpecimen.tofu.length"
+            class="hero-missing"
+            :missing="heroSpecimen.tofu"
+          />
         </section>
         <section class="axes" data-testid="family-axes" :aria-label="t('family.axes')">
           <InspectorAxes v-if="page.face?.isVariable" />
@@ -606,6 +620,12 @@ onBeforeUnmount(() => {
   cursor: ew-resize;
   touch-action: pan-y;
   user-select: none;
+}
+/* "6 glyphs missing · š đ č" under the hero (E43.4). */
+.hero-missing {
+  display: block;
+  margin-block: calc(-1 * var(--fm-space-2)) var(--fm-space-3);
+  font-size: var(--fm-text-sm);
 }
 /* Never a fallback font: nothing shows until the face has loaded. */
 .specimen.loading {

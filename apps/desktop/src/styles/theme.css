@@ -541,3 +541,26 @@ hr {
   display: inline-block;
   transform: scaleX(-1);
 }
+
+/* Tofu (E43.4): a character the face lacks, drawn as a box in the accent instead of a
+   fallback font. 0.62 em wide, sitting on the baseline (an empty inline-block's bottom is
+   its baseline), as tall as a lower-case letter with a little more. */
+.fm-tofu {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.62em;
+  height: 0.72em;
+  margin: 0;
+  vertical-align: baseline;
+  border-width: 1.5px;
+  border-style: solid;
+  border-color: var(--fm-accent);
+  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--fm-accent) 14%, transparent);
+}
+
+/* "6 glyphs missing · š đ č": words in the accent's hue, mixed toward the text colour
+   so they reach 4.5:1 (the accent alone is not a text colour, DESIGN.md). */
+.fm-missing-glyphs {
+  color: color-mix(in srgb, var(--fm-accent) 65%, var(--fm-fg));
+}

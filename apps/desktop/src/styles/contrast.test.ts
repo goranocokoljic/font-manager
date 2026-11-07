@@ -216,6 +216,16 @@ describe.each(
     expect(contrast(rgb(tokens['on-accent']), rgb(tokens.accent))).toBeGreaterThanOrEqual(4.5);
   });
 
+  // E43.4: "6 glyphs missing · š đ č" is the accent mixed toward the text colour.
+  it('has the missing-glyphs words at least 4.5:1 on the surfaces', () => {
+    const rule =
+      /\.fm-missing-glyphs \{[^}]*color-mix\(in srgb, var\(--fm-accent\) (\d+)%, var\(--fm-fg\)\)/;
+    const share = Number(rule.exec(theme)?.[1]) / 100;
+    expect(share).toBeGreaterThan(0);
+    const words = tint(tokens.accent, share, base.fg!);
+    for (const bg of surfaces) expect(contrast(words, rgb(bg)), bg).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('has a focus ring and control outlines at least 3:1 on the surfaces', () => {
     for (const bg of surfaces) {
       expect(contrast(rgb(tokens.accent), rgb(bg)), bg).toBeGreaterThanOrEqual(3);

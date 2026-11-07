@@ -7,6 +7,7 @@
 import { computed, useId, watchEffect } from 'vue';
 import { t } from '../i18n';
 import { sampleText } from '../preview/sampleText';
+import { specimenOf } from '../preview/tofu';
 import { useFaceMetricsStore } from '../stores/faceMetrics';
 import { useFontListStore } from '../stores/fontList';
 import { SIZE, usePreviewStore, type PreviewSettings } from '../stores/preview';
@@ -29,7 +30,9 @@ const face = computed(() => list.cursorFace);
 const sample = computed(() =>
   face.value ? sampleText(props.preview, face.value, previews.pangramText) : '',
 );
-const answer = computed(() => (face.value ? samples.get(face.value.id, sample.value) : undefined));
+const answer = computed(() =>
+  specimenOf(sample.value, face.value ? samples.get(face.value.id, sample.value) : undefined),
+);
 watchEffect(() => {
   if (face.value) samples.want(face.value.id, sample.value);
 });
@@ -84,9 +87,9 @@ function onInput(e: Event): void {
       :face="face"
       :view="view"
       :label="label"
-      :text="answer?.text ?? sample"
-      :fallback="answer?.fallback ?? null"
-      :missing="answer?.missing ?? []"
+      :text="answer.text"
+      :fallback="answer.fallback"
+      :missing="answer.missing"
       :size-px="sizePx"
       :line-height="preview.lineHeight"
       :tracking-em="preview.trackingEm"

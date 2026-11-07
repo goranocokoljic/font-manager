@@ -231,6 +231,48 @@ describe('FontPreviewRow', () => {
     );
   });
 
+  describe('tofu (E43.4)', () => {
+    const text = 'Ljubazni fenjerdžija čađavog';
+
+    it('draws each missing character as a box and says how many are missing', () => {
+      const row = mount(FontPreviewRow, {
+        props: { face: mono, text, missing: ['ž', 'č', 'đ'] },
+      });
+      const boxes = row.findAll('.sample [role="img"]');
+      expect(boxes.map((b) => b.attributes('aria-label'))).toEqual([
+        'missing glyph ž',
+        'missing glyph č',
+        'missing glyph đ',
+      ]);
+      expect(boxes.every((b) => b.classes('fm-tofu') && b.text() === '')).toBe(true);
+      // The face draws the rest; a missing character is never text another font could draw.
+      expect(row.get('.sample').text()).toBe('Ljubazni fenjerdija aavog');
+      expect(row.get('[data-testid="missing-glyphs"]').text()).toBe('3 glyphs missing · ž č đ');
+      expect(row.find('[data-testid="fallback-hint"]').exists()).toBe(false);
+    });
+
+    it('draws no box and no count for a face that maps the text', () => {
+      const row = mount(FontPreviewRow, { props: { face: mono, text } });
+      expect(row.find('.sample [role="img"]').exists()).toBe(false);
+      expect(row.find('[data-testid="missing-glyphs"]').exists()).toBe(false);
+      expect(row.get('.sample').text()).toBe(text);
+    });
+
+    it('draws a fallback text whole: the face maps it', () => {
+      const row = mount(FontPreviewRow, {
+        props: {
+          face: mono,
+          text: 'абвгд',
+          fallback: { kind: 'script', script: 'Cyrl' },
+          missing: ['a'],
+        },
+      });
+      expect(row.find('.sample [role="img"]').exists()).toBe(false);
+      expect(row.find('[data-testid="missing-glyphs"]').exists()).toBe(false);
+      expect(row.get('.sample').text()).toBe('абвгд');
+    });
+  });
+
   describe('metrics overlay and outline (E16.1)', () => {
     const metrics = {
       unitsPerEm: 2048,
