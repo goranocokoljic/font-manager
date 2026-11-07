@@ -8,6 +8,7 @@ import { familyKey } from '../list/rows';
 import { withViewTransition } from '../motion';
 import { useFamilyPageStore } from '../stores/familyPage';
 import { useFontListStore } from '../stores/fontList';
+import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 
 /** The name FamilyView's hero carries in its stylesheet. */
 export const SHARED_SPECIMEN = 'fm-family-specimen';
@@ -58,11 +59,13 @@ export function useFamilyNavigation() {
   const router = useRouter();
   const page = useFamilyPageStore();
   const list = useFontListStore();
+  const preview = usePreviewStore();
 
   /** Pushes the family page from the library, on `face` when a style was the one chosen. */
   async function open(family: FamilyId, face?: FaceId): Promise<void> {
     share(specimenOf(family));
-    page.section = 'styles';
+    // Paragraph asks how the family reads, and the Text section is the place that answers it.
+    page.section = preview.settingsFor(ALL_FONTS_VIEW).preset === 'paragraph' ? 'text' : 'styles';
     page.pushed = true;
     await transition(OPENING, async () => {
       // The view records where it is as it leaves, and Back brings it to that place.

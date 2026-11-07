@@ -1431,6 +1431,21 @@
       "info": "Info"
     },
     "sectionLater": "Dieser Bereich kommt in einem späteren Update.",
+    "textHint": "Lesetest · drei Größen, Ihre Zeilenlänge",
+    "textMeasure": "Satzbreite",
+    "textMeasureValue": "{value} ch",
+    "textLeading": "Zeilenabstand",
+    "textGround": "Grund",
+    "textPaper": "Papier",
+    "textInk": "Tinte",
+    "textColumns": "Der Text in drei Größen",
+    "textSize": "{size} px",
+    "textRoles": {
+      "captions": "Bildunterschriften",
+      "body": "Fließtext",
+      "lead": "Vorspann"
+    },
+    "textInverted": "Der andere Grund · derselbe Text in Fließtextgröße",
     "stylesList": "Schnitte dieser Familie",
     "stylesView": "Schnitte anzeigen als",
     "namedStyles": "Benannte Schnitte · {count}",

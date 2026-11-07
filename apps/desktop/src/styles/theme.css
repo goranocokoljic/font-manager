@@ -501,7 +501,7 @@ hr {
 }
 
 /* A preview surface other than `auto` overrides the theme inside a font view only
-   (list, grid, waterfall). */
+   (list, grid, waterfall) and on the family page's Text section (Paper and Ink). */
 .surface-light {
   color-scheme: light;
   --fm-bg: #ffffff;

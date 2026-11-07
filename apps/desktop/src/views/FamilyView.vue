@@ -9,6 +9,7 @@ import { useRoute, useRouter } from 'vue-router';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilySample from '../components/FamilySample.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
+import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorDeveloper from '../components/InspectorDeveloper.vue';
 import InspectorFeatures from '../components/InspectorFeatures.vue';
@@ -238,7 +239,7 @@ function onKey(e: KeyboardEvent): void {
     }
     return;
   }
-  if (typing || el?.closest('input, [role="slider"]')) return;
+  if (typing || el?.closest('input, [role="slider"], [data-keeps-arrows]')) return;
   const key = inlineKey(e.key);
   if (key === 'ArrowLeft') step(page.previous);
   else if (key === 'ArrowRight') step(page.next);
@@ -381,6 +382,12 @@ onBeforeUnmount(() => {
                     :detail="shown"
                     :text="specimen"
                     @choose="chooseStyle"
+                  />
+                  <FamilyText
+                    v-else-if="page.section === 'text'"
+                    :detail="shown"
+                    :text="specimen"
+                    :face-style="specimenStyle"
                   />
                   <InspectorGlyphs v-else-if="page.section === 'characters'" />
                   <InspectorFeatures v-else-if="page.section === 'features'" />
