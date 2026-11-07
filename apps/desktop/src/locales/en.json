@@ -824,10 +824,15 @@
   "features": {
     "noFace": "Select a face to see its features.",
     "none": "This face has no OpenType features.",
-    "hint": "Switches change this face's previews.",
-    "cssLabel": "features",
     "list": "Features",
-    "automatic": "Applied automatically"
+    "automatic": "Applied automatically",
+    "pageHint": "Switched-on features apply to every preview on this page.",
+    "copySwitched": {
+      "one": "Copy CSS for {count} switched on",
+      "other": "Copy CSS for {count} switched on"
+    },
+    "more": { "one": "{count} more", "other": "{count} more" },
+    "rare": "Rare features"
   },
   "palettes": {
     "title": "Color palette",

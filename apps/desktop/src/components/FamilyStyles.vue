@@ -11,6 +11,7 @@ import { rampAxes, rampStops, ringedStop, type RampStop } from '../preview/ramp'
 import { coordinateSettings, faceAxes, variationSettings } from '../preview/variations';
 import { NEAR_INSTANCE, useAxesStore } from '../stores/axes';
 import { useCompareStore } from '../stores/compare';
+import { useFeaturesStore } from '../stores/features';
 import { NAMED_STYLES, useFamilyPageStore } from '../stores/familyPage';
 import { useToastStore } from '../stores/toast';
 import CopyCss from './CopyCss.vue';
@@ -32,6 +33,7 @@ const emit = defineEmits<{ choose: [face: FaceId] }>();
 const page = useFamilyPageStore();
 const axesSet = useAxesStore();
 const compare = useCompareStore();
+const features = useFeaturesStore();
 const toast = useToastStore();
 
 const heroAxes = computed(() => props.detail?.axes ?? []);
@@ -71,6 +73,10 @@ const heroWeight = computed(() => {
   return face && wght ? axesSet.value(face.id, wght) : (face?.weight ?? null);
 });
 const moved = computed(() => (heroFace.value && axesSet.values(heroFace.value.id)) ?? []);
+/** The features switched on in the Features section: every row shows them, as the hero does. */
+const heroFeatures = computed(() =>
+  heroFace.value ? features.settings(heroFace.value.id) : undefined,
+);
 
 const leans = (face: FaceSummary | undefined): boolean => !!face && face.slant !== 'upright';
 /**
@@ -322,6 +328,7 @@ async function deleteMenuPin(): Promise<void> {
             :face="row.sampleFace"
             :text="text"
             :variation="row.variation"
+            :features="heroFeatures"
           />
           <span v-if="!row.stop" class="hover-actions">
             <CopyCss

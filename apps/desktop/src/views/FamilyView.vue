@@ -7,13 +7,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FamilyCharacters from '../components/FamilyCharacters.vue';
+import FamilyFeatures from '../components/FamilyFeatures.vue';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilySample from '../components/FamilySample.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
 import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorDeveloper from '../components/InspectorDeveloper.vue';
-import InspectorFeatures from '../components/InspectorFeatures.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
@@ -394,7 +394,11 @@ onBeforeUnmount(() => {
                     :detail="shown"
                     :face-style="specimenStyle"
                   />
-                  <InspectorFeatures v-else-if="page.section === 'features'" />
+                  <FamilyFeatures
+                    v-else-if="page.section === 'features'"
+                    :detail="shown"
+                    :text="specimen"
+                  />
                   <InspectorInfo v-else-if="page.section === 'info'" />
                   <p v-else class="quiet">{{ t('family.sectionLater') }}</p>
                 </section>
@@ -410,6 +414,7 @@ onBeforeUnmount(() => {
               :face="faceId"
               :text="specimen"
               :variation="heroVariation"
+              :features="specimenStyle?.fontFeatureSettings"
             />
             <dl class="facts">
               <template v-if="page.detail?.designer">

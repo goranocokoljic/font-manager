@@ -12,8 +12,8 @@ const fixture = readFileSync(
   ),
 );
 
-// MockApi face 1 (Inter Regular): ccmp (automatic), kern and liga (on by
-// default), onum, smcp, ss01.
+// MockApi face 1 (Inter Regular): ccmp (automatic, behind "1 more"), kern and liga
+// (on by default), onum, smcp, ss01.
 async function openFeatures(page: Page) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
@@ -37,10 +37,61 @@ test('the Features tab lists every feature by name and tag at the browser defaul
     const s = panel.getByRole('switch', { name: label, exact: true });
     await expect(s).toHaveAttribute('aria-checked', String(on));
   }
-  // Applied by the shaper: listed, no switch.
+  // Applied by the shaper: behind "1 more", listed without a switch.
   await expect(panel.getByRole('switch', { name: /ccmp/ })).toHaveCount(0);
-  const auto = panel.getByRole('list', { name: 'Applied automatically' });
-  await expect(auto).toContainText('Glyph composition and decomposition');
+  const more = panel.getByRole('button', { name: '1 more' });
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  const rare = panel.getByRole('list', { name: 'Rare features' });
+  await expect(rare).toHaveCount(0);
+  await more.click();
+  await expect(rare).toContainText('Glyph composition and decomposition');
+  await expect(rare).toContainText('Applied automatically');
+});
+
+test('each row shows its sample off and on side by side; ss01 shows the preview text', async ({
+  page,
+}) => {
+  const panel = await openFeatures(page);
+  const row = panel.locator('li[data-tag="liga"]');
+  await expect(row.locator('.tag')).toHaveText('liga');
+  await expect(row.locator('.tag')).toHaveCSS('font-family', /mono/i);
+  const off = row.locator('.sample.off');
+  const on = row.locator('.sample.on');
+  await expect(off).toHaveText('fi fl ffi ffl');
+  await expect(off).toHaveCSS('font-feature-settings', '"liga" 0');
+  await expect(on).toHaveCSS('font-feature-settings', '"liga"');
+  // Side by side: the same line, the off sample first.
+  const [a, b] = [await off.boundingBox(), await on.boundingBox()];
+  expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+  expect(b!.x).toBeGreaterThan(a!.x + a!.width - 1);
+  // Muted: the off sample is not the colour of the on sample.
+  const color = (el: Element) => getComputedStyle(el).color;
+  expect(await off.evaluate(color)).not.toBe(await on.evaluate(color));
+  await expect(panel.locator('li[data-tag="onum"] .sample.on')).toHaveText('0123456789');
+  await expect(panel.locator('li[data-tag="ss01"] .sample.on')).toHaveText(
+    (await hero(page).textContent())!.trim(),
+  );
+});
+
+test('a switched-on feature reaches the hero, the Styles rows, the Text section and the rail', async ({
+  page,
+}) => {
+  const panel = await openFeatures(page);
+  await panel.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
+  await expect(hero(page)).toHaveCSS('font-feature-settings', '"smcp"');
+  await expect(page.getByTestId('family-rail-sample')).toHaveCSS('font-feature-settings', '"smcp"');
+  const styles = await showSection(page, 'Styles');
+  const rows = styles.getByTestId('family-style-sample');
+  await expect(rows.first()).toBeVisible();
+  for (const sample of await rows.all())
+    await expect(sample).toHaveCSS('font-feature-settings', '"smcp"');
+  const text = await showSection(page, 'Text');
+  const passages = text.locator(
+    '[data-testid="family-text-passage"], [data-testid="family-text-ink-passage"]',
+  );
+  await expect(passages.first()).toBeVisible();
+  for (const p of await passages.all())
+    await expect(p).toHaveCSS('font-feature-settings', '"smcp"');
 });
 
 test("toggling smcp changes the hero's computed font-feature-settings; Reset restores it", async ({
@@ -63,20 +114,20 @@ test("toggling smcp changes the hero's computed font-feature-settings; Reset res
   await expect(sample).toHaveCSS('font-feature-settings', 'normal');
 });
 
-test('"Copy CSS" copies font-feature-settings for the changed features, as the preview applies them', async ({
+test('"Copy CSS for N switched on" copies font-feature-settings as the preview applies it', async ({
   page,
   context,
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const panel = await openFeatures(page);
   const sample = hero(page);
-  const copy = panel.getByRole('button', { name: 'Copy CSS for the features' });
+  const copy = panel.getByTestId('features-copy');
   const status = panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ });
   const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
 
-  await copy.click();
-  await expect(status).toHaveText('Copied');
-  expect(await clipboard()).toBe('font-feature-settings: normal;');
+  // Nothing switched: nothing to copy.
+  await expect(copy).toHaveText('Copy CSS for 0 switched on');
+  await expect(copy).toBeDisabled();
 
   // smcp is off by default, liga on: both written; onum switched twice is not.
   await panel.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
@@ -84,7 +135,9 @@ test('"Copy CSS" copies font-feature-settings for the changed features, as the p
   await panel.getByRole('switch', { name: 'Oldstyle figures (onum)' }).click();
   await panel.getByRole('switch', { name: 'Oldstyle figures (onum)' }).click();
   await expect(sample).toHaveCSS('font-feature-settings', /"smcp"/);
+  await expect(copy).toHaveText('Copy CSS for 2 switched on');
   await copy.click();
+  await expect(status).toHaveText('Copied');
   await expect.poll(clipboard).toBe('font-feature-settings: "liga" 0, "smcp" 1;');
   // The copied value, as the browser reads it, is what the row applies.
   const copied = (await clipboard()).replace(/^font-feature-settings: (.*);$/, '$1');
@@ -103,10 +156,12 @@ test('"Copy CSS" for features is keyboard-reachable and says when the clipboard 
   await page.evaluate(() => {
     navigator.clipboard.writeText = () => Promise.reject(new Error('refused'));
   });
-  const copy = panel.getByRole('button', { name: 'Copy CSS for the features' });
+  const copy = panel.getByTestId('features-copy');
+  await panel.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
   await panel.getByRole('switch').first().focus();
   await page.keyboard.press('Shift+Tab');
-  // Reset is disabled while nothing changed, so Copy CSS is just before the switches.
+  await expect(panel.getByRole('button', { name: 'Reset' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   await expect(copy).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(panel.getByRole('status').filter({ hasText: 'Could not copy' })).toBeVisible();
@@ -212,7 +267,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
-// Screenshots of the Features tab for UI reviews: FM_SCREENS_DIR=<dir> pnpm test:e2e --grep @screens
+// Screenshots of the Features section for UI reviews: FM_SCREENS_DIR=<dir> pnpm test:e2e --grep @screens
 test.describe('@screens features tab', () => {
   const dir = process.env.FM_SCREENS_DIR;
   test.skip(!dir, 'FM_SCREENS_DIR is not set');

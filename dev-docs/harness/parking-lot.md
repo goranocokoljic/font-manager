@@ -376,3 +376,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.5 #456] apps/desktop/src/views/FamilyView.vue:134 — the header counts named styles from the shown face only, while the rail's "Styles" reads 1 for the same family, so the two disagree.
 - [E42.5 #456] apps/desktop/src/components/FamilyCharacters.vue:257 — `searchText` starts empty and its watcher is not immediate, so switching section and back leaves the grid filtered by `glyphs.query` under an empty search field.
 - [E42.5 #456] apps/desktop/src/views/FamilyView.vue:430 — whole-button `fm-directional` mirroring is also here (besides InspectorInfo.vue:258 and InspectorLicense.vue:96), so the label mirrors in RTL.
+- [E42.6 #457] apps/desktop/src/preview/useHeldFace.ts:18 — a rejected face load is swallowed, so every `.loading` sample (Features rows, FamilySample) stays hidden with no failure state.
+- [E42.6 #457] dev-docs/harness/parking-lot.md:204 — a parked note still points at InspectorFeatures.vue:176, which E42.6 deleted; the UiSwitch it describes is still used.
+- [E42.6 #457] apps/desktop/src/components/ui/UiSwitch.vue:13 — the off switch outline (`--fm-border-strong` on `--fm-surface-2`) in the light theme may fall under 3:1; needs measuring.
+- [E42.6 #457] apps/desktop/src/views/FamilyView.vue — the page has two buttons named "Reset" (hero axes and features); not new.
