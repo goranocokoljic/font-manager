@@ -40,6 +40,15 @@ describe('glyph alternates', () => {
     expect(got.map((a) => a.key)).toEqual(['feature-ss03']);
   });
 
+  it('leaves out a tag that is not CSS-safe and escapes a quote in one that is', () => {
+    const got = glyphAlternates(
+      { replacedBy: [feature('ssé1'), feature('toolong'), feature('s"s1')] },
+      [],
+      [],
+    );
+    expect(got.map((a) => a.fontFeatureSettings)).toEqual(['"s\\"s1" 1']);
+  });
+
   it('names a feature without a name by its tag', () => {
     const [got] = glyphAlternates({ replacedBy: [feature('ss04', { name: null })] }, [], []);
     expect(got?.name).toBe('ss04');
