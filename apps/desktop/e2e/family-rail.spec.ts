@@ -142,6 +142,17 @@ test('"Show only fonts that can do Polish" filters the wall on the way back', as
   await expect(rail.getByTestId('rail-filter-wall')).toHaveCount(0);
   await chip(rail, 'Polish').click();
   const offer = rail.getByRole('button', { name: 'Show only fonts that can do Polish' });
+  // Unchecked, the box is the only sign of the state: it takes the 3:1 control border, not
+  // the faint hairline.
+  const control = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--fm-control-border)';
+    document.body.append(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    return rgb;
+  });
+  await expect(offer.locator('.box')).toHaveCSS('border-top-color', control);
   await offer.click();
   await expect(offer).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Library', exact: true }).click();

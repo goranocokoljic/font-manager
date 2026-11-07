@@ -325,7 +325,7 @@ const developerOpen = ref(false);
   width: 14px;
   height: 14px;
   place-items: center;
-  border: 1px solid var(--fm-border);
+  border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-radius-sm);
 }
 .offer[aria-pressed='true'] .box {
