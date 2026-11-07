@@ -203,14 +203,9 @@ const developerOpen = ref(false);
     <dt>{{ t('family.railFacts.licence') }}</dt>
     <dd data-testid="rail-licence">
       {{ licenseName ?? DASH }}
-      <span
-        v-for="m in marks"
-        :key="m.key"
-        class="mark"
-        :data-mark="m.key"
-        :data-ok="m.ok"
-        :aria-label="m.label"
-        ><span aria-hidden="true">{{ m.text }}</span></span
+      <span v-for="m in marks" :key="m.key" class="mark" :data-mark="m.key" :data-ok="m.ok"
+        ><span aria-hidden="true">{{ m.text }}</span
+        ><span class="sr-only">{{ m.label }}</span></span
       >
     </dd>
     <dt>{{ t('family.railFacts.format') }}</dt>

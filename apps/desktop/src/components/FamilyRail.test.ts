@@ -172,7 +172,7 @@ describe('family page rail', () => {
     const licence = w.get('[data-testid="rail-licence"]');
     const marks = licence.findAll('.mark');
     expect(marks.map((m) => m.attributes('data-mark'))).toEqual(['web', 'embed']);
-    expect(marks[0]!.attributes('aria-label')).toMatch(/^web: (not )?allowed$/);
+    expect(marks[0]!.get('.sr-only').text()).toMatch(/^web: (not )?allowed$/);
     expect(text(w, 'rail-format')).toContain('2 files · 1.1 MB');
     // In the sidebar's order; a collection that does not hold the family is not listed.
     const used = w.get('[data-testid="rail-used-in"]').findAll('button');
@@ -189,7 +189,8 @@ describe('family page rail', () => {
     const w = await mountWith({ detail: { license: { ...base, embedding: 'restricted' } } });
     const embed = w.get('[data-testid="rail-licence"] [data-mark="embed"]');
     expect(embed.attributes('data-ok')).toBe('false');
-    expect(embed.text()).toBe('embed ✗');
+    expect(embed.get('[aria-hidden="true"]').text()).toBe('embed ✗');
+    expect(embed.get('.sr-only').text()).toBe('embed: not allowed');
   });
 
   it('"Technical details" is the last control of the rail', async () => {
