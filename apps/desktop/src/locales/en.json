@@ -1440,6 +1440,20 @@
       "pairings": "Pairings",
       "info": "Info"
     },
+    "pairingRole": "This family",
+    "pairingRoles": {
+      "headline": "for headlines",
+      "body": "for body"
+    },
+    "pairingHints": {
+      "headline": "This family sets the headline · fonts from your library for the body",
+      "body": "This family sets the body · fonts from your library for the headline"
+    },
+    "pairingsList": "Suggested pairings",
+    "pairingsLoading": "Looking for pairings…",
+    "pairingsNone": "No font in your library pairs with this family yet.",
+    "pairingsError": "Font Manager could not suggest pairings. {message}",
+    "browseCatalogs": "Browse catalogs",
     "sectionLater": "This section comes in a later update.",
     "textHint": "Reading test · three sizes, your line length",
     "textMeasure": "Measure",

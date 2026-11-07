@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { nextTick, ref } from 'vue';
 import { useClient } from '../api/client';
-import type { ApiError, FaceId, FaceSummary, FamilyHit } from '../api/types';
+import type { ApiError, FaceId, FaceSummary, FamilyHit, TextBlock } from '../api/types';
 import {
   disposePanelLayoutsStore,
   usePanelLayoutsStore,
@@ -29,6 +29,18 @@ export function blockScope(panel: number, layoutId: string): string {
 /** The text layouts store of panel `panel`. */
 export function layoutsOf(panel: number): TextLayoutsStore {
   return panel === FIRST_PANEL ? useTextLayoutsStore() : usePanelLayoutsStore(panel);
+}
+
+/**
+ * The block a pairing's headline face sets (E42.7): the largest one, the first of equals.
+ * A block without a size counts as the smallest. Null for a layout without blocks.
+ */
+export function headlineBlock(blocks: readonly TextBlock[]): number | null {
+  let best: number | null = null;
+  blocks.forEach((b, i) => {
+    if (best === null || (b.sizePt ?? 0) > (blocks[best]!.sizePt ?? 0)) best = i;
+  });
+  return best;
 }
 
 /**
@@ -166,6 +178,22 @@ export const useStudioStore = defineStore('studio', () => {
     if (best !== undefined) await setBlockFace(layoutId, index, best);
   }
 
+  /**
+   * Loads a pairing into a layout (E42.7): its headline block (`headlineBlock`) is set in
+   * `headline`; every other block of the layout follows the panel's face, the body face.
+   */
+  async function loadPairing(
+    layoutId: string,
+    blocks: readonly TextBlock[],
+    headline: FaceId,
+  ): Promise<void> {
+    const index = headlineBlock(blocks);
+    blocks.forEach((_, i) => {
+      if (i !== index) resetBlock(layoutId, i);
+    });
+    if (index !== null) await setBlockFace(layoutId, index, headline);
+  }
+
   /** "Use panel font": block `index` follows the panel's face again. */
   function resetBlock(layoutId: string, index: number): void {
     const k = key(layoutId, index);
@@ -192,5 +220,6 @@ export const useStudioStore = defineStore('studio', () => {
     setBlockFace,
     pickFamily,
     resetBlock,
+    loadPairing,
   };
 });

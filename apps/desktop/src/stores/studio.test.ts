@@ -7,9 +7,11 @@ import {
   MAX_PANELS,
   STUDIO_RESULTS,
   blockScope,
+  headlineBlock,
   layoutsOf,
   useStudioStore,
 } from './studio';
+import type { TextBlock } from '../api/types';
 import { useTextLayoutsStore } from './textLayouts';
 
 let client: ReturnType<typeof createMockClient>;
@@ -235,5 +237,42 @@ describe('studio panels', () => {
     expect(blockScope(FIRST_PANEL, 'book')).toBe('book');
     expect(blockScope(2, 'book')).not.toBe(blockScope(3, 'book'));
     expect(blockScope(2, 'book')).not.toBe('book');
+  });
+});
+
+const block = (sizePt: number | null): TextBlock => ({
+  text: 'words',
+  sizePt,
+  lineHeight: null,
+  tracking: null,
+  paragraphSpacingPt: null,
+  firstLineIndentEm: null,
+  columns: 1,
+  align: 'start',
+  overflow: 'wrap',
+});
+
+describe('studio pairings (E42.7)', () => {
+  it('the headline block is the largest one, the first of equals', () => {
+    expect(headlineBlock([block(12), block(48), block(24)])).toBe(1);
+    expect(headlineBlock([block(30), block(30)])).toBe(0);
+    expect(headlineBlock([block(null), block(9)])).toBe(1);
+    expect(headlineBlock([])).toBeNull();
+  });
+
+  it('sets the headline block in the headline face and puts the others back on the panel face', async () => {
+    const studio = useStudioStore();
+    await studio.setBlockFace('book', 0, mono.id);
+    await studio.setBlockFace('book', 2, mono.id);
+    await studio.loadPairing('book', [block(12), block(36), block(10)], inter.id);
+    expect(studio.faceOf('book', 1)?.id).toBe(inter.id);
+    expect(studio.faceOf('book', 0)).toBeNull();
+    expect(studio.faceOf('book', 2)).toBeNull();
+  });
+
+  it('a layout without blocks loads nothing', async () => {
+    const studio = useStudioStore();
+    await studio.loadPairing('book', [], inter.id);
+    expect(studio.blockFaces).toEqual({});
   });
 });
