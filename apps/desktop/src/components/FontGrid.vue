@@ -14,7 +14,9 @@
 // that palette instead, as a mask cannot show colors; so does every card while
 // outline or tracking is on (E16.1), every card of a wrapped preset (E41.2: a thumbnail is
 // one line), and a card waiting for the thumbnail of a text just typed, so a key repaints
-// the wall on the next frame. The grid shares the list's cursor, selection
+// the wall on the next frame. A card whose face lacks characters of the text shows live
+// text too, with tofu for them (E43.4): a thumbnail is a mask and cannot draw the box. Its
+// meta line says "N glyphs missing · š đ č". The grid shares the list's cursor, selection
 // and keyboard model; Up/Down move by a line, Left/Right by a card, Enter expands a
 // family or opens a style. While the grid moves fast (E35.8, `list/settle.ts`) cards
 // ask for no thumbnails or faces and show their empty frame; once it settles, the
@@ -73,6 +75,7 @@ import { t } from '../i18n';
 import { weightRangeText } from '../list/columns';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
+import MissingGlyphs from './MissingGlyphs.vue';
 import FmFlipGroup from '../motion/FmFlipGroup.vue';
 import { useReducedMotion } from '../motion/useReducedMotion';
 
@@ -371,7 +374,7 @@ const visible = computed(() => {
       : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
-    const usesThumb = !!face && !palette && !liveText.value;
+    const usesThumb = !!face && !palette && !liveText.value && !p.tofu.length;
     const renderPx = specimenRenderPx(text, deviceScale());
     const fresh = face && usesThumb ? thumbnails.get(face.id, text, renderPx) : undefined;
     // A held thumbnail shows the same sample at another cut; another sample is a stale text.
@@ -392,6 +395,7 @@ const visible = computed(() => {
       face,
       text,
       fallback: p.fallback,
+      tofu: p.tofu,
       palette,
       usesThumb,
       live,
@@ -555,6 +559,7 @@ function onToggle(row: ListRow): void {
             v-if="item.face && item.live"
             :face="item.face.id"
             :text="item.text"
+            :missing="item.tofu"
             :palette="item.palette"
             :size-px="specimenPx"
             :fit-width="wrapped ? undefined : box.width"
@@ -604,6 +609,7 @@ function onToggle(row: ListRow): void {
                 >{{ weightRangeText(item.row.family.weightRange) }}</span
               >
             </span>
+            <MissingGlyphs v-if="item.tofu.length" :missing="item.tofu" />
             <UiBadge v-if="item.fallback" data-testid="fallback-hint">{{
               t('list.fallback')
             }}</UiBadge>
@@ -760,6 +766,11 @@ function onToggle(row: ListRow): void {
 .rows .card {
   /* ROWS.paddingPx in list/grid.ts. */
   padding: 18px;
+}
+/* The missing line takes the rest of the line, at its end, and is cut rather than wrapped. */
+.meta > .missing-glyphs {
+  flex: 1 1 0;
+  text-align: end;
 }
 .rows .meta {
   order: -1;

@@ -814,7 +814,10 @@ export function mockSampleText(f: FaceDetail, text: string): SampleText {
   const missing: string[] = [];
   for (const c of text)
     if (!/[\s\p{Cc}]/u.test(c) && !chars.has(c) && !missing.includes(c)) missing.push(c);
-  if (!missing.length) return { face, text, fallback: null, missing };
+  // E43.4 (`fm_core::sample::preview_sample`): a face that maps a letter or digit of the
+  // sample previews it, its missing characters drawn as tofu.
+  const mapsAny = [...text].some((c) => /[\p{L}\p{N}]/u.test(c) && chars.has(c));
+  if (!missing.length || mapsAny) return { face, text, fallback: null, missing };
   let best: { score: number; script: string; letters: string } | undefined;
   for (const [script, letters] of MOCK_LANGUAGES) {
     if (![...letters].every((c) => chars.has(c))) continue;

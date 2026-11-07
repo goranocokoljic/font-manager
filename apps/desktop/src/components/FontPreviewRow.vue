@@ -10,7 +10,9 @@
 // family in `view` applies through `font-palette` (E16.3).
 // The list passes the view's preview settings (size, spacing, alignment, color).
 // When the face lacks characters of the sample, the list passes the fallback text
-// the API chose and `fallback`; the row then shows a small "Fallback" hint.
+// the API chose and `fallback`; the row then shows a small "Fallback" hint. Otherwise
+// each character in `missing` is drawn as tofu (E43.4), never in a fallback font, and the
+// label line says "N glyphs missing · š đ č".
 // With `metrics` (E16.1) the row draws the face's baseline, x-height and cap-height
 // lines over the sample: a zero-size box inside the text sits on the webview's own
 // baseline, and each line is the metric's share of the em above it, so the lines
@@ -26,6 +28,8 @@ import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
 import { usePalettesStore } from '../stores/palettes';
 import UiBadge from './ui/UiBadge.vue';
+import MissingGlyphs from './MissingGlyphs.vue';
+import SpecimenText from './SpecimenText';
 import { ALL_FONTS_VIEW } from '../stores/preview';
 import { faceAxes, variationSettings } from '../preview/variations';
 import { t } from '../i18n';
@@ -46,7 +50,7 @@ const props = withDefaults(
     variations?: AxisValue[];
     /** Set when `text` is a fallback from the face's own coverage, not the sample. */
     fallback?: SampleFallback | null;
-    /** Characters of the sample the face lacks. */
+    /** Characters of the sample the face lacks: tofu in `text` unless it is a fallback. */
     missing?: string[];
     /** The view whose chosen color palettes apply. */
     view?: string;
@@ -241,6 +245,9 @@ function onScrubUp(e: PointerEvent): void {
   }
 }
 
+/** The characters drawn as tofu: none in a fallback text, which the face draws whole. */
+const tofu = computed(() => (props.fallback ? [] : props.missing));
+
 const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
 
 /** While deferred, the sample slot shows the row's name in the UI font. */
@@ -265,6 +272,7 @@ const deferredStyle = computed(() => ({
         :aria-label="fallbackTitle"
         >{{ t('list.fallback') }}</UiBadge
       >
+      <MissingGlyphs v-if="tofu.length" :missing="tofu" />
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
       <span
         v-if="scrubbing !== null"
@@ -300,8 +308,8 @@ const deferredStyle = computed(() => ({
           :class="line.kind"
           :data-line="line.kind"
           :style="{ bottom: `${line.em}em` }" /></span
-      >{{ text }}</span
-    >
+      ><SpecimenText :text="text" :missing="tofu"
+    /></span>
   </div>
 </template>
 
@@ -326,6 +334,9 @@ const deferredStyle = computed(() => ({
 }
 .note {
   color: var(--fm-warning);
+}
+.label > .missing-glyphs {
+  margin-inline-start: auto;
 }
 .sample {
   overflow: hidden;

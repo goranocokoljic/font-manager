@@ -19,6 +19,12 @@
 //! count as missing.
 //! A face with an empty set (no `cmap` stored, see E3.7) is not judged: it
 //! previews the sample.
+//!
+//! **Tofu previews (E43.4, [`preview_sample`]):** the live previews draw each
+//! missing character as a box, so a face that maps at least one letter or
+//! digit of the sample previews the sample, with its missing characters
+//! listed; only a face that maps none of them falls back as above. A specimen
+//! page, which cannot draw the boxes, keeps [`dynamic_sample`].
 
 use std::sync::LazyLock;
 
@@ -115,12 +121,26 @@ fn counts(c: char) -> bool {
     !coverage::is_ignorable(c)
 }
 
-/// The text a face that maps `set` previews for the sample `text`.
+/// The text a face that maps `set` previews for the sample `text`, where the
+/// missing characters cannot be drawn (a specimen page).
 pub fn dynamic_sample(set: &CodePointSet, text: &str) -> DynamicSample {
-    sample_of(&SCRIPTS, set, text)
+    sample_of(&SCRIPTS, set, text, false)
 }
 
-fn sample_of(scripts: &[Script], set: &CodePointSet, text: &str) -> DynamicSample {
+/// The text a live preview of a face that maps `set` shows for the sample
+/// `text` (E43.4): the sample, its missing characters drawn as tofu, when the
+/// face maps a letter or digit of it; else as [`dynamic_sample`].
+pub fn preview_sample(set: &CodePointSet, text: &str) -> DynamicSample {
+    sample_of(&SCRIPTS, set, text, true)
+}
+
+/// Whether the face maps a letter or digit of `text`.
+fn maps_any_letter(set: &CodePointSet, text: &str) -> bool {
+    text.chars()
+        .any(|c| c.is_alphanumeric() && set.contains(u32::from(c)))
+}
+
+fn sample_of(scripts: &[Script], set: &CodePointSet, text: &str, tofu: bool) -> DynamicSample {
     let same = |missing| DynamicSample {
         text: text.to_owned(),
         fallback: None,
@@ -135,7 +155,7 @@ fn sample_of(scripts: &[Script], set: &CodePointSet, text: &str) -> DynamicSampl
             missing.push(c);
         }
     }
-    if missing.is_empty() {
+    if missing.is_empty() || (tofu && maps_any_letter(set, text)) {
         return same(missing);
     }
     if let Some((script, letters)) = script_fallback(scripts, set) {
@@ -223,6 +243,11 @@ mod tests {
         }
     }
 
+    /// The specimen rule (no tofu).
+    fn sample_of_(scripts: &[Script], set: &CodePointSet, text: &str) -> DynamicSample {
+        sample_of(scripts, set, text, false)
+    }
+
     fn scripts() -> Vec<Script> {
         scripts_of(&[
             charset("ru", "Cyrl", "АБВабв"),
@@ -234,7 +259,7 @@ mod tests {
 
     #[test]
     fn a_face_that_covers_the_sample_previews_it() {
-        let got = sample_of(&scripts(), &set("ABCDabcd"), "Abc\tdab\n cd");
+        let got = sample_of_(&scripts(), &set("ABCDabcd"), "Abc\tdab\n cd");
         assert_eq!(
             got,
             DynamicSample {
@@ -247,7 +272,7 @@ mod tests {
 
     #[test]
     fn a_face_that_lacks_characters_previews_letters_of_its_script() {
-        let got = sample_of(&scripts(), &set("ABCDabcd"), "Ваба bad");
+        let got = sample_of_(&scripts(), &set("ABCDabcd"), "Ваба bad");
         assert_eq!(got.text, "abcd", "lower-case letters of en");
         assert_eq!(
             got.fallback,
@@ -262,7 +287,7 @@ mod tests {
     fn the_script_the_face_covers_most_wins() {
         // Complete Cyrillic (6 of 6) and complete en; Latin scores 10 with Ą ą.
         let face = set("АБВабвABCDabcdĄą");
-        let got = sample_of(&scripts(), &face, "ابت");
+        let got = sample_of_(&scripts(), &face, "ابت");
         assert_eq!(
             got.fallback,
             Some(SampleFallback::Script {
@@ -272,7 +297,7 @@ mod tests {
         assert_eq!(got.text, "abcd", "the first complete preset of the script");
         // en incomplete: Cyrillic is the only script with a complete preset.
         let cyr = set("АБВабвABab");
-        let got = sample_of(&scripts(), &cyr, "ابت");
+        let got = sample_of_(&scripts(), &cyr, "ابت");
         assert_eq!(
             got.fallback,
             Some(SampleFallback::Script {
@@ -285,7 +310,7 @@ mod tests {
     #[test]
     fn ties_go_to_the_script_listed_first() {
         let both = scripts_of(&[charset("x", "Xaaa", "ab"), charset("y", "Ybbb", "cd")]);
-        let got = sample_of(&both, &set("abcd"), "z");
+        let got = sample_of_(&both, &set("abcd"), "z");
         assert_eq!(
             got.fallback,
             Some(SampleFallback::Script {
@@ -296,7 +321,7 @@ mod tests {
 
     #[test]
     fn a_caseless_script_previews_all_its_letters() {
-        let got = sample_of(&scripts(), &set("ابت"), "abc");
+        let got = sample_of_(&scripts(), &set("ابت"), "abc");
         assert_eq!(got.text, "ابت");
         assert_eq!(
             got.fallback,
@@ -309,14 +334,14 @@ mod tests {
     #[test]
     fn a_face_that_covers_no_language_previews_its_own_symbols() {
         let face = set("★☆♠♣ABC");
-        let got = sample_of(&scripts(), &face, "Hello");
+        let got = sample_of_(&scripts(), &face, "Hello");
         assert_eq!(got.fallback, Some(SampleFallback::Symbols));
         assert_eq!(
             got.text, "A B C ★ ☆ ♠ ♣",
             "letters first, then in code point order"
         );
         let dingbats = CodePointSet::from_code_points(0xE000..0xE100);
-        let got = sample_of(&scripts(), &dingbats, "Hello");
+        let got = sample_of_(&scripts(), &dingbats, "Hello");
         assert_eq!(got.text.split(' ').count(), SYMBOL_SAMPLE_LEN);
         assert!(got.text.starts_with('\u{E000}'));
     }
@@ -324,7 +349,7 @@ mod tests {
     #[test]
     fn invisible_format_characters_never_count_as_missing() {
         let text = "ab\u{200D}c\u{AD}d\u{FE0F}\u{FEFF}";
-        let got = sample_of(&scripts(), &set("ABCDabcd"), text);
+        let got = sample_of_(&scripts(), &set("ABCDabcd"), text);
         assert_eq!(got.fallback, None);
         assert_eq!(got.text, text);
         assert!(got.missing.is_empty(), "{:?}", got.missing);
@@ -332,7 +357,7 @@ mod tests {
 
     #[test]
     fn a_face_without_a_stored_cmap_is_not_judged() {
-        let got = sample_of(&scripts(), &CodePointSet::default(), "Ваба");
+        let got = sample_of_(&scripts(), &CodePointSet::default(), "Ваба");
         assert_eq!(got.text, "Ваба");
         assert_eq!(got.fallback, None);
         assert!(got.missing.is_empty());
@@ -340,7 +365,7 @@ mod tests {
 
     #[test]
     fn a_face_with_only_whitespace_keeps_the_sample() {
-        let got = sample_of(&scripts(), &set(" \u{a0}"), "Hello");
+        let got = sample_of_(&scripts(), &set(" \u{a0}"), "Hello");
         assert_eq!(got.text, "Hello");
         assert_eq!(got.fallback, None);
         assert_eq!(got.missing, vec!['H', 'e', 'l', 'o']);
@@ -375,5 +400,44 @@ mod tests {
         );
         assert!(got.text.starts_with("абвгд"), "{}", got.text);
         assert_eq!(got.text.chars().count(), SCRIPT_SAMPLE_LEN);
+    }
+
+    #[test]
+    fn a_tofu_preview_keeps_a_sample_the_face_partly_maps() {
+        let got = sample_of(&scripts(), &set("ABCDabcd"), "Ваба bad", true);
+        assert_eq!(got.text, "Ваба bad");
+        assert_eq!(got.fallback, None);
+        assert_eq!(got.missing, vec!['В', 'а', 'б'], "drawn as tofu");
+    }
+
+    #[test]
+    fn a_tofu_preview_falls_back_when_the_face_maps_no_letter_of_the_sample() {
+        // Only the space and the full stop are mapped: no letter or digit.
+        let got = sample_of(&scripts(), &set("ABCDabcd ."), "Ваба вба.", true);
+        assert_eq!(got.text, "abcd");
+        assert_eq!(
+            got.fallback,
+            Some(SampleFallback::Script {
+                script: "Latn".into()
+            })
+        );
+        assert_eq!(got.missing, vec!['В', 'а', 'б', 'в']);
+    }
+
+    #[test]
+    fn a_tofu_preview_of_a_covered_sample_is_the_sample() {
+        let got = preview_sample(&set("ABCDabcd"), "Abc");
+        assert_eq!(got.text, "Abc");
+        assert_eq!(got.fallback, None);
+        assert!(got.missing.is_empty());
+    }
+
+    #[test]
+    fn a_specimen_still_falls_back_for_a_partly_mapped_sample() {
+        let latin = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ");
+        assert!(dynamic_sample(&latin, "Šta je to").fallback.is_some());
+        let got = preview_sample(&latin, "Šta je to");
+        assert_eq!(got.fallback, None);
+        assert_eq!(got.missing, vec!['Š']);
     }
 }

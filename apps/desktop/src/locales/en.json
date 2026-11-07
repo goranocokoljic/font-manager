@@ -1009,6 +1009,13 @@
       "active": "Active"
     }
   },
+  "tofu": {
+    "glyph": "missing glyph {char}",
+    "missing": {
+      "one": "{count} glyph missing · {chars}",
+      "other": "{count} glyphs missing · {chars}"
+    }
+  },
   "list": {
     "label": "Font list",
     "inQuickCollection": ", in Quick Collection",

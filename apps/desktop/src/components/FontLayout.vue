@@ -20,7 +20,7 @@
 //
 // In print (E24.4) the controls (`fm-no-print`) stay off the paper and the text keeps the
 // layout's width: the locked width, or the page's when unlocked.
-import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch, watchEffect } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
@@ -30,6 +30,8 @@ import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useActions } from '../stores/commands';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW } from '../stores/preview';
+import { useSamplesStore } from '../stores/samples';
+import { specimenOf } from '../preview/tofu';
 import LayoutBlock from './LayoutBlock.vue';
 
 const props = defineProps<{
@@ -200,6 +202,22 @@ const familyOf = (face: FaceSummary) =>
   `"${faceFamily(face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`;
 const fontFamily = computed(() => (props.face ? familyOf(props.face) : 'inherit'));
 
+/** The face block `i` is set in: its own, or the layout's. */
+const blockFace = (i: number): FaceSummary | null => props.blockFaces?.[i] ?? props.face;
+
+const samples = useSamplesStore();
+watchEffect(() => {
+  props.layout?.blocks.forEach((b, i) => {
+    const face = blockFace(i);
+    if (face) samples.want(face.id, b.text);
+  });
+});
+/** The characters of block `i`'s text its face lacks: drawn as tofu (E43.4). */
+function blockTofu(i: number, text: string): string[] {
+  const face = blockFace(i);
+  return face ? specimenOf(text, samples.get(face.id, text), true).tofu : [];
+}
+
 /** The `font-family` of block `i`: its own face, or the layout's. */
 function blockFamily(i: number): string {
   const own = props.blockFaces?.[i];
@@ -304,6 +322,7 @@ function blockFamily(i: number): string {
             <LayoutBlock
               :block="block"
               :font-family="blockFamily(i)"
+              :missing="blockTofu(i, block.text)"
               :editable="editable"
               :label="blockLabel(i)"
               :bounds="hasEditor ? bounds : null"

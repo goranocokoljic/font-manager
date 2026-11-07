@@ -4,14 +4,18 @@
 // thumbnail is a one-color mask, so it cannot show any of them. The face is held
 // through the shared face loader while the card shows it. With `defer` (the grid
 // moves fast, E35.8) a card that does not hold its face yet starts no load and shows
-// its empty frame (`data-state="deferred"`) until `defer` is off.
+// its empty frame (`data-state="deferred"`) until `defer` is off. The characters in
+// `missing` are drawn as tofu (E43.4), never in a fallback font.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
+import SpecimenText from './SpecimenText';
 
 const props = defineProps<{
   face: FaceId;
   text: string;
+  /** Characters of `text` the face lacks: drawn as tofu. */
+  missing?: readonly string[];
   /** The CSS `font-palette` to draw in; the face's default when absent. */
   palette?: string;
   sizePx: number;
@@ -124,8 +128,8 @@ const style = computed(() => ({
     :style="style"
   >
     <span ref="line" class="line"
-      ><template v-if="state !== 'deferred'">{{ text }}</template></span
-    >
+      ><SpecimenText v-if="state !== 'deferred'" :text="text" :missing="missing ?? []"
+    /></span>
   </div>
 </template>
 

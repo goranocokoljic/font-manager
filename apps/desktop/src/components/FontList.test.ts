@@ -435,6 +435,23 @@ describe('FontList dynamic previews', () => {
     list.unmount();
   });
 
+  it('a face that draws some of the sample shows it with tofu, not a fallback (E43.4)', async () => {
+    // Legacy Grotesk maps "Love" but none of "Љубав".
+    const list = await listOf({}, { preview: custom('Love Љубав') });
+    const [inter, , legacy] = items(list);
+    expect(inter!.findAll('.sample [role="img"]')).toHaveLength(0);
+    expect(inter!.find('[data-testid="missing-glyphs"]').exists()).toBe(false);
+    expect(legacy!.get('.sample').text()).toBe('Love');
+    expect(legacy!.findAll('.sample [role="img"]').map((b) => b.attributes('aria-label'))).toEqual(
+      ['Љ', 'у', 'б', 'а', 'в'].map((c) => `missing glyph ${c}`),
+    );
+    expect(legacy!.get('[data-testid="missing-glyphs"]').text()).toBe(
+      '5 glyphs missing · Љ у б а в',
+    );
+    expect(legacy!.find('[data-testid="fallback-hint"]').exists()).toBe(false);
+    list.unmount();
+  });
+
   it('follows the sample live: covered text drops the fallback again', async () => {
     const list = await listOf({}, { preview: custom('Љубав') });
     expect(rows(list)[2]!.hint.exists()).toBe(true);

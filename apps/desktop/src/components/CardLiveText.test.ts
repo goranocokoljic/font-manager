@@ -116,3 +116,27 @@ describe('CardLiveText deferred while the grid moves fast (E35.8)', () => {
     card.unmount();
   });
 });
+
+describe('CardLiveText tofu (E43.4)', () => {
+  it('draws the characters the face lacks as boxes, and the rest as text', async () => {
+    const card = mount(CardLiveText, {
+      props: { face: 7, text: 'pokaže štos', sizePx: 24, missing: ['ž', 'š'] },
+    });
+    await flushPromises();
+    const boxes = card.findAll('[role="img"]');
+    expect(boxes.map((b) => b.attributes('aria-label'))).toEqual([
+      'missing glyph ž',
+      'missing glyph š',
+    ]);
+    expect(card.get('.line').text()).toBe('pokae tos');
+    card.unmount();
+  });
+
+  it('draws text with nothing missing whole', async () => {
+    const card = mount(CardLiveText, { props: { face: 7, text: 'pokaže', sizePx: 24 } });
+    await flushPromises();
+    expect(card.find('[role="img"]').exists()).toBe(false);
+    expect(card.get('.line').text()).toBe('pokaže');
+    card.unmount();
+  });
+});

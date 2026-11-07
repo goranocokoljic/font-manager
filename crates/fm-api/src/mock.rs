@@ -2745,8 +2745,9 @@ impl PreviewService for MockApi {
         })
     }
 
-    /// The core's rule (`fm_core::sample`) on the mock's languages: the
-    /// sample when the face maps it, else lower-case letters of the complete
+    /// The core's rule (`fm_core::sample::preview_sample`) on the mock's
+    /// languages: the sample when the face maps it or any letter or digit of
+    /// it (E43.4, tofu), else lower-case letters of the complete
     /// language whose script the face maps most, else its own characters.
     fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
         let st = self.state();
@@ -2765,7 +2766,13 @@ impl PreviewService for MockApi {
                         missing.push(s);
                     }
                 }
-                if missing.is_empty() {
+                // E43.4: a face that maps a letter or digit of the sample
+                // previews it, its missing characters drawn as tofu.
+                let maps_any = req
+                    .text
+                    .chars()
+                    .any(|c| c.is_alphanumeric() && f.chars.contains(&c));
+                if missing.is_empty() || maps_any {
                     return Ok(SampleText {
                         face: id,
                         text: req.text.clone(),

@@ -11,6 +11,7 @@ import type { FaceId } from '../api/types';
 import { t } from '../i18n';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { sampleText } from '../preview/sampleText';
+import { specimenOf } from '../preview/tofu';
 import {
   DEFAULT_PREVIEW,
   previewRowHeight,
@@ -75,9 +76,7 @@ const visible = computed(() =>
       index,
       slot: index % pool.value,
       name: `${face.familyName} ${face.style}`,
-      text: got?.text ?? sample,
-      fallback: got?.fallback ?? null,
-      missing: got?.missing ?? [],
+      ...specimenOf(sample, got),
     };
   }),
 );

@@ -1840,7 +1840,15 @@ fn sample_texts_fall_back_to_the_faces_own_script() {
     let got = ask(&[1, 7], "Źdźbło trawy");
     assert_eq!(got[0].text, "Źdźbło trawy");
     assert_eq!(got[0].fallback, None);
+    // E43.4: face 7 maps letters of the sample, so it previews it with tofu.
     assert_eq!(got[1].face, FaceId(7));
+    assert_eq!(
+        (got[1].text.as_str(), &got[1].fallback),
+        ("Źdźbło trawy", &None)
+    );
+    assert_eq!(got[1].missing, ["Ź", "ź", "ł"]);
+    // It maps no letter of this one: its own letters instead.
+    let got = ask(&[1, 7], "Źź ł");
     assert_eq!(got[1].text, "abcdefghijklmnopqrstuvwxyz");
     assert_eq!(
         got[1].fallback,

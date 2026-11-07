@@ -16,9 +16,13 @@
 //
 // An editable block opens its text in a box set in the same face on a double click or
 // Enter; leaving the box (or Ctrl/Cmd+Enter) hands the text to the parent, Escape drops it.
+//
+// The characters in `missing` (the face lacks them) are drawn as tofu (E43.4), never in a
+// fallback font.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { LayoutBounds, TextBlock } from '../api/types';
 import { formatNumber, t } from '../i18n';
+import SpecimenText from './SpecimenText';
 import type { BlockProps } from '../stores/textLayouts';
 import {
   DRAG_THRESHOLD_PX,
@@ -34,6 +38,8 @@ const props = defineProps<{
   block: TextBlock;
   /** The CSS `font-family` of the face the block is set in. */
   fontFamily: string;
+  /** Characters of the text the face lacks: drawn as tofu. */
+  missing?: readonly string[];
   /** The block's text can be edited; the parent gets it through `edit`. */
   editable?: boolean;
   /** The accessible name of the block and its text box ("Block 1"). */
@@ -370,7 +376,7 @@ function onFieldKey(e: KeyboardEvent): void {
           dir="auto"
           :style="paragraphStyle"
         >
-          {{ line }}
+          <SpecimenText :text="line" :missing="missing ?? []" />
         </p>
       </template>
     </div>

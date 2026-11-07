@@ -1,9 +1,12 @@
 <script setup lang="ts">
 // One line of text in a face at the given coordinates, for the family page's Styles rows and
-// rail. Never a fallback font: nothing shows until the face has loaded.
+// rail. Never a fallback font: nothing shows until the face has loaded, and a character the
+// face lacks is drawn as tofu (E43.4).
 import { toRef } from 'vue';
 import type { FaceId } from '../api/types';
 import { useHeldFace } from '../preview/useHeldFace';
+import { useSpecimen } from '../preview/useSpecimen';
+import SpecimenText from './SpecimenText';
 
 const props = defineProps<{
   face: FaceId;
@@ -15,6 +18,10 @@ const props = defineProps<{
 }>();
 
 const family = useHeldFace(toRef(props, 'face'));
+const shown = useSpecimen(
+  () => props.face,
+  () => props.text,
+);
 </script>
 
 <template>
@@ -26,8 +33,8 @@ const family = useHeldFace(toRef(props, 'face'));
       fontVariationSettings: variation,
       fontFeatureSettings: features,
     }"
-    >{{ text }}</span
-  >
+    ><SpecimenText :text="text" :missing="shown.tofu"
+  /></span>
 </template>
 
 <style scoped>

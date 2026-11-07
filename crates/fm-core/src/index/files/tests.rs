@@ -772,6 +772,15 @@ fn sample_texts_fall_back_to_the_faces_own_coverage() {
     );
     assert!(got[0].missing.is_empty());
 
+    // E43.4: a face that maps some letters of the sample previews it, its
+    // missing characters drawn as tofu; it falls back only when it maps none.
+    let got = ask("Quick fox Съешь");
+    assert_eq!(
+        (got[0].text.as_str(), &got[0].fallback),
+        ("Quick fox Съешь", &None)
+    );
+    assert_eq!(got[0].missing, ["С", "ъ", "е", "ш", "ь"]);
+
     let err = index
         .sample_texts(&SampleTextRequest {
             faces: vec![fm_api::FaceId(9_999)],

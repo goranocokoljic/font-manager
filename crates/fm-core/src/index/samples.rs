@@ -37,7 +37,8 @@ impl Index {
     }
 
     /// The text each face of `req` previews for its sample text, in request
-    /// order (see [`sample::dynamic_sample`]). A face whose stored `cmap`
+    /// order (see [`sample::preview_sample`]: missing characters are drawn as
+    /// tofu, E43.4). A face whose stored `cmap`
     /// cannot be read is not judged (it previews the sample), like a face
     /// with no `cmap`; the other faces of the request are answered as usual.
     /// An unknown face or a database error fails the request.
@@ -52,7 +53,7 @@ impl Index {
                         CodePointSet::default()
                     }),
                 };
-                let got = sample::dynamic_sample(&set, &req.text);
+                let got = sample::preview_sample(&set, &req.text);
                 Ok(SampleText {
                     face,
                     text: got.text,
