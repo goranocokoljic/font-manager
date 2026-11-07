@@ -17,6 +17,9 @@ export interface MetricsSpecimen {
   xLine: number | null;
 }
 
+/** The letters of the specimen: a cap, an x-height letter and a descender. Not UI text. */
+export const SPECIMEN_TEXT = 'Hxg';
+
 /** The size the criterion sets for the specimen. */
 export const SPECIMEN_SIZE = 96;
 

@@ -9,7 +9,7 @@ import { computed, ref } from 'vue';
 import type { Axis, FaceDetail, FamilySummary } from '../api/types';
 import { formatNumber, t } from '../i18n';
 import { dateText } from '../list/columns';
-import { metricsSpecimen, xHeightRatio } from '../preview/metricsSpecimen';
+import { SPECIMEN_TEXT, metricsSpecimen, xHeightRatio } from '../preview/metricsSpecimen';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
 import InspectorLicense from './InspectorLicense.vue';
@@ -228,7 +228,7 @@ const xHeight = computed(() => {
             :font-size="specimen.size"
             :style="faceStyle"
           >
-            Hxg
+            {{ SPECIMEN_TEXT }}
           </text>
         </svg>
         <dl class="values">
