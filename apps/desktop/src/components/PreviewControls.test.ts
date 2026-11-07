@@ -6,6 +6,7 @@ import { ACTIONS } from '../keyboard/keymap';
 import { PARAGRAPH } from '../preview/sampleText';
 import { useCommandsStore } from '../stores/commands';
 import { usePreviewStore } from '../stores/preview';
+import { useSearchStore } from '../stores/search';
 import PreviewControls from './PreviewControls.vue';
 import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import { pickOption, selectOptions } from './ui/testing';
@@ -420,5 +421,44 @@ describe('PreviewControls in paragraph mode (E43.1)', () => {
     store.update('all', { bodySizePx: 19 });
     await chip(wrapper, 'Paragraph').trigger('click');
     expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('body text at 19 px');
+  });
+});
+
+describe('PreviewControls with a detected language (E43.3)', () => {
+  const SERBIAN = 'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos.';
+
+  it("names the language the API detects in the field's text", async () => {
+    const { wrapper } = controls('all', { fontCount: 212 });
+    const search = useSearchStore();
+    // After the controls' own language load, so these names are the ones read.
+    await flushPromises();
+    search.languages = [
+      {
+        code: 'sr-Latn',
+        name: 'Serbian (Latin)',
+        script: 'Latn',
+        pangram: null,
+        sampleGlyphs: null,
+      },
+    ];
+    await field(wrapper).setValue(SERBIAN);
+    // Not detected yet: the plain note.
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('renders in 212 fonts');
+    search.coverText = SERBIAN;
+    search.detected = [{ code: 'sr-Latn', confidence: 0.9 }];
+    await flushPromises();
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe(
+      'Serbian (Latin) detected · showing fonts that render every glyph',
+    );
+  });
+
+  it('keeps the plain note when the detection is for another text', async () => {
+    const { wrapper } = controls('all', { fontCount: 212 });
+    const search = useSearchStore();
+    await field(wrapper).setValue(SERBIAN);
+    search.coverText = 'Ђ';
+    search.detected = [{ code: 'sr-Cyrl', confidence: 0.9 }];
+    await flushPromises();
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('renders in 212 fonts');
   });
 });

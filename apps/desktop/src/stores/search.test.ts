@@ -212,3 +212,67 @@ describe('font list with a search', () => {
     expect(best).toBeLessThan(50);
   });
 });
+
+describe('the renders-your-text switch (E43.3)', () => {
+  const TEXT = 'čađavog štos';
+
+  it('counts with and without the text rule and asks which language the text is in', async () => {
+    vi.useFakeTimers();
+    const store = await setup();
+    const asked: string[] = [];
+    client.detectLanguages = async (req) => {
+      asked.push(req.text);
+      return [{ code: 'sr-Latn', confidence: 0.8 }];
+    };
+    store.setCoverText(TEXT);
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    await flushPromises();
+    expect(asked).toEqual([TEXT]);
+    expect(store.detected).toEqual([{ code: 'sr-Latn', confidence: 0.8 }]);
+    expect(store.coverBase).toBe(store.total);
+    expect(store.coverTotal).not.toBeNull();
+    expect(requests.filter((r) => r.rule).length).toBe(1);
+    expect(requests.filter((r) => !r.rule).length).toBe(1);
+  });
+
+  it('puts the text rule on the list search at once when on, and takes it off', async () => {
+    vi.useFakeTimers();
+    const store = await setup();
+    store.setCoverText(TEXT);
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    await flushPromises();
+    requests = [];
+    store.setHideMissing(true);
+    await flushPromises();
+    const list = requests.find((r) => (r.page?.limit ?? 0) > 1)!;
+    expect(list.rule).toEqual({
+      op: 'and',
+      rules: [{ kind: 'filters', filters: { supports: { kind: 'text', text: TEXT } } }],
+    });
+    expect(list.order).toEqual({ by: 'name', descending: false });
+    // The switch changes what the list shows, not the counts: no recount.
+    expect(requests.filter((r) => r.page?.limit === 1)).toEqual([]);
+    expect(store.active).toBe(true);
+    expect(store.hits).not.toBeNull();
+    expect(store.total).toBe(store.coverTotal);
+
+    requests = [];
+    store.setHideMissing(false);
+    await flushPromises();
+    expect(requests.some((r) => (r.page?.limit ?? 0) > 1)).toBe(false);
+    expect(store.hits).toBeNull();
+  });
+
+  it('a failed detection leaves the counts and names no language', async () => {
+    vi.useFakeTimers();
+    const store = await setup();
+    client.detectLanguages = async () => {
+      throw new Error('down');
+    };
+    store.setCoverText(TEXT);
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    await flushPromises();
+    expect(store.detected).toEqual([]);
+    expect(store.coverTotal).not.toBeNull();
+  });
+});

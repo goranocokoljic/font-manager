@@ -9,7 +9,7 @@ const files = wallFixtures();
 const SERBIAN =
   'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos, pa onda i drugi štos, i još jedan.';
 
-async function openWall(page: Page): Promise<Locator> {
+async function openWall(page: Page, query = '?mockLibrary=wall'): Promise<Locator> {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/fmfont/*', (route) => {
     const id = Number(new URL(route.request().url()).pathname.split('/').pop());
@@ -20,7 +20,7 @@ async function openWall(page: Page): Promise<Locator> {
       path: fileURLToPath(new URL(`../../../fixtures/fonts/${path}`, import.meta.url)),
     });
   });
-  await page.goto('/?mockLibrary=wall#/');
+  await page.goto(`/${query}#/`);
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
   await page
     .getByRole('group', { name: 'View mode' })
@@ -138,5 +138,98 @@ test.describe('paragraph mode', () => {
     await expect(page.locator('[role="listbox"][data-layout="wall"]')).toBeVisible();
     await expect(grids).toHaveCount(1);
     expect(await grids.evaluate((el) => el.scrollTop)).toBe(left);
+  });
+});
+
+test.describe('renders-my-text filter (E43.3)', () => {
+  const hideSwitch = (page: Page) => countLine(page).getByRole('switch');
+  const filters = (page: Page) => page.getByRole('region', { name: 'Filters' });
+  /** The wall's size: every card says how many there are (a virtualized list). */
+  const size = (page: Page) =>
+    page.getByRole('listbox', { name: 'Font grid' }).getByRole('option').first();
+
+  test('names the detected language and hides the families with missing glyphs', async ({
+    page,
+  }) => {
+    const wall = await openWall(page);
+    await field(page).fill(SERBIAN);
+    await expect(row(page).getByTestId('preview-hint')).toHaveText(
+      // The mock's detection ranks by shared letters; the core's by its own data.
+      /^\p{Lu}[^·]+ detected · showing fonts that render every glyph$/u,
+    );
+    const count = countLine(page).getByTestId('renders-text');
+    await expect(count).toHaveText(/^\d+ of 60 families$/);
+    const covered = Number((await count.textContent())!.split(' ')[0]);
+    await expect(countLine(page).getByTestId('hide-missing')).toHaveText(
+      `Hide the ${60 - covered} with missing glyphs`,
+    );
+    await expect(hideSwitch(page)).toHaveAttribute('aria-checked', 'false');
+    await expect(size(page)).toHaveAttribute('aria-setsize', '60');
+    await expect(wall.getByRole('option').first()).toHaveAttribute('aria-posinset', '1');
+
+    await hideSwitch(page).click();
+    await expect(hideSwitch(page)).toHaveAttribute('aria-checked', 'true');
+    await expect(size(page)).toHaveAttribute('aria-setsize', String(covered));
+    // A filter chip like any other, counted in the Filters badge.
+    const chip = filters(page).getByRole('button', { name: 'Remove filter Renders your text' });
+    await expect(chip).toBeVisible();
+    await expect(filters(page).locator('button.opener .count')).toHaveText('1');
+
+    // Remembered with the view.
+    await page.reload();
+    await expect(hideSwitch(page)).toHaveAttribute('aria-checked', 'true');
+    await expect(chip).toBeVisible();
+
+    // Removing the chip turns the switch off and brings every family back.
+    await chip.click();
+    await expect(hideSwitch(page)).toHaveAttribute('aria-checked', 'false');
+    await expect(chip).toHaveCount(0);
+    await expect(size(page)).toHaveAttribute('aria-setsize', '60');
+  });
+
+  test('toggling on 1,000 families re-renders in under 100 ms', async ({ page }) => {
+    const wall = await openWall(page, '?mockLibrary=wall&mockFaces=940');
+    await field(page).fill(SERBIAN);
+    await expect(hideSwitch(page)).toBeVisible();
+    await expect(wall.getByRole('option').first()).toHaveAttribute('aria-setsize', '1000');
+    // Click to the painted frame: the search (the mock, standing in for the core) and the
+    // page's work and paint. The DOM change is seen as it happens; the next frame paints it.
+    const once = () =>
+      page.evaluate(
+        () =>
+          new Promise<number>((resolve) => {
+            const setsize = () =>
+              document
+                .querySelector('[role="listbox"][aria-label="Font grid"] [role="option"]')
+                ?.getAttribute('aria-setsize');
+            const before = setsize();
+            const seen = new MutationObserver(() => {
+              if (setsize() === before) return;
+              seen.disconnect();
+              requestAnimationFrame(() => resolve(performance.now() - t0));
+            });
+            seen.observe(document.body, { subtree: true, childList: true, attributes: true });
+            const t0 = performance.now();
+            document
+              .querySelector<HTMLElement>('[data-testid="count-line"] [role="switch"]')!
+              .click();
+          }),
+      );
+    const first = wall.getByRole('option').first();
+    // Three times on (and off between): the median, so one garbage collection is not the number.
+    const runs: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      runs.push(await once());
+      await expect(first).not.toHaveAttribute('aria-setsize', '1000');
+      await hideSwitch(page).click();
+      await expect(first).toHaveAttribute('aria-setsize', '1000');
+    }
+    const ms = runs.sort((a, b) => a - b)[1]!;
+    console.log(
+      `renders-text switch: the wall repainted ${ms.toFixed(1)} ms after the click (median of ${runs.map((r) => r.toFixed(1)).join(', ')})`,
+    );
+    // The CI macOS VM runs this page 2-3x slower (see search.spec.ts): there it checks the
+    // switch re-renders promptly; the 100 ms budget is held on a desktop machine.
+    expect(ms).toBeLessThan(process.env.CI ? 300 : 100);
   });
 });

@@ -196,4 +196,77 @@ describe('the count line with your own text (E43.1)', () => {
     await w.setProps({ rows: false });
     expect(w.find('[data-testid="body-size"]').exists()).toBe(false);
   });
+
+  it('offers "Hide the N with missing glyphs" and hides them with a text rule (E43.3)', async () => {
+    vi.useFakeTimers();
+    const { w, store, preview, asked } = await mountOwn();
+    store.setFilters({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
+    await flushPromises();
+    await type(preview, SERBIAN);
+    const toggle = w.get('[data-testid="hide-missing"]');
+    expect(toggle.text()).toBe('Hide the 64 with missing glyphs');
+    const sw = toggle.get('[role="switch"]');
+    expect(sw.attributes('aria-checked')).toBe('false');
+
+    asked.length = 0;
+    await sw.trigger('click');
+    await flushPromises();
+    expect(sw.attributes('aria-checked')).toBe('true');
+    // Remembered with the view, and the list search itself now carries the text rule.
+    expect(preview.settingsFor(ALL_FONTS_VIEW).hideMissing).toBe(true);
+    expect(store.hiding).toBe(true);
+    const list = asked.find((r) => (r.page?.limit ?? 0) > 1)!;
+    expect(list.filters).toEqual({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
+    expect(list.rule).toEqual({
+      op: 'and',
+      rules: [{ kind: 'filters', filters: { supports: { kind: 'text', text: SERBIAN } } }],
+    });
+    // The count still reads against every family, and the switch still names the hidden ones.
+    expect(w.get('[role="status"]').text()).toBe('148 of 212 families render your text completely');
+    expect(w.get('[data-testid="hide-missing"]').text()).toBe('Hide the 64 with missing glyphs');
+
+    asked.length = 0;
+    await sw.trigger('click');
+    await flushPromises();
+    expect(store.hiding).toBe(false);
+    expect(asked.find((r) => (r.page?.limit ?? 0) > 1)?.rule).toBeUndefined();
+  });
+
+  it('shows no switch while no family misses a glyph, nor without text past Basic Latin', async () => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const client = createMockClient();
+    const search = client.search.bind(client);
+    client.search = async (req) => ({ ...(await search(req)), total: 212 });
+    setClient(client);
+    await useLibraryStore().load();
+    wrapper = mount(WallCountLine, {
+      props: { view: ALL_FONTS_VIEW },
+      global: { plugins: [pinia] },
+    });
+    const preview = usePreviewStore();
+    await type(preview, ENGLISH);
+    expect(wrapper.find('[data-testid="hide-missing"]').exists()).toBe(false);
+    await type(preview, SERBIAN);
+    expect(wrapper.get('[data-testid="renders-text"]').text()).toBe('212 of 212 families');
+    expect(wrapper.find('[data-testid="hide-missing"]').exists()).toBe(false);
+  });
+
+  it('a remembered switch hides from the start, and only while there is text to check', async () => {
+    vi.useFakeTimers();
+    const { store, preview, asked } = await mountOwn();
+    preview.update(ALL_FONTS_VIEW, { hideMissing: true });
+    await flushPromises();
+    // Basic Latin: nothing to hide, no rule on the list.
+    expect(store.hiding).toBe(false);
+    await type(preview, SERBIAN);
+    expect(store.hiding).toBe(true);
+    expect(asked.filter((r) => (r.page?.limit ?? 0) > 1).pop()?.rule).toBeTruthy();
+    asked.length = 0;
+    await type(preview, ENGLISH);
+    expect(store.hiding).toBe(false);
+    expect(asked.find((r) => (r.page?.limit ?? 0) > 1)?.rule).toBeUndefined();
+  });
 });

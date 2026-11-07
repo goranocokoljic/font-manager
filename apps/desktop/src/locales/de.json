@@ -257,7 +257,8 @@
       "pangram": "ein Pangramm · jeder Buchstabe einmal",
       "alphabet": "der Zeichensatz auf einen Blick",
       "numerals": "Ziffern · tabellarisch, wo die Schrift sie hat",
-      "paragraph": "Fließtext in {size} px"
+      "paragraph": "Fließtext in {size} px",
+      "detected": "{language} erkannt · zeigt Schriften, die jedes Zeichen darstellen"
     }
   },
   "samples": {
@@ -307,7 +308,11 @@
         "one": "{covered} von {count} Familie",
         "other": "{covered} von {count} Familien"
       },
-      "tail": { "one": "zeigt Ihren Text vollständig", "other": "zeigen Ihren Text vollständig" }
+      "tail": { "one": "zeigt Ihren Text vollständig", "other": "zeigen Ihren Text vollständig" },
+      "hide": {
+        "one": "Die {count} mit fehlenden Zeichen ausblenden",
+        "other": "Die {count} mit fehlenden Zeichen ausblenden"
+      }
     },
     "bodySize": "Fließtext {size} px · Zeilenhöhe {lineHeight}",
     "viewMode": "Ansichtsmodus",
@@ -431,6 +436,7 @@
   },
   "chips": {
     "options": "Filteroptionen",
+    "rendersText": "Zeigt Ihren Text",
     "more": {
       "one": "+{count} weiterer Filter",
       "other": "+{count} weitere Filter"

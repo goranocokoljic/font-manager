@@ -509,11 +509,22 @@ const MOCK_LANGUAGES: [string, string][] = [
   ['Cyrl', 'абвгдђежзијклљмнњопрстћуфхцчџш'],
 ];
 
+/** The character sets by the scripts that pick them: built once, not per face per search. */
+const SCRIPT_CHARS = new Map<string, Set<string>>();
+
 function mockChars(f: FaceDetail): Set<string> {
   const own = mockWall().chars.get(f.face.family);
   if (own) return own;
-  const latin = f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN;
-  return new Set(f.scripts.includes('hebr') ? latin + HEBREW : latin);
+  const cyrl = f.scripts.includes('cyrl');
+  const hebr = f.scripts.includes('hebr');
+  const key = `${cyrl}:${hebr}`;
+  let chars = SCRIPT_CHARS.get(key);
+  if (!chars) {
+    const latin = cyrl ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN;
+    chars = new Set(hebr ? latin + HEBREW : latin);
+    SCRIPT_CHARS.set(key, chars);
+  }
+  return chars;
 }
 
 /**
@@ -567,6 +578,24 @@ export function mockCoverage(f: FaceDetail, text: string, cjk: boolean): Coverag
     (c) => !/\s/.test(c) && !has.has(c) && !(cjk && CJK.includes(c)),
   );
   return { face: f.face.id, complete: missing.length === 0, missing, languages: [] };
+}
+
+/**
+ * True when a mock face has every character of `text`, remembered per face and text: the
+ * filter counts ask it once per filter value for every face (E43.3's switch on 1,000 families).
+ */
+const RENDERS = new WeakMap<FaceDetail, Map<string, boolean>>();
+function rendersAll(f: FaceDetail, text: string): boolean {
+  let known = RENDERS.get(f);
+  if (!known) RENDERS.set(f, (known = new Map()));
+  let complete = known.get(text);
+  if (complete === undefined) {
+    complete = mockCoverage(f, text, false).complete;
+    // A face's text changes as the user types: keep the last few texts only.
+    if (known.size >= 8) known.delete(known.keys().next().value!);
+    known.set(text, complete);
+  }
+  return complete;
 }
 
 /** What a mock face lacks of the presets `codes`, like the Rust mock's `check_coverage`. */
@@ -1381,8 +1410,8 @@ function passes(
   const f = d.face;
   // A wall face covers a language by its own characters, so the wall's gaps show in this
   // filter too (its Vietnamese preset included); the other faces by script.
-  const own = mockWall().chars.get(f.family);
   const covers = (code: string) => {
+    const own = mockWall().chars.get(f.family);
     const preset = [...mockLanguages, ...(own ? [WALL_VIETNAMESE] : [])].find(
       (l) => l.code === code,
     );
@@ -1415,7 +1444,7 @@ function passes(
     (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
     (q.webOk == null || q.webOk === mockWebUse(d.license).ok) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers)) &&
-    (supports?.kind !== 'text' || mockCoverage(d, supports.text, false).complete)
+    (supports?.kind !== 'text' || rendersAll(d, supports.text))
   );
 }
 
@@ -2356,10 +2385,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     if (!trimmed) throw invalid('A comparison needs a name.');
     return trimmed;
   };
+  /** The last search's results and counts, for its next page (see `search`). */
+  let lastSearch: { key: string; all: FamilyHit[]; counts: FilterCounts } | null = null;
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
   const faceHits = (words: string[], d: FaceDetail, q: Filters, rule?: RuleGroup | null) => {
-    const hay =
-      `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
+    // No words: no text to build (the counts ask this for every face per filter value).
+    const hay = words.length
+      ? `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase()
+      : '';
     return (
       words.every((w) => hay.includes(w)) &&
       matches(d, q, []) &&
@@ -2559,7 +2592,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     return g.op === 'and' ? results.every(Boolean) : !results.length || results.some(Boolean);
   };
   const matches = (d: FaceDetail, q: Filters, path: CollectionId[]): boolean =>
-    passes(d, active.has(d.face.id), everActivated.has(d.face.id), tagIdsOf(d), q) &&
+    // Tags only when the filter asks for them: the counts run this for every face.
+    passes(
+      d,
+      active.has(d.face.id),
+      everActivated.has(d.face.id),
+      q.tags?.length ? tagIdsOf(d) : [],
+      q,
+    ) &&
     (q.collection == null || inCollection(d, q.collection, path));
   // Refuses a stored rule of `id` that reaches a collection twice on one path.
   const checkLoops = (id: CollectionId, path: CollectionId[]) => {
@@ -2880,20 +2920,33 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const query = req.query ?? '';
       const filters = req.filters ?? {};
       const rule = req.rule ?? null;
-      const found = hits(query, filters, rule);
-      // As fm-core: an order replaces the ranking, before the page window.
-      const all = req.order
-        ? sortFamilies(
-            found.map((h) => h.family),
-            req.order,
-          ).map((f) => found.find((h) => h.family.id === f.id)!)
-        : found;
+      // The pages of one search come one after another: the next page of the same search
+      // reuses the results and counts instead of working them out again. Any other call
+      // in between, or the next task, starts afresh, so a change never reads stale counts.
+      const key = JSON.stringify([query, filters, rule, req.order ?? null]);
+      let paged = lastSearch?.key === key ? lastSearch : null;
+      if (!paged) {
+        const found = hits(query, filters, rule);
+        // As fm-core: an order replaces the ranking, before the page window.
+        const byId = new Map(found.map((h) => [h.family.id, h]));
+        const all = req.order
+          ? sortFamilies(
+              found.map((h) => h.family),
+              req.order,
+            ).map((f) => byId.get(f.id)!)
+          : found;
+        paged = { key, all, counts: counts(query, filters, rule) };
+        lastSearch = paged;
+        setTimeout(() => {
+          if (lastSearch === paged) lastSearch = null;
+        }, 0);
+      }
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
       return {
-        families: all.slice(offset, offset + limit),
-        total: all.length,
-        counts: counts(query, filters, rule),
+        families: structuredClone(paged.all.slice(offset, offset + limit)),
+        total: paged.all.length,
+        counts: structuredClone(paged.counts),
       } satisfies SearchResponse;
     },
     checkCoverage: async (req) => {
@@ -3816,6 +3869,15 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
   };
   activateFaces = client.activate;
+  // Any other call may change what a search finds: the next search starts afresh.
+  const methods = client as unknown as Record<string, unknown>;
+  for (const [name, method] of Object.entries(methods)) {
+    if (name === 'search' || typeof method !== 'function') continue;
+    methods[name] = (...args: unknown[]) => {
+      lastSearch = null;
+      return (method as (...a: unknown[]) => unknown)(...args);
+    };
+  }
   return client;
 }
 

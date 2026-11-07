@@ -307,3 +307,21 @@ describe('the reading rows body (E43.1)', () => {
     expect(normalizePreview({ bodySizePx: 'big' }).bodySizePx).toBe(17);
   });
 });
+
+describe('the hide-missing switch (E43.3)', () => {
+  it('is off by default and keeps only a boolean', () => {
+    expect(normalizePreview({}).hideMissing).toBe(false);
+    expect(normalizePreview({ hideMissing: true }).hideMissing).toBe(true);
+    expect(normalizePreview({ hideMissing: 'yes' }).hideMissing).toBe(false);
+  });
+
+  it('is remembered with the view across a restart', async () => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    usePreviewStore().update('all', { hideMissing: true });
+    await nextTick();
+    setActivePinia(createPinia());
+    expect(usePreviewStore().settingsFor('all').hideMissing).toBe(true);
+    expect(usePreviewStore().settingsFor('other').hideMissing).toBe(false);
+  });
+});

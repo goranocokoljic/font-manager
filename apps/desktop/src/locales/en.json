@@ -257,7 +257,8 @@
       "pangram": "a pangram · every letter once",
       "alphabet": "the character set at a glance",
       "numerals": "figures · tabular where the font has them",
-      "paragraph": "body text at {size} px"
+      "paragraph": "body text at {size} px",
+      "detected": "{language} detected · showing fonts that render every glyph"
     }
   },
   "samples": {
@@ -304,7 +305,11 @@
     },
     "rendersText": {
       "count": { "one": "{covered} of {count} family", "other": "{covered} of {count} families" },
-      "tail": { "one": "renders your text completely", "other": "render your text completely" }
+      "tail": { "one": "renders your text completely", "other": "render your text completely" },
+      "hide": {
+        "one": "Hide the {count} with missing glyphs",
+        "other": "Hide the {count} with missing glyphs"
+      }
     },
     "bodySize": "Body size {size} px · line height {lineHeight}",
     "viewMode": "View mode",
@@ -428,6 +433,7 @@
   },
   "chips": {
     "options": "Filter options",
+    "rendersText": "Renders your text",
     "more": {
       "one": "+{count} more filter",
       "other": "+{count} more filters"

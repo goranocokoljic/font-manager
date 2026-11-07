@@ -540,6 +540,8 @@ function onToggle(row: ListRow): void {
         }"
         role="option"
         :data-key="item.row.key"
+        :aria-setsize="count"
+        :aria-posinset="item.index + 1"
         :aria-selected="list.isSelected(item.row.key)"
         :aria-label="rowLabel(item.row)"
         :style="cardStyle(item.index)"

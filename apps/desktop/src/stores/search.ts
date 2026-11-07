@@ -10,7 +10,9 @@ import type {
   FamilyOrder,
   FilterCounts,
   Filters,
+  LanguageHint,
   LanguagePreset,
+  RuleGroup,
 } from '../api/types';
 import { hasFilters } from '../search/chips';
 import { useLibraryStore } from './library';
@@ -43,6 +45,15 @@ export const useSearchStore = defineStore('search', () => {
   const coverText = ref('');
   /** How many of the results render `coverText` completely; null while unknown or off. */
   const coverTotal = ref<number | null>(null);
+  /**
+   * How many families the results have before the switch hides any (E43.3): the search
+   * without the text rule. Null while unknown or off.
+   */
+  const coverBase = ref<number | null>(null);
+  /** The languages the API detects in `coverText`, best first (E43.3); empty for none. */
+  const detected = shallowRef<LanguageHint[]>([]);
+  /** The "Hide the N with missing glyphs" switch is on (E43.3); it acts only with `coverText`. */
+  const hideMissing = ref(false);
   let coverTimer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by every cover count; answers to an older one are dropped. */
   let coverGeneration = 0;
@@ -50,7 +61,18 @@ export const useSearchStore = defineStore('search', () => {
   /** Bumped by every search; answers to an older one are dropped. */
   let generation = 0;
 
-  const active = computed(() => query.value.trim() !== '' || hasFilters(filters.value));
+  /** The switch hides the families that cannot render `coverText` now. */
+  const hiding = computed(() => hideMissing.value && coverText.value !== '');
+
+  const active = computed(
+    () => query.value.trim() !== '' || hasFilters(filters.value) || hiding.value,
+  );
+
+  /** The rule that keeps only the families rendering `text` completely. */
+  const rendersText = (text: string): RuleGroup => ({
+    op: 'and',
+    rules: [{ kind: 'filters', filters: { supports: { kind: 'text', text } } }],
+  });
 
   /** The matching faces per family of the current results. */
   const matchingFaces = computed(() => {
@@ -68,17 +90,21 @@ export const useSearchStore = defineStore('search', () => {
   function orderOf(q: string, f: Filters, searching: boolean): FamilyOrder | null {
     if (!searching) return null;
     if (library.order) return library.order;
-    return q === '' && f.supports ? { by: 'name', descending: false } : null;
+    return q === '' && (f.supports || hiding.value) ? { by: 'name', descending: false } : null;
   }
 
-  /** Runs the search for the current query and filters now. */
-  async function run(): Promise<void> {
+  /**
+   * Runs the search for the current query and filters now. `recount` false keeps the cover
+   * counts: the switch changes what the list shows, not how many render the text.
+   */
+  async function run(recount = true): Promise<void> {
     clearTimeout(timer);
     timer = undefined;
     const mine = ++generation;
     const q = query.value.trim();
     const f = filters.value;
-    const searching = q !== '' || hasFilters(f);
+    const rule = hiding.value ? rendersText(coverText.value) : null;
+    const searching = q !== '' || hasFilters(f) || rule !== null;
     const order = orderOf(q, f, searching);
     const client = useClient();
     try {
@@ -90,6 +116,7 @@ export const useSearchStore = defineStore('search', () => {
         const page = await client.search({
           query: q,
           filters: f,
+          ...(rule ? { rule } : {}),
           ...(order ? { order } : {}),
           page: { offset, limit: searching ? PAGE : 1 },
         });
@@ -106,13 +133,15 @@ export const useSearchStore = defineStore('search', () => {
     } catch (e) {
       if (mine === generation) error.value = e as ApiError;
     }
-    if (mine === generation) await runCover();
+    if (mine === generation && recount) await runCover();
   }
 
   /**
    * Counts the families of the current results that render `coverText` completely: the
    * same search with a text-coverage rule on top, so the query and every filter (a
-   * language filter included) still apply. The API does the coverage.
+   * language filter included) still apply. The API does the coverage. It also counts the
+   * results without that rule, for "N of M" and the switch's "Hide the M−N" while the switch
+   * hides them, and asks the API which languages the text is in.
    */
   async function runCover(): Promise<void> {
     clearTimeout(coverTimer);
@@ -121,24 +150,31 @@ export const useSearchStore = defineStore('search', () => {
     const text = coverText.value;
     if (!text) {
       coverTotal.value = null;
+      coverBase.value = null;
+      detected.value = [];
       return;
     }
     const q = query.value.trim();
-    try {
-      const page = await useClient().search({
-        query: q,
-        filters: filters.value,
-        rule: {
-          op: 'and',
-          rules: [{ kind: 'filters', filters: { supports: { kind: 'text', text } } }],
-        },
-        page: { offset: 0, limit: 1 },
-      });
-      if (mine === coverGeneration) coverTotal.value = page.total;
-    } catch {
-      // No count is better than a wrong one: the line shows the plain family count.
-      if (mine === coverGeneration) coverTotal.value = null;
-    }
+    const client = useClient();
+    const count = (rule: RuleGroup | null) =>
+      client
+        .search({
+          query: q,
+          filters: filters.value,
+          ...(rule ? { rule } : {}),
+          page: { offset: 0, limit: 1 },
+        })
+        .then((page) => page.total);
+    const [covered, base, hints] = await Promise.all([
+      count(rendersText(text)).catch(() => null),
+      count(null).catch(() => null),
+      client.detectLanguages({ text }).catch(() => [] as LanguageHint[]),
+    ]);
+    if (mine !== coverGeneration) return;
+    // No count is better than a wrong one: the line shows the plain family count.
+    coverTotal.value = covered !== null && base !== null ? covered : null;
+    coverBase.value = coverTotal.value !== null ? base : null;
+    detected.value = hints;
   }
 
   /**
@@ -147,14 +183,34 @@ export const useSearchStore = defineStore('search', () => {
    */
   function setCoverText(next: string): void {
     if (next === coverText.value) return;
+    const wasHiding = hiding.value;
     coverText.value = next;
     clearTimeout(coverTimer);
     if (!next) {
       coverGeneration++;
       coverTotal.value = null;
+      coverBase.value = null;
+      detected.value = [];
+      // The switch hid families for the old text: they come back.
+      if (wasHiding) void run();
       return;
     }
-    coverTimer = setTimeout(() => void runCover(), SEARCH_DEBOUNCE_MS);
+    coverTimer = setTimeout(() => {
+      // The switch hides by the text: the results change with it (run counts it too).
+      if (hiding.value || wasHiding) void run();
+      else void runCover();
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  /**
+   * Turns the "Hide the N with missing glyphs" switch on or off and searches at once, as a
+   * chip click does. It hides nothing while there is no text to check.
+   */
+  function setHideMissing(on: boolean): void {
+    if (on === hideMissing.value) return;
+    const before = hiding.value;
+    hideMissing.value = on;
+    if (hiding.value !== before) void run(false);
   }
 
   /** The box changed: searches once typing pauses for `SEARCH_DEBOUNCE_MS`. */
@@ -212,12 +268,17 @@ export const useSearchStore = defineStore('search', () => {
     languages,
     coverText,
     coverTotal,
+    coverBase,
+    detected,
+    hideMissing,
+    hiding,
     active,
     matchingFaces,
     run,
     setText,
     setFilters,
     setCoverText,
+    setHideMissing,
     clear,
     loadLanguages,
     saveAsSmartCollection,
