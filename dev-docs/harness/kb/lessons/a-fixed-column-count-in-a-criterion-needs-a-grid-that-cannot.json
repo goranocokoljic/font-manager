@@ -1,0 +1,19 @@
+{
+  "id": "a-fixed-column-count-in-a-criterion-needs-a-grid-that-cannot",
+  "title": "A fixed column count in a criterion needs a grid that cannot grow past it",
+  "category": "correctness",
+  "rule": "When a criterion or design names a column count (\"a two-column grid\"), do not use `repeat(auto-fit, minmax(<px>, 1fr))` alone: the count then follows the container width and grows on wide windows, because the family page's main column has no maximum width. Cap it: give each track a minimum of at least 1/N of the width (`minmax(max(<px>, calc((100% - (N-1) * gap) / N)), 1fr)`) or use a fixed `repeat(N, minmax(0, 1fr))` with a narrow breakpoint. Add a Playwright check at 1366, 1920 and 2560 px wide that asserts the row and column of each item, and one at a narrow width.",
+  "rationale": "E42.8 (#459): the Info section's four groups were two columns at 1280 px but three at 1366 and four at 1920; the only layout test ran at 1280 px.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    459
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-11-07T14:48:22.294Z",
+  "last_seen": "2026-11-07T14:48:22.294Z"
+}

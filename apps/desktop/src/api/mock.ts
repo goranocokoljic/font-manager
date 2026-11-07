@@ -218,7 +218,7 @@ export const mockFaces: FaceDetail[] = [
     version: 'Version 1.000',
     copyright: 'Copyright 2016 Inter Authors',
     designer: 'Rasmus Andersson',
-    vendorId: null,
+    vendorId: 'RSMS',
     license: ofl,
     metrics,
     axes: [{ tag: 'wght', name: 'Weight', min: 100, default: 400, max: 900 }],
@@ -238,6 +238,8 @@ export const mockFaces: FaceDetail[] = [
     foundry: 'rsms',
     italicAngle: 0,
     codePointCount: 187,
+    description: 'A typeface carefully crafted and designed for computer screens.',
+    tables: ['GDEF', 'GPOS', 'GSUB', 'OS/2', 'cmap', 'fvar', 'glyf', 'head', 'name', 'post'],
   },
   {
     face: {

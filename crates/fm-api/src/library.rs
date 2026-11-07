@@ -660,6 +660,13 @@ pub struct FaceDetail {
     /// without them.
     #[serde(default)]
     pub palettes: Vec<Palette>,
+    /// What the font says about its design (name ID 10), for the family
+    /// page's Info section (E42.8).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// The tags of the tables in the font file, in directory order (E42.8).
+    #[serde(default)]
+    pub tables: Vec<String>,
 }
 
 /// What kind of health problem.

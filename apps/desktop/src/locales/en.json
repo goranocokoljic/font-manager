@@ -1488,7 +1488,6 @@
     "designer": "Designer",
     "foundry": "Foundry",
     "stylesFact": "Styles",
-    "developer": "Developer",
     "variableCounts": "Variable, {axes} · {styles}",
     "axisCount": {
       "one": "{count} axis",
@@ -1501,6 +1500,47 @@
     "styleCount": {
       "one": "{count} style",
       "other": "{count} styles"
+    },
+    "technical": "Technical details",
+    "technicalHash": "hash",
+    "technicalTables": {
+      "one": "Table",
+      "other": "Tables ({count})"
+    },
+    "info": {
+      "design": "Design",
+      "designer": "Designer",
+      "foundry": "Foundry",
+      "classification": "Classification",
+      "axes": "Axes",
+      "namedStyles": "Named styles",
+      "description": "Description",
+      "licence": "Licence",
+      "licenceName": "Licence",
+      "youMay": "You may",
+      "youMayNot": "You may not",
+      "record": "Your record",
+      "addRecord": "Add your purchase or licence note",
+      "editRecord": "Edit your record",
+      "seats": {
+        "one": "{count} seat",
+        "other": "{count} seats"
+      },
+      "purchased": "bought {date}",
+      "files": "Files",
+      "format": "Format",
+      "variable": "variable",
+      "location": "Location",
+      "added": "Added",
+      "health": "Health",
+      "metrics": "Metrics",
+      "unitsPerEm": "Units/em",
+      "capHeight": "Cap height",
+      "xHeight": "x-height",
+      "xHeightRatio": "{value} ({ratio})",
+      "ascender": "Ascender",
+      "descender": "Descender",
+      "axisRange": "{name} {min}–{max}"
     }
   },
   "studio": {

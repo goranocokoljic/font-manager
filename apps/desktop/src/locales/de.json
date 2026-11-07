@@ -1488,7 +1488,6 @@
     "designer": "Designer",
     "foundry": "Schriftgießerei",
     "stylesFact": "Schnitte",
-    "developer": "Entwickler",
     "variableCounts": "Variabel, {axes} · {styles}",
     "axisCount": {
       "one": "{count} Achse",
@@ -1501,6 +1500,47 @@
     "styleCount": {
       "one": "{count} Schnitt",
       "other": "{count} Schnitte"
+    },
+    "technical": "Technische Details",
+    "technicalHash": "Hash",
+    "technicalTables": {
+      "one": "Tabelle",
+      "other": "Tabellen ({count})"
+    },
+    "info": {
+      "design": "Gestaltung",
+      "designer": "Gestaltung von",
+      "foundry": "Schriftenhaus",
+      "classification": "Klassifikation",
+      "axes": "Achsen",
+      "namedStyles": "Benannte Schnitte",
+      "description": "Beschreibung",
+      "licence": "Lizenz",
+      "licenceName": "Lizenz",
+      "youMay": "Erlaubt",
+      "youMayNot": "Nicht erlaubt",
+      "record": "Ihr Eintrag",
+      "addRecord": "Kauf oder Lizenznotiz hinzufügen",
+      "editRecord": "Eintrag bearbeiten",
+      "seats": {
+        "one": "{count} Arbeitsplatz",
+        "other": "{count} Arbeitsplätze"
+      },
+      "purchased": "gekauft am {date}",
+      "files": "Dateien",
+      "format": "Format",
+      "variable": "variabel",
+      "location": "Ort",
+      "added": "Hinzugefügt",
+      "health": "Zustand",
+      "metrics": "Maße",
+      "unitsPerEm": "Einheiten/Geviert",
+      "capHeight": "Versalhöhe",
+      "xHeight": "x-Höhe",
+      "xHeightRatio": "{value} ({ratio})",
+      "ascender": "Oberlänge",
+      "descender": "Unterlänge",
+      "axisRange": "{name} {min}–{max}"
     }
   },
   "studio": {

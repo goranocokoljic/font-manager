@@ -1157,6 +1157,13 @@ export type FaceDetail = {
 	 *  without them.
 	 */
 	palettes?: Palette[],
+	/**
+	 *  What the font says about its design (name ID 10), for the family
+	 *  page's Info section (E42.8).
+	 */
+	description?: string | null,
+	/**  The tags of the tables in the font file, in directory order (E42.8). */
+	tables?: string[],
 };
 
 /**  One face (style) inside a font file; a collection file has several. */

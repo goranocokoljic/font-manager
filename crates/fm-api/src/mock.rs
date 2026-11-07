@@ -841,6 +841,8 @@ fn face(
             code_point_count: Some(char_set.len() as u32),
             family_notes: None,
             palettes: Vec::new(), // the sample has no color fonts
+            description: None,
+            tables: Vec::new(),
         },
         source: SourceId(1),
         chars: char_set,

@@ -53,8 +53,9 @@ const englishOnly: RegExp[] = (() => {
 })();
 
 /** Library data of the mock, not UI text: the source folder `/Users/demo/Fonts`. */
-// The font's own axis name is data too: the axis row shows it as the font has it.
-const MOCK_DATA = new Set(['Fonts', 'Weight']);
+// The font's own axis name is data too: the axis row shows it as the font has it, and the Info
+// section's Design group with its range (E42.8).
+const MOCK_DATA = new Set(['Fonts', 'Weight', 'Weight 100–900']);
 
 /** Every text the user reads or hears now: text nodes and text attributes. */
 function shownTexts(page: Page): Promise<string[]> {

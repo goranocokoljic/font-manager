@@ -3,7 +3,9 @@
 // and the activation button. Names and paths copy on click. Tags, favorite,
 // rating, the notes of the face and of its family, and the family's declared
 // license are edited here; the API stores them. A color face's palette picker
-// (E16.3) comes first. The family page's Info section shows it until E42.8.
+// (E16.3) comes first. On the family page (E42.8) only the user's part shows,
+// under the Design, Licence, Files and Metrics groups: `part="yours"` leaves out
+// About, License and Technical details, which the page shows itself.
 import { computed, ref, watch } from 'vue';
 import type { Axis } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
@@ -16,6 +18,9 @@ import UiIcon from './ui/UiIcon.vue';
 import HealthBadge from './HealthBadge.vue';
 import InspectorLicense from './InspectorLicense.vue';
 import InspectorPalettes from './InspectorPalettes.vue';
+
+const props = withDefaults(defineProps<{ part?: 'all' | 'yours' }>(), { part: 'all' });
+const all = computed(() => props.part === 'all');
 
 const selection = useSelectionStore();
 const tags = useTagsStore();
@@ -96,7 +101,7 @@ const activationState = computed(() => {
         <h2 class="name">
           <bdi>{{ d.face.familyName }} {{ d.face.style }}</bdi>
         </h2>
-        <HealthBadge :health="d.face.health" />
+        <HealthBadge v-if="all" :health="d.face.health" />
         <div class="activation">
           <button
             type="button"
@@ -115,7 +120,7 @@ const activationState = computed(() => {
 
       <InspectorPalettes />
 
-      <section aria-labelledby="fm-info-about">
+      <section v-if="all" aria-labelledby="fm-info-about">
         <h3 id="fm-info-about">{{ t('info.about.title') }}</h3>
         <dl class="about">
           <dt>{{ t('info.names.designer') }}</dt>
@@ -127,7 +132,7 @@ const activationState = computed(() => {
         </dl>
       </section>
 
-      <section aria-labelledby="fm-info-license">
+      <section v-if="all" aria-labelledby="fm-info-license">
         <h3 id="fm-info-license">{{ t('info.license.title') }}</h3>
         <dl>
           <dt>{{ t('info.license.license') }}</dt>
@@ -252,7 +257,7 @@ const activationState = computed(() => {
         </dl>
       </section>
 
-      <div class="technical">
+      <div v-if="all" class="technical">
         <button
           type="button"
           class="tech-toggle fm-directional"

@@ -8,13 +8,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FamilyCharacters from '../components/FamilyCharacters.vue';
 import FamilyFeatures from '../components/FamilyFeatures.vue';
+import FamilyInfo from '../components/FamilyInfo.vue';
 import FamilyPairings from '../components/FamilyPairings.vue';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilySample from '../components/FamilySample.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
+import FamilyTechnical from '../components/FamilyTechnical.vue';
 import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
-import InspectorDeveloper from '../components/InspectorDeveloper.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
@@ -426,7 +427,17 @@ onBeforeUnmount(() => {
                     @open="openPairing"
                     @browse="browseCatalogs"
                   />
-                  <InspectorInfo v-else-if="page.section === 'info'" />
+                  <template v-else-if="page.section === 'info'">
+                    <FamilyInfo
+                      :detail="shown"
+                      :summary="page.summary"
+                      :year="page.detail?.year ?? null"
+                      :designer="page.detail?.designer ?? null"
+                      :face-style="specimenStyle"
+                    />
+                    <!-- The user's own part of the face: palettes, tags, rating, notes. -->
+                    <InspectorInfo part="yours" class="yours" />
+                  </template>
                   <p v-else class="quiet">{{ t('family.sectionLater') }}</p>
                 </section>
               </FmFade>
@@ -465,11 +476,11 @@ onBeforeUnmount(() => {
               @click="developerOpen = !developerOpen"
             >
               <UiChevron :open="developerOpen" />
-              {{ t('family.developer') }}
+              {{ t('family.technical') }}
             </button>
             <!-- Mounted only while open: it asks fm-core for the CSS as the state changes. -->
             <div id="fm-family-developer">
-              <InspectorDeveloper v-if="developerOpen" />
+              <FamilyTechnical v-if="developerOpen" :detail="shown" />
             </div>
           </aside>
         </div>
@@ -637,6 +648,11 @@ onBeforeUnmount(() => {
   font: inherit;
   font-size: var(--fm-text-sm);
   cursor: pointer;
+}
+.yours.yours {
+  margin-block-start: var(--fm-space-5);
+  padding: var(--fm-space-4) 0 0;
+  border-block-start: 1px solid var(--fm-border);
 }
 .quiet {
   margin: 0;

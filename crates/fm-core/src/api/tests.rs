@@ -559,6 +559,18 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     assert_ne!(detail.license.embedding, Embedding::Restricted);
     assert!(detail.code_point_count.is_some_and(|n| n > 0));
     assert!(!detail.features.is_empty());
+    // Name ID 10 and the table directory reach the Info section (E42.8).
+    assert_eq!(
+        detail.description.as_deref(),
+        Some("Font re-engineered by Rahul Gajjar.")
+    );
+    for tag in ["name", "cmap", "OS/2", "head"] {
+        assert!(
+            detail.tables.iter().any(|t| t == tag),
+            "{tag}: {:?}",
+            detail.tables
+        );
+    }
     // get_face names registered features and flags shaper and default ones (E10.3).
     let feature = |tag: &str| detail.features.iter().find(|f| f.tag == tag);
     let kern = feature("kern").expect("kern");

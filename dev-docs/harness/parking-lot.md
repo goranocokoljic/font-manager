@@ -382,3 +382,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.6 #457] apps/desktop/src/views/FamilyView.vue — the page has two buttons named "Reset" (hero axes and features); not new.
 - [E42.7 #458] apps/desktop/src/locales/de.json:497 — German strings mix formal "Ihre" (textHint, a catalog toast) with the informal "du/deiner" used elsewhere.
 - [E42.7 #458] apps/desktop/src/stores/catalogs.ts:153 — a failed `listCatalogs` leaves `catalogs` empty with only `error` set, so a caller like the Pairings "Browse catalogs" returns to the library with no catalog and no message.
+- [E42.8 #459] crates/fm-core/src/index/faces.rs:206 — `file_size` is clamped to `u32::MAX`, so a file over 4 GB reads as about 4,294.97 MB in the Info section's Files row.
+- [E42.8 #459] apps/desktop/src/components/InspectorInfo.vue:123 — the `part="all"` branch (About, License, Technical details) is now mounted only by InspectorInfo.test.ts and duplicates what FamilyInfo and FamilyTechnical render.
+- [E42.8 #459] crates/fm-core/src/similar.rs:105 — `x_height_ratio` there means x-height over cap height, while the UI's `xHeightRatio` means x-height over the em; the shared name can mislead.
