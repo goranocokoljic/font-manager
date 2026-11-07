@@ -1,0 +1,19 @@
+{
+  "id": "assert-the-exact-text-each-branch-shows-not-a-pattern-every-",
+  "title": "Assert the exact text each branch shows, not a pattern every branch matches",
+  "category": "testing",
+  "rule": "When a component chooses between wordings by data ('all 3', '2 of 3', 'unknown'), test each branch with the exact expected text (toBe / toHaveText with a string), driven by a stubbed answer for that branch. A loose regex that accepts every wording passes when the branches are swapped or when have and total are swapped, so it proves nothing.",
+  "rationale": "E42.5 (#456): the 'in N of M styles' text and the axis-end alternates had no test that failed when the wording or the values were wrong.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    456
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.test.ts",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-06T23:20:33.539Z",
+  "last_seen": "2026-11-06T23:20:33.539Z"
+}

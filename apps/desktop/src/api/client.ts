@@ -64,6 +64,7 @@ import type {
   GlyphDetail,
   GlyphPage,
   GlyphRequest,
+  GlyphStyles,
   GlyphsRequest,
   JobId,
   KeepCopyRequest,
@@ -162,6 +163,7 @@ export interface FmClient {
   listGlyphs(req: GlyphsRequest): Promise<GlyphPage>;
   /** One character in detail: glyph id and name, advance width, the GSUB features that produce or replace it. */
   getGlyph(req: GlyphRequest): Promise<GlyphDetail>;
+  glyphStyles(req: GlyphRequest): Promise<GlyphStyles>;
   /** What dragging a face to another app carries: its names and its file as a `file://` URL (E34.1). */
   fontSwitchPayload(face: FaceId): Promise<FontSwitchPayload>;
   listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
@@ -415,6 +417,7 @@ export const tauriClient: FmClient = {
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
   listGlyphs: (req) => invoke<GlyphPage>('list_glyphs', { req }),
   getGlyph: (req) => invoke<GlyphDetail>('get_glyph', { req }),
+  glyphStyles: (req) => invoke<GlyphStyles>('glyph_styles', { req }),
   fontSwitchPayload: (face) => invoke<FontSwitchPayload>('font_switch_payload', { face }),
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),

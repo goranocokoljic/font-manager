@@ -92,6 +92,7 @@ routes! {
     resolve_sidecar_conflict(req),
     list_glyphs(req),
     get_glyph(req),
+    glyph_styles(req),
     resolve_font(req),
     font_switch_payload(face),
     // search

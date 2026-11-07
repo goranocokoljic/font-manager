@@ -21,7 +21,7 @@ async function openDetail(page: Page) {
   const panel = await openSection(page, 1, 'Characters');
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0416');
   const detail = panel.getByRole('region', { name: 'Selected glyph' });
-  await expect(detail.getByLabel('Code point', { exact: true })).toHaveText('U+0416');
+  await expect(detail.getByLabel('Code', { exact: true })).toHaveText('U+0416');
   return detail.getByRole('button', { name: 'Compare with…' });
 }
 

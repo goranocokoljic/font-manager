@@ -2,8 +2,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient } from '../api/mock';
-import type { GlyphsRequest } from '../api/types';
-import { GLYPH_PAGE, useGlyphsStore } from './glyphs';
+import type { GlyphStyles, GlyphsRequest } from '../api/types';
+import { GLYPH_PAGE, STYLE_COUNT_DELAY, useGlyphsStore } from './glyphs';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
@@ -150,5 +150,117 @@ describe('glyphs store', () => {
     await s.select({ ...s.item(0)!, codePoint: 0x61 });
     expect(s.detail).toBeNull();
     expect(s.detailError?.message).toBe('Character U+0061 was not found.');
+  });
+});
+
+describe('glyphs store: in how many styles', () => {
+  /** Answers `glyphStyles` with `answer`, or fails; returns the code points asked for. */
+  function answer(got: GlyphStyles | null) {
+    const asked: number[] = [];
+    setClient({
+      ...client,
+      glyphStyles: async (req) => {
+        asked.push(req.codePoint);
+        if (!got) throw { code: 'notFound', message: 'gone' };
+        return got;
+      },
+    });
+    return asked;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    return useGlyphsStore().open(1);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const rest = () => vi.advanceTimersByTimeAsync(STYLE_COUNT_DELAY);
+
+  it('shows what fm-core answers for the open face', async () => {
+    const asked = answer({ have: 2, total: 3 });
+    const s = useGlyphsStore();
+    s.countStyles(0x17d);
+    await rest();
+    expect(asked).toEqual([0x17d]);
+    expect(s.styleCount).toEqual({ have: 2, total: 3 });
+  });
+
+  it('waits for the selection to rest and asks for the last character only', async () => {
+    const asked = answer({ have: 1, total: 1 });
+    const s = useGlyphsStore();
+    s.countStyles(0x41);
+    s.countStyles(0x42);
+    expect(asked).toEqual([]);
+    expect(s.styleCount).toBeNull();
+    await rest();
+    expect(asked).toEqual([0x42]);
+  });
+
+  it('drops the answer to a character selected before the last one', async () => {
+    let answerOld: (got: GlyphStyles) => void = () => undefined;
+    setClient({
+      ...client,
+      glyphStyles: () => new Promise((resolve) => (answerOld = resolve)),
+    });
+    const s = useGlyphsStore();
+    s.countStyles(0x41);
+    await rest();
+    s.countStyles(null);
+    answerOld({ have: 1, total: 1 });
+    await rest();
+    expect(s.styleCount).toBeNull();
+  });
+
+  it('clears the count with the selection, and asks nothing', async () => {
+    const asked = answer({ have: 1, total: 1 });
+    const s = useGlyphsStore();
+    s.countStyles(0x41);
+    await rest();
+    expect(s.styleCount).not.toBeNull();
+    asked.length = 0;
+    s.countStyles(null);
+    await rest();
+    expect(s.styleCount).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it('says it failed when fm-core cannot answer, and a new selection starts over', async () => {
+    answer(null);
+    const s = useGlyphsStore();
+    s.countStyles(0x41);
+    await rest();
+    expect(s.styleCountFailed).toBe(true);
+    expect(s.styleCount).toBeNull();
+    answer({ have: 1, total: 1 });
+    s.countStyles(0x41);
+    expect(s.styleCountFailed).toBe(false);
+    await rest();
+    expect(s.styleCount).toEqual({ have: 1, total: 1 });
+  });
+});
+
+describe('glyphs store: pages on their way', () => {
+  it('ensure waits for a page another caller already asked for', async () => {
+    const s = useGlyphsStore();
+    await s.open(1);
+    let release: () => void = () => undefined;
+    const mock = client.listGlyphs;
+    setClient({
+      ...client,
+      listGlyphs: async (req) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        return mock(req);
+      },
+    });
+    const last = s.total - 1;
+    void s.ensure(last, last + 1);
+    let done = false;
+    void s.ensure(last, last + 1).then(() => (done = true));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(done).toBe(false);
+    release();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(done).toBe(true);
+    expect(s.item(last)).toBeDefined();
   });
 });

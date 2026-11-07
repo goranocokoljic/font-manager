@@ -26,9 +26,9 @@ use fm_api::layout::{
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary,
-    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest,
-    LibraryService, ListFamiliesRequest, Problem, Resolution, ResolveSidecarConflictRequest,
-    ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
+    KeepCopyRequest, LibraryService, ListFamiliesRequest, Problem, Resolution,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -505,6 +505,13 @@ async fn list_glyphs(state: State<'_, AppState>, req: GlyphsRequest) -> ApiResul
 #[tauri::command]
 async fn get_glyph(state: State<'_, AppState>, req: GlyphRequest) -> ApiResult<GlyphDetail> {
     call(&state, move |api| api.get_glyph(req)).await
+}
+
+/// How many styles of a face's family map a character, for the Characters
+/// section's detail card.
+#[tauri::command]
+async fn glyph_styles(state: State<'_, AppState>, req: GlyphRequest) -> ApiResult<GlyphStyles> {
+    call(&state, move |api| api.glyph_styles(req)).await
 }
 
 /// What dragging a face to another app carries (E34.1), for the list's drag
@@ -1423,6 +1430,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_face,
             list_glyphs,
             get_glyph,
+            glyph_styles,
             font_switch_payload,
             list_families,
             get_family,

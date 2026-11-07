@@ -1769,6 +1769,17 @@ export type GlyphRequest = {
 	codePoint: number,
 };
 
+/**  How many styles of a face's family map a character (E42.5). */
+export type GlyphStyles = {
+	/**  The styles that map it. */
+	have: number,
+	/**
+	 *  All styles of the family: a variable face counts as its named
+	 *  instances (at least one), a static face as one.
+	 */
+	total: number,
+};
+
 /**
  *  One glyph's outline as SVG (E11.5). The SVG text is returned, never
  *  written: saving it goes to a path the user picks.

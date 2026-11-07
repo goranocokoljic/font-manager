@@ -279,6 +279,39 @@ impl Index {
         coverage::face_coverage(face, &set, &locl)
     }
 
+    /// How many styles of the family of `req.face` map `req.code_point`
+    /// (`glyph_styles`, E42.5). A variable face counts as its named instances
+    /// (at least one), a static face as one. A face whose stored `cmap`
+    /// cannot be read counts as not mapping it; the others are answered as
+    /// usual. An unknown face is `NotFound`.
+    pub fn glyph_styles(
+        &self,
+        req: &fm_api::library::GlyphRequest,
+    ) -> FmResult<fm_api::library::GlyphStyles> {
+        let family = self.face_row(req.face)?.summary.family;
+        let faces = self
+            .family_faces(family)?
+            .ok_or_else(|| FmError::not_found(format!("Family {family}")))?;
+        let (mut have, mut total) = (0_u32, 0_u32);
+        for id in faces {
+            let row = self.face_row(id)?;
+            let instances = row
+                .parsed
+                .as_ref()
+                .filter(|_| row.summary.is_variable)
+                .map_or(0, |p| p.named_instances.len());
+            let styles = u32::try_from(instances).unwrap_or(u32::MAX).max(1);
+            total = total.saturating_add(styles);
+            if self
+                .face_cmap(id)
+                .is_ok_and(|set| set.contains(req.code_point))
+            {
+                have = have.saturating_add(styles);
+            }
+        }
+        Ok(fm_api::library::GlyphStyles { have, total })
+    }
+
     /// The file of the face `face`. An unknown face is `NotFound`.
     pub fn face_file(&self, face: FaceId) -> FmResult<FaceLocation> {
         Ok(self.face_row(face)?.file)

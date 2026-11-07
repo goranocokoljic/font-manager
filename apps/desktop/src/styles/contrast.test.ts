@@ -366,7 +366,6 @@ describe('the accent in the style sheets', () => {
     ['toast action', 'components/ToastMessage.vue', '.action'],
     ['active segment', 'components/ui/UiSegmentedControl.vue', ".seg[aria-pressed='true']"],
     ['active Compare mode', 'components/CompareSheet.vue', '.mode:has(input:checked)'],
-    ['selected glyph', 'components/InspectorGlyphs.vue', ".cell[aria-selected='true']"],
   ])('%s fills with the accent and writes on-accent (%s)', (_, file, selector) => {
     const body = ruleOf(file, selector);
     expect(body).toMatch(ACCENT_FILL);

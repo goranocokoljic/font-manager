@@ -8,6 +8,7 @@ import type {
   GlyphDetail,
   GlyphInfo,
   GlyphPage,
+  GlyphStyles,
   GlyphsRequest,
   Health,
 } from '../api/types';
@@ -15,8 +16,11 @@ import type {
 /** Characters fetched per request: fm-api's largest page. */
 export const GLYPH_PAGE = 500;
 
+/** How long the selection must rest before asking every style whether it has the character. */
+export const STYLE_COUNT_DELAY = 120;
+
 /**
- * The inspector's glyph map of one face (the Glyphs tab), as fm-core lists it:
+ * The glyph map of one face (the family page's Characters section), as fm-core lists it:
  * the blocks of the list with their counts, and the characters page by page as
  * the grid scrolls to them. A search or a block choice asks fm-core for a new
  * list; the first character a search finds is selected. The selected character's
@@ -41,6 +45,9 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   /** The selected character in detail, once fm-core answers. */
   const detail = ref<GlyphDetail | null>(null);
   const detailError = ref<ApiError | null>(null);
+  /** How many of the family's styles have the selected character, once fm-core answers. */
+  const styleCount = ref<GlyphStyles | null>(null);
+  const styleCountFailed = ref(false);
   /** Pages of the current list by page number. */
   const pages = shallowReactive(new Map<number, GlyphInfo[]>());
   /** Bumped when a new list arrives, so the grid can scroll to its selection. */
@@ -49,7 +56,10 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   // Answers to an older list are dropped.
   let request = 0;
   let detailRequest = 0;
-  const pending = new Set<number>();
+  /** Pages on their way; a second asker waits for the same answer. */
+  const pending = new Map<number, Promise<void>>();
+  let styleRequest = 0;
+  let styleTimer: ReturnType<typeof setTimeout> | undefined;
 
   const req = (page: number): GlyphsRequest => ({
     face: face.value!,
@@ -118,26 +128,35 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     await load();
   }
 
-  /** Fetches the pages holding list indexes `start` (inclusive) to `end` (exclusive). */
+  async function loadPage(p: number, mine: number): Promise<void> {
+    try {
+      const page = await useClient().listGlyphs(req(p));
+      if (mine === request) pages.set(p, page.items);
+    } catch (e) {
+      if (mine === request) error.value = e as ApiError;
+    } finally {
+      if (mine === request) pending.delete(p);
+    }
+  }
+
+  /**
+   * Fetches the pages holding list indexes `start` (inclusive) to `end` (exclusive), and resolves
+   * when they are in, also when another caller had already asked for them.
+   */
   async function ensure(start: number, end: number): Promise<void> {
     if (face.value === null || end <= start) return;
     const mine = request;
-    const wanted: number[] = [];
-    for (let p = Math.floor(start / GLYPH_PAGE); p * GLYPH_PAGE < Math.min(end, total.value); p++)
-      if (!pages.has(p) && !pending.has(p)) wanted.push(p);
-    await Promise.all(
-      wanted.map(async (p) => {
-        pending.add(p);
-        try {
-          const page = await useClient().listGlyphs(req(p));
-          if (mine === request) pages.set(p, page.items);
-        } catch (e) {
-          if (mine === request) error.value = e as ApiError;
-        } finally {
-          if (mine === request) pending.delete(p);
-        }
-      }),
-    );
+    const waits: Promise<void>[] = [];
+    for (let p = Math.floor(start / GLYPH_PAGE); p * GLYPH_PAGE < Math.min(end, total.value); p++) {
+      if (pages.has(p)) continue;
+      let wait = pending.get(p);
+      if (!wait) {
+        wait = loadPage(p, mine);
+        pending.set(p, wait);
+      }
+      waits.push(wait);
+    }
+    await Promise.all(waits);
   }
 
   /** The character at list index `i`, or undefined while its page loads. */
@@ -158,6 +177,27 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     } catch (e) {
       if (mine === detailRequest) detailError.value = e as ApiError;
     }
+  }
+
+  /**
+   * Asks fm-core how many styles of the family have `codePoint`. It waits for the selection to
+   * rest: the arrow keys move it faster than a family can answer.
+   */
+  function countStyles(codePoint: number | null): void {
+    const mine = ++styleRequest;
+    clearTimeout(styleTimer);
+    styleCount.value = null;
+    styleCountFailed.value = false;
+    const of = face.value;
+    if (codePoint === null || of === null) return;
+    styleTimer = setTimeout(async () => {
+      try {
+        const got = await useClient().glyphStyles({ face: of, codePoint });
+        if (mine === styleRequest) styleCount.value = got;
+      } catch {
+        if (mine === styleRequest) styleCountFailed.value = true;
+      }
+    }, STYLE_COUNT_DELAY);
   }
 
   /** The list index of the selected character, when its page is loaded. */
@@ -185,6 +225,8 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     selected,
     detail,
     detailError,
+    styleCount,
+    styleCountFailed,
     selectedIndex,
     generation,
     open,
@@ -194,5 +236,6 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     ensure,
     item,
     select,
+    countStyles,
   };
 });

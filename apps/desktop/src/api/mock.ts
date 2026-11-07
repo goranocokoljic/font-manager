@@ -69,6 +69,7 @@ import {
   type GlyphInfo,
   type GlyphPage,
   type GlyphRequest,
+  type GlyphStyles,
   type GlyphsRequest,
   type FilterCounts,
   type Filters,
@@ -678,6 +679,23 @@ function mockFeature(tag: string): FeatureInfo {
  * map lists it; lower-case letters are replaced by `smcp` and `ss01`, figures by
  * `onum`, `fi`/`fl` ligatures produced by `liga`; CJK is 1,000 units wide.
  */
+/** As fm-core: the styles of the family that have the character; a variable face is its instances. */
+export function mockGlyphStyles(
+  faces: readonly FaceDetail[],
+  req: GlyphRequest,
+  cjkFaces: readonly FaceId[],
+): GlyphStyles {
+  const c = String.fromCodePoint(req.codePoint);
+  let have = 0;
+  let total = 0;
+  for (const f of faces) {
+    const styles = f.face.isVariable ? Math.max(1, f.instances.length) : 1;
+    total += styles;
+    if (mockChars(f).has(c) || (cjkFaces.includes(f.face.id) && CJK.includes(c))) have += styles;
+  }
+  return { have, total };
+}
+
 export function mockGlyphDetail(f: FaceDetail, req: GlyphRequest, cjk: boolean): GlyphDetail {
   // Glyph ids as mockGlyphPage numbers them.
   const all = [...mockChars(f)].join('') + (cjk ? CJK : '');
@@ -2772,6 +2790,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
       return mockGlyphDetail(f, req, options.cjkFaces?.includes(req.face) ?? false);
+    },
+    glyphStyles: async (req) => {
+      const f = find(req.face);
+      if (!f) throw notFound(req.face);
+      return mockGlyphStyles(byFamily.get(f.face.family) ?? [], req, options.cjkFaces ?? []);
     },
     fontSwitchPayload: async (id) => {
       const f = find(id);
