@@ -831,10 +831,7 @@
       "one": "CSS für {count} eingeschaltetes kopieren",
       "other": "CSS für {count} eingeschaltete kopieren"
     },
-    "more": {
-      "one": "{count} weiteres",
-      "other": "{count} weitere"
-    },
+    "more": { "one": "{count} weiteres", "other": "{count} weitere" },
     "rare": "Seltene Features"
   },
   "palettes": {

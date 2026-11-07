@@ -831,10 +831,7 @@
       "one": "Copy CSS for {count} switched on",
       "other": "Copy CSS for {count} switched on"
     },
-    "more": {
-      "one": "{count} more",
-      "other": "{count} more"
-    },
+    "more": { "one": "{count} more", "other": "{count} more" },
     "rare": "Rare features"
   },
   "palettes": {
