@@ -253,10 +253,13 @@ const xHeight = computed(() => {
   margin: 0;
   color: var(--fm-muted);
 }
-/* Two columns; under the page's narrow width they stack. */
 .family-info {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  /* Each track is at least half the width, so never more than two fit; under 620 px, one. */
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(max(300px, calc((100% - var(--fm-space-5)) / 2)), 1fr)
+  );
   gap: var(--fm-space-5) var(--fm-space-5);
   align-items: start;
 }

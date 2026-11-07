@@ -50,6 +50,31 @@ test('Info shows Design, Licence, Files and Metrics in a two-column grid', async
   await expect(metrics.getByTestId('info-x')).toHaveText('520 (0.52)');
 });
 
+for (const width of [1366, 1920, 2560]) {
+  test(`the grid stays two columns on a ${width} px window`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const panel = await open(page);
+    const groups = panel.getByTestId('family-info').locator('> section');
+    const box = async (i: number) => (await groups.nth(i).boundingBox())!;
+    // Licence beside Design; Files and Metrics on the second row, under them.
+    expect(Math.abs((await box(1)).y - (await box(0)).y)).toBeLessThan(1);
+    expect((await box(2)).y).toBeGreaterThan((await box(0)).y + (await box(0)).height - 1);
+    expect(Math.abs((await box(2)).x - (await box(0)).x)).toBeLessThan(1);
+    expect(Math.abs((await box(3)).x - (await box(1)).x)).toBeLessThan(1);
+    expect(Math.abs((await box(3)).y - (await box(2)).y)).toBeLessThan(1);
+  });
+}
+
+test('the grid is one column when the window is narrow', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 900 });
+  const panel = await open(page);
+  const groups = panel.getByTestId('family-info').locator('> section');
+  const xs = await Promise.all(
+    [0, 1, 2, 3].map(async (i) => (await groups.nth(i).boundingBox())!.x),
+  );
+  expect(new Set(xs.map(Math.round)).size).toBe(1);
+});
+
 test('the record link opens the licence form with the focus in it', async ({ page }) => {
   const panel = await open(page);
   const link = panel.getByRole('button', { name: 'Add your purchase or licence note' });
