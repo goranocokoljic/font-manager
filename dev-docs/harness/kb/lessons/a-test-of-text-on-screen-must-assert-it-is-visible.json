@@ -1,0 +1,19 @@
+{
+  "id": "a-test-of-text-on-screen-must-assert-it-is-visible",
+  "title": "A test of text on screen must assert it is visible",
+  "category": "testing",
+  "rule": "When a test proves that a UI part shows some text, assert `toBeVisible()` on that element as well. `toHaveText`, `toHaveCSS` and `boundingBox` all pass on an element under `visibility: hidden`, and a part that waits for a font hides itself exactly that way, so a part that never shows stays green. When the text must be in the family's face, also compare its computed `font-family` with the hero's. Check it by forcing the hiding state on and seeing the test fail. In a Vue mutation use `:class=\"{ loading: true }\"`: a second `class` attribute stops the template compiling, and then every test fails for the wrong reason.",
+  "rationale": "E42.4 (#455): all 20 tests passed with every reading-test passage forced to `visibility: hidden`, because none asserted that a passage was visible.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    455
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/components/**/*.vue"
+  ],
+  "first_seen": "2026-11-07T00:20:42.429Z",
+  "last_seen": "2026-11-07T00:20:42.429Z"
+}

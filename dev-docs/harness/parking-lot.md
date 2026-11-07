@@ -369,3 +369,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.2 #453] apps/desktop/src/components/InspectorAxes.vue:85 — `reset()` makes the focused Reset button disabled and moves focus nowhere, so a keyboard user's focus drops.
 - [E42.3 #454] apps/desktop/src/components/CollectionsSidebar.vue:236 — it moves focus into the menu after two `nextTick`s, the timing that failed for the same `UiPopover` layer in this story, and its only focus test is jsdom; not reproduced.
 - [E42.3 #454] apps/desktop/src/components/CollectionsSidebar.vue:275 — Tab calls `closeMenu()` with no refocus, the pattern that dropped the focus to body in FamilyStyles; read, not run.
+
+## 2026-11-07
+
+- [E42.4 #455] apps/desktop/src/styles/theme.css:377 — the global range track (`--fm-border-strong`, 16% alpha) is well under 3:1 on both grounds; only the thumb reaches 3:1.
