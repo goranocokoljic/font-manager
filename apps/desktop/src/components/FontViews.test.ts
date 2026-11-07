@@ -172,6 +172,70 @@ describe('FontGrid', () => {
     ]);
   });
 
+  it('a drag on the ground draws a box that selects the cards it touches (E44.1)', async () => {
+    await load({ extraFaces: 17, stylesPerFamily: 3 });
+    const grid = await mountView(FontGrid);
+    const list = useFontListStore();
+    const box = grid.get('[role="listbox"]');
+    Object.defineProperty(box.element, 'clientWidth', { value: FALLBACK_WIDTH });
+    // jsdom has no PointerEvent: a MouseEvent of the pointer type carries the same fields.
+    const at = (x: number, y: number, more: MouseEventInit = {}) => ({
+      clientX: x,
+      clientY: y,
+      ...more,
+    });
+    const fire = async (target: { element: Element }, type: string, init: MouseEventInit) => {
+      target.element.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, ...init }),
+      );
+      await flushPromises();
+    };
+    // From the inset above the first card down into the first card of the second line:
+    // cards 0 and 2 (two per line), nothing in between.
+    await fire(grid.get('.spacer'), 'pointerdown', at(4, 4));
+    await fire(box, 'pointermove', at(WALL.inset + 10, WALL.gap + LINE + 10));
+    expect(grid.find('[data-testid="selection-box"]').exists()).toBe(true);
+    expect([...list.selection.selected]).toEqual([list.rows[0]!.key, list.rows[2]!.key]);
+    await fire(box, 'pointerup', at(WALL.inset + 10, WALL.gap + LINE + 10));
+    expect(grid.find('[data-testid="selection-box"]').exists()).toBe(false);
+    expect(grid.get(`[data-key="${list.rows[2]!.key}"]`).attributes('aria-selected')).toBe('true');
+    // With Ctrl, a second box adds to the selection.
+    const right = WALL.inset + wallCardWidth(FALLBACK_WIDTH, 2) + WALL.gap + 10;
+    await fire(grid.get('.spacer'), 'pointerdown', at(right, 4, { ctrlKey: true }));
+    await fire(box, 'pointermove', at(right + 5, 30, { ctrlKey: true }));
+    await fire(box, 'pointerup', at(right + 5, 30, { ctrlKey: true }));
+    expect(list.selectedCount).toBe(3);
+    expect(list.isSelected(list.rows[1]!.key)).toBe(true);
+    // A press on a card is the card's click, not a box.
+    await fire(grid.findAll('[role="option"]')[3]!, 'pointerdown', at(right, WALL.gap + LINE));
+    await fire(box, 'pointermove', at(right + 50, WALL.gap + LINE + 50));
+    expect(grid.find('[data-testid="selection-box"]').exists()).toBe(false);
+    expect(list.selectedCount).toBe(3);
+    // A plain click on the ground, without a drag, clears the selection.
+    await fire(grid.get('.spacer'), 'pointerdown', at(4, 4));
+    await fire(box, 'pointerup', at(5, 5));
+    expect(list.selectedCount).toBe(0);
+  });
+
+  it('a selected card has the ring and the tint; Esc clears the selection', async () => {
+    await load({ extraFaces: 17, stylesPerFamily: 3 });
+    const grid = await mountView(FontGrid);
+    const list = useFontListStore();
+    const cards = grid.findAll('[role="option"]');
+    await cards[0]!.trigger('click');
+    await cards[2]!.trigger('click', { shiftKey: true });
+    expect(list.selectedCount).toBe(3);
+    expect(cards[1]!.classes()).toContain('selected');
+    await cards[1]!.trigger('click', { ctrlKey: true });
+    expect(list.selectedCount).toBe(2);
+    const box = grid.get('[role="listbox"]');
+    await box.trigger('keydown', { key: 'a', ctrlKey: true });
+    expect(list.selectedCount).toBe(list.rows.length);
+    await box.trigger('keydown', { key: 'Escape' });
+    expect(list.selectedCount).toBe(0);
+    expect(grid.findAll('.slot.selected')).toHaveLength(0);
+  });
+
   it('a failed thumbnail says so', async () => {
     await load({ extraFaces: 1 });
     const failing = useClientWithFailingRenders();

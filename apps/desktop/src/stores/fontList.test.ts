@@ -86,6 +86,44 @@ describe('font list store', () => {
     expect(list.selectedCount).toBe(5);
   });
 
+  it('Esc clears the selection and keeps the cursor; a box selects by row index (E44.1)', async () => {
+    const list = await setup();
+    list.click(familyKey(3));
+    list.click(familyKey(A), 'extend');
+    expect(list.selectedCount).toBe(3);
+    list.clearSelection();
+    expect(list.selectedCount).toBe(0);
+    expect(list.cursor).toBe(familyKey(A));
+    list.boxSelect([1, 3]);
+    expect(selectedOf(list)).toEqual([familyKey(3), familyKey(A)]);
+    // A Shift or Ctrl/Cmd drag adds to what was selected when it started.
+    const base = new Set(list.selection.selected);
+    list.boxSelect([0], base);
+    expect(list.selectedCount).toBe(3);
+    // Indexes past the rows are ignored.
+    list.boxSelect([99]);
+    expect(list.selectedCount).toBe(0);
+  });
+
+  it('selectedFaces: a style its face, a family its first style read on demand, at most N', async () => {
+    const list = await setup();
+    list.expand(A);
+    await flushPromises();
+    const style = list.rows.find((r) => r.kind === 'face' && r.family.id === A)!;
+    list.click(style.key);
+    list.click(familyKey(B), 'toggle');
+    // Family B's styles are not loaded yet: they are read for it.
+    expect(useLibraryStore().faces.has(B)).toBe(false);
+    const faces = await list.selectedFaces();
+    expect(faces.map((f) => f.id)).toEqual([
+      (style as { face: { id: number } }).face.id,
+      EXTRA_ID_BASE + 4,
+    ]);
+    expect((await list.selectedFaces(1)).map((f) => f.id)).toEqual([faces[0]!.id]);
+    list.clearSelection();
+    expect(await list.selectedFaces()).toEqual([]);
+  });
+
   it('the cursor face of a family is its first style, once loaded', async () => {
     const list = await setup();
     list.click(familyKey(B));

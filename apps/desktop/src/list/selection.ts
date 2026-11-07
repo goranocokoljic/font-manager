@@ -79,3 +79,24 @@ export function prune(keys: ReadonlySet<RowKey>, sel: ListSelection): ListSelect
     selected.size === sel.selected.size && cursor === sel.cursor && anchor === sel.anchor;
   return same ? sel : { selected, cursor, anchor };
 }
+
+/** Selects nothing; the cursor stays where it is, as the place the keys go on from. */
+export function clearSelected(sel: ListSelection): ListSelection {
+  return sel.selected.size ? { ...sel, selected: new Set<RowKey>() } : sel;
+}
+
+/**
+ * A box drawn on the wall's ground touches `touched`: they are the selection, added to
+ * `base` (what was selected when the drag started with Shift or Ctrl/Cmd; else empty).
+ * The cursor and the anchor go to the first touched key, so a Shift-click goes on from it.
+ */
+export function selectBox(
+  sel: ListSelection,
+  base: ReadonlySet<RowKey>,
+  touched: readonly RowKey[],
+): ListSelection {
+  const selected = new Set(base);
+  for (const k of touched) selected.add(k);
+  const first = touched[0] ?? null;
+  return first === null ? { ...sel, selected } : { selected, cursor: first, anchor: first };
+}

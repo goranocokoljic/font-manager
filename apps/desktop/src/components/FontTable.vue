@@ -555,7 +555,7 @@ span.sort {
   contain: layout paint;
 }
 .tr.selected {
-  background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
+  background: color-mix(in srgb, var(--fm-accent) 6%, transparent);
 }
 /* The tint alone is under 3:1; a solid accent bar marks every selected row (WCAG 1.4.11). */
 .tr.selected::before {

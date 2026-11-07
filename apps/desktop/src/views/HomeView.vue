@@ -35,6 +35,7 @@ import QuickLookSheet from '../components/QuickLookSheet.vue';
 import QuickCollectionReview from '../components/QuickCollectionReview.vue';
 import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
+import SelectionBar from '../components/SelectionBar.vue';
 import SimilarPanel from '../components/SimilarPanel.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
@@ -45,6 +46,7 @@ import { errorMessage, t } from '../i18n';
 import { DENSITIES } from '../list/density';
 import { WALL_SIZE, wallLayout } from '../list/grid';
 import FmFade from '../motion/FmFade.vue';
+import FmSlide from '../motion/FmSlide.vue';
 import type { ListRow } from '../list/rows';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
@@ -568,6 +570,16 @@ onBeforeUnmount(() => {
   if (el) fontList.viewLeft(el.scrollTop, LAYOUT_LINE, LAYOUT_LINE);
 });
 
+// The selection bar (E44.1) rises on the first selection, over the views with rows.
+const showSelectionBar = computed(
+  () =>
+    fontList.selectedCount > 0 &&
+    fontList.families.length > 0 &&
+    mode.value !== 'layout' &&
+    !quick.open &&
+    !catalogs.current,
+);
+
 /** Escape in the search box or the preview field: back to the font list the keys drive. */
 function focusList(): void {
   browse.value
@@ -759,6 +771,9 @@ async function openFace(face: FaceId): Promise<void> {
               </button>
             </UiEmptyState>
           </section>
+          <FmSlide from="bottom" distance="16px">
+            <SelectionBar v-if="showSelectionBar" @cleared="focusList" />
+          </FmSlide>
         </div>
       </template>
       <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />

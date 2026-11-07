@@ -299,6 +299,7 @@
     },
     "allFonts": "All fonts",
     "selected": "{count} selected",
+    "selectHint": "Shift-click or drag a box to select · Esc clears",
     "families": {
       "one": "{count} family",
       "other": "{count} families"
@@ -963,7 +964,19 @@
     "cssFor": "Copy CSS for the {label}"
   },
   "selection": {
-    "chooseReceipt": "Choose the receipt"
+    "chooseReceipt": "Choose the receipt",
+    "bar": {
+      "label": "Selection",
+      "families": { "one": "{count} family", "other": "{count} families" },
+      "fonts": { "one": "{count} font", "other": "{count} fonts" },
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "collection": "Collection",
+      "tag": "Tag",
+      "compare": "Compare",
+      "studio": "Studio",
+      "clear": "Clear the selection"
+    }
   },
   "table": {
     "label": "Font table",

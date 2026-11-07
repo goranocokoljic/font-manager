@@ -301,7 +301,7 @@ function onToggle(row: ListRow): void {
   padding-inline-start: 24px;
 }
 .slot.selected {
-  background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
+  background: color-mix(in srgb, var(--fm-accent) 6%, transparent);
 }
 /* The tint alone is under 3:1; a solid accent bar marks every selected block (WCAG 1.4.11). */
 .slot.selected::before {

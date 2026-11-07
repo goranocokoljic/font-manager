@@ -9,6 +9,7 @@ import type { SearchRequest } from '../api/types';
 import { SEARCH_DEBOUNCE_MS } from '../stores/search';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useViewsStore } from '../stores/views';
+import { useFontListStore } from '../stores/fontList';
 import WallCountLine from './WallCountLine.vue';
 
 let wrapper: VueWrapper | undefined;
@@ -52,6 +53,21 @@ describe('the count line above the wall', () => {
     await flushPromises();
     expect(w.get('[role="status"]').text()).toBe('212 families · Sans serif · Serbian (Latin)');
     expect(w.get('.sort').text().replace(/\s+/g, ' ')).toBe('Sorted by name · change');
+  });
+
+  it('with several selected, reads "N selected" and how to select (E44.1)', async () => {
+    const { w } = await mountLine();
+    const list = useFontListStore();
+    list.click(list.rows[0]!.key);
+    await flushPromises();
+    // One selected: the family count stays, and the row's name and state.
+    expect(w.find('[data-testid="selected-count"]').exists()).toBe(false);
+    list.click(list.rows[2]!.key, 'extend');
+    await flushPromises();
+    expect(w.get('[data-testid="selected-count"]').text()).toBe('3 selected');
+    expect(w.get('.count').text()).toBe(
+      '3 selected · Shift-click or drag a box to select · Esc clears',
+    );
   });
 
   it('has no separators and no filter names with no filter', async () => {

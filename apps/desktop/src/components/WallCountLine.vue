@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The line above the wall: how many families there are, which filters gave them, the one
-// selected row with its state, and how they are sorted, with a menu to change that. The API
+// selected row with its state (several: 'N selected' and how to select, E44.1), and how they are sorted, with a menu to change that. The API
 // does the sorting. With your own text past Basic Latin on the wall it says how many of the
 // families render it completely (E43.1; the API checks the coverage), and the reading rows
 // add their body size and line height. A switch beside the count hides the families with
@@ -140,9 +140,12 @@ function onFocusOut(e: FocusEvent): void {
       role="status"
       :title="labels.join(' · ') || undefined"
     >
-      <template v-if="selecting">{{
-        t('home.selected', { count: fontList.selectedCount })
-      }}</template>
+      <template v-if="selecting">
+        <strong data-testid="selected-count">{{
+          t('home.selected', { count: fontList.selectedCount })
+        }}</strong>
+        · {{ t('home.selectHint') }}
+      </template>
       <template v-else-if="shown && covering !== null">
         <strong data-testid="renders-text">{{
           t('home.rendersText.count', { covered: covering, count: coverBase })

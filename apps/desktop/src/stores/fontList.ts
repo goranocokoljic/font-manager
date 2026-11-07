@@ -10,10 +10,12 @@ import {
   type RowKey,
 } from '../list/rows';
 import {
+  clearSelected,
   EMPTY_SELECTION,
   moveTo,
   prune,
   selectAll as selectAllKeys,
+  selectBox,
   selectKey,
   type ListSelection,
   type SelectMode,
@@ -82,6 +84,27 @@ export const useFontListStore = defineStore('fontList', () => {
   const selectedRows = computed(() =>
     rows.value.filter((r) => selection.value.selected.has(r.key)),
   );
+
+  /**
+   * The faces the selected rows stand for, in list order, at most `limit`: a style row's own
+   * face, a family row's first shown face (its styles are read when not loaded yet). The
+   * selection bar's Compare and Studio act on them (E44.1).
+   */
+  async function selectedFaces(limit = Infinity): Promise<FaceSummary[]> {
+    const out: FaceSummary[] = [];
+    for (const row of selectedRows.value) {
+      if (out.length >= limit) break;
+      if (row.kind === 'face') {
+        out.push(row.face);
+        continue;
+      }
+      const id = row.family.id;
+      if (!previewFace(id)) await library.facesOf(id).catch(() => undefined);
+      const face = previewFace(id);
+      if (face) out.push(face);
+    }
+    return out;
+  }
 
   /** The face the cursor shows: a style row's face, or a family's first face. */
   const cursorFace = computed<FaceSummary | undefined>(() => {
@@ -234,6 +257,26 @@ export const useFontListStore = defineStore('fontList', () => {
     selection.value = selectAllKeys(keys.value, selection.value);
   }
 
+  /** Esc, or the selection bar's ×: nothing selected. The cursor stays. */
+  function clearSelection(): void {
+    selection.value = clearSelected(selection.value);
+  }
+
+  /**
+   * The wall's selection box (E44.1) touches the rows at `indexes`: they are the selection,
+   * added to `base` (the selection when a Shift or Ctrl/Cmd drag started; else empty).
+   */
+  function boxSelect(indexes: readonly number[], base: ReadonlySet<RowKey> = new Set()): void {
+    const touched = indexes.map((i) => keys.value[i]).filter((k): k is RowKey => k !== undefined);
+    const next = selectBox(selection.value, base, touched);
+    const now = selection.value;
+    const same =
+      next.cursor === now.cursor &&
+      next.selected.size === now.selected.size &&
+      [...next.selected].every((k) => now.selected.has(k));
+    if (!same) selection.value = next;
+  }
+
   /**
    * Right arrow: expands a collapsed family, or goes to its first style.
    * Left arrow: collapses an expanded family, or goes from a style to its family.
@@ -293,6 +336,7 @@ export const useFontListStore = defineStore('fontList', () => {
     cursorFace,
     selectedCount,
     selectedRows,
+    selectedFaces,
     isSelected,
     anchor,
     anchorIndex,
@@ -311,6 +355,8 @@ export const useFontListStore = defineStore('fontList', () => {
     click,
     toggleCursor,
     selectAll,
+    clearSelection,
+    boxSelect,
     expandOrEnter,
     collapseOrLeave,
     revealed,

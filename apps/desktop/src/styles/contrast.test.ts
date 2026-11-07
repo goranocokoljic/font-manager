@@ -124,6 +124,15 @@ describe('the sidebar', () => {
   });
 });
 
+// E44.1: the selection bar is dark with white on it, the same in both themes.
+describe('the selection bar', () => {
+  it('is #141413 with white words, at least 4.5:1, in both themes', () => {
+    expect(light['bar-bg']).toBe('#141413');
+    expect(light['bar-fg']).toBe('#ffffff');
+    expect(contrast(rgb(light['bar-fg']!), rgb(light['bar-bg']!))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('text the browser colors by default', () => {
   it('placeholders use the muted color at full opacity', () => {
     // `muted` is in the checked text colors above; the browser default is not.
@@ -164,6 +173,8 @@ const CHECKED = [
   'surface',
   'surface-2',
   'control-border',
+  'bar-bg',
+  'bar-fg',
 ];
 
 describe('every color token', () => {
