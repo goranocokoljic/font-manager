@@ -11,6 +11,7 @@ export const ICONS = {
   sidebar: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6 3v10"/>',
   inspector: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M10 3v10"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/>',
   plus: '<path d="M8 3v10M3 8h10"/>',
   minus: '<path d="M3 8h10"/>',
   sparkles:

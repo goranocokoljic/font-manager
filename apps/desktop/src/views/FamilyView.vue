@@ -6,6 +6,7 @@
 // it shows selected: the `?face=` of the route, else the family's first.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import FamilyCharacters from '../components/FamilyCharacters.vue';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilySample from '../components/FamilySample.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
@@ -13,7 +14,6 @@ import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorDeveloper from '../components/InspectorDeveloper.vue';
 import InspectorFeatures from '../components/InspectorFeatures.vue';
-import InspectorGlyphs from '../components/InspectorGlyphs.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
@@ -389,7 +389,11 @@ onBeforeUnmount(() => {
                     :text="specimen"
                     :face-style="specimenStyle"
                   />
-                  <InspectorGlyphs v-else-if="page.section === 'characters'" />
+                  <FamilyCharacters
+                    v-else-if="page.section === 'characters'"
+                    :detail="shown"
+                    :face-style="specimenStyle"
+                  />
                   <InspectorFeatures v-else-if="page.section === 'features'" />
                   <InspectorInfo v-else-if="page.section === 'info'" />
                   <p v-else class="quiet">{{ t('family.sectionLater') }}</p>

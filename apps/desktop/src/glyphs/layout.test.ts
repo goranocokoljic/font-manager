@@ -1,65 +1,57 @@
 import { describe, expect, it } from 'vitest';
-import type { GlyphBlock } from '../api/types';
-import { codePointLabel, glyphColumns, glyphLayout, moveCursor, rowOf } from './layout';
-
-const block = (name: string, count: number): GlyphBlock => ({ name, first: 0, last: 0, count });
-// Basic Latin: 7 cells (rows of 3: 3, 3, 1); Cyrillic: 4 cells (3, 1).
-const layout = glyphLayout([block('Basic Latin', 7), block('Cyrillic', 4)], 3);
+import {
+  GLYPH_COLUMNS,
+  codePointLabel,
+  glyphRowCount,
+  glyphRowHeight,
+  moveCursor,
+  rowOf,
+} from './layout';
 
 describe('glyph grid layout', () => {
-  it('lays out each block as a heading and rows of cells', () => {
-    expect(layout.rows.map((r) => (r.kind === 'heading' ? r.block.name : r.count))).toEqual([
-      'Basic Latin',
-      3,
-      3,
-      1,
-      'Cyrillic',
-      3,
-      1,
-    ]);
-    expect(layout.rows.map((r) => r.start)).toEqual([0, 0, 3, 6, 7, 7, 10]);
-    expect(layout.total).toBe(11);
+  it('always has twelve columns of square cells in whole pixels', () => {
+    expect(GLYPH_COLUMNS).toBe(12);
+    expect(glyphRowHeight(720)).toBe(60);
+    expect(glyphRowHeight(725)).toBe(60);
+    expect(glyphRowHeight(0)).toBe(1);
   });
 
-  it('fits whole cells, at least one', () => {
-    expect(glyphColumns(300)).toBe(6);
-    expect(glyphColumns(10)).toBe(1);
+  it('counts the rows a list fills', () => {
+    expect(glyphRowCount(0)).toBe(0);
+    expect(glyphRowCount(1)).toBe(1);
+    expect(glyphRowCount(12)).toBe(1);
+    expect(glyphRowCount(13)).toBe(2);
+    expect(rowOf(11)).toBe(0);
+    expect(rowOf(12)).toBe(1);
   });
 
-  it('finds the row of a list index', () => {
-    expect([0, 2, 3, 6, 7, 10].map((i) => rowOf(layout, i))).toEqual([1, 1, 2, 3, 5, 6]);
-    expect(rowOf(layout, 11)).toBe(-1);
-    expect(rowOf(layout, -1)).toBe(-1);
+  it('moves the cursor by cell and by row', () => {
+    expect(moveCursor(30, 5, 'ArrowRight')).toBe(6);
+    expect(moveCursor(30, 5, 'ArrowLeft')).toBe(4);
+    expect(moveCursor(30, 5, 'ArrowDown')).toBe(17);
+    expect(moveCursor(30, 17, 'ArrowUp')).toBe(5);
+    expect(moveCursor(30, 5, 'Home')).toBe(0);
+    expect(moveCursor(30, 5, 'End')).toBe(29);
   });
 
-  it('a CJK-sized list is a few thousand rows, not 30k cells', () => {
-    const big = glyphLayout([block('CJK Unified Ideographs', 20_992), block('Hangul', 11_172)], 6);
-    expect(big.total).toBe(32_164);
-    expect(big.rows.length).toBe(2 + Math.ceil(20_992 / 6) + Math.ceil(11_172 / 6));
-    expect(rowOf(big, 32_163)).toBe(big.rows.length - 1);
+  it('stops at the ends of the list', () => {
+    expect(moveCursor(30, 0, 'ArrowLeft')).toBe(0);
+    expect(moveCursor(30, 29, 'ArrowRight')).toBe(29);
+    expect(moveCursor(30, 5, 'ArrowUp')).toBe(5);
+    expect(moveCursor(30, 25, 'ArrowDown')).toBe(25);
   });
 
-  it('arrow keys move by cell and by row, across block headings', () => {
-    const move = (i: number, key: string) => moveCursor(layout, i, key);
-    expect(move(0, 'ArrowRight')).toBe(1);
-    expect(move(10, 'ArrowRight')).toBe(10);
-    expect(move(0, 'ArrowLeft')).toBe(0);
-    expect(move(1, 'ArrowDown')).toBe(4);
-    // Into a shorter row: its last cell.
-    expect(move(5, 'ArrowDown')).toBe(6);
-    // Past the heading into the next block, same column.
-    expect(move(6, 'ArrowDown')).toBe(7);
-    expect(move(8, 'ArrowUp')).toBe(6);
-    expect(move(1, 'ArrowUp')).toBe(1);
-    expect(move(4, 'Home')).toBe(0);
-    expect(move(4, 'End')).toBe(10);
-    expect(move(4, 'a')).toBeNull();
-    expect(moveCursor(glyphLayout([], 3), 0, 'ArrowRight')).toBeNull();
+  it('goes to the last cell when the row below is shorter', () => {
+    expect(moveCursor(30, 23, 'ArrowDown')).toBe(29);
   });
 
-  it('writes code points as Unicode does', () => {
-    expect(codePointLabel(0x416)).toBe('U+0416');
-    expect(codePointLabel(0x41)).toBe('U+0041');
+  it('ignores other keys and an empty list', () => {
+    expect(moveCursor(30, 5, 'a')).toBeNull();
+    expect(moveCursor(0, 0, 'ArrowDown')).toBeNull();
+  });
+
+  it('writes a code point as Unicode does', () => {
+    expect(codePointLabel(0x17d)).toBe('U+017D');
     expect(codePointLabel(0x1f600)).toBe('U+1F600');
   });
 });

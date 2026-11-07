@@ -2,8 +2,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient } from '../api/mock';
-import type { GlyphsRequest } from '../api/types';
-import { GLYPH_PAGE, useGlyphsStore } from './glyphs';
+import type { CoverageReport, FaceDetail, FaceSummary, GlyphsRequest } from '../api/types';
+import { GLYPH_PAGE, STYLE_COUNT_DELAY, useGlyphsStore } from './glyphs';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
@@ -150,5 +150,120 @@ describe('glyphs store', () => {
     await s.select({ ...s.item(0)!, codePoint: 0x61 });
     expect(s.detail).toBeNull();
     expect(s.detailError?.message).toBe('Character U+0061 was not found.');
+  });
+});
+
+describe('glyphs store: in how many styles', () => {
+  const face = (id: number, isVariable = false) => ({ id, isVariable }) as FaceSummary;
+
+  /** Faces in `lacking` do not have the character; a variable face has `instances` named styles. */
+  function answer({ lacking = [] as number[], instances = 0, fails = false } = {}) {
+    const asked: string[] = [];
+    setClient({
+      ...client,
+      checkCoverage: async (req) => {
+        if (fails) throw { code: 'notFound', message: 'gone' };
+        asked.push(`${req.face}:${req.target.kind === 'text' ? req.target.text : ''}`);
+        return {
+          face: req.face,
+          complete: !lacking.includes(req.face),
+          missing: [],
+          languages: [],
+        };
+      },
+      getFace: async () => ({ instances: Array(instances).fill({}) }) as unknown as FaceDetail,
+    });
+    return asked;
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const rest = () => vi.advanceTimersByTimeAsync(STYLE_COUNT_DELAY);
+
+  it('counts the styles fm-core says have the character', async () => {
+    const asked = answer({ lacking: [2] });
+    const s = useGlyphsStore();
+    s.countStyles(0x17d, [face(1), face(2), face(3)]);
+    await rest();
+    expect(asked).toEqual(['1:Ž', '2:Ž', '3:Ž']);
+    expect(s.styleCount).toEqual({ have: 2, total: 3 });
+  });
+
+  it('counts every style when no face lacks the character', async () => {
+    answer();
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1), face(2)]);
+    await rest();
+    expect(s.styleCount).toEqual({ have: 2, total: 2 });
+  });
+
+  it('counts a variable face as its named styles, only if it has the character', async () => {
+    answer({ instances: 18, lacking: [2] });
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1, true), face(2, true), face(3)]);
+    await rest();
+    expect(s.styleCount).toEqual({ have: 19, total: 37 });
+  });
+
+  it('counts a variable face without named styles as one style', async () => {
+    answer({ instances: 0 });
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1, true)]);
+    await rest();
+    expect(s.styleCount).toEqual({ have: 1, total: 1 });
+  });
+
+  it('waits for the selection to rest and asks for the last character only', async () => {
+    const asked = answer();
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1)]);
+    s.countStyles(0x42, [face(1)]);
+    expect(asked).toEqual([]);
+    expect(s.styleCount).toBeNull();
+    await rest();
+    expect(asked).toEqual(['1:B']);
+  });
+
+  it('drops the answer to a character selected before the last one', async () => {
+    let answerOld: (report: CoverageReport) => void = () => undefined;
+    setClient({
+      ...client,
+      checkCoverage: () => new Promise((resolve) => (answerOld = resolve)),
+    });
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1)]);
+    await rest();
+    s.countStyles(null, [face(1)]);
+    answerOld({ face: 1, complete: true, missing: [], languages: [] });
+    await rest();
+    expect(s.styleCount).toBeNull();
+  });
+
+  it('clears the count with the selection, and asks nothing', async () => {
+    const asked = answer();
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1)]);
+    await rest();
+    expect(s.styleCount).not.toBeNull();
+    asked.length = 0;
+    s.countStyles(null, [face(1)]);
+    await rest();
+    expect(s.styleCount).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it('says it failed when fm-core cannot answer, and a new selection starts over', async () => {
+    answer({ fails: true });
+    const s = useGlyphsStore();
+    s.countStyles(0x41, [face(1)]);
+    await rest();
+    expect(s.styleCountFailed).toBe(true);
+    expect(s.styleCount).toBeNull();
+    answer();
+    s.countStyles(0x41, [face(1)]);
+    expect(s.styleCountFailed).toBe(false);
+    await rest();
+    expect(s.styleCount).toEqual({ have: 1, total: 1 });
   });
 });
