@@ -15,8 +15,12 @@ export default defineComponent({
   },
   setup(props) {
     const runs = computed(() => specimenRuns(props.text, props.missing));
-    return () =>
-      runs.value.map((run) =>
+    return () => {
+      // Without tofu the text is one text node, as before: a fragment would put empty
+      // anchor nodes around it, and the first child of the line would be one of them.
+      const only = runs.value.length === 1 ? runs.value[0]! : undefined;
+      if (only && !only.missing) return only.text;
+      return runs.value.map((run) =>
         run.missing
           ? h('span', {
               class: TOFU_CLASS,
@@ -26,5 +30,6 @@ export default defineComponent({
             })
           : run.text,
       );
+    };
   },
 });
