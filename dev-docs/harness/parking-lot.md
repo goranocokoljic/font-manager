@@ -401,3 +401,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E44.1 #469] apps/desktop/src/styles/theme.css:82 — in the dark theme the #141413 selection bar on #1c1c1e separates from the page only by its shadow.
 - [E44.2 #470] apps/desktop/src/components/CollectionsSidebar.vue:448 — the collection count is a role-less `<span>` named only by `aria-label`; ARIA 1.2 does not allow naming a generic element, so some screen readers read the visible text instead.
 - [E44.4 #472] crates/fm-platform/src/pdf.rs:161 — pdf::file_url (lossy, no UNC) and fm_core::font_switch::file_url (byte-exact, UNC) are two diverging file:// encoders; E44.4 added a third (drag::file_uri).
+- [E45.1 #473] crates/fm-core/src/preview/page.rs:176 — the rasterizer clamps every layout width to the A4 inner width, so wide or unlocked layouts export narrower than they show.
+- [E45.1 #473] crates/fm-core/src/layout/store.rs:306 — `LayoutStore::seed` stops at the first `write_atomic` error, so one unwritable shipped file fails the whole list or open call.
+- [E45.1 #473] crates/fm-core/src/layout/store.rs:306 — a user file already named `studio-magazine.json` is kept but recorded as written in `.presets`, so the Magazine context is never seeded for that user.
+- [E45.1 #473] apps/desktop/src/components/ui/UiButton.vue — a pressed button (`aria-pressed='true'`) is marked only by a 16 % accent tint and a muted-to-fg text change, probably under 3:1.
