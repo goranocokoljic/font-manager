@@ -62,9 +62,20 @@ your team, read [Shared libraries](shared-libraries.md).
   and "unsaved" when the layout has changes that are not saved). Choose a context to try
   the pairing on a real page: **Magazine** and **Poster** (A4), **Web hero** (1440 × 900),
   **Mobile UI** (390 × 844, with the iOS text sizes) and **Video title** (1920 × 1080, with
-  the title-safe and action-safe frames). The page shows at 100 % on a grey ground. Point
-  to a block to see its controls; drag it sideways for size, up and down for line height.
-  **Compare 2 pairings** puts a second copy beside the first. **Save** saves the layout
+  the title-safe and action-safe frames). The page shows at 100 % on a grey ground.
+- The **Roles** rail at the left of the page has one card for each role of the context
+  (Magazine: Headline, Deck, Body, Caption; each context has its own roles). Each card has
+  the role's font. Click the font to search your library: each family shows in its own
+  letters. The font you choose sets all blocks of that role. Under the font are the style,
+  the size and the line height. The lock button locks the role, so **Shuffle unlocked**
+  does not change it.
+- Point to a block on the page to see its role in the margin. Click the block to select
+  it: its card in the rail gets a ring. Drag a block sideways for size, up and down for
+  line height. Press Enter to edit its text.
+- When you open the Studio from a pairing card, the pairing's headline font sets
+  **Headline** and its body font sets **Body**. When you drop two fonts on the Studio, the
+  first sets **Body** and the second sets **Headline**.
+- **Compare 2 pairings** puts a second copy beside the first. **Save** saves the layout
   file. **Export PNG** saves the saved layout as a PNG in the export folder (save first).
 - To print a layout, open it in **Pairing Studio** and choose **Print the Studio page** in
   the command palette. On the second panel of **Compare 2 pairings**, click **Print…**.

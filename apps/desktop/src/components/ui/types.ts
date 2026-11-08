@@ -7,4 +7,6 @@ export interface SelectOption<T extends string | number = string> {
   disabled?: boolean;
   /** A tooltip on the option (why it is disabled, for one). */
   title?: string;
+  /** A CSS `font-family` the label is set in: a font picker shows each family in itself. */
+  fontFamily?: string;
 }

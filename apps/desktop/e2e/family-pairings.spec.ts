@@ -69,18 +69,25 @@ test('hovering lifts a card on the fast time', async ({ page }) => {
   await expect(card).not.toHaveCSS('box-shadow', 'none');
 });
 
-test('a card opens the Studio with the pairing loaded: body as the panel face, headline in its block', async ({
+test('a card opens the Studio with the pairing loaded: Headline and Body filled (E45.2)', async ({
   page,
 }) => {
   const panel = await openPairings(page);
   await cards(panel).first().click();
   await expect(page).toHaveURL(/#\/studio\?face=1000&headline=1$/);
   const studio = page.getByRole('region', { name: /^Pairing Studio: / });
-  // The Studio opens on the Magazine context: its headline is block 2, under the kicker.
+  // The Studio opens on the Magazine context: the Headline role is set in the headline face, the
+  // Body role in the body face; the others follow the panel's face, the body face.
   await expect(page.getByTestId('studio-pairing')).toHaveText('Inter + Sample 1');
-  await expect(studio.getByRole('combobox', { name: 'Font for Block 2' })).toHaveValue(/^Inter /);
-  await expect(studio.getByRole('combobox', { name: 'Font for Block 1' })).toHaveValue('');
-  await expect(studio.getByRole('combobox', { name: 'Font for Block 3' })).toHaveValue('');
+  const picker = (role: string) => studio.getByRole('combobox', { name: `Font for ${role}` });
+  await expect(picker('Headline')).toHaveText('Inter');
+  await expect(picker('Body')).toHaveText('Sample 1');
+  await expect(picker('Deck')).toHaveText('Sample 1');
+  const blocks = studio.getByTestId('layout-block');
+  const family = (i: number) => blocks.nth(i).evaluate((el) => getComputedStyle(el).fontFamily);
+  // Block 2 is the headline (under the kicker), block 4 the body.
+  expect(await family(1)).not.toBe(await family(3));
+  expect(await family(0)).toBe(await family(3));
 });
 
 test('with no candidate in the library: one line and a way to browse catalogs', async ({

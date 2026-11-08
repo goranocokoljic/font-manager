@@ -205,7 +205,7 @@ test('the page sits on #ecebe7 with a soft shadow; the hint under it says hover,
   await expect(sheet(region)).not.toHaveCSS('box-shadow', 'none');
   const hint = region.getByTestId('layout-sheet-hint');
   await expect(hint).toHaveText(
-    'Hover a block to see its controls · click it to edit its text · drag sideways for size, up and down for leading',
+    'Hover a block to see its role · click to select it and edit in the rail · drag sideways for size, up and down for leading · Enter edits the text',
   );
   // The hint is under the page.
   const pageBox = (await sheet(region).boundingBox())!;
@@ -679,4 +679,233 @@ test('"Print..." prints one panel alone, as live text in its fonts, and the PDF 
   await page.emulateMedia({ media: 'print' });
   await expect(second).toBeHidden();
   await expect(blocks(layout(first, 'Book')).first()).toBeVisible();
+});
+
+// ---- E45.2 roles rail ------------------------------------------------------------------
+
+const rail = (page: Page) => studio(page).getByTestId('studio-roles');
+const roleCards = (page: Page) => rail(page).getByTestId('studio-role');
+const roleCard = (page: Page, role: string) =>
+  roleCards(page).filter({ has: page.getByRole('heading', { name: role, exact: true }) });
+const rolePicker = (page: Page, role: string) =>
+  rail(page).getByRole('combobox', { name: `Font for ${role}`, exact: true });
+const familyOf = (block: Locator) => block.evaluate((el) => getComputedStyle(el).fontFamily);
+/** The menu of an open role picker: the listbox the combobox controls. */
+const menuOf = async (picker: Locator) =>
+  picker.page().locator(`[id="${await picker.getAttribute('aria-controls')}"]`);
+
+/** Opens role `role`'s picker, searches `text` and takes the family `name`. */
+async function pickRoleFont(page: Page, role: string, text: string, name: string) {
+  await rolePicker(page, role).click();
+  await expect(rolePicker(page, role)).toHaveAttribute('aria-expanded', 'true');
+  const menu = await menuOf(rolePicker(page, role));
+  await expect(menu).toBeVisible();
+  await page.keyboard.type(text);
+  await menu.getByRole('option', { name, exact: true }).click();
+  await expect(menu).toBeHidden();
+}
+
+test('a 300 px rail lists the context roles as cards: name, lock, font picker, style and size', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?face=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  await expect(rail(page)).toBeVisible();
+  const railBox = (await rail(page).boundingBox())!;
+  expect(Math.round(railBox.width)).toBe(300);
+  // The rail is left of the page.
+  expect(railBox.x).toBeLessThan((await sheet(region).boundingBox())!.x);
+  await expect(roleCards(page).getByRole('heading')).toHaveText([
+    'Headline',
+    'Deck',
+    'Body',
+    'Caption',
+  ]);
+  // No per-block pickers beside the page: the rail has them.
+  await expect(region.getByTestId('block-font')).toHaveCount(0);
+
+  const headline = roleCard(page, 'Headline');
+  // The style of the face and the size / leading of the role's block: 40 pt on 1.05.
+  await expect(headline.getByTestId('studio-role-detail')).toHaveText(/^\S.* · 40 pt · 1\.05$/);
+
+  // The lock toggles, per role.
+  const lock = headline.getByRole('button', { name: 'Lock Headline' });
+  await expect(lock).toHaveAttribute('aria-pressed', 'false');
+  await lock.click();
+  await expect(lock).toHaveAttribute('aria-pressed', 'true');
+  await expect(lock).toHaveAttribute('title', /^Locked/);
+  await expect(roleCard(page, 'Body').getByRole('button', { name: 'Lock Body' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+
+  // The picker searches the library; each family is set in itself.
+  const picker = rolePicker(page, 'Headline');
+  await picker.click();
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
+  const menu = await menuOf(picker);
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('option').nth(1)).toBeVisible();
+  const optionFamilies = await menu
+    .locator('.label')
+    .evaluateAll((els) => els.map((el) => (el as HTMLElement).style.fontFamily));
+  expect(optionFamilies.length).toBeGreaterThan(1);
+  for (const f of optionFamilies) expect(f).toMatch(/fm-face-\d+/);
+  await page.keyboard.type('mono');
+  await expect(menu.getByRole('option', { name: 'JetBrains Mono', exact: true })).toBeVisible();
+  const before = await familyOf(blocks(region).nth(1));
+  await menu.getByRole('option', { name: 'JetBrains Mono', exact: true }).click();
+  await expect(picker).toHaveText('JetBrains Mono');
+  await expect(picker).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(() => familyOf(blocks(region).nth(1))).not.toBe(before);
+  await expect(pairing(page)).toHaveText(/^JetBrains Mono \+ /);
+  // The button shows the family in itself too.
+  expect(
+    await picker.locator('.value').evaluate((el) => (el as HTMLElement).style.fontFamily),
+  ).toMatch(/fm-face-\d+/);
+
+  // Caption sets both of its blocks: the kicker and the caption.
+  await pickRoleFont(page, 'Caption', 'mono', 'JetBrains Mono');
+  const mono = await familyOf(blocks(region).nth(1));
+  await expect.poll(() => familyOf(blocks(region).nth(0))).toBe(mono);
+  await expect.poll(() => familyOf(blocks(region).nth(4))).toBe(mono);
+  expect(await familyOf(blocks(region).nth(3))).not.toBe(mono);
+
+  // Each context defines its own roles.
+  await contextButton(page, 'Web hero').click();
+  await expect(roleCards(page).getByRole('heading')).toHaveText([
+    'Eyebrow',
+    'Headline',
+    'Body',
+    'Button',
+  ]);
+  await contextButton(page, 'Video title').click();
+  await expect(roleCards(page).getByRole('heading')).toHaveText(['Headline', 'Subtitle']);
+});
+
+test('blocks show their role only on hover; a click selects one and rings its card', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?face=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  const marks = region.getByTestId('block-role-mark');
+  await expect(marks).toHaveText(['Caption', 'Headline', 'Deck', 'Body', 'Caption']);
+  const headline = blocks(region).nth(1);
+  const headlineMark = marks.nth(1);
+  const tools = headlineMark.locator('xpath=ancestor::div[contains(@class, "tools")][1]');
+  const row = headline.locator('xpath=ancestor::div[contains(@class, "row")][1]');
+  const outline = (b: Locator) =>
+    b.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { width: s.outlineWidth, color: s.outlineColor };
+    });
+
+  // At rest: no mark, no ring.
+  await expect(tools).toHaveCSS('opacity', '0');
+  expect((await outline(headline)).color).toBe('rgba(0, 0, 0, 0)');
+  // Hover: the mark in the margin and a hairline ring.
+  await headline.hover();
+  await expect(tools).toHaveCSS('opacity', '1');
+  const sheetBox = (await sheet(region).boundingBox())!;
+  expect((await headlineMark.boundingBox())!.x).toBeLessThan(sheetBox.x);
+  await expect.poll(async () => (await outline(headline)).color).not.toBe('rgba(0, 0, 0, 0)');
+  expect((await outline(headline)).width).toBe('1px');
+  await page.mouse.move(0, 0);
+  await expect(tools).toHaveCSS('opacity', '0');
+
+  // Click: selected, with the accent ring; the mark stays; the Headline card has the ring.
+  await headline.click();
+  await expect(row).toHaveAttribute('data-selected', '');
+  await page.mouse.move(0, 0);
+  await expect(tools).toHaveCSS('opacity', '1');
+  await expect.poll(async () => (await outline(headline)).width).toBe('2px');
+  const accent = await roleCard(page, 'Headline').evaluate(
+    (el) => getComputedStyle(el).borderTopColor,
+  );
+  expect((await outline(headline)).color).toBe(accent);
+  await expect(roleCard(page, 'Headline')).toHaveAttribute('aria-current', 'true');
+  // The focus stays on the block, so its keys work.
+  await expect(headline).toBeFocused();
+
+  // The card's ring follows the selection.
+  await blocks(region).nth(3).click();
+  await expect(roleCard(page, 'Body')).toHaveAttribute('aria-current', 'true');
+  await expect(roleCard(page, 'Headline')).not.toHaveAttribute('aria-current', 'true');
+  await expect(row).not.toHaveAttribute('data-selected', '');
+  // The kicker and the caption share the Caption card.
+  await blocks(region).nth(4).click();
+  await expect(roleCard(page, 'Caption')).toHaveAttribute('aria-current', 'true');
+  // The focus selects too.
+  await blocks(region).nth(2).focus();
+  await expect(roleCard(page, 'Deck')).toHaveAttribute('aria-current', 'true');
+});
+
+test('on a selected block: drag sideways for size, up and down for leading; Enter edits its text', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?face=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  const deck = blocks(region).nth(2);
+  await deck.click();
+  await expect(roleCard(page, 'Deck')).toHaveAttribute('aria-current', 'true');
+  const size = Number(await deck.getAttribute('data-size'));
+  const leading = Number(await deck.getAttribute('data-line-height'));
+  const box = (await deck.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + 10;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 20, y, { steps: 4 });
+  await page.mouse.move(x + 40, y, { steps: 4 });
+  await page.mouse.move(x + 40, y - 30, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await deck.getAttribute('data-size'))).toBeGreaterThan(size);
+  await expect
+    .poll(async () => Number(await deck.getAttribute('data-line-height')))
+    .not.toBe(leading);
+  // The card shows the new size, and the block is still the selected one.
+  await expect(roleCard(page, 'Deck').getByTestId('studio-role-detail')).not.toHaveText(
+    new RegExp(` ${size} pt `),
+  );
+  await expect(roleCard(page, 'Deck')).toHaveAttribute('aria-current', 'true');
+
+  // Enter edits the selected block's text.
+  await deck.focus();
+  await page.keyboard.press('Enter');
+  const editor = region.getByTestId('layout-block-editor');
+  await expect(editor).toBeFocused();
+  await editor.fill('A new deck for the page.');
+  await page.keyboard.press('Control+Enter');
+  await expect(deck).toHaveText('A new deck for the page.');
+  await expect(pairing(page)).toContainText('unsaved');
+});
+
+test('opening the Studio with two faces (a pairing card or a drop) fills Headline and Body', async ({
+  page,
+}) => {
+  await open(page);
+  // The URL a pairing card (E42.7) and a drop of two fonts on the Studio (E44.2) open: the body
+  // face (JetBrains Mono) and the headline face (Inter).
+  await page.goto('/#/studio?face=6&headline=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  const headlineName = 'Inter';
+  const bodyName = 'JetBrains Mono';
+  await expect(rolePicker(page, 'Headline')).toHaveText(headlineName);
+  await expect(rolePicker(page, 'Body')).toHaveText(bodyName);
+  await expect(pairing(page)).toHaveText(`${headlineName} + ${bodyName}`);
+  // The other roles follow the body face.
+  await expect(rolePicker(page, 'Deck')).toHaveText(bodyName);
+  await expect(rolePicker(page, 'Caption')).toHaveText(bodyName);
+  expect(await familyOf(blocks(region).nth(1))).not.toBe(await familyOf(blocks(region).nth(3)));
+  // Another context gets the pairing too.
+  await contextButton(page, 'Mobile UI').click();
+  await expect(rolePicker(page, 'Headline')).toHaveText(headlineName);
+  await expect(rolePicker(page, 'Body')).toHaveText(bodyName);
 });

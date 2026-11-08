@@ -305,8 +305,14 @@
       "other": "{count} families"
     },
     "rendersText": {
-      "count": { "one": "{covered} of {count} family", "other": "{covered} of {count} families" },
-      "tail": { "one": "renders your text completely", "other": "render your text completely" },
+      "count": {
+        "one": "{covered} of {count} family",
+        "other": "{covered} of {count} families"
+      },
+      "tail": {
+        "one": "renders your text completely",
+        "other": "render your text completely"
+      },
       "hide": {
         "one": "Hide the {count} with missing glyphs",
         "other": "Hide the {count} with missing glyphs"
@@ -843,7 +849,10 @@
       "one": "Copy CSS for {count} switched on",
       "other": "Copy CSS for {count} switched on"
     },
-    "more": { "one": "{count} more", "other": "{count} more" },
+    "more": {
+      "one": "{count} more",
+      "other": "{count} more"
+    },
     "rare": "Rare features"
   },
   "palettes": {
@@ -967,8 +976,14 @@
     "chooseReceipt": "Choose the receipt",
     "bar": {
       "label": "Selection",
-      "families": { "one": "{count} family", "other": "{count} families" },
-      "fonts": { "one": "{count} font", "other": "{count} fonts" },
+      "families": {
+        "one": "{count} family",
+        "other": "{count} families"
+      },
+      "fonts": {
+        "one": "{count} font",
+        "other": "{count} fonts"
+      },
       "activate": "Activate",
       "deactivate": "Deactivate",
       "collection": "Collection",
@@ -1526,7 +1541,10 @@
     "deletePin": "Delete {name}",
     "pinDeleted": "Deleted “{name}”.",
     "rail": "About this family",
-    "railLanguages": { "one": "Supports {count} language", "other": "Supports {count} languages" },
+    "railLanguages": {
+      "one": "Supports {count} language",
+      "other": "Supports {count} languages"
+    },
     "railLanguagesHint": "Click one to preview the page in it",
     "railMore": "+ {count} more",
     "railPreviewing": "Every specimen on this page now shows {language}.",
@@ -1544,7 +1562,10 @@
       "no": "{what} ✗",
       "allowed": "{what}: allowed",
       "notAllowed": "{what}: not allowed",
-      "files": { "one": "{count} file", "other": "{count} files" },
+      "files": {
+        "one": "{count} file",
+        "other": "{count} files"
+      },
       "separator": ", "
     },
     "designer": "Designer",
@@ -1647,7 +1668,26 @@
     "exported": "Exported to {path}",
     "printPage": "Print the Studio page",
     "pageScale": "{page} · {scale} %",
-    "hint": "Hover a block to see its controls · click it to edit its text · drag sideways for size, up and down for leading"
+    "hint": "Hover a block to see its role · click to select it and edit in the rail · drag sideways for size, up and down for leading · Enter edits the text",
+    "roles": "Roles",
+    "rolesNote": "lock what you like, shuffle the rest",
+    "role": {
+      "headline": "Headline",
+      "deck": "Deck",
+      "body": "Body",
+      "caption": "Caption",
+      "eyebrow": "Eyebrow",
+      "action": "Button",
+      "title": "Title",
+      "footnote": "Footnote",
+      "subtitle": "Subtitle",
+      "details": "Details"
+    },
+    "roleFont": "Font for {role}",
+    "roleBlock": "{role}, {label}",
+    "lockRole": "Lock {role}",
+    "lockedTitle": "Locked: Shuffle leaves this role as it is",
+    "unlockedTitle": "Lock this role so Shuffle leaves it as it is"
   },
   "conflicts": {
     "title": "Font conflicts",
@@ -1928,7 +1968,10 @@
     }
   },
   "drag": {
-    "more": { "one": "+ {count} more", "other": "+ {count} more" },
+    "more": {
+      "one": "+ {count} more",
+      "other": "+ {count} more"
+    },
     "count": "{before} → {after}",
     "countLabel": "{before}, {after} after the drop",
     "smartRefused": "A smart collection fills itself from its rules, so fonts cannot be dropped on it."

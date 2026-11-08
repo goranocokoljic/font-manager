@@ -6,6 +6,10 @@
 // than eight options) typing filters the list instead. Closed, a typed letter changes
 // the value like the native control did. Every <select> in the app is one of these.
 //
+// With `remote`, the parent does the filtering: the typed text goes out as `search` (and an
+// empty one when the menu opens), and the options shown are the ones the parent sends back.
+// An option with a `fontFamily` is set in it, in the menu and on the button.
+//
 // Attributes fall through to the button: `id` (for a `<label for>`), `aria-label`,
 // `name`, `class`, `data-testid`. The button sizes to its longest option, so a change
 // of value never moves the controls beside it.
@@ -27,11 +31,15 @@ const props = withDefaults(
     searchable?: boolean;
     /** The button is as wide as its longest option (off for a picker that only adds). */
     fit?: boolean;
+    /** The parent filters: typing emits `search` and the options are shown as they come. */
+    remote?: boolean;
   }>(),
-  { disabled: false, placeholder: '', searchable: undefined, fit: true },
+  { disabled: false, placeholder: '', searchable: undefined, fit: true, remote: false },
 );
 const emit = defineEmits<{
   'update:modelValue': [value: T];
+  /** With `remote`: the text typed into the open menu's filter ('' when it opens). */
+  search: [query: string];
   /** The open menu's current option was chosen again: no change, but the user asked for it. */
   repick: [value: T];
 }>();
@@ -52,10 +60,13 @@ const active = ref(0);
 const query = ref('');
 
 const SEARCH_FROM = 9;
-const canSearch = computed(() => props.searchable ?? props.options.length >= SEARCH_FROM);
+const canSearch = computed(
+  () => props.searchable ?? (props.remote || props.options.length >= SEARCH_FROM),
+);
 const selected = computed(() => props.options.find((o) => o.value === props.modelValue));
 const visible = computed(() => {
   const q = query.value.trim().toLowerCase();
+  if (props.remote) return [...props.options];
   return q ? props.options.filter((o) => o.label.toLowerCase().includes(q)) : [...props.options];
 });
 const activeId = computed(() =>
@@ -79,6 +90,7 @@ function show(): void {
           props.options.findIndex((o) => !o.disabled),
         );
   open.value = true;
+  if (props.remote) emit('search', '');
   void nextTick(scrollActiveIntoView);
 }
 function hide(): void {
@@ -209,6 +221,9 @@ watch(
     if (disabled) hide();
   },
 );
+watch(query, (q) => {
+  if (props.remote && open.value) emit('search', q);
+});
 watch(visible, (rows) => {
   if (active.value >= rows.length) active.value = Math.max(0, rows.length - 1);
 });
@@ -235,11 +250,21 @@ defineExpose({ focus: () => trigger.value?.focus() });
   >
     <span class="body">
       <template v-if="fit">
-        <span v-for="o in options" :key="o.value" class="sizer" aria-hidden="true">
+        <span
+          v-for="o in options"
+          :key="o.value"
+          class="sizer"
+          aria-hidden="true"
+          :style="o.fontFamily ? { fontFamily: o.fontFamily } : undefined"
+        >
           {{ o.label }}
         </span>
       </template>
-      <span class="value" :class="{ placeholder: !selected }">
+      <span
+        class="value"
+        :class="{ placeholder: !selected }"
+        :style="selected?.fontFamily ? { fontFamily: selected.fontFamily } : undefined"
+      >
         {{ selected?.label ?? placeholder }}
       </span>
     </span>
@@ -282,7 +307,9 @@ defineExpose({ focus: () => trigger.value?.focus() });
           <svg class="check" viewBox="0 0 16 16" aria-hidden="true">
             <path d="M3 8.5l3 3 7-7" />
           </svg>
-          <span class="label">{{ o.label }}</span>
+          <span class="label" :style="o.fontFamily ? { fontFamily: o.fontFamily } : undefined">
+            {{ o.label }}
+          </span>
         </li>
         <li v-if="!visible.length" class="empty" role="presentation">
           {{ t('ui.select.noMatches') }}

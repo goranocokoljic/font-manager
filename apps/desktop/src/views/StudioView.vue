@@ -21,9 +21,9 @@
 // fonts (E24.3). Print (E24.4) is in the command palette for the first panel and in the second
 // panel's own bar.
 //
-// A pairing card of the family page (E42.7) opens `?face=<body>&headline=<face>`: the panel's
-// face sets the body and the first panel's headline block is set in the headline face, once
-// for each layout the panel shows.
+// A pairing card of the family page (E42.7) or a drop on the Studio (E44.2) opens
+// `?face=<body>&headline=<face>`: the panel's face sets the body, and the first panel's Headline
+// and Body roles (E45.2) are set in the two faces, once for each layout the panel shows.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { StudioContext } from '../api/types';
@@ -34,13 +34,7 @@ import UiSegmentedControl, { type SegmentOption } from '../components/ui/UiSegme
 import { errorMessage, t } from '../i18n';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
-import {
-  FIRST_PANEL,
-  blockScope,
-  headlineBlock,
-  layoutsOf,
-  useStudioStore,
-} from '../stores/studio';
+import { FIRST_PANEL, blockScope, blocksOf, layoutsOf, useStudioStore } from '../stores/studio';
 
 const route = useRoute();
 const router = useRouter();
@@ -92,13 +86,22 @@ const fontName = computed(() =>
 const firstScope = computed(() =>
   firstLayouts.saved ? blockScope(FIRST_PANEL, firstLayouts.saved.id) : null,
 );
-/** "<headline> + <body>": the headline block's face (its own, else the panel's) and the panel's. */
+/**
+ * "<headline> + <body>": the faces of the Headline and Body roles (E45.2), each its own, else the
+ * panel's. A layout without roles names its largest block's face as the headline.
+ */
 const pairing = computed(() => {
-  const body = face.value;
-  if (!body) return t('studio.noFont');
-  const index = headlineBlock(firstLayouts.draft?.blocks ?? []);
-  const headline = (index !== null ? studio.faceOf(firstScope.value, index) : null) ?? body;
-  return t('studio.pairing', { headline: headline.familyName, body: body.familyName });
+  const panelFace = face.value;
+  if (!panelFace) return t('studio.noFont');
+  const draft = firstLayouts.draft;
+  const faceOfRole = (role: 'headline' | 'body') => {
+    const first = draft ? blocksOf(draft, role)[0] : undefined;
+    return (first !== undefined ? studio.faceOf(firstScope.value, first) : null) ?? panelFace;
+  };
+  return t('studio.pairing', {
+    headline: faceOfRole('headline').familyName,
+    body: faceOfRole('body').familyName,
+  });
 });
 
 // The pairing's headline face, once the first panel's layout has loaded.
@@ -111,7 +114,7 @@ watch(
     const key = `${face}@${id}`;
     if (pairingLoaded === key) return;
     pairingLoaded = key;
-    void studio.loadPairing(id, draft.blocks, face);
+    void studio.loadPairing(id, draft, face, faceId.value);
   },
   { immediate: true },
 );
@@ -265,6 +268,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :face="face"
         :layout-id="panel === FIRST_PANEL ? layoutId : undefined"
         :closable="panel !== FIRST_PANEL"
+        :rail="panel === FIRST_PANEL"
         @pick="pick"
         @close="closePanel(panel)"
       />

@@ -1,7 +1,16 @@
 import { defineStore } from 'pinia';
 import { nextTick, ref } from 'vue';
 import { useClient } from '../api/client';
-import type { ApiError, FaceId, FaceSummary, FamilyHit, TextBlock } from '../api/types';
+import type {
+  ApiError,
+  BlockRole,
+  FaceId,
+  FaceSummary,
+  FamilyHit,
+  Layout,
+  LayoutRole,
+  TextBlock,
+} from '../api/types';
 import {
   disposePanelLayoutsStore,
   usePanelLayoutsStore,
@@ -43,6 +52,23 @@ export function headlineBlock(blocks: readonly TextBlock[]): number | null {
   return best;
 }
 
+/** The role of block `index` in `roles` (E45.2); null for a block without one. */
+export function roleOf(roles: readonly LayoutRole[], index: number): LayoutRole | null {
+  return roles.find((r) => r.blocks.includes(index)) ?? null;
+}
+
+/**
+ * The blocks a role sets, by the layout's own roles (E45.2), else the old rule for a layout
+ * without roles: the headline is the largest block (`headlineBlock`). Empty when there is none.
+ */
+export function blocksOf(layout: Pick<Layout, 'blocks' | 'roles'>, role: BlockRole): number[] {
+  const roles = layout.roles ?? [];
+  if (roles.length) return roles.find((r) => r.role === role)?.blocks ?? [];
+  if (role !== 'headline') return [];
+  const index = headlineBlock(layout.blocks);
+  return index === null ? [] : [index];
+}
+
 /**
  * Pairing Studio's per-block fonts (E24.2): a block of a layout can be set in its own face
  * instead of the panel's. The choice lives here for the session only; it is never written
@@ -73,6 +99,8 @@ export const useStudioStore = defineStore('studio', () => {
   const picks = new Map<string, number>();
 
   const key = (layoutId: string, index: number) => `${layoutId}#${index}`;
+  /** The key of a role's card in the rail (E45.2): its picker's search and its lock. */
+  const roleKey = (scope: string, role: BlockRole) => `${scope}@${role}`;
 
   /** The panels, left to right, by key; the first is always `FIRST_PANEL`. */
   const panels = ref<number[]>([FIRST_PANEL]);
@@ -108,6 +136,9 @@ export const useStudioStore = defineStore('studio', () => {
     const prefix = `p${panel}/`;
     blockFaces.value = Object.fromEntries(
       Object.entries(blockFaces.value).filter(([k]) => !k.startsWith(prefix)),
+    );
+    locks.value = Object.fromEntries(
+      Object.entries(locks.value).filter(([k]) => !k.startsWith(prefix)),
     );
     if (searchFor.value?.startsWith(prefix)) searchFor.value = null;
     if (printPanel.value === panel) printPanel.value = null;
@@ -185,7 +216,17 @@ export const useStudioStore = defineStore('studio', () => {
 
   /** Searches the library by name for the picker of one block. */
   async function search(layoutId: string, index: number, text: string): Promise<void> {
-    searchFor.value = key(layoutId, index);
+    await searchAs(key(layoutId, index), text);
+  }
+
+  /** Searches the library by name for the picker of one role's card (E45.2). */
+  async function searchRole(scope: string, role: BlockRole, text: string): Promise<void> {
+    await searchAs(roleKey(scope, role), text);
+  }
+
+  /** Searches the library for the picker `forKey`; only that picker shows the results. */
+  async function searchAs(forKey: string, text: string): Promise<void> {
+    searchFor.value = forKey;
     query.value = text;
     const mine = ++searchRequest;
     try {
@@ -203,17 +244,64 @@ export const useStudioStore = defineStore('studio', () => {
 
   /** Sets block `index` in face `face`. */
   async function setBlockFace(layoutId: string, index: number, face: FaceId): Promise<void> {
-    const k = key(layoutId, index);
-    const mine = (picks.get(k) ?? 0) + 1;
-    picks.set(k, mine);
+    await setBlocksFace(layoutId, [index], face);
+  }
+
+  /**
+   * Sets every block of `indices` in face `face`, asked once. A later pick or reset of a block
+   * wins over this one for that block.
+   */
+  async function setBlocksFace(
+    layoutId: string,
+    indices: readonly number[],
+    face: FaceId,
+  ): Promise<void> {
+    const mine = indices.map((i) => {
+      const k = key(layoutId, i);
+      const n = (picks.get(k) ?? 0) + 1;
+      picks.set(k, n);
+      return [k, n] as const;
+    });
+    const current = () => mine.filter(([k, n]) => picks.get(k) === n);
     try {
       const detail = await useClient().getFace(face);
-      if (picks.get(k) !== mine) return;
-      blockFaces.value = { ...blockFaces.value, [k]: detail.face };
+      const keys = current();
+      if (!keys.length) return;
+      const set = Object.fromEntries(keys.map(([k]) => [k, detail.face]));
+      blockFaces.value = { ...blockFaces.value, ...set };
       error.value = null;
     } catch (e) {
-      if (picks.get(k) === mine) error.value = e as ApiError;
+      if (current().length) error.value = e as ApiError;
     }
+  }
+
+  /** The face role `role` is set in: its first block's own face; null uses the panel's. */
+  function roleFace(scope: string | null | undefined, role: LayoutRole): FaceSummary | null {
+    const first = role.blocks[0];
+    return first === undefined ? null : faceOf(scope, first);
+  }
+
+  /** Sets every block of `role` in the best face of a search result (the rail's picker). */
+  async function pickRoleFamily(scope: string, role: LayoutRole, hit: FamilyHit): Promise<void> {
+    const best = hit.faces[0];
+    if (best !== undefined) await setBlocksFace(scope, role.blocks, best);
+  }
+
+  /** Locked roles by `scope@role` (E45.2): Shuffle (E45.3) leaves them as they are. */
+  const locks = ref<Record<string, true>>({});
+
+  /** Whether role `role` of layout scope `scope` is locked. */
+  function isLocked(scope: string | null | undefined, role: BlockRole): boolean {
+    return Boolean(scope && locks.value[roleKey(scope, role)]);
+  }
+
+  /** Locks role `role`, or unlocks it. */
+  function toggleLock(scope: string, role: BlockRole): void {
+    const k = roleKey(scope, role);
+    const rest = { ...locks.value };
+    if (rest[k]) delete rest[k];
+    else rest[k] = true;
+    locks.value = rest;
   }
 
   /** Sets block `index` in the best face of a search result. */
@@ -223,19 +311,25 @@ export const useStudioStore = defineStore('studio', () => {
   }
 
   /**
-   * Loads a pairing into a layout (E42.7): its headline block (`headlineBlock`) is set in
-   * `headline`; every other block of the layout follows the panel's face, the body face.
+   * Loads a pairing into a layout (E42.7, E45.2): the Headline role's blocks are set in
+   * `headline` and the Body role's in `body`; every other block follows the panel's face, the
+   * body face. A layout without roles has its largest block as the headline (`blocksOf`).
    */
   async function loadPairing(
     layoutId: string,
-    blocks: readonly TextBlock[],
+    layout: Pick<Layout, 'blocks' | 'roles'>,
     headline: FaceId,
+    body: FaceId | null,
   ): Promise<void> {
-    const index = headlineBlock(blocks);
-    blocks.forEach((_, i) => {
-      if (i !== index) resetBlock(layoutId, i);
+    const heads = blocksOf(layout, 'headline');
+    const bodies = body === null ? [] : blocksOf(layout, 'body').filter((i) => !heads.includes(i));
+    layout.blocks.forEach((_, i) => {
+      if (!heads.includes(i) && !bodies.includes(i)) resetBlock(layoutId, i);
     });
-    if (index !== null) await setBlockFace(layoutId, index, headline);
+    await Promise.all([
+      heads.length ? setBlocksFace(layoutId, heads, headline) : null,
+      bodies.length && body !== null ? setBlocksFace(layoutId, bodies, body) : null,
+    ]);
   }
 
   /** "Use panel font": block `index` follows the panel's face again. */
@@ -264,7 +358,15 @@ export const useStudioStore = defineStore('studio', () => {
     error,
     faceOf,
     search,
+    searchRole,
+    roleKey,
     setBlockFace,
+    setBlocksFace,
+    roleFace,
+    pickRoleFamily,
+    locks,
+    isLocked,
+    toggleLock,
     pickFamily,
     resetBlock,
     loadPairing,

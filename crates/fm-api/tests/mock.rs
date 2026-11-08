@@ -3860,3 +3860,31 @@ fn the_mock_ships_the_five_studio_contexts_on_their_pages() {
     hero.width_locked = false;
     assert_eq!(api.layout_width(hero).expect("width"), Some(1440.0 - 240.0));
 }
+
+#[test]
+fn the_mock_magazine_context_has_its_four_roles_and_saving_keeps_them() {
+    use fm_api::layout::{BlockRole, SaveLayoutRequest};
+    let api = api();
+    let saved = api
+        .get_layout(LayoutRef {
+            id: "studio-magazine".into(),
+        })
+        .expect("get");
+    let roles: Vec<_> = saved.layout.roles.iter().map(|r| r.role).collect();
+    assert_eq!(
+        roles,
+        [
+            BlockRole::Headline,
+            BlockRole::Deck,
+            BlockRole::Body,
+            BlockRole::Caption
+        ]
+    );
+    let again = api
+        .save_layout(SaveLayoutRequest {
+            id: saved.id.clone(),
+            layout: saved.layout.clone(),
+        })
+        .expect("save");
+    assert_eq!(again.layout.roles, saved.layout.roles);
+}

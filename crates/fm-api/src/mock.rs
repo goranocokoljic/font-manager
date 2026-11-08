@@ -37,10 +37,10 @@ use crate::export::{
     SpecimenRequest, SpecimenResponse, Subset, WebFormat,
 };
 use crate::layout::{
-    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest,
+    BlockAlign, BlockOverflow, BlockRange, BlockRole, ColumnRange, DuplicateLayoutRequest,
     ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutPage, LayoutPreset, LayoutRef,
-    LayoutSurface, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
-    SavedLayout, StudioContext, TextBlock,
+    LayoutRole, LayoutSurface, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest,
+    SaveLayoutRequest, SavedLayout, StudioContext, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
@@ -5065,6 +5065,7 @@ fn mock_preset(preset: LayoutPreset) -> Layout {
         width_px: None,
         page: None,
         context: None,
+        roles: Vec::new(),
     }
 }
 
@@ -5160,7 +5161,38 @@ fn mock_context(context: StudioContext) -> Layout {
         width_px: None,
         page: Some(page),
         context: Some(context),
+        roles: mock_context_roles(context),
     }
+}
+
+/// The roles of the mock's contexts (E45.2), as the core's `context_roles`, for
+/// the mock's shorter block lists.
+fn mock_context_roles(context: StudioContext) -> Vec<LayoutRole> {
+    use BlockRole::*;
+    let roles: &[(BlockRole, &[u32])] = match context {
+        StudioContext::Magazine => &[
+            (Headline, &[1]),
+            (Deck, &[2]),
+            (Body, &[3]),
+            (Caption, &[0, 4]),
+        ],
+        StudioContext::WebHero => &[(Headline, &[0]), (Body, &[1])],
+        StudioContext::MobileUi => &[
+            (Title, &[0]),
+            (Headline, &[1]),
+            (Body, &[2]),
+            (Footnote, &[3]),
+        ],
+        StudioContext::VideoTitle => &[(Headline, &[0]), (Subtitle, &[1])],
+        StudioContext::Poster => &[(Headline, &[0]), (Details, &[1])],
+    };
+    roles
+        .iter()
+        .map(|(role, blocks)| LayoutRole {
+            role: *role,
+            blocks: blocks.to_vec(),
+        })
+        .collect()
 }
 
 /// The contexts in switch order, with their file ids (`fm_core::layout::store::context_id`).

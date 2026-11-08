@@ -26,6 +26,10 @@
 // width (`width`, from the core) and the width lock has nothing to do. Safe-area guides are drawn
 // as dashed frames. A block's controls sit outside the sheet's edge and show while the pointer
 // or the focus is on the block, so the page reads like the page.
+//
+// With `roleMarks` (the Studio's roles, E45.2), a block with a role carries no mark at rest; on
+// hover its role's name shows in the margin and a hairline ring around it. A press or the focus
+// selects it (`select`); the `selected` block keeps its mark and gets the accent ring.
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch, watchEffect } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
@@ -60,6 +64,10 @@ const props = defineProps<{
   /** The parent already names the face and explains the gestures: no name line, the lock floats
    *  on the page and the hint is for screen readers only. */
   bare?: boolean;
+  /** Each block's role name (E45.2), shown in the margin on hover; null for a block without. */
+  roleMarks?: readonly (string | null)[];
+  /** The selected block (E45.2): its mark stays and it has the accent ring. */
+  selected?: number | null;
 }>();
 defineSlots<{
   /** Controls for one block, beside its size badge. */
@@ -72,6 +80,8 @@ const emit = defineEmits<{
   'edit-text': [index: number, text: string];
   /** The face has loaded or failed, so the text has its final height. */
   settled: [];
+  /** Block `index` was pressed or got the focus (with `roleMarks`). */
+  select: [index: number];
 }>();
 
 type LoadState = 'loading' | 'ready' | 'failed';
@@ -134,7 +144,12 @@ onBeforeUnmount(() => holdBlocks([]));
 const editing = ref<number | null>(null);
 const badges = ref<HTMLButtonElement[]>([]);
 const hasEditor = computed(() => Boolean(props.bounds && props.setProps));
-const hasTools = computed(() => Boolean(slots['block-tools']));
+const hasTools = computed(() => Boolean(slots['block-tools'] || props.roleMarks));
+
+/** Block `i` is selected, when the parent shows roles. */
+function selectBlock(i: number): void {
+  if (props.roleMarks) emit('select', i);
+}
 // The gesture sentence sits behind the info button (Studio has its own).
 const helpOpen = ref(false);
 const hintId = `${useId()}-hint`;
@@ -338,9 +353,24 @@ function blockFamily(i: number): string {
           v-for="(block, i) in layout.blocks"
           :key="`${layout.preset ?? layout.name}-${i}`"
           class="row"
-          :class="{ 'with-badge': hasEditor || hasTools }"
+          :class="{
+            'with-badge': hasEditor || hasTools,
+            'has-role': Boolean(roleMarks?.[i]),
+            selected: selected === i,
+          }"
+          :data-selected="selected === i ? '' : undefined"
+          @pointerdown="selectBlock(i)"
+          @focusin="selectBlock(i)"
         >
           <div v-if="hasEditor || hasTools" class="tools fm-no-print">
+            <span
+              v-if="roleMarks?.[i]"
+              class="role-mark"
+              data-testid="block-role-mark"
+              aria-hidden="true"
+            >
+              {{ roleMarks[i] }}
+            </span>
             <button
               v-if="hasEditor"
               ref="badges"
@@ -372,7 +402,11 @@ function blockFamily(i: number): string {
               :font-family="blockFamily(i)"
               :missing="blockTofu(i, block.text)"
               :editable="editable"
-              :label="blockLabel(i)"
+              :label="
+                roleMarks?.[i]
+                  ? t('studio.roleBlock', { role: roleMarks[i]!, label: blockLabel(i) })
+                  : blockLabel(i)
+              "
               :bounds="hasEditor ? bounds : null"
               :describedby="hasEditor ? hintId : undefined"
               @edit="(text) => emit('edit-text', i, text)"
@@ -397,6 +431,7 @@ function blockFamily(i: number): string {
 <style scoped>
 .layout {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   background-color: var(--fm-bg);
@@ -586,6 +621,32 @@ function blockFamily(i: number): string {
 .page.sheet .row:hover .tools,
 .page.sheet .row:focus-within .tools,
 .page.sheet .tools:has([aria-expanded='true']) {
+  opacity: 1;
+}
+/* Roles (E45.2): no mark at rest; hover shows the mark and a hairline ring, selection the
+   accent ring, and the mark stays. */
+.role-mark {
+  color: var(--fm-muted);
+  font: 600 var(--fm-text-xs)/1.4 var(--fm-font-ui);
+  white-space: nowrap;
+}
+.row.selected .role-mark {
+  color: var(--fm-fg);
+}
+.page.sheet .row.has-role :deep(.block) {
+  outline: 1px solid transparent;
+  outline-offset: 4px;
+  transition: outline-color var(--fm-motion-fast) var(--fm-ease);
+}
+.page.sheet .row.has-role:hover :deep(.block) {
+  outline-color: var(--fm-border-strong);
+}
+.page.sheet .row.selected :deep(.block),
+.page.sheet .row.selected:hover :deep(.block) {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 4px;
+}
+.page.sheet .row.selected .tools {
   opacity: 1;
 }
 .safe-area {
