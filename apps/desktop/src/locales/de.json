@@ -1901,5 +1901,11 @@
       "search": "Tippen zum Filtern",
       "noMatches": "Keine Treffer"
     }
+  },
+  "drag": {
+    "more": { "one": "+ {count} weitere", "other": "+ {count} weitere" },
+    "count": "{before} → {after}",
+    "countLabel": "{before}, nach dem Ablegen {after}",
+    "smartRefused": "Eine intelligente Sammlung füllt sich selbst nach ihren Regeln; Schriften lassen sich dort nicht ablegen."
   }
 }

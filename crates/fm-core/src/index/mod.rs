@@ -25,6 +25,7 @@ mod activation;
 mod catalog_downloads;
 mod collections;
 mod comparisons;
+mod drops;
 mod duplicates;
 mod faces;
 mod family_license;

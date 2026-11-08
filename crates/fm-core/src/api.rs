@@ -64,7 +64,7 @@ use fm_api::library::{
     SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, DropCounts,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
     MoveCollectionRequest, OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection,
     QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest,
@@ -1142,6 +1142,10 @@ impl OrganizationService for CoreApi {
 
     fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags> {
         Ok(self.lock().selection_tags(&req.faces, &req.families)?)
+    }
+
+    fn drop_counts(&self, req: SelectionTagsRequest) -> ApiResult<DropCounts> {
+        Ok(self.lock().drop_counts(&req.faces, &req.families)?)
     }
 
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {

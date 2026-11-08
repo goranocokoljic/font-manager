@@ -4,6 +4,7 @@ import { errorMessage, t } from '../i18n';
 import type { FaceId, FaceSummary, FontSwitchPayload } from '../api/types';
 import { leftWindow, startFontDrag } from '../list/drag';
 import type { ListRow, RowKey } from '../list/rows';
+import { useFontDragStore } from './fontDrag';
 import { useFontListStore } from './fontList';
 import { useSettingsStore } from './settings';
 import { useToastStore } from './toast';
@@ -68,12 +69,18 @@ export const useFontSwitchStore = defineStore('fontSwitch', () => {
 
   /**
    * Starts a font drag of `keys` on `e`; the face of `row`, the row the drag
-   * starts on, is the one a design app gets, when its payload is known.
+   * starts on, is the one a design app gets, when its payload is known. Inside
+   * the window the drag shows the ghost of the element it starts on (E44.2).
    */
   function startDrag(e: DragEvent, keys: RowKey[], row: ListRow): void {
     const face = faceOf(row);
     const known = face ? payloads.get(face.id) : undefined;
     startFontDrag(e, keys, known);
+    useFontDragStore().start(
+      e,
+      keys,
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     stopWatching();
     if (!face || !known) return;
     dragging = face;

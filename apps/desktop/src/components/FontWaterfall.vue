@@ -17,6 +17,7 @@ import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { WATERFALL_SIZES, waterfallLinePx, waterfallRowPx } from '../list/waterfall';
 import { useFontListStore } from '../stores/fontList';
+import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
@@ -46,6 +47,7 @@ const FALLBACK_HEIGHT = 600;
 
 const list = useFontListStore();
 const fontSwitch = useFontSwitchStore();
+const fontDrag = useFontDragStore();
 const library = useLibraryStore();
 
 const rowPx = computed(() => waterfallRowPx(props.preview.lineHeight));
@@ -199,6 +201,7 @@ function onToggle(row: ListRow): void {
         :class="{
           face: item.row.kind === 'face',
           selected: list.isSelected(item.row.key),
+          origin: fontDrag.isOrigin(item.row.key),
           cursor: item.id === activeId,
         }"
         role="treeitem"
@@ -357,5 +360,9 @@ function onToggle(row: ListRow): void {
   padding-inline-start: 40px;
   color: var(--fm-warning);
   font-size: var(--fm-text-xs);
+}
+/* A dragged row stays in place, faded, while its ghost travels (E44.2). */
+.slot.origin {
+  opacity: 0.35;
 }
 </style>

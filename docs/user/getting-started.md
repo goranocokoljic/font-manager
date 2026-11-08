@@ -110,6 +110,21 @@ your team, read [Shared libraries](shared-libraries.md).
   embedding permission of the font, its license URL and its folder. From the palette,
   the file lists the collection that is open, or all fonts.
 
+## Drag fonts onto a collection, a tag or the Studio
+
+Select fonts, then drag one of them. A small copy of the card follows the
+pointer. It shows how many fonts you drag. The fonts you drag stay in the list,
+faded. Drop them on:
+
+- a collection in the sidebar. The collection shows its count now and after
+  the drop, for example **31 → 34**.
+- a tag in the sidebar. The tag also shows its count now and after the drop.
+- **Studio** in the selection bar. The Studio opens with the fonts.
+
+You cannot drop fonts on a smart collection, because it fills itself from its
+rules. Press `Esc` to stop a drag; nothing changes. To do the same with the
+keyboard, use **Collection** and **Tag** in the selection bar.
+
 ## Give a collection a colour
 
 Open the **More actions** menu of a collection in the sidebar and click one of

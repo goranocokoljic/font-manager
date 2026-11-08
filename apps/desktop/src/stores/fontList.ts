@@ -91,8 +91,13 @@ export const useFontListStore = defineStore('fontList', () => {
    * selection bar's Compare and Studio act on them (E44.1).
    */
   async function selectedFaces(limit = Infinity): Promise<FaceSummary[]> {
+    return facesOfKeys(selection.value.selected, limit);
+  }
+
+  /** The faces the rows `keys` stand for, as `selectedFaces` reads them (a drop, E44.2). */
+  async function facesOfKeys(keys: ReadonlySet<RowKey>, limit = Infinity): Promise<FaceSummary[]> {
     const out: FaceSummary[] = [];
-    for (const row of selectedRows.value) {
+    for (const row of rows.value.filter((r) => keys.has(r.key))) {
       if (out.length >= limit) break;
       if (row.kind === 'face') {
         out.push(row.face);
@@ -336,6 +341,7 @@ export const useFontListStore = defineStore('fontList', () => {
     cursorFace,
     selectedCount,
     selectedRows,
+    facesOfKeys,
     selectedFaces,
     isSelected,
     anchor,

@@ -3,11 +3,15 @@
 // and for screen readers. Drop fonts from
 // the list or the table on a tag to put it on every dragged font, whole families
 // included. While fonts are dragged the group unfolds and marks the tags the dragged
-// fonts already carry; after the drop it folds back if it was folded.
+// fonts already carry; after the drop it folds back if it was folded. The tag under the
+// pointer shows the accent ring and its count now and after the drop ("31 → 34", E44.2);
+// the drop flies the ghost into it.
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import type { TagId } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
 import { isFontDrag, readFontDrop } from '../list/drag';
+import { FmFade } from '../motion';
+import { useFontDragStore, type DropTarget } from '../stores/fontDrag';
 import { useTaggingStore } from '../stores/tagging';
 import { useTagsStore } from '../stores/tags';
 import SidebarHead from './SidebarHead.vue';
@@ -15,6 +19,18 @@ import SidebarHead from './SidebarHead.vue';
 const tags = useTagsStore();
 const tagging = useTaggingStore();
 const target = ref<TagId | null>(null);
+const fontDrag = useFontDragStore();
+const dropTarget = (id: TagId): DropTarget => ({ kind: 'tag', id });
+
+/** "31 → 34" while a font drag is over the tag and fm-api has answered. */
+function dropCount(id: TagId): { text: string; label: string } | null {
+  const c = fontDrag.isTarget(dropTarget(id)) ? fontDrag.countOf(dropTarget(id)) : null;
+  if (!c) return null;
+  return {
+    text: t('drag.count', { before: formatNumber(c.before), after: formatNumber(c.after) }),
+    label: t('drag.countLabel', { before: countLabel(c.before), after: countLabel(c.after) }),
+  };
+}
 
 // Any font drag in the window: the payload can be read while the drag starts.
 function onWindowDragStart(e: DragEvent): void {
@@ -43,13 +59,20 @@ function onDragOver(id: TagId, e: DragEvent): void {
   e.preventDefault();
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
   target.value = id;
+  fontDrag.enter(dropTarget(id));
+}
+
+function onDragLeave(id: TagId): void {
+  target.value = null;
+  fontDrag.leave(dropTarget(id));
 }
 
 function onDrop(name: string, e: DragEvent): void {
   e.preventDefault();
   target.value = null;
   const fonts = readFontDrop(e);
-  if (fonts) void tagging.dropOn(name, fonts);
+  if (fonts && fontDrag.land(e.currentTarget as Element | null, e))
+    void tagging.dropOn(name, fonts);
 }
 
 function countLabel(n: number): string {
@@ -81,10 +104,19 @@ function countLabel(n: number): string {
         :data-tag="tag.name"
         :data-carried="tagging.dragging && tagging.dragCarried.has(tag.id) ? 'true' : undefined"
         @dragover="onDragOver(tag.id, $event)"
-        @dragleave="target = null"
+        @dragleave="onDragLeave(tag.id)"
         @drop="onDrop(tag.name, $event)"
       >
         <span class="name">{{ tag.name }}</span>
+        <FmFade speed="fast">
+          <span
+            v-if="dropCount(tag.id)"
+            class="drop-count"
+            data-testid="tag-drop-count"
+            :aria-label="dropCount(tag.id)!.label"
+            >{{ dropCount(tag.id)!.text }}</span
+          >
+        </FmFade>
         <span class="sr-only count" :aria-label="countLabel(tag.faceCount)">{{
           formatNumber(tag.faceCount)
         }}</span>
@@ -121,6 +153,14 @@ function countLabel(n: number): string {
 }
 .drop {
   outline: 2px solid var(--fm-accent);
+}
+.chip:has(.drop-count) {
+  display: flex;
+  gap: var(--fm-space-1);
+}
+.drop-count {
+  font-weight: 600;
+  white-space: nowrap;
 }
 .name {
   display: block;

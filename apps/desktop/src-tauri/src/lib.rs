@@ -32,7 +32,7 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, DropCounts, FamilyNotesUpdate,
     ImportSetResponse, LicenseDeclaration, LoadSetFileRequest, MoveCollectionRequest,
     PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
     RenameCollectionRequest, SaveSetFileRequest, SavedSetFile, SelectionTags, SelectionTagsRequest,
@@ -1098,6 +1098,15 @@ async fn selection_tags(
     call(&state, move |api| api.selection_tags(req)).await
 }
 
+/// What a font drop would do to each collection's and tag's face count (E44.2).
+#[tauri::command]
+async fn drop_counts(
+    state: State<'_, AppState>,
+    req: SelectionTagsRequest,
+) -> ApiResult<DropCounts> {
+    call(&state, move |api| api.drop_counts(req)).await
+}
+
 /// Declares the license of a family (E15.2).
 #[tauri::command]
 async fn declare_license(state: State<'_, AppState>, req: LicenseDeclaration) -> ApiResult<()> {
@@ -1454,6 +1463,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             untag_faces,
             update_user_meta,
             selection_tags,
+            drop_counts,
             update_family_notes,
             declare_license,
             quick_collection,

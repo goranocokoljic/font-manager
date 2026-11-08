@@ -3238,6 +3238,29 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         }),
       };
     },
+    // Like fm-core: every manual collection and every tag, now and after the drop.
+    dropCounts: async (req) => {
+      const ids = facesOf(req.faces, req.families);
+      const targets = ids.map(faceOrThrow);
+      const byName = [...tags].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
+      return {
+        faces: ids,
+        collections: walk(null)
+          .filter((c) => !ruleOf(c))
+          .map((c) => {
+            const held = members.get(c.id) ?? new Set<FaceId>();
+            const added = ids.filter((id) => !held.has(id)).length;
+            return { collection: c.id, before: c.faceCount, after: c.faceCount + added };
+          }),
+        tags: byName.map((t) => {
+          const before = tagView(t).faceCount;
+          const added = targets.filter((d) => !d.tags.some((x) => sameName(x, t.name))).length;
+          return { tag: t.id, before, after: before + added };
+        }),
+      };
+    },
     updateUserMeta: async (req) => {
       if (req.rating != null && req.rating > 5)
         throw invalid('A rating is 1 to 5 stars, or 0 to clear it.');

@@ -108,6 +108,7 @@ service!(OrganizationService {
     tag_faces(req: TagFacesRequest) -> Vec<Tag>;
     untag_faces(req: UntagFacesRequest) -> ();
     selection_tags(req: SelectionTagsRequest) -> SelectionTags;
+    drop_counts(req: SelectionTagsRequest) -> DropCounts;
     update_user_meta(req: UserMetaUpdate) -> ();
     list_sets() -> Vec<ProjectSet>;
     create_set(req: CreateSetRequest) -> ProjectSet;
