@@ -81,6 +81,8 @@ import {
   type LicensePermissions,
   type LicenseType,
   type Layout,
+  type LayoutPage,
+  type StudioContext,
   type LayoutBounds,
   type LayoutEntry,
   type LayoutVersion,
@@ -1612,6 +1614,143 @@ export const MOCK_LAYOUT_PRESETS: readonly Layout[] = (
   ] as Layout[]
 ).map((l) => ({ ...l, widthLocked: true, widthPx: null }));
 
+const pageOf = (
+  name: string,
+  widthPx: number,
+  heightPx: number,
+  marginPx: number,
+  safeAreas: number[] = [],
+): LayoutPage => ({ name, widthPx, heightPx, marginPx, safeAreas });
+
+/** Points per CSS pixel: a size designed as `s` px is `s * 0.75` pt (as `fm_core`). */
+const PT_PER_PX = 0.75;
+const pxBlock = (text: string, px: number, leadingPx: number, more: Partial<TextBlock> = {}) =>
+  layoutBlock(text, px * PT_PER_PX, leadingPx / px, more);
+
+/**
+ * The mock's copy of the core's Pairing Studio contexts (`fm_core::layout::context`, E45.1): the
+ * same five in switch order, on the same pages, with their file ids.
+ */
+export const MOCK_STUDIO_CONTEXTS: readonly { id: string; layout: Layout }[] = (
+  [
+    [
+      'studio-magazine',
+      'magazine',
+      'Magazine page',
+      pageOf('A4', 794, 1123, 76),
+      [
+        layoutBlock('ISSUE 14 · TYPOGRAPHY', 8, 1.3, { tracking: 100, paragraphSpacingPt: 18 }),
+        layoutBlock('The Quiet Return of the Printed Page', 40, 1.05, {
+          tracking: -20,
+          paragraphSpacingPt: 14,
+        }),
+        layoutBlock(
+          'Readers are going back to paper, and designers are relearning what makes a page worth turning.',
+          15,
+          1.35,
+          { paragraphSpacingPt: 18 },
+        ),
+        layoutBlock(MOCK_BODY, 9.5, 1.45, {
+          firstLineIndentEm: 1,
+          columns: 2,
+          align: 'justify',
+          paragraphSpacingPt: 6,
+        }),
+        layoutBlock('Fig. 3 · The headline and body faces of this page', 8, 1.4),
+      ],
+    ],
+    [
+      'studio-web-hero',
+      'webHero',
+      'Web hero',
+      pageOf('1440 × 900', 1440, 900, 120),
+      [
+        pxBlock('NEW IN VERSION 2', 14, 18, { tracking: 80, paragraphSpacingPt: 12 }),
+        pxBlock('Typefaces that work as hard as you do', 72, 76, {
+          tracking: -20,
+          paragraphSpacingPt: 18,
+        }),
+        pxBlock(
+          'Browse, compare and activate every font you own, offline and in one place.',
+          20,
+          29,
+          { paragraphSpacingPt: 24 },
+        ),
+        pxBlock('Get started →', 16, 20),
+      ],
+    ],
+    [
+      'studio-mobile-ui',
+      'mobileUi',
+      'Mobile UI',
+      pageOf('390 × 844', 390, 844, 16),
+      [
+        pxBlock('Library', 34, 41, { paragraphSpacingPt: 12 }),
+        pxBlock('Recently added', 17, 22, { paragraphSpacingPt: 4 }),
+        pxBlock(
+          'Twelve families arrived this week. Pin the ones you use to keep them close; the rest stay out of the way until you search for them.',
+          17,
+          22,
+          { paragraphSpacingPt: 8 },
+        ),
+        pxBlock('Updated just now', 13, 18),
+      ],
+    ],
+    [
+      'studio-video-title',
+      'videoTitle',
+      'Video title',
+      pageOf('1920 × 1080', 1920, 1080, 96, [0.035, 0.05]),
+      [
+        pxBlock('The Printed Page', 120, 126, { align: 'center', paragraphSpacingPt: 18 }),
+        pxBlock('Episode 3 · A story of type', 40, 48, { align: 'center', tracking: 60 }),
+      ],
+    ],
+    [
+      'studio-poster',
+      'poster',
+      'Poster',
+      pageOf('A4', 794, 1123, 57),
+      [
+        layoutBlock('Type\nMatters', 120, 0.9, { tracking: -30, paragraphSpacingPt: 36 }),
+        layoutBlock(
+          'Readers are going back to paper, and designers are relearning what makes a page worth turning.',
+          20,
+          1.25,
+          { paragraphSpacingPt: 24 },
+        ),
+        layoutBlock(
+          'An evening of letters, ink and paper\nFriday 14 March · 19:00 · The Print Room',
+          11,
+          1.5,
+          { tracking: 50 },
+        ),
+      ],
+    ],
+  ] as [string, StudioContext, string, LayoutPage, TextBlock[]][]
+).map(([id, context, name, page, blocks]) => ({
+  id,
+  layout: { preset: null, name, blocks, widthLocked: true, widthPx: null, page, context },
+}));
+
+/** `fm_core::layout::clamp_page`: sides 100–20,000 px, a margin under half the smaller side. */
+function mockClampPage(page: LayoutPage): LayoutPage {
+  const side = (v: number) => Math.min(20_000, Math.max(100, Math.round(v)));
+  const widthPx = side(page.widthPx);
+  const heightPx = side(page.heightPx);
+  const half = Math.min(widthPx, heightPx) / 2 - 1;
+  const margin = page.marginPx;
+  return {
+    ...page,
+    widthPx,
+    heightPx,
+    marginPx: margin !== null && Number.isFinite(margin) ? Math.min(half, Math.max(0, margin)) : 0,
+    safeAreas: (page.safeAreas ?? [])
+      .filter((x): x is number => x !== null && Number.isFinite(x))
+      .map((x) => Math.min(0.25, Math.max(0, x))),
+  };
+}
+
 /** The ranges and steps of `fm_core::layout::bounds` (the fm-api mock has the same). */
 export const MOCK_LAYOUT_BOUNDS: LayoutBounds = {
   sizePt: { min: 8, max: 600, default: 12, step: 1, perPx: 0.5 },
@@ -1635,6 +1774,7 @@ export function mockClampLayout(layout: Layout, bounds: LayoutBounds = MOCK_LAYO
   return {
     ...layout,
     widthPx: mockWidthPx(layout.widthPx),
+    ...(layout.page ? { page: mockClampPage(layout.page) } : {}),
     blocks: layout.blocks.map((x) => ({
       ...x,
       sizePt: fit(x.sizePt, b.sizePt),
@@ -1661,6 +1801,10 @@ function mockWidthPx(width: number | null | undefined): number | null {
  * block with the most text, the first on a tie; 4/3 px per point); null when unlocked.
  */
 export function mockLayoutWidth(layout: Layout): number | null {
+  if (layout.page) {
+    const page = mockClampPage(layout.page);
+    return page.widthPx - 2 * (page.marginPx ?? 0);
+  }
   if (layout.widthLocked === false) return null;
   const chosen = mockWidthPx(layout.widthPx);
   if (chosen !== null) return chosen;
@@ -1684,7 +1828,11 @@ export function mockLayoutWidth(layout: Layout): number | null {
 
 /** How many earlier versions of one template the mock keeps (as the core). */
 export const MOCK_MAX_LAYOUT_VERSIONS = 20;
-const MOCK_PRESET_IDS: string[] = MOCK_LAYOUT_PRESETS.map((l) => l.preset ?? '');
+/** The shipped files in list order: the presets, then the contexts (as `fm_core`). */
+const MOCK_PRESET_IDS: string[] = [
+  ...MOCK_LAYOUT_PRESETS.map((l) => l.preset ?? ''),
+  ...MOCK_STUDIO_CONTEXTS.map((c) => c.id),
+];
 
 type MockLayoutContent = { layout: Layout } | { broken: string };
 type MockLayoutFile = {
@@ -2075,6 +2223,11 @@ function createMockLayouts(): Pick<
       content: { layout: structuredClone(l) },
       versions: [],
     })),
+    ...MOCK_STUDIO_CONTEXTS.map((c) => ({
+      id: c.id,
+      content: { layout: structuredClone(c.layout) },
+      versions: [],
+    })),
     {
       id: 'draft',
       content: { broken: 'Not valid JSON: EOF while parsing an object at line 3 column 0' },
@@ -2102,10 +2255,23 @@ function createMockLayouts(): Pick<
   };
   const presetOfId = (id: string): Layout['preset'] =>
     MOCK_LAYOUT_PRESETS.find((l) => l.preset === id)?.preset ?? null;
+  const contextOfId = (id: string) => MOCK_STUDIO_CONTEXTS.find((c) => c.id === id) ?? null;
   const entry = (f: MockLayoutFile): LayoutEntry =>
     'broken' in f.content
-      ? { id: f.id, name: f.id, preset: presetOfId(f.id), broken: f.content.broken }
-      : { id: f.id, name: f.content.layout.name, preset: f.content.layout.preset, broken: null };
+      ? {
+          id: f.id,
+          name: f.id,
+          preset: presetOfId(f.id),
+          broken: f.content.broken,
+          context: contextOfId(f.id)?.layout.context ?? null,
+        }
+      : {
+          id: f.id,
+          name: f.content.layout.name,
+          preset: f.content.layout.preset,
+          broken: null,
+          context: f.content.layout.context ?? null,
+        };
   const save = (id: string, raw: Layout): SavedLayout => {
     if (!id || id.startsWith('.') || /[/\\:]/.test(id))
       throw err('invalidRequest', 'That is not a layout name the app can use.');
@@ -2159,9 +2325,15 @@ function createMockLayouts(): Pick<
     revertLayout: async ({ id, toOriginal }) => {
       const f = file(id);
       if (!toOriginal) return { id, layout: content(f) };
+      const context =
+        'layout' in f.content
+          ? (f.content.layout.context ?? null)
+          : (contextOfId(id)?.layout.context ?? null);
       const preset = 'layout' in f.content ? f.content.layout.preset : presetOfId(id);
-      const original = MOCK_LAYOUT_PRESETS.find((l) => l.preset === preset);
-      if (!preset || !original)
+      const original = context
+        ? MOCK_STUDIO_CONTEXTS.find((c) => c.layout.context === context)?.layout
+        : MOCK_LAYOUT_PRESETS.find((l) => l.preset === preset);
+      if (!original)
         throw err(
           'invalidRequest',
           'Only a layout that started from a preset can be reset to its original.',

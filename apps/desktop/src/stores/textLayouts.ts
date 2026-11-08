@@ -182,12 +182,13 @@ function textLayoutsSetup() {
     layout.widthPx = clamped.widthPx ?? null;
   }
 
-  // The core decides the width from the lock, the chosen width and the body block's size; a
-  // width that fails to come back leaves the text following the window.
+  // The core decides the width from the page (E45.1), the lock, the chosen width and the body
+  // block's size; a width that fails to come back leaves the text following the window.
   watch(
     () =>
       draft.value &&
       JSON.stringify([
+        draft.value.page ?? null,
         draft.value.widthLocked,
         draft.value.widthPx,
         draft.value.blocks.map((b) => [b.text.length, b.sizePt]),

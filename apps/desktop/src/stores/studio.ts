@@ -134,6 +134,50 @@ export const useStudioStore = defineStore('studio', () => {
     }
   }
 
+  /**
+   * "Compare 2 pairings" (E45.1): a second panel, a copy of the first, beside it; pressed
+   * again, back to the first panel alone.
+   */
+  function toggleCompare(): void {
+    const others = panels.value.filter((p) => p !== FIRST_PANEL);
+    if (others.length) others.forEach(closePanel);
+    else addPanel(FIRST_PANEL);
+  }
+
+  /** Where the last PNG export went, or why it failed; null before the first one. */
+  const exported = ref<{ path: string } | { error: ApiError } | null>(null);
+
+  /**
+   * "Export PNG" (E45.1): the core renders panel `panel`'s saved layout file (E45.5) in `face`,
+   * each block in its own face where it has one, at 2× on paper. Unsaved edits are not in the
+   * file, so the toolbar asks for a save first.
+   */
+  async function exportPng(panel: number, face: FaceId): Promise<string | null> {
+    const layouts = layoutsOf(panel);
+    const saved = layouts.saved;
+    if (!saved || !panels.value.includes(panel)) return null;
+    const scope = blockScope(panel, saved.id);
+    const font = (id: FaceId) => ({ face: id, variations: [], features: [] });
+    const blockFonts = saved.layout.blocks.map((_, i) => {
+      const own = faceOf(scope, i);
+      return own ? font(own.id) : null;
+    });
+    try {
+      const path = await useClient().exportLayoutPng({
+        layout: saved.id,
+        scale: 2,
+        surface: 'paper',
+        font: font(face),
+        blockFonts,
+      });
+      exported.value = { path };
+      return path;
+    } catch (e) {
+      exported.value = { error: e as ApiError };
+      return null;
+    }
+  }
+
   /** The face block `index` of layout `layoutId` is set in; null uses the panel's. */
   function faceOf(layoutId: string | null | undefined, index: number): FaceSummary | null {
     return layoutId ? (blockFaces.value[key(layoutId, index)] ?? null) : null;
@@ -207,6 +251,9 @@ export const useStudioStore = defineStore('studio', () => {
     panels,
     addPanel,
     closePanel,
+    toggleCompare,
+    exported,
+    exportPng,
     printPanel,
     printError,
     print,

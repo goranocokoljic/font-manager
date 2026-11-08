@@ -8,7 +8,10 @@ use fm_api::layout::{
     TextBlock,
 };
 
+pub mod context;
 pub mod store;
+
+pub use context::{CONTEXTS, clamp_page, context_layout, context_layouts, context_name};
 
 /// The range of a block value and what a value that is not a number becomes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -234,6 +237,8 @@ pub fn preset(preset: LayoutPreset) -> Layout {
         blocks,
         width_locked: true,
         width_px: None,
+        page: None,
+        context: None,
     }
 }
 
@@ -286,8 +291,8 @@ pub fn bounds() -> LayoutBounds {
     }
 }
 
-/// A layout with every block clamped, and its locked width inside
-/// [`WIDTH_PX`] (a width that is not a number is dropped).
+/// A layout with every block clamped, its locked width inside [`WIDTH_PX`]
+/// (a width that is not a number is dropped) and its page clamped ([`clamp_page`]).
 pub fn clamp_layout(layout: Layout) -> Layout {
     Layout {
         blocks: layout.blocks.into_iter().map(clamp_block).collect(),
@@ -295,6 +300,7 @@ pub fn clamp_layout(layout: Layout) -> Layout {
             .width_px
             .filter(|w| w.is_finite())
             .map(|w| WIDTH_PX.clamp(w)),
+        page: layout.page.map(clamp_page),
         ..layout
     }
 }
@@ -319,7 +325,12 @@ pub fn readable_width_px(layout: &Layout) -> f32 {
 
 /// The width the layout's text is set at in CSS pixels: the locked width, or
 /// the readable one when none was chosen; none when unlocked (it follows the window).
+/// A layout on a page (E45.1) is set at the page's width inside its margins, locked or not.
 pub fn layout_width(layout: &Layout) -> Option<f32> {
+    if let Some(page) = &layout.page {
+        let page = clamp_page(page.clone());
+        return Some(page.width_px as f32 - 2.0 * page.margin_px);
+    }
     if !layout.width_locked {
         return None;
     }
@@ -532,6 +543,8 @@ mod tests {
             }],
             width_locked: false,
             width_px: Some(640.0),
+            page: None,
+            context: None,
         };
         let c = clamp_layout(l);
         assert!(!c.width_locked);
@@ -551,6 +564,8 @@ mod tests {
             blocks,
             width_locked: true,
             width_px: None,
+            page: None,
+            context: None,
         }
     }
 

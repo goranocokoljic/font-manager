@@ -81,6 +81,8 @@
   /* The selection bar (E44.1, board 4): a dark bar with white on it, the same in both themes. */
   --fm-bar-bg: #141413;
   --fm-bar-fg: #ffffff;
+  /* The neutral ground the Pairing Studio page sits on (E45.1, board 5). */
+  --fm-studio-ground: #ecebe7;
 
   /* A collection's colour (E44.3): marks, never words, so each is at least 3:1 on the surfaces. */
   --fm-collection-coral: #d9553a;
@@ -104,6 +106,7 @@
     --fm-bg: #1c1c1e;
     --fm-surface: #262628;
     --fm-surface-2: #262628;
+    --fm-studio-ground: var(--fm-surface-2);
     --fm-fg: #ececec;
     --fm-muted: #a3a3a8;
     --fm-border: rgb(255 255 255 / 9%);
@@ -136,6 +139,7 @@
   --fm-surface: #262628;
   /* The lightest surface where the dark accent, as a focus ring, still reaches 3:1. */
   --fm-surface-2: #262628;
+  --fm-studio-ground: var(--fm-surface-2);
   --fm-fg: #ececec;
   --fm-muted: #a3a3a8;
   --fm-border: rgb(255 255 255 / 9%);

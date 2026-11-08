@@ -20,6 +20,12 @@
 //
 // In print (E24.4) the controls (`fm-no-print`) stay off the paper and the text keeps the
 // layout's width: the locked width, or the page's when unlocked.
+//
+// A layout with a page (a Pairing Studio context, E45.1) is set on a sheet of the page's size in
+// CSS pixels, at 100 %, on a neutral ground with a soft shadow; the text keeps the page's inner
+// width (`width`, from the core) and the width lock has nothing to do. Safe-area guides are drawn
+// as dashed frames. A block's controls sit outside the sheet's edge and show while the pointer
+// or the focus is on the block, so the page reads like the page.
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch, watchEffect } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
@@ -160,7 +166,29 @@ function sizeLabel(block: TextBlock): string {
 const blockLabel = (i: number) => t('blocks.label', { n: i + 1 });
 
 const page = ref<HTMLDivElement | null>(null);
-const locked = computed(() => props.layout?.widthLocked !== false);
+/** The page the layout is set on, if it has one. */
+const sheet = computed(() => props.layout?.page ?? null);
+/** The sheet at its real size: CSS pixels at 100 %. */
+const SCALE = 100;
+const sheetStyle = computed(() => {
+  const p = sheet.value;
+  if (!p) return undefined;
+  return {
+    width: `${p.widthPx}px`,
+    minHeight: `${p.heightPx}px`,
+    padding: `${p.marginPx ?? 0}px`,
+    '--sheet-margin': `${p.marginPx ?? 0}px`,
+  };
+});
+/** One dashed frame per safe area, inset from every edge by its share of the page. */
+const safeAreas = computed(() => {
+  const p = sheet.value;
+  if (!p) return [];
+  return (p.safeAreas ?? []).map((share) => ({
+    inset: `${(share ?? 0) * p.heightPx}px ${(share ?? 0) * p.widthPx}px`,
+  }));
+});
+const locked = computed(() => sheet.value !== null || props.layout?.widthLocked !== false);
 const canLock = computed(() => Boolean(props.setWidthLock && props.layout && props.face));
 
 /** Locks the width the text column has now, or unlocks it. */
@@ -229,6 +257,7 @@ function blockFamily(i: number): string {
   <section
     class="layout"
     tabindex="0"
+    :class="{ paged: sheet !== null }"
     :aria-label="
       layout ? t('textLayout.regionNamed', { name: layout.name }) : t('textLayout.region')
     "
@@ -238,6 +267,7 @@ function blockFamily(i: number): string {
   >
     <template v-if="face && layout">
       <header
+        v-if="!(sheet && bare) || state === 'failed'"
         class="head"
         :class="{ bare, locked: pageStyle !== undefined, 'with-tools': hasTools }"
         :style="pageStyle"
@@ -260,7 +290,7 @@ function blockFamily(i: number): string {
           @click="helpOpen = !helpOpen"
         />
         <UiIconButton
-          v-if="setWidthLock"
+          v-if="setWidthLock && !sheet"
           icon="width"
           :label="t('textLayout.lockWidth')"
           class="fm-no-print"
@@ -279,13 +309,31 @@ function blockFamily(i: number): string {
         {{ t('textLayout.hint') }}
         <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
       </p>
+      <p
+        v-if="sheet"
+        class="sheet-label fm-no-print"
+        data-testid="layout-sheet-label"
+        :style="{ width: `${sheet.widthPx}px` }"
+      >
+        {{ t('studio.pageScale', { page: sheet.name, scale: String(SCALE) }) }}
+      </p>
       <div
         ref="page"
         class="page"
-        :class="{ locked: pageStyle !== undefined, 'with-tools': hasTools }"
+        :class="{ locked: pageStyle !== undefined, 'with-tools': hasTools, sheet: sheet !== null }"
         data-testid="layout-page"
-        :style="[pageStyle, fontPaletteStyle]"
+        :data-page-width="sheet?.widthPx"
+        :data-page-height="sheet?.heightPx"
+        :style="[pageStyle, fontPaletteStyle, sheetStyle]"
       >
+        <div
+          v-for="(area, i) in safeAreas"
+          :key="`safe-${i}`"
+          class="safe-area fm-no-print"
+          data-testid="layout-safe-area"
+          aria-hidden="true"
+          :style="area"
+        />
         <div
           v-for="(block, i) in layout.blocks"
           :key="`${layout.preset ?? layout.name}-${i}`"
@@ -333,6 +381,14 @@ function blockFamily(i: number): string {
           </div>
         </div>
       </div>
+      <p
+        v-if="sheet && bare"
+        class="sheet-hint fm-no-print"
+        data-testid="layout-sheet-hint"
+        :style="{ width: `${sheet.widthPx}px` }"
+      >
+        {{ t('studio.hint') }}
+      </p>
     </template>
     <p v-else-if="!face" class="empty">{{ t('textLayout.empty') }}</p>
   </section>
@@ -457,9 +513,14 @@ function blockFamily(i: number): string {
   font-size: var(--fm-text-sm);
 }
 @media print {
-  .layout {
+  .layout,
+  .layout.paged {
     overflow: visible;
+    padding: 0;
     background: none;
+  }
+  .page.sheet {
+    box-shadow: none;
   }
   /* No badge column on paper: each row is its text, at the layout's width. */
   .page {
@@ -473,6 +534,64 @@ function blockFamily(i: number): string {
     max-width: min(var(--fm-layout-width), 100%);
     margin-inline: auto;
   }
+}
+/* A page (E45.1): a sheet at its real size on the neutral ground. The ground keeps room for the
+   block controls left of the sheet; a sheet wider than the window scrolls, never clips. */
+.layout.paged {
+  padding: var(--fm-space-6) calc(var(--fm-tools-width-sheet) + var(--fm-space-6)) var(--fm-space-8);
+  background-color: var(--fm-studio-ground);
+  --fm-tools-width-sheet: 11em;
+}
+.sheet-label,
+.sheet-hint {
+  max-width: none;
+  margin: 0 auto;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.sheet-label {
+  padding-bottom: var(--fm-space-2);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.sheet-hint {
+  padding-top: var(--fm-space-4);
+  text-align: center;
+}
+.page.sheet {
+  position: relative;
+  box-sizing: border-box;
+  margin-inline: auto;
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
+}
+/* The text keeps the page's inner width; no tool columns inside the page. */
+.page.sheet .row,
+.page.sheet .row.with-badge {
+  position: relative;
+  display: block;
+  max-width: none;
+  margin-inline: 0;
+}
+/* The block's controls hang outside the sheet's left edge and show on hover or focus. */
+.page.sheet .tools {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 100%;
+  width: var(--fm-tools-width-sheet);
+  margin-inline-end: calc(var(--sheet-margin, 0px) + var(--fm-space-4));
+  opacity: 0;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.page.sheet .row:hover .tools,
+.page.sheet .row:focus-within .tools,
+.page.sheet .tools:has([aria-expanded='true']) {
+  opacity: 1;
+}
+.safe-area {
+  position: absolute;
+  border: 1px dashed var(--fm-border-strong);
+  pointer-events: none;
 }
 .empty {
   display: grid;

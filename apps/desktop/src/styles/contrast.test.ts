@@ -133,6 +133,25 @@ describe('the selection bar', () => {
   });
 });
 
+// E45.1: the Studio's page sits on a neutral ground (#ecebe7 light, surface-2 dark); the page
+// label and the hint under the page are muted text on it.
+describe('the Studio ground', () => {
+  it('is #ecebe7 in light and keeps muted text at least 4.5:1', () => {
+    expect(light['studio-ground']).toBe('#ecebe7');
+    expect(contrast(rgb(light.muted!), rgb(light['studio-ground']!))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    ['the OS dark mode', ":root:not([data-theme='light'])"],
+    ['the dark theme', ":root[data-theme='dark']"],
+  ])('is surface-2 in %s, where muted text keeps 4.5:1', (_, selector) => {
+    const start = theme.indexOf(`${selector} {`);
+    const body = theme.slice(start, theme.indexOf('}', start));
+    expect(body).toMatch(/--fm-studio-ground:\s*var\(--fm-surface-2\);/);
+    expect(contrast(rgb(dark.muted!), rgb(dark['surface-2']!))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('text the browser colors by default', () => {
   it('placeholders use the muted color at full opacity', () => {
     // `muted` is in the checked text colors above; the browser default is not.
@@ -175,6 +194,7 @@ const CHECKED = [
   'control-border',
   'bar-bg',
   'bar-fg',
+  'studio-ground',
 ];
 
 describe('every color token', () => {

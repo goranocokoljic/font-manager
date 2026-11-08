@@ -14,7 +14,7 @@ function fresh() {
 }
 
 describe('text layouts store', () => {
-  it('lists the files, presets first, with the broken one and its reason', async () => {
+  it('lists the files, presets and contexts first, with the broken one and its reason', async () => {
     const { store } = fresh();
     await store.loadList();
     expect(store.entries.map((e) => e.id)).toEqual([
@@ -24,6 +24,11 @@ describe('text layouts store', () => {
       'quote',
       'characters',
       'waterfall',
+      'studio-magazine',
+      'studio-web-hero',
+      'studio-mobile-ui',
+      'studio-video-title',
+      'studio-poster',
       'draft',
     ]);
     expect(store.entries.at(-1)?.broken).toMatch(/Not valid JSON/);

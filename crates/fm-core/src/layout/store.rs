@@ -11,6 +11,8 @@
 //!   again: `.presets` records which ones were written, so a preset file the
 //!   user deleted stays deleted and an edited one keeps its edits.
 //!   [`LayoutStore::revert`] with `to_original` brings back the shipped one.
+//!   The five Pairing Studio contexts (E45.1) are shipped the same way, with
+//!   ids `studio-<context>`; they list after the presets, in switch order.
 //! - **Versions.** A save that changes the file moves the content it replaces
 //!   to `.history/<id>/<number>-<unix ms>.json`, the newest
 //!   [`MAX_VERSIONS`] kept. These are app-owned copies in the app's config
@@ -22,10 +24,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use fm_api::layout::{Layout, LayoutEntry, LayoutPreset, LayoutVersion, SavedLayout};
+use fm_api::layout::{
+    Layout, LayoutEntry, LayoutPreset, LayoutVersion, SavedLayout, StudioContext,
+};
 use fm_api::{ApiError, ApiResult, ErrorCode};
 
-use super::{PRESETS, clamp_layout, preset, preset_name};
+use super::{CONTEXTS, PRESETS, clamp_layout, context_layout, preset, preset_name};
 
 /// How many earlier versions of one template are kept.
 pub const MAX_VERSIONS: usize = 20;
@@ -46,6 +50,67 @@ pub fn preset_id(p: LayoutPreset) -> String {
 /// The preset whose shipped file has this id.
 fn preset_of_id(id: &str) -> Option<LayoutPreset> {
     PRESETS.into_iter().find(|p| preset_id(*p) == id)
+}
+
+/// The template file id of a context ("studio-web-hero").
+pub fn context_id(c: StudioContext) -> String {
+    let slug = match c {
+        StudioContext::Magazine => "magazine",
+        StudioContext::WebHero => "web-hero",
+        StudioContext::MobileUi => "mobile-ui",
+        StudioContext::VideoTitle => "video-title",
+        StudioContext::Poster => "poster",
+    };
+    format!("studio-{slug}")
+}
+
+/// The context whose shipped file has this id.
+fn context_of_id(id: &str) -> Option<StudioContext> {
+    CONTEXTS.into_iter().find(|c| context_id(*c) == id)
+}
+
+/// What a template is the shipped original of: a preset or a context.
+#[derive(Debug, Clone, Copy)]
+enum Shipped {
+    Preset(LayoutPreset),
+    Context(StudioContext),
+}
+
+impl Shipped {
+    /// The shipped file with this id.
+    fn of_id(id: &str) -> Option<Self> {
+        preset_of_id(id)
+            .map(Self::Preset)
+            .or_else(|| context_of_id(id).map(Self::Context))
+    }
+
+    /// What a layout started from: its context first, as a context layout is
+    /// never one of the presets.
+    fn of_layout(layout: &Layout) -> Option<Self> {
+        layout
+            .context
+            .map(Self::Context)
+            .or_else(|| layout.preset.map(Self::Preset))
+    }
+
+    fn original(self) -> Layout {
+        match self {
+            Self::Preset(p) => preset(p),
+            Self::Context(c) => context_layout(c),
+        }
+    }
+}
+
+/// Every shipped template with its id, in list order: the presets, then the contexts.
+fn shipped() -> impl Iterator<Item = (String, Shipped)> {
+    PRESETS
+        .into_iter()
+        .map(|p| (preset_id(p), Shipped::Preset(p)))
+        .chain(
+            CONTEXTS
+                .into_iter()
+                .map(|c| (context_id(c), Shipped::Context(c))),
+        )
 }
 
 /// Whether `id` can name a template file on every OS: not empty, not hidden,
@@ -229,8 +294,8 @@ impl LayoutStore {
         self.dir.join(HISTORY_DIR).join(id)
     }
 
-    /// Writes the presets not written before; a preset file that exists is
-    /// never replaced. Called by every operation, under the lock.
+    /// Writes the presets and contexts not written before; a file that exists
+    /// is never replaced. Called by every operation, under the lock.
     fn seed(&self) -> ApiResult<()> {
         let record = self.dir.join(PRESETS_FILE);
         let mut written: Vec<String> = fs::read_to_string(&record)
@@ -238,14 +303,13 @@ impl LayoutStore {
             .and_then(|t| serde_json::from_str(&t).ok())
             .unwrap_or_default();
         let before = written.len();
-        for p in PRESETS {
-            let id = preset_id(p);
+        for (id, original) in shipped() {
             if written.contains(&id) {
                 continue;
             }
             let path = self.file(&id);
             if !path.exists() {
-                write_atomic(&path, &to_text(&preset(p))?)?;
+                write_atomic(&path, &to_text(&original.original())?)?;
             }
             written.push(id);
         }
@@ -282,16 +346,18 @@ impl LayoutStore {
         }
     }
 
-    /// Every template file: the presets in picker order, then the others by
-    /// name. A file that cannot be read is listed with the reason.
+    /// Every template file: the presets in picker order, the contexts in
+    /// switch order, then the others by name. A file that cannot be read is
+    /// listed with the reason.
     pub fn list(&self) -> ApiResult<Vec<LayoutEntry>> {
         let _guard = self.guard()?;
         let mut entries = self.scan()?;
+        let order: Vec<String> = shipped().map(|(id, _)| id).collect();
         let rank = |e: &LayoutEntry| {
-            PRESETS
+            order
                 .iter()
-                .position(|p| preset_id(*p) == e.id)
-                .unwrap_or(PRESETS.len())
+                .position(|id| *id == e.id)
+                .unwrap_or(order.len())
         };
         entries.sort_by(|a, b| {
             rank(a)
@@ -328,12 +394,14 @@ impl LayoutStore {
                     name: layout.name,
                     preset: layout.preset,
                     broken: None,
+                    context: layout.context,
                 },
                 Content::Broken(reason) => LayoutEntry {
                     id: id.to_owned(),
                     name: id.to_owned(),
                     preset: preset_of_id(id),
                     broken: Some(reason),
+                    context: context_of_id(id),
                 },
             });
         }
@@ -474,8 +542,8 @@ impl LayoutStore {
     }
 
     /// The saved file again; with `to_original`, writes the shipped original
-    /// of the layout's preset (keeping the layout's own name) and keeps what
-    /// it replaces as a version.
+    /// of the layout's context or preset (keeping the layout's own name) and
+    /// keeps what it replaces as a version.
     pub fn revert(&self, id: &str, to_original: bool) -> ApiResult<SavedLayout> {
         let _guard = self.guard()?;
         if !to_original {
@@ -490,20 +558,20 @@ impl LayoutStore {
         }
         let current = self.read(id)?.map(|b| parse_bytes(&b));
         let (shipped, name) = match current {
-            Some(Content::Layout(l)) => (l.preset, Some(l.name)),
-            Some(Content::Broken(_)) => (preset_of_id(id), None),
-            None => match preset_of_id(id) {
-                Some(p) => (Some(p), None),
+            Some(Content::Layout(l)) => (Shipped::of_layout(&l), Some(l.name)),
+            Some(Content::Broken(_)) => (Shipped::of_id(id), None),
+            None => match Shipped::of_id(id) {
+                Some(s) => (Some(s), None),
                 None => return Err(not_found(id)),
             },
         };
-        let Some(p) = shipped else {
+        let Some(original) = shipped else {
             return Err(ApiError::new(
                 ErrorCode::InvalidRequest,
                 "Only a layout that started from a preset can be reset to its original.",
             ));
         };
-        let original = preset(p);
+        let original = original.original();
         let name = name.unwrap_or_else(|| original.name.clone());
         self.write(id, Layout { name, ..original })
     }
