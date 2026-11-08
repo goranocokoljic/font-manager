@@ -130,8 +130,8 @@ test.describe('multi-select on the wall', () => {
               tint,
             };
           });
-      // The ring's 120 ms fade.
-      await page.waitForTimeout(200);
+      // The ring's 120 ms fade: a slow runner can still be in it after any fixed wait.
+      await expect.poll(async () => (await looks(2)).ringOpacity).toBe('1');
       const on = await looks(2);
       const off = await looks(1);
       expect(on.ringColor).toBe(on.accent);
