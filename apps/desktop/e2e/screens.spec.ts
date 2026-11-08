@@ -69,6 +69,12 @@ const locale = process.env.FM_SCREENS_LOCALE;
 // FM_SCREENS_TWISTY=4 clicks the open/fold twisty on that grid card (1-based).
 const twistyCard = Number(process.env.FM_SCREENS_TWISTY ?? 0);
 const rowIndex = Number(process.env.FM_SCREENS_ROW ?? 0);
+// FM_SCREENS_SELECT=1,4,8 Ctrl/Cmd-clicks those list rows or grid cards (1-based): a
+// multi-selection, with the selection bar (E44.1).
+const selectRows = (process.env.FM_SCREENS_SELECT ?? '')
+  .split(',')
+  .map(Number)
+  .filter((n) => n > 0);
 // FM_SCREENS_HOVER=2 leaves the pointer over that list row (1-based) for the shot, so hover-only
 // row actions (Find similar) are in it.
 const hoverRow = Number(process.env.FM_SCREENS_HOVER ?? 0);
@@ -174,6 +180,15 @@ test.describe('@screens', () => {
             await listRows(page)
               .nth(rowIndex - 1)
               .click();
+          }
+          for (const i of selectRows) {
+            await listRows(page)
+              .nth(i - 1)
+              .click({ modifiers: ['ControlOrMeta'] });
+          }
+          if (selectRows.length) {
+            await expect(page.getByRole('toolbar', { name: 'Selection' })).toBeVisible();
+            await page.waitForTimeout(300); // the bar rises (200 ms)
           }
           if (twistyCard) {
             await listRows(page)

@@ -22,6 +22,13 @@
 // ask for no thumbnails or faces and show their empty frame; once it settles, the
 // cards on screen ask.
 //
+// Selection (E44.1, board `4-drag.png`): a click selects one card, Shift-click a range,
+// Ctrl/Cmd-click toggles one. A drag on the wall's empty ground draws a box; every card it
+// touches is selected (with Shift or Ctrl/Cmd, added to the selection). The box is checked
+// against the layout (`list/marquee.ts`), so it selects cards scrolled out of the render too.
+// A click on the ground without a drag clears the selection. A selected card has the accent
+// ring and a 6 % accent tint.
+//
 // Paragraph mode (E43.1, board `3-wall-text.png`): the Paragraph preset, or your own text
 // past 80 characters, lays the wall out as reading rows: at most two per line, the family
 // name and its meta in a 12 px line on top, the text under it at the body size of the
@@ -35,6 +42,7 @@ import { useScrollAnchor } from '../list/anchor';
 import { SETTLE_MS, useScrollSettle } from '../list/settle';
 import { rowActivation } from '../list/activation';
 import { dragKeys } from '../list/drag';
+import { boxBetween, cardsInBox, isClick, type Box } from '../list/marquee';
 import {
   gridRange,
   lineCount,
@@ -57,7 +65,7 @@ import {
 } from '../list/grid';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
-import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
+import { rowLabel, styleCount, styleName, type ListRow, type RowKey } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
 import { useFontSwitchStore } from '../stores/fontSwitch';
@@ -270,6 +278,7 @@ watch(
 
 function onScroll(): void {
   measure();
+  if (boxFrom) drawMarquee();
   if (layoutTop !== null && Math.abs(scrollTop.value - layoutTop) >= 1) layoutTop = null;
   motion.scrolled(scrollTop.value);
   anchor.track(scrollTop.value);
@@ -501,6 +510,91 @@ function onCardClick(row: ListRow, e: MouseEvent): void {
   viewport.value?.focus({ preventScroll: true });
 }
 
+/** The selection box: where the drag started, where the pointer is, what it adds to. */
+const marquee = ref<Box | null>(null);
+let boxFrom: { inline: number; block: number } | null = null;
+let boxPointer = { x: 0, y: 0 };
+let boxAdds = false;
+let boxBase: ReadonlySet<RowKey> = new Set();
+
+/** A point of the window in the wall's content: inline from its start edge, block from its top. */
+function contentPoint(x: number, y: number): { inline: number; block: number } {
+  const el = viewport.value!;
+  const r = el.getBoundingClientRect();
+  const fromLeft = x - r.left - el.clientLeft;
+  const rtl = getComputedStyle(el).direction === 'rtl';
+  return {
+    inline: rtl ? el.clientWidth - fromLeft : fromLeft,
+    block: y - r.top - el.clientTop + el.scrollTop,
+  };
+}
+
+/** The wall's layout, as `cardStyle` places the cards. */
+function geometry() {
+  return {
+    count: count.value,
+    columns: columns.value,
+    cardWidth: cardWidth.value,
+    cardHeight: cardHeight.value,
+    linePx: linePx.value,
+    gap: WALL.gap,
+    inset: WALL.inset,
+  };
+}
+
+function drawMarquee(): void {
+  if (!boxFrom) return;
+  const b = boxBetween(boxFrom, contentPoint(boxPointer.x, boxPointer.y));
+  // Until the pointer has moved a few px it is a click, not a box.
+  if (!marquee.value && isClick(b)) return;
+  marquee.value = b;
+  list.boxSelect(cardsInBox(b, geometry()), boxBase);
+}
+
+/** A press on the wall's ground (not on a card, not on the scrollbar) starts a box. */
+function onGroundDown(e: PointerEvent): void {
+  const el = viewport.value;
+  if (!el || e.button !== 0) return;
+  if (e.target instanceof Element && e.target.closest('.slot')) return;
+  const x = e.clientX - el.getBoundingClientRect().left - el.clientLeft;
+  if (x < 0 || x > el.clientWidth) return;
+  boxAdds = e.shiftKey || e.ctrlKey || e.metaKey;
+  boxBase = boxAdds ? new Set(list.selection.selected) : new Set();
+  boxFrom = contentPoint(e.clientX, e.clientY);
+  boxPointer = { x: e.clientX, y: e.clientY };
+  el.setPointerCapture?.(e.pointerId);
+  el.focus({ preventScroll: true });
+  e.preventDefault();
+}
+
+function onGroundMove(e: PointerEvent): void {
+  if (!boxFrom) return;
+  boxPointer = { x: e.clientX, y: e.clientY };
+  drawMarquee();
+}
+
+function onGroundUp(e: PointerEvent): void {
+  if (!boxFrom) return;
+  const drew = marquee.value !== null;
+  boxFrom = null;
+  marquee.value = null;
+  viewport.value?.releasePointerCapture?.(e.pointerId);
+  // A plain click on the ground: nothing selected.
+  if (!drew && !boxAdds && e.type === 'pointerup') list.clearSelection();
+}
+
+/** The box, in the wall's content: it scrolls with the cards. */
+const marqueeStyle = computed(() => {
+  const b = marquee.value;
+  if (!b) return {};
+  return {
+    insetInlineStart: `${b.inline0}px`,
+    top: `${b.block0}px`,
+    width: `${b.inline1 - b.inline0}px`,
+    height: `${b.block1 - b.block0}px`,
+  };
+});
+
 function onToggle(row: ListRow): void {
   if (row.kind === 'family') list.toggleExpanded(row.family.id);
   viewport.value?.focus({ preventScroll: true });
@@ -524,6 +618,10 @@ function onToggle(row: ListRow): void {
     :aria-activedescendant="activeId"
     @scroll="onScroll"
     @keydown="onKeyDown"
+    @pointerdown="onGroundDown"
+    @pointermove="onGroundMove"
+    @pointerup="onGroundUp"
+    @pointercancel="onGroundUp"
   >
     <FmFlipGroup
       tag="div"
@@ -617,11 +715,19 @@ function onToggle(row: ListRow): void {
         </div>
       </div>
     </FmFlipGroup>
+    <div
+      v-if="marquee"
+      class="marquee"
+      data-testid="selection-box"
+      aria-hidden="true"
+      :style="marqueeStyle"
+    />
   </div>
 </template>
 
 <style scoped>
 .viewport {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
@@ -663,6 +769,20 @@ function onToggle(row: ListRow): void {
 }
 .slot:hover .card {
   box-shadow: var(--fm-shadow-1);
+}
+/* A selected card: the ring below and a 6 % accent tint over its ground. */
+.slot.selected .card {
+  background-color: color-mix(in srgb, var(--fm-accent) 6%, var(--fm-card-bg, var(--fm-bg)));
+}
+/* The selection box: the accent's hairline over a 6 % tint; it never takes a click. */
+.marquee {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 1px solid var(--fm-accent);
+  border-radius: var(--fm-radius-sm);
+  background-color: color-mix(in srgb, var(--fm-accent) 6%, transparent);
+  pointer-events: none;
 }
 /* The ring draws in over the hairline: 2 px of solid accent (WCAG 1.4.11), ring opacity per the motion table. */
 .card::after {

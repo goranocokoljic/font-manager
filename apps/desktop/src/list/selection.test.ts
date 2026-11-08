@@ -5,6 +5,8 @@ import {
   prune,
   rangeBetween,
   selectAll,
+  clearSelected,
+  selectBox,
   selectKey,
   type ListSelection,
 } from './selection';
@@ -69,5 +71,32 @@ describe('list selection', () => {
     const pruned = prune(new Set(['a', 'b', 'c']), s);
     expect(selected(pruned)).toEqual(['a', 'b', 'c']);
     expect([pruned.cursor, pruned.anchor]).toEqual([null, null]);
+  });
+});
+
+describe('clearing and the selection box (E44.1)', () => {
+  it('Esc clears the selection and keeps the cursor', () => {
+    const sel = selectKey(keys, selectKey(keys, EMPTY_SELECTION, 'b', 'replace'), 'd', 'extend');
+    const cleared = clearSelected(sel);
+    expect(selected(cleared)).toEqual([]);
+    expect(cleared.cursor).toBe('d');
+    expect(clearSelected(EMPTY_SELECTION)).toBe(EMPTY_SELECTION);
+  });
+
+  it('a box selects what it touches, replacing or adding to the base', () => {
+    const sel = selectKey(keys, EMPTY_SELECTION, 'a', 'replace');
+    const replaced = selectBox(sel, new Set(), ['c', 'd']);
+    expect(selected(replaced)).toEqual(['c', 'd']);
+    expect(replaced.cursor).toBe('c');
+    expect(replaced.anchor).toBe('c');
+    const added = selectBox(sel, sel.selected, ['c', 'd']);
+    expect(selected(added)).toEqual(['a', 'c', 'd']);
+  });
+
+  it('a box that touches nothing keeps the cursor', () => {
+    const sel = selectKey(keys, EMPTY_SELECTION, 'a', 'replace');
+    const none = selectBox(sel, new Set(), []);
+    expect(selected(none)).toEqual([]);
+    expect(none.cursor).toBe('a');
   });
 });

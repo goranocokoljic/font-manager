@@ -2,7 +2,8 @@
 // arrows, Home/End, PageUp/PageDown move the cursor; Right/Left expand/collapse;
 // Enter opens the row's family page; Shift extends the selection,
 // Ctrl/Cmd moves without selecting, Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A
-// selects all. Plain Space is the app's quick-look key, so it is left alone.
+// selects all, Escape clears the selection (E44.1). Plain Space is the app's quick-look
+// key, so it is left alone.
 // The grid view lays rows out in `columns` per line: Up/Down then move by a
 // line of cards and Left/Right by one card (Alt+Right / Alt+Left opens and closes a family).
 // Left/Right follow what the user sees: in right-to-left chrome they swap.
@@ -79,6 +80,11 @@ export function handleListKey(
     case 'Enter':
       if (mod || e.shiftKey || !row) return false;
       opts.open(row);
+      return true;
+    case 'Escape':
+      // Nothing selected: the key is not the list's, so a sheet or a field above can use it.
+      if (mod || e.shiftKey || !list.selectedCount) return false;
+      list.clearSelection();
       return true;
     case ' ':
       if (!mod) return false;

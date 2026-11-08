@@ -78,6 +78,9 @@
   --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 8%), 0 12px 40px rgb(0 0 0 / 18%);
   /* The dimmed page behind a modal dialog; the same in both themes. */
   --fm-scrim: rgb(0 0 0 / 20%);
+  /* The selection bar (E44.1, board 4): a dark bar with white on it, the same in both themes. */
+  --fm-bar-bg: #141413;
+  --fm-bar-fg: #ffffff;
 
   /* A collection's colour (E44.3): marks, never words, so each is at least 3:1 on the surfaces. */
   --fm-collection-coral: #d9553a;

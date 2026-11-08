@@ -170,7 +170,8 @@ test('multi-select with Shift, Ctrl/Cmd and the mouse', async ({ page }) => {
   await page.keyboard.press('Shift+ArrowDown');
   await page.keyboard.press('Shift+ArrowDown');
   await expect(selected).toHaveCount(3);
-  await expect(status).toHaveText('3 selected');
+  // E44.1: the count line says how to select.
+  await expect(status).toHaveText('3 selected · Shift-click or drag a box to select · Esc clears');
 
   await tree
     .getByRole('treeitem', { name: 'Sample 3, 4 styles' })
@@ -187,7 +188,7 @@ test('multi-select with Shift, Ctrl/Cmd and the mouse', async ({ page }) => {
 
   await page.keyboard.press('ControlOrMeta+a');
   await expect(selected).toHaveCount(6);
-  await expect(status).toHaveText('6 selected');
+  await expect(status).toHaveText('6 selected · Shift-click or drag a box to select · Esc clears');
   await page.keyboard.press('ArrowUp');
   await expect(selected).toHaveCount(1);
   await expect(status).toHaveText('6 families');

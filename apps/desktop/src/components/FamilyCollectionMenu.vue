@@ -2,15 +2,32 @@
 // "Add to collection" on the family page: the manual collections in a menu under the icon
 // button. A smart collection works its members out from a rule, so it takes no fonts by hand.
 // As with UiSelect the button keeps the focus and handles the keys: a combobox over a listbox.
+// The selection bar (E44.1) uses it too: `pick` is the whole selection, `text` its visible label.
 import { computed, ref, useId } from 'vue';
 import type { Collection, FamilyId } from '../api/types';
+import type { FontPick } from '../stores/collections';
 import { errorMessage, t } from '../i18n';
 import { useCollectionsStore } from '../stores/collections';
 import { useToastStore } from '../stores/toast';
 import UiIconButton from './ui/UiIconButton.vue';
 import UiPopover from './ui/UiPopover.vue';
 
-const props = defineProps<{ family: FamilyId | null }>();
+// Two roots (the button and the popover): a class or test id goes to the button.
+defineOptions({ inheritAttrs: false });
+
+const props = defineProps<{
+  family?: FamilyId | null;
+  /** The fonts to add, instead of one family. */
+  pick?: FontPick | null;
+  /** A visible label beside the icon. */
+  text?: string;
+}>();
+
+/** What a pick adds: the `pick`, else the family; null when there is nothing. */
+const target = computed<FontPick | null>(() => {
+  if (props.pick) return props.pick.faces.length || props.pick.families.length ? props.pick : null;
+  return props.family != null ? { faces: [], families: [props.family] } : null;
+});
 
 const collections = useCollectionsStore();
 const toast = useToastStore();
@@ -34,8 +51,9 @@ async function toggle(): Promise<void> {
 async function add(collection: Collection): Promise<void> {
   open.value = false;
   anchor.value?.focus();
-  if (props.family === null) return;
-  await collections.add(collection.id, { faces: [], families: [props.family] });
+  const pick = target.value;
+  if (pick === null) return;
+  await collections.add(collection.id, pick);
   toast.show(
     collections.error
       ? errorMessage(collections.error)
@@ -66,6 +84,7 @@ function onKey(e: KeyboardEvent): void {
 
 <template>
   <UiIconButton
+    v-bind="$attrs"
     ref="button"
     icon="folderPlus"
     :label="t('family.addToCollection')"
@@ -74,10 +93,11 @@ function onKey(e: KeyboardEvent): void {
     :aria-expanded="open"
     :aria-controls="open ? id : undefined"
     :aria-activedescendant="open && manual.length ? `${id}-${active}` : undefined"
-    :disabled="family === null"
+    :disabled="target === null"
     @click="toggle"
     @keydown="onKey"
-  />
+    ><span v-if="text" class="text">{{ text }}</span></UiIconButton
+  >
   <UiPopover :open="open" :anchor="anchor" @close="open = false">
     <div :id="id">
       <div v-if="manual.length" role="listbox" :aria-label="t('family.addToCollection')">

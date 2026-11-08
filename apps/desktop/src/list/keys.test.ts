@@ -99,4 +99,14 @@ describe('list keys', () => {
       handleListKey(key('ArrowRight', { altKey: true }), list, { page: 5, count: 20, open }),
     ).toBe(false);
   });
+  it('Escape clears the selection; with nothing selected it is not the list key', async () => {
+    const list = await setup();
+    const opts = { page: 5, count: 20, open };
+    expect(handleListKey(key('a', { ctrlKey: true }), list, opts)).toBe(true);
+    expect(list.selectedCount).toBe(list.rows.length);
+    expect(handleListKey(key('Escape'), list, opts)).toBe(true);
+    expect(list.selectedCount).toBe(0);
+    expect(list.cursorIndex).toBe(0);
+    expect(handleListKey(key('Escape'), list, opts)).toBe(false);
+  });
 });

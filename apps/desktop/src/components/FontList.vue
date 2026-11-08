@@ -463,7 +463,7 @@ function onToggle(row: ListRow): void {
   background-color: var(--fm-hover);
 }
 .slot.selected {
-  background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
+  background: color-mix(in srgb, var(--fm-accent) 6%, transparent);
 }
 /* The tint alone is under 3:1; a solid accent bar marks every selected row (WCAG 1.4.11).
    The keyboard cursor gets a thinner bar plus a hairline ring, not a heavy box. */

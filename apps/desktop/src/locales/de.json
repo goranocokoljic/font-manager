@@ -299,6 +299,7 @@
     },
     "allFonts": "Alle Schriften",
     "selected": "{count} ausgewählt",
+    "selectHint": "Umschalt-Klick oder einen Rahmen ziehen zum Auswählen · Esc hebt auf",
     "families": {
       "one": "{count} Familie",
       "other": "{count} Familien"
@@ -966,7 +967,19 @@
     "cssFor": "CSS für {label} kopieren"
   },
   "selection": {
-    "chooseReceipt": "Beleg auswählen"
+    "chooseReceipt": "Beleg auswählen",
+    "bar": {
+      "label": "Auswahl",
+      "families": { "one": "{count} Familie", "other": "{count} Familien" },
+      "fonts": { "one": "{count} Schrift", "other": "{count} Schriften" },
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren",
+      "collection": "Sammlung",
+      "tag": "Tag",
+      "compare": "Vergleichen",
+      "studio": "Studio",
+      "clear": "Auswahl aufheben"
+    }
   },
   "table": {
     "label": "Schrifttabelle",

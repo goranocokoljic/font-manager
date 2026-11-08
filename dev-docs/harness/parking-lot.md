@@ -394,3 +394,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E43.3 #467] apps/desktop/src/components/FilterChips.vue:422 — a spilled chip is reachable only via "+N", which opens the drawer; the drawer has no control for the renders-text chip except Clear.
 - [E43.4 #468] apps/desktop/src/views/FamilyView.vue:152 — the hero's fontFamily has no fallback stack, so until the sampleTexts answer arrives a missing character briefly renders in the browser's default font.
 - [E43.4 #468] apps/desktop/src/components/FontGrid.vue:112 — a user-chosen preview background (--fm-card-bg) sits under the card's meta line; the meta text colours are never contrast-checked against it.
+
+## 2026-11-08
+
+- [E44.1 #469] apps/desktop/e2e/selection.spec.ts:115 — Ctrl/Cmd-A is checked with no filter active, so the test cannot tell "the filtered set" from every family.
+- [E44.1 #469] apps/desktop/src/styles/theme.css:82 — in the dark theme the #141413 selection bar on #1c1c1e separates from the page only by its shadow.
