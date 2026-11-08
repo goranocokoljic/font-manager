@@ -6,14 +6,15 @@
   "rationale": "E44.3 (#471): a colour picked by keyboard from the collection menu closed the menu without refocus, so the focus dropped to body and the user lost their place in the sidebar.",
   "severity": "must",
   "status": "active",
-  "occurrences": 2,
+  "occurrences": 3,
   "source_issues": [
     454,
-    471
+    471,
+    475
   ],
   "file_globs": [
     "apps/desktop/src/components/**/*.vue"
   ],
   "first_seen": "2026-11-04T05:22:52.634Z",
-  "last_seen": "2026-11-06T21:40:20.096Z"
+  "last_seen": "2026-11-08T08:14:24.746Z"
 }
