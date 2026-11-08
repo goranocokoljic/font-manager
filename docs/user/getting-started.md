@@ -58,10 +58,19 @@ your team, read [Shared libraries](shared-libraries.md).
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.
-- To print a layout, open it in **Pairing Studio** and click **Print…** on its panel.
+- **Pairing Studio** has one toolbar. It shows the pairing ("headline font + body font",
+  and "unsaved" when the layout has changes that are not saved). Choose a context to try
+  the pairing on a real page: **Magazine** and **Poster** (A4), **Web hero** (1440 × 900),
+  **Mobile UI** (390 × 844, with the iOS text sizes) and **Video title** (1920 × 1080, with
+  the title-safe and action-safe frames). The page shows at 100 % on a grey ground. Point
+  to a block to see its controls; drag it sideways for size, up and down for line height.
+  **Compare 2 pairings** puts a second copy beside the first. **Save** saves the layout
+  file. **Export PNG** saves the saved layout as a PNG in the export folder (save first).
+- To print a layout, open it in **Pairing Studio** and choose **Print the Studio page** in
+  the command palette. On the second panel of **Compare 2 pairings**, click **Print…**.
   The print dialog of your system opens. Only that panel prints: the text at the width
   of the layout, in its fonts, without the buttons of the app or the other panels.
-- To make a PDF of a panel, click **Print…** and choose the PDF printer in the print
+- To make a PDF of a panel, print it and choose the PDF printer in the print
   dialog: **Microsoft Print to PDF** on Windows, **PDF** › **Save as PDF** on a Mac, and
   **Print to File** (PDF) on Linux. The text in the PDF stays text, in its fonts.
 - To see more fonts at a time, click **Compact rows** in the toolbar. The rows of

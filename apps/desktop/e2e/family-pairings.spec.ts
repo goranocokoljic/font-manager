@@ -76,9 +76,11 @@ test('a card opens the Studio with the pairing loaded: body as the panel face, h
   await cards(panel).first().click();
   await expect(page).toHaveURL(/#\/studio\?face=1000&headline=1$/);
   const studio = page.getByRole('region', { name: /^Pairing Studio: / });
-  await expect(studio.getByTestId('studio-font')).toContainText('Sample 1');
-  await expect(studio.getByRole('combobox', { name: 'Font for Block 1' })).toHaveValue(/^Inter /);
-  await expect(studio.getByRole('combobox', { name: 'Font for Block 2' })).toHaveValue('');
+  // The Studio opens on the Magazine context: its headline is block 2, under the kicker.
+  await expect(page.getByTestId('studio-pairing')).toHaveText('Inter + Sample 1');
+  await expect(studio.getByRole('combobox', { name: 'Font for Block 2' })).toHaveValue(/^Inter /);
+  await expect(studio.getByRole('combobox', { name: 'Font for Block 1' })).toHaveValue('');
+  await expect(studio.getByRole('combobox', { name: 'Font for Block 3' })).toHaveValue('');
 });
 
 test('with no candidate in the library: one line and a way to browse catalogs', async ({

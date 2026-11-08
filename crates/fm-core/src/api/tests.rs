@@ -3517,8 +3517,14 @@ fn layout_files_live_in_the_app_layouts_folder_through_the_api() {
     };
     let lib = Lib::new("api-layout-files");
     let listed = lib.api.list_layouts().expect("list");
-    assert_eq!(listed.len(), 6);
+    assert_eq!(listed.len(), 11, "six presets and five Studio contexts");
     assert!(lib.paths.layouts_dir().join("book.json").is_file());
+    assert!(
+        lib.paths
+            .layouts_dir()
+            .join("studio-web-hero.json")
+            .is_file()
+    );
 
     let book = lib
         .api

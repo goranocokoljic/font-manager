@@ -28,6 +28,42 @@ pub enum LayoutPreset {
     Waterfall,
 }
 
+/// A Pairing Studio context (E45.1): where a pairing is tried out. Each one is a
+/// layout template on a page of its own size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum StudioContext {
+    /// A magazine spread page: kicker, headline, standfirst, two-column body, caption; A4.
+    Magazine,
+    /// A website's first screen at 1440 × 900.
+    WebHero,
+    /// A phone screen at 390 × 844 with the iOS text styles.
+    MobileUi,
+    /// A video title card at 1920 × 1080 with safe-area guides.
+    VideoTitle,
+    /// A poster: a very large headline and its details; A4.
+    Poster,
+}
+
+/// The page a layout is set on (E45.1): the text keeps the page's inner width and
+/// the page is shown at its real size.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutPage {
+    /// What the page is called ("A4", "1440 × 900").
+    pub name: String,
+    /// Width in CSS pixels (96 per inch).
+    pub width_px: u32,
+    /// Height in CSS pixels.
+    pub height_px: u32,
+    /// The margin around the text on every side, in CSS pixels.
+    pub margin_px: f32,
+    /// Safe-area guides, each an inset from every edge as a share of the page's
+    /// width and height (0.05 is title safe); none for a page without guides.
+    #[serde(default)]
+    pub safe_areas: Vec<f32>,
+}
+
 /// How the lines of a block line up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -143,6 +179,12 @@ pub struct Layout {
     /// length at the body block's size. Kept while the width is unlocked.
     #[serde(default)]
     pub width_px: Option<f32>,
+    /// The page the layout is set on (E45.1); none sets the text in the window.
+    #[serde(default)]
+    pub page: Option<LayoutPage>,
+    /// The Pairing Studio context this layout is, or started from (E45.1).
+    #[serde(default)]
+    pub context: Option<StudioContext>,
 }
 
 /// A layout's width is locked unless it says otherwise.
@@ -164,6 +206,9 @@ pub struct LayoutEntry {
     /// Why the file cannot be used (not valid JSON, not a layout); none when it can.
     #[serde(default)]
     pub broken: Option<String>,
+    /// The Pairing Studio context the layout is or started from (E45.1).
+    #[serde(default)]
+    pub context: Option<StudioContext>,
 }
 
 /// A layout as it is saved in its template file.

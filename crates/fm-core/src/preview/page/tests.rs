@@ -91,6 +91,8 @@ fn layout_of(blocks: Vec<TextBlock>) -> Layout {
         blocks,
         width_locked: true,
         width_px: Some(600.0),
+        page: None,
+        context: None,
     }
 }
 

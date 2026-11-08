@@ -276,3 +276,65 @@ describe('studio pairings (E42.7)', () => {
     expect(studio.blockFaces).toEqual({});
   });
 });
+
+describe('the Studio toolbar (E45.1)', () => {
+  it('"Compare 2 pairings" adds a copy of the first panel, and pressed again closes it', async () => {
+    const studio = useStudioStore();
+    await layoutsOf(FIRST_PANEL).open('studio-magazine');
+    studio.toggleCompare();
+    expect(studio.panels).toHaveLength(2);
+    const second = studio.panels[1]!;
+    expect(layoutsOf(second).saved?.id).toBe('studio-magazine');
+    studio.toggleCompare();
+    expect(studio.panels).toEqual([FIRST_PANEL]);
+  });
+
+  it('"Compare 2 pairings" closes every other panel, so it never opens a third', () => {
+    const studio = useStudioStore();
+    studio.addPanel(FIRST_PANEL);
+    studio.addPanel(FIRST_PANEL);
+    studio.toggleCompare();
+    expect(studio.panels).toEqual([FIRST_PANEL]);
+  });
+
+  it('exports the saved file in the panel face, each block with a font of its own in it', async () => {
+    const exportPng = vi.spyOn(client, 'exportLayoutPng');
+    const studio = useStudioStore();
+    const layouts = layoutsOf(FIRST_PANEL);
+    await layouts.open('studio-magazine');
+    const scope = blockScope(FIRST_PANEL, 'studio-magazine');
+    await studio.setBlockFace(scope, 1, mono.id);
+    const path = await studio.exportPng(FIRST_PANEL, inter.id);
+    expect(path).toBe('/mock/exports/studio-magazine-paper-2x.png');
+    const font = (face: number) => ({ face, variations: [], features: [] });
+    expect(exportPng).toHaveBeenCalledWith({
+      layout: 'studio-magazine',
+      scale: 2,
+      surface: 'paper',
+      font: font(inter.id),
+      blockFonts: [null, font(mono.id), null, null, null],
+    });
+    expect(studio.exported).toEqual({ path });
+  });
+
+  it('keeps the export error and answers null', async () => {
+    vi.spyOn(client, 'exportLayoutPng').mockRejectedValue({
+      code: 'io',
+      message: 'The export folder is full.',
+      detail: null,
+    });
+    const studio = useStudioStore();
+    await layoutsOf(FIRST_PANEL).open('book');
+    expect(await studio.exportPng(FIRST_PANEL, inter.id)).toBeNull();
+    expect(studio.exported).toEqual({
+      error: { code: 'io', message: 'The export folder is full.', detail: null },
+    });
+  });
+
+  it('exports nothing for a panel without a saved layout', async () => {
+    const exportPng = vi.spyOn(client, 'exportLayoutPng');
+    const studio = useStudioStore();
+    expect(await studio.exportPng(FIRST_PANEL, inter.id)).toBeNull();
+    expect(exportPng).not.toHaveBeenCalled();
+  });
+});

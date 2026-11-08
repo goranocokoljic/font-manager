@@ -38,9 +38,9 @@ use crate::export::{
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest,
-    ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef,
+    ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutPage, LayoutPreset, LayoutRef,
     LayoutSurface, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
-    SavedLayout, TextBlock,
+    SavedLayout, StudioContext, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
@@ -5063,6 +5063,142 @@ fn mock_preset(preset: LayoutPreset) -> Layout {
         blocks,
         width_locked: true,
         width_px: None,
+        page: None,
+        context: None,
+    }
+}
+
+/// The mock's copy of the core contexts (`fm_core::layout::context`): the same
+/// five, on the same pages, with shorter text.
+fn mock_context(context: StudioContext) -> Layout {
+    let block = |text: &str, size_pt: f32, line_height: f32| TextBlock {
+        text: text.to_owned(),
+        size_pt,
+        line_height,
+        tracking: 0.0,
+        paragraph_spacing_pt: 0.0,
+        first_line_indent_em: 0.0,
+        columns: 1,
+        align: BlockAlign::Start,
+        overflow: BlockOverflow::Wrap,
+    };
+    let page = |name: &str, width_px: u32, height_px: u32, margin_px: f32| LayoutPage {
+        name: name.to_owned(),
+        width_px,
+        height_px,
+        margin_px,
+        safe_areas: Vec::new(),
+    };
+    let (name, page, blocks) = match context {
+        StudioContext::Magazine => (
+            "Magazine page",
+            page("A4", 794, 1123, 76.0),
+            vec![
+                block("ISSUE 14 \u{b7} TYPOGRAPHY", 8.0, 1.3),
+                block("The Quiet Return of the Printed Page", 40.0, 1.05),
+                block("Readers are going back to paper.", 15.0, 1.35),
+                TextBlock {
+                    columns: 2,
+                    ..block(
+                        "Typography gives language a durable visual form.",
+                        9.5,
+                        1.45,
+                    )
+                },
+                block("Fig. 3 \u{b7} The faces of this page", 8.0, 1.4),
+            ],
+        ),
+        StudioContext::WebHero => (
+            "Web hero",
+            page("1440 \u{d7} 900", 1440, 900, 120.0),
+            vec![
+                block("Typefaces that work as hard as you do", 54.0, 1.05),
+                block("Every font you own, in one place.", 15.0, 1.45),
+            ],
+        ),
+        StudioContext::MobileUi => (
+            "Mobile UI",
+            page("390 \u{d7} 844", 390, 844, 16.0),
+            vec![
+                block("Library", 25.5, 41.0 / 34.0),
+                block("Recently added", 12.75, 22.0 / 17.0),
+                block("Twelve families arrived this week.", 12.75, 22.0 / 17.0),
+                block("Updated just now", 9.75, 18.0 / 13.0),
+            ],
+        ),
+        StudioContext::VideoTitle => (
+            "Video title",
+            LayoutPage {
+                safe_areas: vec![0.035, 0.05],
+                ..page("1920 \u{d7} 1080", 1920, 1080, 96.0)
+            },
+            vec![
+                TextBlock {
+                    align: BlockAlign::Center,
+                    ..block("The Printed Page", 90.0, 1.05)
+                },
+                TextBlock {
+                    align: BlockAlign::Center,
+                    ..block("Episode 3 \u{b7} A story of type", 30.0, 1.2)
+                },
+            ],
+        ),
+        StudioContext::Poster => (
+            "Poster",
+            page("A4", 794, 1123, 57.0),
+            vec![
+                block("Type\nMatters", 120.0, 0.9),
+                block("An evening of letters, ink and paper", 11.0, 1.5),
+            ],
+        ),
+    };
+    Layout {
+        preset: None,
+        name: name.to_owned(),
+        blocks,
+        width_locked: true,
+        width_px: None,
+        page: Some(page),
+        context: Some(context),
+    }
+}
+
+/// The contexts in switch order, with their file ids (`fm_core::layout::store::context_id`).
+const MOCK_CONTEXTS: [(StudioContext, &str); 5] = [
+    (StudioContext::Magazine, "studio-magazine"),
+    (StudioContext::WebHero, "studio-web-hero"),
+    (StudioContext::MobileUi, "studio-mobile-ui"),
+    (StudioContext::VideoTitle, "studio-video-title"),
+    (StudioContext::Poster, "studio-poster"),
+];
+
+fn mock_context_of_id(id: &str) -> Option<StudioContext> {
+    MOCK_CONTEXTS
+        .iter()
+        .find(|(_, i)| *i == id)
+        .map(|(c, _)| *c)
+}
+
+/// The core's page clamp (`fm_core::layout::clamp_page`).
+fn mock_clamp_page(page: LayoutPage) -> LayoutPage {
+    let side = |v: u32| v.clamp(100, 20_000);
+    let (width_px, height_px) = (side(page.width_px), side(page.height_px));
+    let half = width_px.min(height_px) as f32 / 2.0 - 1.0;
+    LayoutPage {
+        width_px,
+        height_px,
+        margin_px: if page.margin_px.is_finite() {
+            page.margin_px.clamp(0.0, half)
+        } else {
+            0.0
+        },
+        safe_areas: page
+            .safe_areas
+            .into_iter()
+            .filter(|s| s.is_finite())
+            .map(|s| s.clamp(0.0, 0.25))
+            .collect(),
+        ..page
     }
 }
 
@@ -5158,6 +5294,7 @@ impl LayoutService for MockApi {
         Ok(Layout {
             blocks,
             width_px: mock_width_px(layout.width_px),
+            page: layout.page.map(mock_clamp_page),
             ..layout
         })
     }
@@ -5169,11 +5306,16 @@ impl LayoutService for MockApi {
     fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {
         let st = self.state();
         let mut entries: Vec<LayoutEntry> = st.layouts.iter().map(mock_layout_entry).collect();
+        let order: Vec<&str> = MOCK_PRESET_IDS
+            .iter()
+            .copied()
+            .chain(MOCK_CONTEXTS.iter().map(|(_, id)| *id))
+            .collect();
         let rank = |e: &LayoutEntry| {
-            MOCK_PRESET_IDS
+            order
                 .iter()
                 .position(|id| *id == e.id)
-                .unwrap_or(MOCK_PRESET_IDS.len())
+                .unwrap_or(order.len())
         };
         entries.sort_by(|a, b| {
             rank(a)
@@ -5237,17 +5379,24 @@ impl LayoutService for MockApi {
             let layout = mock_layout_content(file)?;
             return Ok(SavedLayout { id: req.id, layout });
         }
-        let (preset, name) = match &file.content {
-            Ok(l) => (l.preset, Some(l.name.clone())),
-            Err(_) => (mock_preset_of_id(&req.id), None),
+        let (context, preset, name) = match &file.content {
+            Ok(l) => (l.context, l.preset, Some(l.name.clone())),
+            Err(_) => (
+                mock_context_of_id(&req.id),
+                mock_preset_of_id(&req.id),
+                None,
+            ),
         };
-        let Some(preset) = preset else {
-            return Err(ApiError::new(
-                ErrorCode::InvalidRequest,
-                "Only a layout that started from a preset can be reset to its original.",
-            ));
+        let original = match (context, preset) {
+            (Some(c), _) => mock_context(c),
+            (None, Some(p)) => mock_preset(p),
+            (None, None) => {
+                return Err(ApiError::new(
+                    ErrorCode::InvalidRequest,
+                    "Only a layout that started from a preset can be reset to its original.",
+                ));
+            }
         };
-        let original = mock_preset(preset);
         let name = name.unwrap_or_else(|| original.name.clone());
         mock_save_layout(&mut st.layouts, &req.id, Layout { name, ..original })
     }
@@ -5318,6 +5467,10 @@ impl LayoutService for MockApi {
     /// `fm_core::layout::layout_width`: 33 em at the body block's size (the
     /// block with the most text, the first on a tie), 4/3 px per point.
     fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
+        if let Some(page) = layout.page {
+            let page = mock_clamp_page(page);
+            return Ok(Some(page.width_px as f32 - 2.0 * page.margin_px));
+        }
         if !layout.width_locked {
             return Ok(None);
         }
@@ -5372,7 +5525,7 @@ fn mock_preset_of_id(id: &str) -> Option<LayoutPreset> {
         .map(|i| PRESETS[i])
 }
 
-/// The six preset files and one hand-edited file that is not valid JSON.
+/// The six preset files, the five context files and one hand-edited file that is not valid JSON.
 fn mock_layout_files() -> Vec<MockLayoutFile> {
     let mut files: Vec<MockLayoutFile> = MOCK_PRESET_IDS
         .iter()
@@ -5384,6 +5537,11 @@ fn mock_layout_files() -> Vec<MockLayoutFile> {
             })
         })
         .collect();
+    files.extend(MOCK_CONTEXTS.iter().map(|(c, id)| MockLayoutFile {
+        id: (*id).to_owned(),
+        content: Ok(mock_context(*c)),
+        versions: Vec::new(),
+    }));
     files.push(MockLayoutFile {
         id: "draft".to_owned(),
         content: Err("Not valid JSON: EOF while parsing an object at line 3 column 0".to_owned()),
@@ -5399,12 +5557,14 @@ fn mock_layout_entry(file: &MockLayoutFile) -> LayoutEntry {
             name: l.name.clone(),
             preset: l.preset,
             broken: None,
+            context: l.context,
         },
         Err(reason) => LayoutEntry {
             id: file.id.clone(),
             name: file.id.clone(),
             preset: mock_preset_of_id(&file.id),
             broken: Some(reason.clone()),
+            context: mock_context_of_id(&file.id),
         },
     }
 }

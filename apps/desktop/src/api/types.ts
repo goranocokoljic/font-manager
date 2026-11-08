@@ -2092,6 +2092,10 @@ export type Layout = {
 	 *  length at the body block's size. Kept while the width is unlocked.
 	 */
 	widthPx?: number | null,
+	/**  The page the layout is set on (E45.1); none sets the text in the window. */
+	page?: LayoutPage | null,
+	/**  The Pairing Studio context this layout is, or started from (E45.1). */
+	context?: StudioContext | null,
 };
 
 /**
@@ -2123,6 +2127,8 @@ export type LayoutEntry = {
 	preset?: LayoutPreset | null,
 	/**  Why the file cannot be used (not valid JSON, not a layout); none when it can. */
 	broken?: string | null,
+	/**  The Pairing Studio context the layout is or started from (E45.1). */
+	context?: StudioContext | null,
 };
 
 /**  The font a block is set in: a layout file holds no fonts, so an export names them. */
@@ -2133,6 +2139,26 @@ export type LayoutFont = {
 	variations?: AxisValue[],
 	/**  OpenType features switched on or off. */
 	features?: FeatureSetting[],
+};
+
+/**
+ *  The page a layout is set on (E45.1): the text keeps the page's inner width and
+ *  the page is shown at its real size.
+ */
+export type LayoutPage = {
+	/**  What the page is called ("A4", "1440 × 900"). */
+	name: string,
+	/**  Width in CSS pixels (96 per inch). */
+	widthPx: number,
+	/**  Height in CSS pixels. */
+	heightPx: number,
+	/**  The margin around the text on every side, in CSS pixels. */
+	marginPx: number | null,
+	/**
+	 *  Safe-area guides, each an inset from every edge as a share of the page's
+	 *  width and height (0.05 is title safe); none for a page without guides.
+	 */
+	safeAreas?: (number | null)[],
 };
 
 /**  A built-in layout. */
@@ -3389,6 +3415,22 @@ export type SpecimenResponse = {
 	path: string,
 };
 
+/**
+ *  A Pairing Studio context (E45.1): where a pairing is tried out. Each one is a
+ *  layout template on a page of its own size.
+ */
+export type StudioContext = 
+/**  A magazine spread page: kicker, headline, standfirst, two-column body, caption; A4. */
+"magazine" | 
+/**  A website's first screen at 1440 × 900. */
+"webHero" | 
+/**  A phone screen at 390 × 844 with the iOS text styles. */
+"mobileUi" | 
+/**  A video title card at 1920 × 1080 with safe-area guides. */
+"videoTitle" | 
+/**  A poster: a very large headline and its details; A4. */
+"poster";
+
 /**  One style on a family's weight line. */
 export type StyleMark = {
 	/**  `OS/2.usWeightClass` (100–1000). */
@@ -3709,4 +3751,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 24, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 25, patch: 0 };

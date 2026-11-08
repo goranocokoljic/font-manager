@@ -1,7 +1,9 @@
 use std::fs;
 
 use fm_api::ErrorCode;
-use fm_api::layout::{BlockAlign, Layout, LayoutPreset};
+use fm_api::layout::{BlockAlign, Layout, LayoutPreset, StudioContext};
+
+use crate::layout::{CONTEXTS, context_layout};
 
 use super::*;
 use crate::test_support::TempDir;
@@ -35,12 +37,25 @@ const PRESET_IDS: [&str; 6] = [
     "waterfall",
 ];
 
+const CONTEXT_IDS: [&str; 5] = [
+    "studio-magazine",
+    "studio-web-hero",
+    "studio-mobile-ui",
+    "studio-video-title",
+    "studio-poster",
+];
+
+/// Every shipped id in list order: the presets, then the contexts.
+fn shipped_ids() -> Vec<&'static str> {
+    PRESET_IDS.into_iter().chain(CONTEXT_IDS).collect()
+}
+
 #[test]
 fn the_six_presets_are_written_on_first_use_as_json_files() {
     let dir = TempDir::new("layouts-seed");
     let (store, folder) = store_in(&dir);
     assert!(!folder.exists(), "nothing is written before first use");
-    assert_eq!(ids(&store), PRESET_IDS);
+    assert_eq!(ids(&store), shipped_ids());
     for p in PRESETS {
         let text = fs::read_to_string(folder.join(format!("{}.json", preset_id(p)))).expect("file");
         let on_disk: Layout = serde_json::from_str(&text).expect("plain JSON layout");
@@ -131,7 +146,7 @@ fn a_malformed_file_is_listed_as_broken_and_the_others_still_load() {
     fs::write(folder.join("bytes.json"), [0xff, 0xfe, 0x00]).expect("not text");
 
     let entries = store.list().expect("list never fails on one file");
-    assert_eq!(entries.len(), 8);
+    assert_eq!(entries.len(), 13);
     let by_id = |id: &str| entries.iter().find(|e| e.id == id).expect(id).clone();
     let book = by_id("book");
     assert!(
@@ -427,4 +442,112 @@ fn utc_timestamps_are_formatted_from_unix_milliseconds() {
     assert_eq!(iso_utc(0), "1970-01-01T00:00:00Z");
     assert_eq!(iso_utc(951_782_400_000), "2000-02-29T00:00:00Z");
     assert_eq!(iso_utc(1_792_576_245_999), "2026-10-21T09:50:45Z");
+}
+
+#[test]
+fn the_five_contexts_are_written_on_first_use_and_listed_after_the_presets() {
+    let dir = TempDir::new("layouts-contexts");
+    let (store, folder) = store_in(&dir);
+    let entries = store.list().expect("list");
+    let after: Vec<_> = entries[PRESET_IDS.len()..]
+        .iter()
+        .map(|e| (e.id.as_str(), e.context))
+        .collect();
+    assert_eq!(
+        after,
+        [
+            ("studio-magazine", Some(StudioContext::Magazine)),
+            ("studio-web-hero", Some(StudioContext::WebHero)),
+            ("studio-mobile-ui", Some(StudioContext::MobileUi)),
+            ("studio-video-title", Some(StudioContext::VideoTitle)),
+            ("studio-poster", Some(StudioContext::Poster)),
+        ]
+    );
+    assert!(
+        entries[..PRESET_IDS.len()]
+            .iter()
+            .all(|e| e.context.is_none())
+    );
+    for c in CONTEXTS {
+        let id = context_id(c);
+        let text = fs::read_to_string(folder.join(format!("{id}.json"))).expect("file");
+        let on_disk: Layout = serde_json::from_str(&text).expect("plain JSON layout");
+        assert_eq!(on_disk, context_layout(c));
+        assert_eq!(
+            store.get(&id).expect("get").layout.page,
+            context_layout(c).page
+        );
+    }
+}
+
+#[test]
+fn a_user_layout_lists_after_the_contexts() {
+    let dir = TempDir::new("layouts-contexts-order");
+    let (store, _) = store_in(&dir);
+    store
+        .save(
+            "aaa",
+            Layout {
+                name: "Aaa".into(),
+                ..preset(LayoutPreset::Book)
+            },
+        )
+        .expect("save");
+    assert_eq!(ids(&store).last().map(String::as_str), Some("aaa"));
+    assert_eq!(ids(&store)[..11], shipped_ids()[..]);
+}
+
+#[test]
+fn a_context_file_is_never_overwritten_and_reset_brings_back_its_page() {
+    let dir = TempDir::new("layouts-context-reset");
+    let (store, folder) = store_in(&dir);
+    store.list().expect("seed");
+    let id = context_id(StudioContext::VideoTitle);
+    let mut mine = context_layout(StudioContext::VideoTitle);
+    mine.name = "My title card".into();
+    mine.page = None;
+    mine.blocks[0].size_pt = 20.0;
+    store.save(&id, mine).expect("save");
+    store.list().expect("seed again");
+    let kept = store.get(&id).expect("get").layout;
+    assert_eq!(kept.page, None, "an edited context file is kept as it is");
+
+    let back = store.revert(&id, true).expect("reset").layout;
+    assert_eq!(back.name, "My title card", "the layout keeps its own name");
+    assert_eq!(back.page, context_layout(StudioContext::VideoTitle).page);
+    assert_eq!(
+        back.blocks,
+        context_layout(StudioContext::VideoTitle).blocks
+    );
+    assert_eq!(back.context, Some(StudioContext::VideoTitle));
+
+    // A broken context file resets from its id.
+    fs::write(folder.join(format!("{id}.json")), "{").expect("break");
+    let entry = store
+        .list()
+        .expect("list")
+        .into_iter()
+        .find(|e| e.id == id)
+        .expect("listed");
+    assert!(entry.broken.is_some());
+    assert_eq!(entry.context, Some(StudioContext::VideoTitle));
+    let fixed = store.revert(&id, true).expect("reset broken").layout;
+    assert_eq!(fixed, context_layout(StudioContext::VideoTitle));
+}
+
+#[test]
+fn a_duplicated_context_keeps_its_page_and_resets_to_its_context() {
+    let dir = TempDir::new("layouts-context-dup");
+    let (store, _) = store_in(&dir);
+    let copy = store
+        .duplicate(&context_id(StudioContext::MobileUi), None)
+        .expect("duplicate");
+    assert_eq!(copy.layout.name, "Mobile UI copy");
+    assert_eq!(
+        copy.layout.page,
+        context_layout(StudioContext::MobileUi).page
+    );
+    let reset = store.revert(&copy.id, true).expect("reset").layout;
+    assert_eq!(reset.blocks, context_layout(StudioContext::MobileUi).blocks);
+    assert_eq!(reset.name, "Mobile UI copy");
 }

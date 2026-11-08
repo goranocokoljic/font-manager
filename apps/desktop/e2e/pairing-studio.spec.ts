@@ -35,14 +35,22 @@ const presetPicker = (page: Page) => page.getByRole('combobox', { name: 'Preset'
 const openButton = (page: Page) =>
   page.getByRole('button', { name: 'Open in Pairing Studio', exact: true });
 const studio = (page: Page) => page.getByRole('region', { name: /^Pairing Studio: / });
-const studioPicker = (page: Page) => studio(page).getByRole('combobox', { name: 'Layout' });
+const bar = (page: Page) => page.getByTestId('studio-toolbar');
+const barButton = (page: Page, name: string) =>
+  bar(page).getByRole('button', { name, exact: true });
+const contexts = (page: Page) => bar(page).getByRole('group', { name: 'Context' });
+const contextButton = (page: Page, name: string) =>
+  contexts(page).getByRole('button', { name, exact: true });
+const pairing = (page: Page) => bar(page).getByTestId('studio-pairing');
+const status = (page: Page) => studio(page).getByTestId('studio-status');
 const layout = (scope: Page | Locator, name: string) =>
   scope.getByRole('region', { name: `${name} layout` });
 const blocks = (region: Locator) => region.getByTestId('layout-block');
+const sheet = (region: Locator) => region.getByTestId('layout-page');
 const fileAction = (page: Page, name: string) =>
   page.getByRole('toolbar', { name: 'Layout file' }).getByRole('button', { name, exact: true });
 
-test('Layout mode opens the layout and face in Pairing Studio; Close returns to the library as it was', async ({
+test('Layout mode opens the layout and face in Pairing Studio; Back returns to the library as it was', async ({
   page,
 }) => {
   await open(page);
@@ -61,7 +69,8 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
   const panel = studio(page);
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAccessibleName(/^Pairing Studio: JetBrains Mono /);
-  await expect(panel.getByTestId('studio-font')).toContainText('JetBrains Mono');
+  // No headline face of its own: the pairing is the panel's face twice.
+  await expect(pairing(page)).toHaveText('JetBrains Mono + JetBrains Mono');
 
   // The layout's blocks are live text in the face, in the same components as Layout mode.
   const columns = layout(panel, 'Columns');
@@ -72,16 +81,17 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
     .evaluate((el) => getComputedStyle(el).fontFamily);
   expect(family).toMatch(/^"?fm-face-\d+/);
 
-  // The picker lists the layout files; picking one shows it in the panel.
-  await expect(studioPicker(page)).toHaveAttribute('data-value', 'columns');
-  const names = await optionLabels(studioPicker(page));
-  expect(names).toEqual(expect.arrayContaining(['Book', 'Columns', 'Quote']));
-  await selectOption(studioPicker(page), 'quote');
-  await expect(page).toHaveURL(/layout=quote/);
-  await expect(panel.getByTestId('studio-font')).toContainText('JetBrains Mono');
+  // Columns is not a context: the switch shows none pressed. Picking one shows its file.
+  for (const b of await contexts(page).getByRole('button').all())
+    await expect(b).toHaveAttribute('aria-pressed', 'false');
+  await contextButton(page, 'Web hero').click();
+  await expect(page).toHaveURL(/layout=studio-web-hero/);
+  await expect(contextButton(page, 'Web hero')).toHaveAttribute('aria-pressed', 'true');
+  await expect(sheet(layout(panel, 'Web hero'))).toHaveAttribute('data-page-width', '1440');
+  await expect(pairing(page)).toHaveText('JetBrains Mono + JetBrains Mono');
 
-  // Close goes back to the library: same URL, same mode, same preset and selection.
-  await panel.getByRole('button', { name: 'Close', exact: true }).click();
+  // Back goes to the library: same URL, same mode, same preset and selection.
+  await barButton(page, 'Back').click();
   await expect(studio(page)).toBeHidden();
   expect(page.url()).toBe(libraryUrl);
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
@@ -95,7 +105,174 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
   );
 });
 
-test('the palette opens Pairing Studio; edits save to the layout file; Escape closes', async ({
+test('one toolbar: Back, title, pairing, the five contexts, Compare, Shuffle, Save, Export', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?face=1');
+  await expect(studio(page)).toBeVisible();
+  // In this order, in one bar.
+  const items = await bar(page)
+    .locator('button, h1, [data-testid="studio-pairing"]')
+    .evaluateAll((els) =>
+      els.map((el) => (el.getAttribute('aria-label') ?? el.textContent)!.trim()),
+    );
+  expect(items).toEqual([
+    'Back',
+    'Pairing Studio',
+    expect.stringMatching(/^.+ \+ .+$/),
+    'Magazine',
+    'Web hero',
+    'Mobile UI',
+    'Video title',
+    'Poster',
+    'Compare 2 pairings',
+    'Shuffle unlocked',
+    'Save',
+    'Export PNG',
+  ]);
+  // One bar: the first panel has no bar of its own and the page has no head row.
+  const bars = await studio(page)
+    .locator('header')
+    .evaluateAll((els) => els.filter((el) => el.getBoundingClientRect().height > 4).length);
+  expect(bars).toBe(1);
+  await expect(studio(page).getByRole('toolbar', { name: 'Layout file' })).toHaveCount(0);
+  await expect(studio(page).getByRole('combobox', { name: 'Layout' })).toHaveCount(0);
+  // All of the bar is on one row.
+  const tops = await bar(page)
+    .locator('button, h1')
+    .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top / 8)));
+  expect(new Set(tops).size).toBe(1);
+  // Shuffle comes with the roles: it says so and does nothing yet.
+  await expect(barButton(page, 'Shuffle unlocked')).toHaveAttribute('aria-disabled', 'true');
+  await expect(barButton(page, 'Shuffle unlocked')).toHaveAttribute('title', /Not available yet/);
+});
+
+const CONTEXTS = [
+  ['Magazine', 'Magazine page', 'studio-magazine', 794, 1123, 'A4', 76],
+  ['Web hero', 'Web hero', 'studio-web-hero', 1440, 900, '1440 × 900', 120],
+  ['Mobile UI', 'Mobile UI', 'studio-mobile-ui', 390, 844, '390 × 844', 16],
+  ['Video title', 'Video title', 'studio-video-title', 1920, 1080, '1920 × 1080', 96],
+  ['Poster', 'Poster', 'studio-poster', 794, 1123, 'A4', 57],
+] as const;
+
+test('each context is a layout file on its page at 100 %, on the neutral ground', async ({
+  page,
+}) => {
+  await open(page);
+  // Without a layout in the URL, the Studio opens on the Magazine context.
+  await page.goto('/#/studio?face=1');
+  const panel = studio(page);
+  await expect(contextButton(page, 'Magazine')).toHaveAttribute('aria-pressed', 'true');
+
+  for (const [button, name, id, width, height, pageName, margin] of CONTEXTS) {
+    await contextButton(page, button).click();
+    await expect(page).toHaveURL(new RegExp(`layout=${id}(&|$)`));
+    await expect(contextButton(page, button)).toHaveAttribute('aria-pressed', 'true');
+    const region = layout(panel, name);
+    await expect(region).toHaveAttribute('data-state', 'ready');
+    const page_ = sheet(region);
+    await expect(page_).toHaveAttribute('data-page-width', String(width));
+    await expect(page_).toHaveAttribute('data-page-height', String(height));
+    // The real size in CSS pixels: 100 %.
+    const box = (await page_.boundingBox())!;
+    expect(Math.round(box.width)).toBe(width);
+    expect(box.height).toBeGreaterThanOrEqual(height - 1);
+    await expect(region.getByTestId('layout-sheet-label')).toHaveText(`${pageName} · 100 %`);
+    // The text keeps the page's width inside its margins.
+    const row = await blocks(region)
+      .first()
+      .evaluate((el) => el.closest('.row')!.getBoundingClientRect().width);
+    expect(Math.abs(row - (width - 2 * margin))).toBeLessThanOrEqual(1);
+    // A page has no width lock: its size decides.
+    await expect(region.getByTestId('layout-width-lock')).toHaveCount(0);
+    // Safe-area guides on the video frame only.
+    await expect(region.getByTestId('layout-safe-area')).toHaveCount(
+      button === 'Video title' ? 2 : 0,
+    );
+  }
+});
+
+test('the page sits on #ecebe7 with a soft shadow; the hint under it says hover, click, drag', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?face=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  await expect(region).toHaveCSS('background-color', 'rgb(236, 235, 231)');
+  await expect(sheet(region)).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(sheet(region)).not.toHaveCSS('box-shadow', 'none');
+  const hint = region.getByTestId('layout-sheet-hint');
+  await expect(hint).toHaveText(
+    'Hover a block to see its controls · click it to edit its text · drag sideways for size, up and down for leading',
+  );
+  // The hint is under the page.
+  const pageBox = (await sheet(region).boundingBox())!;
+  const hintBox = (await hint.boundingBox())!;
+  expect(hintBox.y).toBeGreaterThanOrEqual(pageBox.y + pageBox.height - 1);
+
+  // A block's controls stay off the page until the pointer or the focus is on the block.
+  const badge = region.getByTestId('block-size-badge').nth(1);
+  const tools = badge.locator('xpath=ancestor::div[contains(@class, "tools")][1]');
+  await expect(tools).toHaveCSS('opacity', '0');
+  await blocks(region).nth(1).hover();
+  await expect(tools).toHaveCSS('opacity', '1');
+  const badgeBox = (await badge.boundingBox())!;
+  expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(pageBox.x);
+  await page.mouse.move(0, 0);
+  await expect(tools).toHaveCSS('opacity', '0');
+  await badge.focus();
+  await expect(tools).toHaveCSS('opacity', '1');
+
+  // Dark: the ground is surface-2.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(region).toHaveCSS('background-color', 'rgb(38, 38, 40)');
+});
+
+test('Mobile UI uses the iOS text styles; Video title draws title and action safe', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?layout=studio-mobile-ui&face=1');
+  const mobile = layout(studio(page), 'Mobile UI');
+  await expect(mobile).toHaveAttribute('data-state', 'ready');
+  // Large Title 34/41, Headline 17/22, Body 17/22, Footnote 13/18 on the 390 px page.
+  const sizes = await blocks(mobile).evaluateAll((els) =>
+    els.map((el) => {
+      const s = getComputedStyle(el);
+      return [Math.round(parseFloat(s.fontSize)), Math.round(parseFloat(s.lineHeight))];
+    }),
+  );
+  expect(sizes).toEqual([
+    [34, 41],
+    [17, 22],
+    [17, 22],
+    [13, 18],
+  ]);
+
+  await contextButton(page, 'Video title').click();
+  const video = layout(studio(page), 'Video title');
+  await expect(video).toHaveAttribute('data-state', 'ready');
+  const frame = (await sheet(video).boundingBox())!;
+  const guides = video.getByTestId('layout-safe-area');
+  const insets = await guides.evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      const p = el.parentElement!.getBoundingClientRect();
+      return [Math.round(r.left - p.left), Math.round(r.top - p.top)];
+    }),
+  );
+  // Action safe 3.5 %, title safe 5 % of 1920 × 1080.
+  expect(insets).toEqual([
+    [67, 38],
+    [96, 54],
+  ]);
+  expect(frame.width).toBe(1920);
+  await expect(guides.first()).toHaveAttribute('aria-hidden', 'true');
+});
+
+test('the palette opens Pairing Studio; Save and Export in the toolbar; Escape closes', async ({
   page,
 }) => {
   await open(page);
@@ -113,6 +290,8 @@ test('the palette opens Pairing Studio; edits save to the layout file; Escape cl
   const panel = studio(page);
   await expect(panel).toBeVisible();
   await expect(page).toHaveURL(/#\/studio\?layout=book&face=\d+$/);
+  await expect(barButton(page, 'Save')).toHaveAttribute('aria-disabled', 'true');
+  await expect(pairing(page)).not.toContainText('unsaved');
 
   // Editing goes through the same store as Layout mode: the draft, Save, the file.
   const book = layout(panel, 'Book');
@@ -126,9 +305,24 @@ test('the palette opens Pairing Studio; edits save to the layout file; Escape cl
   await blocks(book).first().dblclick();
   await box.fill('Studio heading');
   await page.keyboard.press('ControlOrMeta+Enter');
-  await expect(fileAction(page, 'Save')).toBeEnabled();
-  await fileAction(page, 'Save').click();
-  await expect(page.getByRole('toolbar', { name: 'Layout file' })).toContainText('Saved.');
+  await expect(pairing(page)).toContainText('· unsaved');
+  // The PNG is made from the saved file: Export asks for a save first.
+  await expect(barButton(page, 'Export PNG')).toHaveAttribute('aria-disabled', 'true');
+  await expect(barButton(page, 'Export PNG')).toHaveAttribute('title', /^Save first/);
+  // It stays on the Tab path, so its title tells why; pressing it does nothing.
+  await barButton(page, 'Export PNG').focus();
+  await page.keyboard.press('Enter');
+  await expect(status(page)).toHaveText('');
+  await expect(barButton(page, 'Save')).toHaveAttribute('aria-disabled', 'false');
+  await barButton(page, 'Save').click();
+  await expect(status(page)).toHaveText('Saved.');
+  await expect(pairing(page)).not.toContainText('unsaved');
+  await expect(barButton(page, 'Save')).toHaveAttribute('aria-disabled', 'true');
+
+  // Saved: Export renders the file through the core.
+  await expect(barButton(page, 'Export PNG')).toHaveAttribute('aria-disabled', 'false');
+  await barButton(page, 'Export PNG').click();
+  await expect(status(page)).toHaveText('Exported to /mock/exports/book-paper-2x.png');
 
   // A block property edit uses the core's ranges, like Layout mode.
   await panel.getByRole('button', { name: /^Block 1 properties/ }).click();
@@ -153,30 +347,28 @@ test('a Pairing Studio opened by its URL closes to the library with its face sel
   // The library opened in List mode, so only the studio reads the layouts folder here.
   await page.goto('/#/studio?layout=quote&face=1');
   await expect(layout(studio(page), 'Quote')).toBeVisible();
-  // The picker lists the files from `list_layouts`, not only the presets: the mock's
-  // unreadable `draft` file is there, and cannot be picked.
-  await studioPicker(page).click();
+  // The compared panel's picker lists the files from `list_layouts`, not only the presets:
+  // the contexts and the mock's unreadable `draft` file are there; `draft` cannot be picked.
+  await barButton(page, 'Compare 2 pairings').click();
+  const picker = studio(page).getByRole('combobox', { name: 'Layout' });
+  const names = await optionLabels(picker);
+  expect(names).toEqual(expect.arrayContaining(['Book', 'Quote', 'Magazine page', 'Web hero']));
+  await picker.click();
   const broken = page
     .locator('.ui-popover')
     .getByRole('option', { name: 'draft (cannot be read)' });
   await expect(broken).toHaveCount(1);
   await expect(broken).toHaveAttribute('aria-disabled', 'true');
-  await studioPicker(page).press('Escape');
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await picker.press('Escape');
+  await barButton(page, 'Back').click();
   await expect(page).toHaveURL(/#\/\?face=1$/);
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
 });
 
-test('every Pairing Studio control is reachable with Tab and has a label', async ({ page }) => {
-  await open(page);
-  await page.goto('/#/studio?layout=book&face=1');
-  const panel = studio(page);
-  await expect(layout(panel, 'Book')).toHaveAttribute('data-state', 'ready');
-  await expect(panel.getByRole('heading', { name: 'Pairing Studio' })).toBeFocused();
-
+/** The names of the Tab stops after the focused element, until the focus leaves the page. */
+async function tabStops(page: Page, max: number): Promise<string[]> {
   const reached: string[] = [];
-  // Tab through the panel until the focus leaves the page.
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < max; i++) {
     await page.keyboard.press('Tab');
     const name = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
@@ -190,10 +382,31 @@ test('every Pairing Studio control is reachable with Tab and has a label', async
     expect(name, `tab stop ${i + 1} has a label`).not.toBe('');
     reached.push(name);
   }
-  const expected = [/^Layout/, /^Close$/, /^Duplicate$/, /^History$/, /^Book layout$/];
-  expected.push(/^Lock width$/, /^Block 1 properties/, /^Font for Block 1$/, /^Block 1/);
-  expected.push(/^Font for Block 2$/);
-  for (const name of expected) expect(reached.some((r) => name.test(r))).toBe(true);
+  return reached;
+}
+
+test('every Pairing Studio control is reachable with Tab and has a label', async ({ page }) => {
+  await open(page);
+  await page.goto('/#/studio?layout=book&face=1');
+  const panel = studio(page);
+  await expect(layout(panel, 'Book')).toHaveAttribute('data-state', 'ready');
+  const heading = panel.getByRole('heading', { name: 'Pairing Studio' });
+  await expect(heading).toBeFocused();
+  // Back is just before the title.
+  await page.keyboard.press('Shift+Tab');
+  await expect(barButton(page, 'Back')).toBeFocused();
+  await heading.focus();
+
+  const reached = await tabStops(page, 30);
+  const expected = [/^Magazine$/, /^Web hero$/, /^Mobile UI$/, /^Video title$/, /^Poster$/];
+  expected.push(/^Compare 2 pairings$/, /^Shuffle unlocked$/, /^Save$/, /^Export PNG$/);
+  expected.push(/^Book layout$/, /^Lock width$/, /^Block 1 properties/, /^Font for Block 1$/);
+  expected.push(/^Block 1/, /^Font for Block 2$/);
+  for (const name of expected)
+    expect(
+      reached.some((r) => name.test(r)),
+      String(name),
+    ).toBe(true);
 });
 
 test('a block gets a face of its own from its font picker; "Use panel font" resets it', async ({
@@ -209,6 +422,7 @@ test('a block gets a face of its own from its font picker; "Use panel font" rese
   const familyOf = (block: Locator) => block.evaluate((el) => getComputedStyle(el).fontFamily);
   // Both blocks start in the panel's face.
   expect(await familyOf(heading)).toBe(await familyOf(body));
+  const panelFamily = (await pairing(page).textContent())!.split(' + ')[1]!;
 
   // Keyboard only: Tab from the heading's size badge reaches its font picker.
   await panel.getByRole('button', { name: /^Block 1 properties/ }).focus();
@@ -231,6 +445,8 @@ test('a block gets a face of its own from its font picker; "Use panel font" rese
   expect(await familyOf(heading)).toMatch(/^"?fm-face-\d+/);
   expect(await familyOf(body)).toMatch(/^"?fm-face-1"?,/);
   await expect(book).toHaveAttribute('data-state', 'ready');
+  // The toolbar names the pairing: the headline block's face + the panel's.
+  await expect(pairing(page)).toHaveText(`JetBrains Mono + ${panelFamily}`);
 
   // Escape in an open list closes the list only, not the studio.
   await picker.focus();
@@ -241,7 +457,7 @@ test('a block gets a face of its own from its font picker; "Use panel font" rese
   await expect(panel).toBeVisible();
 
   // The choice is not part of the layout file: nothing to save.
-  await expect(fileAction(page, 'Save')).toBeDisabled();
+  await expect(barButton(page, 'Save')).toHaveAttribute('aria-disabled', 'true');
 
   // "Use panel font" puts the heading back in the panel's face.
   const reset = panel.getByRole('button', { name: 'Use panel font for Block 1' });
@@ -255,7 +471,7 @@ test('a block gets a face of its own from its font picker; "Use panel font" rese
 const panels = (page: Page) => studio(page).getByRole('region', { name: /^Panel \d: / });
 const panelNamed = (page: Page, name: string) =>
   studio(page).getByRole('region', { name, exact: true });
-const addPanel = (page: Page) => studio(page).getByRole('button', { name: 'Add panel' });
+const compare = (page: Page) => barButton(page, 'Compare 2 pairings');
 
 /** Sets block 1 of `panel` in `family` with the keyboard, through its font picker. */
 async function headingFont(page: Page, panel: Locator, family: string) {
@@ -269,7 +485,7 @@ async function headingFont(page: Page, panel: Locator, family: string) {
   await expect(picker).toHaveValue(new RegExp(`^${family} `));
 }
 
-test('panels side by side: copies, independent, close one, kept for the session', async ({
+test('Compare 2 pairings: a copy beside the first, independent, closed again, kept for the session', async ({
   page,
 }) => {
   await open(page);
@@ -277,6 +493,7 @@ test('panels side by side: copies, independent, close one, kept for the session'
   await expect(panels(page)).toHaveCount(1);
   const first = panelNamed(page, 'Panel 1: Book');
   await expect(layout(first, 'Book')).toHaveAttribute('data-state', 'ready');
+  await expect(compare(page)).toHaveAttribute('aria-pressed', 'false');
   // The first panel is the library's layout: it has no "Close panel" of its own.
   await expect(first.getByRole('button', { name: /^Close panel/ })).toHaveCount(0);
 
@@ -291,11 +508,11 @@ test('panels side by side: copies, independent, close one, kept for the session'
       .evaluate((el) => getComputedStyle(el).fontFamily);
   const inter = await familyOf(first);
 
-  // "Add panel" opens a copy beside it: same layout, same text, same block fonts.
-  await addPanel(page).click();
+  // Compare opens a copy beside it: same layout, same text, same block fonts.
+  await compare(page).click();
+  await expect(compare(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(panels(page)).toHaveCount(2);
   const second = panelNamed(page, 'Panel 2: Book');
-  await expect(second.getByRole('heading', { name: 'Panel 2: Book' })).toBeFocused();
   await expect(blocks(layout(second, 'Book')).first()).toHaveText('Copied heading');
   await expect(second.getByRole('combobox', { name: 'Font for Block 1' })).toHaveValue(/^Inter /);
   await expect.poll(() => familyOf(second)).toBe(inter);
@@ -311,32 +528,14 @@ test('panels side by side: copies, independent, close one, kept for the session'
   await expect(blocks(layout(second, 'Book')).first()).toHaveText('Only panel 2');
   await expect(blocks(layout(first, 'Book')).first()).toHaveText('Copied heading');
 
-  // A third panel copies the panel that had the focus last (panel 2), then gets its own font.
-  await addPanel(page).click();
-  await expect(panels(page)).toHaveCount(3);
-  const third = panelNamed(page, 'Panel 3: Book');
-  await expect(blocks(layout(third, 'Book')).first()).toHaveText('Only panel 2');
-  await headingFont(page, third, 'Legacy Grotesk');
-  await expect.poll(() => familyOf(third)).not.toBe(mono);
-  const legacy = await familyOf(third);
-  expect(new Set([inter, mono, legacy]).size).toBe(3);
-
   // Equal widths.
   const widths = await panels(page).evaluateAll((els) =>
     els.map((el) => el.getBoundingClientRect().width),
   );
-  for (const w of widths) expect(Math.abs(w - widths[0]!)).toBeLessThanOrEqual(1);
-
-  // "Close panel" removes one; the others move up and keep their fonts and text.
-  await second.getByRole('button', { name: 'Close panel 2' }).click();
-  await expect(panels(page)).toHaveCount(2);
-  await expect(addPanel(page)).toBeFocused();
-  const kept = panelNamed(page, 'Panel 2: Book');
-  await expect.poll(() => familyOf(kept)).toBe(legacy);
-  expect(await familyOf(first)).toBe(inter);
+  expect(Math.abs(widths[1]! - widths[0]!)).toBeLessThanOrEqual(1);
 
   // Back to the library and into the studio again: the panels are as they were.
-  await studio(page).getByRole('button', { name: 'Close', exact: true }).click();
+  await barButton(page, 'Back').click();
   await expect(studio(page)).toBeHidden();
   await page.evaluate(() => (location.hash = '#/studio?layout=book&face=1'));
   await expect(panels(page)).toHaveCount(2);
@@ -345,56 +544,41 @@ test('panels side by side: copies, independent, close one, kept for the session'
   );
   const again = panelNamed(page, 'Panel 2: Book');
   await expect(blocks(layout(again, 'Book')).first()).toHaveText('Only panel 2');
-  await expect.poll(() => familyOf(again)).toBe(legacy);
+  await expect.poll(() => familyOf(again)).toBe(mono);
 
-  // Up to four panels; at four, "Add panel" says so and adds none.
-  await addPanel(page).click();
-  await addPanel(page).click();
-  await expect(panels(page)).toHaveCount(4);
-  await expect(addPanel(page)).toHaveAttribute('aria-disabled', 'true');
-  // It stays on the Tab path, so its title tells why; pressing it does nothing.
-  await addPanel(page).focus();
+  // "Close panel 2" ends the comparison; the focus goes to Compare, which brings a fresh copy.
+  await again.getByRole('button', { name: 'Close panel 2' }).click();
+  await expect(panels(page)).toHaveCount(1);
+  await expect(compare(page)).toBeFocused();
+  await expect(compare(page)).toHaveAttribute('aria-pressed', 'false');
+  expect(await familyOf(first)).toBe(inter);
   await page.keyboard.press('Enter');
-  await expect(panels(page)).toHaveCount(4);
+  await expect(panels(page)).toHaveCount(2);
+  await expect.poll(() => familyOf(panelNamed(page, 'Panel 2: Book'))).toBe(inter);
+  // Pressed again, Compare puts the first panel back alone.
+  await compare(page).click();
+  await expect(panels(page)).toHaveCount(1);
 });
 
-test('a narrow window scrolls the panels sideways; every panel control is on the Tab path', async ({
-  page,
-}) => {
+test('with two pairings every panel control is on the Tab path', async ({ page }) => {
   await open(page);
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.goto('/#/studio?layout=book&face=1');
   await expect(layout(studio(page), 'Book')).toHaveAttribute('data-state', 'ready');
-  await addPanel(page).click();
-  await addPanel(page).click();
-  await expect(panels(page)).toHaveCount(3);
+  await compare(page).click();
+  await expect(panels(page)).toHaveCount(2);
   const row = panels(page).first().locator('..');
-  const overflow = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
-  expect(overflow).toBeGreaterThan(0);
   await expect(row).toHaveCSS('overflow-x', 'auto');
 
   await studio(page).getByRole('heading', { name: 'Pairing Studio' }).focus();
-  const reached: string[] = [];
-  for (let i = 0; i < 80; i++) {
-    await page.keyboard.press('Tab');
-    const name = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null;
-      if (!el || el === document.body) return null;
-      const label = (el as HTMLSelectElement).labels?.[0]?.textContent;
-      return (el.getAttribute('aria-label') ?? label ?? el.textContent ?? '').trim();
-    });
-    if (name === null) break;
-    expect(name, `tab stop ${i + 1} has a label`).not.toBe('');
-    reached.push(name);
-  }
+  const reached = await tabStops(page, 80);
   const count = (re: RegExp) => reached.filter((r) => re.test(r)).length;
-  expect(count(/^Add panel$/)).toBe(1);
+  expect(count(/^Compare 2 pairings$/)).toBe(1);
   expect(count(/^Close panel 2$/)).toBe(1);
-  expect(count(/^Close panel 3$/)).toBe(1);
-  expect(count(/^Layout/)).toBe(3);
-  expect(count(/^Font for Block 1$/)).toBe(3);
-  expect(count(/^Duplicate$/)).toBe(3);
-  expect(count(/^Print panel [123]$/)).toBe(3);
+  expect(count(/^Layout/)).toBe(1);
+  expect(count(/^Font for Block 1$/)).toBe(2);
+  expect(count(/^Duplicate$/)).toBe(1);
+  expect(count(/^Print panel 2$/)).toBe(1);
 });
 
 test('"Print..." prints one panel alone, as live text in its fonts, and the PDF holds its text', async ({
@@ -419,7 +603,7 @@ test('"Print..." prints one panel alone, as live text in its fonts, and the PDF 
   await page.goto('/#/studio?layout=book&face=1');
   const first = panelNamed(page, 'Panel 1: Book');
   await expect(layout(first, 'Book')).toHaveAttribute('data-state', 'ready');
-  await addPanel(page).click();
+  await compare(page).click();
   const second = panelNamed(page, 'Panel 2: Book');
   await expect(layout(second, 'Book')).toHaveAttribute('data-state', 'ready');
   // Text that only one panel has, to tell the printed panel from the other on paper.
@@ -448,7 +632,7 @@ test('"Print..." prints one panel alone, as live text in its fonts, and the PDF 
   // Under print media only that panel's layout shows: no app chrome, no other panel.
   await page.emulateMedia({ media: 'print' });
   await expect(first).toBeHidden();
-  await expect(addPanel(page)).toBeHidden();
+  await expect(compare(page)).toBeHidden();
   await expect(studio(page).getByRole('heading', { name: 'Pairing Studio' })).toBeHidden();
   await expect(print).toBeHidden();
   await expect(second.getByRole('heading', { name: 'Panel 2: Book' })).toBeHidden();
@@ -476,16 +660,19 @@ test('"Print..." prints one panel alone, as live text in its fonts, and the PDF 
   const squash = (s: string) => s.replace(/\s+/g, '');
   expect(squash(pdf.text)).toContain(squash('Printed panel two'));
   expect(squash(pdf.text)).not.toContain(squash('Left out of print'));
-  expect(squash(pdf.text)).not.toContain(squash('Add panel'));
+  expect(squash(pdf.text)).not.toContain(squash('Compare 2 pairings'));
   expect(squash(pdf.text)).not.toContain(squash('Print…'));
   const heading = pdf.runs.find((r) => squash(r.text).includes(squash('Printed panel two')));
   expect(heading?.font).toMatch(/^[A-Z]{6}\+PublicSans-Bold$/);
   expect(pdf.fonts).toContain(heading?.font);
 
-  // On screen nothing changed; the other panel prints alone after its own "Print...".
+  // On screen nothing changed; the first panel prints alone from the command palette.
   await page.emulateMedia({ media: 'screen' });
   await expect(first).toBeVisible();
-  await first.getByRole('button', { name: 'Print panel 1', exact: true }).click();
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox', { name: 'Search commands' }).fill('Print the Studio page');
+  await expect(page.getByRole('option', { name: /Print the Studio page/ })).toBeVisible();
+  await page.keyboard.press('Enter');
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { fmPrints: number }).fmPrints))
     .toBe(2);

@@ -8,6 +8,10 @@
 // "Print..." (E24.4) prints this panel alone through the OS print dialog: the studio store
 // marks it the print target and the print stylesheet leaves out everything else, the
 // controls marked `fm-no-print` included. PDF is the dialog's save-as-PDF.
+//
+// The first panel has no bar of its own (E45.1): the Studio's one toolbar picks its context,
+// saves and exports it, and the command palette prints it. Its heading stays for screen
+// readers. The compared panel keeps its bar: layout, file actions, Print and Close.
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
@@ -70,7 +74,8 @@ const pickerOptions = computed(() =>
 watch(
   () => props.layoutId,
   (id) => {
-    if (id !== undefined && layouts.saved?.id !== id) void layouts.open(id);
+    // An empty id: the context list has not arrived yet.
+    if (id && layouts.saved?.id !== id) void layouts.open(id);
   },
   { immediate: true },
 );
@@ -108,7 +113,10 @@ onMounted(() => {
     data-testid="studio-panel"
     :data-print-target="printing ? '' : undefined"
   >
-    <header class="bar fm-no-print">
+    <h2 v-if="!closable" :id="headingId" ref="heading" class="sr-only" tabindex="-1">
+      {{ label }}
+    </h2>
+    <header v-else class="bar fm-no-print">
       <h2 :id="headingId" ref="heading" class="name" tabindex="-1">{{ label }}</h2>
       <LayoutActions :store="layouts" inline @opened="pick" />
       <label class="picker">
@@ -122,7 +130,6 @@ onMounted(() => {
         @click="studio.print(panel)"
       />
       <UiIconButton
-        v-if="closable"
         icon="close"
         :label="t('studio.closePanelFor', { number: String(number) })"
         @click="emit('close')"

@@ -2576,10 +2576,15 @@ fn layout_files_save_duplicate_revert_and_restore_like_the_core() {
             "quote",
             "characters",
             "waterfall",
+            "studio-magazine",
+            "studio-web-hero",
+            "studio-mobile-ui",
+            "studio-video-title",
+            "studio-poster",
             "draft"
         ]
     );
-    assert!(entries[6].broken.is_some(), "the mock has one broken file");
+    assert!(entries[11].broken.is_some(), "the mock has one broken file");
     assert_eq!(
         api.get_layout(r("draft")).expect_err("broken").code,
         ErrorCode::InvalidRequest
@@ -3810,4 +3815,48 @@ fn the_ui_draws_every_collection_colour() {
             "{key}: a light, an OS dark and a forced dark value"
         );
     }
+}
+
+#[test]
+fn the_mock_ships_the_five_studio_contexts_on_their_pages() {
+    use fm_api::layout::StudioContext;
+    let api = api();
+    let entries = api.list_layouts().expect("list");
+    let contexts: Vec<_> = entries.iter().filter_map(|e| e.context).collect();
+    assert_eq!(
+        contexts,
+        [
+            StudioContext::Magazine,
+            StudioContext::WebHero,
+            StudioContext::MobileUi,
+            StudioContext::VideoTitle,
+            StudioContext::Poster,
+        ]
+    );
+    let page = |id: &str| {
+        api.get_layout(LayoutRef { id: id.into() })
+            .expect("get")
+            .layout
+            .page
+            .expect("a context has a page")
+    };
+    assert_eq!(
+        (
+            page("studio-magazine").width_px,
+            page("studio-magazine").height_px
+        ),
+        (794, 1123)
+    );
+    assert_eq!(page("studio-mobile-ui").width_px, 390);
+    assert_eq!(page("studio-video-title").safe_areas, [0.035, 0.05]);
+    assert!(page("studio-web-hero").safe_areas.is_empty());
+    // A layout on a page is set at the page's inner width, locked or not.
+    let mut hero = api
+        .get_layout(LayoutRef {
+            id: "studio-web-hero".into(),
+        })
+        .expect("get")
+        .layout;
+    hero.width_locked = false;
+    assert_eq!(api.layout_width(hero).expect("width"), Some(1440.0 - 240.0));
 }
