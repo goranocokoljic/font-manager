@@ -80,6 +80,45 @@ describe('Try for <role> (E45.3)', () => {
     expect(useStudioStore().tries?.role).toBe('caption');
   });
 
+  it('after a pick the focus stays in the list and the change is announced', async () => {
+    const w = rail('body');
+    await flushPromises();
+    const second = w.findAll('[data-testid="studio-try-candidate"]')[1]!;
+    (second.element as HTMLElement).focus();
+    const picked = useStudioStore().tries!.suggestions[1]!.face.familyName;
+    await second.trigger('click');
+    await flushPromises();
+    // The picked family left the list, so its button went: the candidate now at its place
+    // has the focus, not the page.
+    const now = w.findAll('[data-testid="studio-try-candidate"]');
+    expect(now.map((c) => c.get('.family').text())).not.toContain(picked);
+    expect(document.activeElement).toBe(now[1]!.element);
+    expect(w.get('[data-testid="studio-try-status"]').text()).toBe(`Body set in ${picked}.`);
+    expect(w.get('[data-testid="studio-try-status"]').attributes('role')).toBe('status');
+  });
+
+  it('when nothing is left after a pick, the focus goes to Browse catalogs', async () => {
+    const w = rail('body');
+    await flushPromises();
+    vi.spyOn(client, 'suggestPairings').mockResolvedValue([]);
+    const first = w.get('[data-testid="studio-try-candidate"]');
+    (first.element as HTMLElement).focus();
+    await first.trigger('click');
+    await flushPromises();
+    expect(document.activeElement).toBe(w.get('[data-testid="studio-try-browse"]').element);
+  });
+
+  it('a pick by mouse from outside the list does not pull the focus into it', async () => {
+    const w = rail('body');
+    await flushPromises();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    await w.get('[data-testid="studio-try-candidate"]').trigger('click');
+    await flushPromises();
+    expect(document.activeElement).toBe(outside);
+  });
+
   it('a click sets that role alone, and the list moves on from it', async () => {
     const w = rail('deck');
     await flushPromises();

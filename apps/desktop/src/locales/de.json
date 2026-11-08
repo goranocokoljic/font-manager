@@ -1672,6 +1672,7 @@
     "tryFor": "Probier für {role}",
     "tryNone": "Noch passt nichts in deiner Bibliothek hierzu für {role}.",
     "tryApply": "{role} in {family} setzen: {reasons}",
+    "tryApplied": "{role} in {family} gesetzt.",
     "save": "Sichern",
     "saveTitle": "Die Layout-Datei sichern",
     "saved": "Gesichert.",

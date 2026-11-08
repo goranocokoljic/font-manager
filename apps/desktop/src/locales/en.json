@@ -1672,6 +1672,7 @@
     "tryFor": "Try for {role}",
     "tryNone": "Nothing in your library pairs with this for {role} yet.",
     "tryApply": "Set {role} in {family}: {reasons}",
+    "tryApplied": "{role} set in {family}.",
     "save": "Save",
     "saveTitle": "Save the layout file",
     "saved": "Saved.",

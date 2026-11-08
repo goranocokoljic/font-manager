@@ -1010,12 +1010,17 @@ test('Try for <role>: three candidates with reasons; a click sets that role alon
   await expect(candidates(page).first()).toHaveAccessibleName(
     `Set Body in ${name}: ${reasons.split(' · ').join(', ')}`,
   );
-  await candidates(page).first().click();
+  // By keyboard: Enter on the first candidate.
+  await candidates(page).first().focus();
+  await page.keyboard.press('Enter');
   await expect(rolePicker(page, 'Body')).toHaveText(name);
   expect(await pickers(page)).toEqual(['Inter', 'Inter', name, 'Inter']);
   // The list moves on: the picked family is the one being replaced now.
   await expect(candidates(page).filter({ hasText: name })).toHaveCount(0);
   await expect.poll(() => fades(page)).toBe(1);
+  // Its button went, so the focus is on the candidate now first, not on the page; it is said.
+  await expect(candidates(page).first()).toBeFocused();
+  await expect(tryList(page).getByRole('status')).toHaveText(`Body set in ${name}.`);
 
   await page.keyboard.press('ControlOrMeta+z');
   await expect(rolePicker(page, 'Body')).toHaveText('Inter');

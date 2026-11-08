@@ -129,10 +129,50 @@ watch(
   { immediate: true },
 );
 
-/** A Try candidate was clicked: it sets its role alone. */
-function apply(s: PairingSuggestion): void {
-  if (tryRole.value) studio.applySuggestion(props.scope, tryRole.value, s);
+const trySection = ref<HTMLElement | null>(null);
+const tryHeading = ref<HTMLElement | null>(null);
+/** What the last Try pick did, for screen readers (a polite status). */
+const announced = ref('');
+/**
+ * The place of the candidate a pick was made from, while the list asks again. A pick leaves the
+ * picked family out of the next answer, so its button goes; the focus then moves to the candidate
+ * now at that place (else the last one, the Browse button or the heading), never to the page body.
+ */
+let refocusAt: number | null = null;
+
+/** A Try candidate was clicked: it sets its role alone and says so. */
+function apply(s: PairingSuggestion, index: number): void {
+  const role = tryRole.value;
+  if (!role) return;
+  const active = document.activeElement;
+  refocusAt = active && trySection.value?.contains(active) ? index : null;
+  studio.applySuggestion(props.scope, role, s);
+  announced.value = t('studio.tryApplied', {
+    role: roleName(role.role),
+    family: s.face.familyName,
+  });
 }
+
+// The list answered after a pick: the focus goes back into it.
+watch(
+  () => (tryList.value && !tryList.value.loading ? tryList.value : null),
+  (list) => {
+    if (!list || refocusAt === null) return;
+    const at = refocusAt;
+    refocusAt = null;
+    void nextTick(() => {
+      const section = trySection.value;
+      const buttons = [
+        ...(section?.querySelectorAll<HTMLElement>('[data-testid="studio-try-candidate"]') ?? []),
+      ];
+      const target =
+        buttons[Math.min(at, buttons.length - 1)] ??
+        section?.querySelector<HTMLElement>('[data-testid="studio-try-browse"]') ??
+        tryHeading.value;
+      target?.focus();
+    });
+  },
+);
 
 // Every face a picker shows stays loaded while it is listed, so each family is drawn in itself.
 const held = new Set<FaceId>();
@@ -232,8 +272,14 @@ const roleName = (role: BlockRole) => t(`studio.role.${role}`);
         <p class="detail" data-testid="studio-role-detail">{{ detailOf(r) }}</p>
       </li>
     </ul>
-    <section v-if="tryRole" class="try" :aria-labelledby="tryId" data-testid="studio-try">
-      <h3 :id="tryId" class="title">
+    <section
+      v-if="tryRole"
+      ref="trySection"
+      class="try"
+      :aria-labelledby="tryId"
+      data-testid="studio-try"
+    >
+      <h3 :id="tryId" ref="tryHeading" class="title" tabindex="-1">
         {{ t('studio.tryFor', { role: roleName(tryRole.role) }) }}
       </h3>
       <p v-if="tryList?.error" class="error" role="alert">
@@ -255,7 +301,7 @@ const roleName = (role: BlockRole) => t(`studio.role.${role}`);
         </button>
       </div>
       <ul v-else class="candidates" :aria-busy="tryList?.loading ? 'true' : undefined">
-        <li v-for="s in trySuggestions" :key="s.face.id">
+        <li v-for="(s, i) in trySuggestions" :key="s.face.id">
           <button
             type="button"
             class="candidate"
@@ -267,7 +313,7 @@ const roleName = (role: BlockRole) => t(`studio.role.${role}`);
                 reasons: s.reasons.join(', '),
               })
             "
-            @click="apply(s)"
+            @click="apply(s, i)"
           >
             <span class="family" :style="{ fontFamily: familyCss(s.face.id) }">
               {{ s.face.familyName }}
@@ -278,6 +324,7 @@ const roleName = (role: BlockRole) => t(`studio.role.${role}`);
           </button>
         </li>
       </ul>
+      <p class="sr-only" role="status" data-testid="studio-try-status">{{ announced }}</p>
     </section>
   </aside>
 </template>
