@@ -18,8 +18,16 @@
 // shows with no context pressed.
 //
 // "Compare 2 pairings" puts a copy of the first panel beside it, with its own store and block
-// fonts (E24.3). Print (E24.4) is in the command palette for the first panel and in the second
-// panel's own bar.
+// fonts (E24.3). The two share their text (E45.4): an edit in one shows in the other while both
+// show the same layout file; each keeps its own roles, rail and locks. The toolbar names both
+// pairings. Either panel closes: closing the first moves the second into its place. Print (E24.4)
+// is in the command palette for the first panel and in the second panel's own bar.
+//
+// Save (E45.4) stores the first pairing as a layout named after its faces ("Lora + Inter"): a
+// file not yet so named is copied under that name (saveLayout into the copy), which opens, so a
+// shipped template keeps its name; a file already so named is saved in place. History and Revert
+// work on that file as on any other. Export (E45.4) offers PNG at 1x or 2x, rendered by the core
+// and named "<Headline>-<Body>-<context>.png" there, and PDF through the print dialog.
 //
 // A pairing card of the family page (E42.7) or a drop on the Studio (E44.2) opens
 // `?face=<body>&headline=<face>`: the panel's face sets the body, and the first panel's Headline
@@ -32,6 +40,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { StudioContext } from '../api/types';
+import StudioExportMenu, { type ExportChoice } from '../components/StudioExportMenu.vue';
 import StudioPanel from '../components/StudioPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
@@ -41,7 +50,7 @@ import { formatChord, matches, type Chord } from '../keyboard/keymap';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
-import { FIRST_PANEL, blockScope, blocksOf, layoutsOf, useStudioStore } from '../stores/studio';
+import { FIRST_PANEL, blockScope, layoutsOf, namedAfter, useStudioStore } from '../stores/studio';
 
 const route = useRoute();
 const router = useRouter();
@@ -94,21 +103,23 @@ const firstScope = computed(() =>
   firstLayouts.saved ? blockScope(FIRST_PANEL, firstLayouts.saved.id) : null,
 );
 /**
- * "<headline> + <body>": the faces of the Headline and Body roles (E45.2), each its own, else the
- * panel's. A layout without roles names its largest block's face as the headline.
+ * "<headline> + <body>" of panel `panel`: the faces of its Headline and Body roles (E45.2), each
+ * its own, else the panel's. A layout without roles names its largest block's face as the
+ * headline. Null without a face.
  */
+function pairingName(panel: number): string | null {
+  const faces = studio.pairingOf(panel, face.value);
+  return faces
+    ? t('studio.pairing', { headline: faces.headline.familyName, body: faces.body.familyName })
+    : null;
+}
+/** The first pairing's name, the name Save gives its layout. */
+const firstPairing = computed(() => pairingName(FIRST_PANEL));
+/** The toolbar's label: the first pairing, or both while two are compared (E45.4). */
 const pairing = computed(() => {
-  const panelFace = face.value;
-  if (!panelFace) return t('studio.noFont');
-  const draft = firstLayouts.draft;
-  const faceOfRole = (role: 'headline' | 'body') => {
-    const first = draft ? blocksOf(draft, role)[0] : undefined;
-    return (first !== undefined ? studio.faceOf(firstScope.value, first) : null) ?? panelFace;
-  };
-  return t('studio.pairing', {
-    headline: faceOfRole('headline').familyName,
-    body: faceOfRole('body').familyName,
-  });
+  const names = studio.panels.map((p) => pairingName(p) ?? t('studio.noFont'));
+  if (names.length < 2) return names[0] ?? t('studio.noFont');
+  return t('studio.pairingCompare', { first: names[0]!, second: names[1]! });
 });
 
 // The pairing's headline face, once the first panel's layout has loaded.
@@ -140,10 +151,26 @@ function pick(id: string): void {
 const comparing = computed(() => studio.panels.length > 1);
 const compareButton = ref<InstanceType<typeof UiButton> | null>(null);
 
-/** Closes the compared panel; the focus goes to "Compare 2 pairings", which brings it back. */
+/**
+ * Closes a compared panel; the other stays (E45.4). Closing the first moves the second into its
+ * place and its layout into the URL. The focus goes to "Compare 2 pairings", which brings a
+ * second panel back.
+ */
 function closePanel(panel: number): void {
-  studio.closePanel(panel);
+  if (panel === FIRST_PANEL) {
+    const id = studio.promote();
+    if (id) keepPairing(id);
+  } else studio.closePanel(panel);
   (compareButton.value?.$el as HTMLElement | undefined)?.focus();
+}
+
+/**
+ * Shows layout `id` in the first panel with the roles it has now: the URL's pairing is not
+ * loaded into it again.
+ */
+function keepPairing(id: string): void {
+  if (headline.value !== null) pairingLoaded = `${headline.value}@${id}`;
+  if (id !== layoutId.value) pick(id);
 }
 
 /** What the last Save or Export did, read in the language shown now. */
@@ -151,17 +178,51 @@ const status = ref<(() => string) | null>(null);
 const saveError = computed(() => (firstLayouts.error ? errorMessage(firstLayouts.error) : null));
 const message = computed(() => saveError.value ?? status.value?.() ?? '');
 
+/** The open layout is the first pairing's own: named after its faces (E45.4). */
+const ownLayout = computed(() => {
+  const name = firstPairing.value;
+  return Boolean(name && firstLayouts.draft && namedAfter(firstLayouts.draft.name, name));
+});
+/** Save has something to store: edits, or a pairing that has no layout of its own yet. */
+const canSave = computed(
+  () =>
+    Boolean(firstPairing.value && firstLayouts.saved && firstLayouts.draft) &&
+    !firstLayouts.busy &&
+    (firstLayouts.dirty || !ownLayout.value),
+);
+
+/**
+ * Save (E45.4): the first pairing as a layout named after its faces. Its own layout is saved in
+ * place; any other is copied under the pairing's name, the copy opens with the panel's roles, and
+ * the file it came from keeps its saved content.
+ */
 async function save(): Promise<void> {
-  if (!firstLayouts.dirty || firstLayouts.busy) return;
+  const name = firstPairing.value;
+  const from = firstLayouts.saved?.id;
+  if (!canSave.value || !name || !from) return;
   status.value = null;
-  if (await firstLayouts.save()) status.value = () => t('studio.saved');
+  if (ownLayout.value) {
+    if (await firstLayouts.save()) status.value = () => t('studio.saved');
+    return;
+  }
+  const copy = await firstLayouts.saveAs(name);
+  if (!copy) return;
+  studio.copyScope(blockScope(FIRST_PANEL, from), blockScope(FIRST_PANEL, copy.id));
+  keepPairing(copy.id);
+  const saved = copy.layout.name;
+  status.value = () => t('studio.savedAs', { name: saved });
 }
 
 const canExport = computed(() => Boolean(face.value && firstLayouts.saved && !firstLayouts.dirty));
-async function exportPng(): Promise<void> {
+/** Export (E45.4): a PNG at 1x or 2x through the core, or a PDF through the print dialog. */
+async function exportAs(choice: ExportChoice): Promise<void> {
   if (!canExport.value || !face.value) return;
   status.value = null;
-  const path = await studio.exportPng(FIRST_PANEL, face.value.id);
+  if (choice === 'pdf') {
+    await studio.print(FIRST_PANEL);
+    return;
+  }
+  const path = await studio.exportPng(FIRST_PANEL, face.value.id, choice === 'png1' ? 1 : 2);
   if (path) status.value = () => t('studio.exported', { path });
   else if (studio.exported && 'error' in studio.exported) {
     const { error } = studio.exported;
@@ -313,20 +374,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <UiIcon name="rescan" />{{ t('studio.shuffle') }}
         </UiButton>
         <UiButton
-          :aria-disabled="!firstLayouts.dirty || firstLayouts.busy"
-          :title="t('studio.saveTitle')"
+          :aria-disabled="!canSave"
+          :title="
+            firstPairing ? t('studio.saveTitle', { name: firstPairing }) : t('studio.saveNoFont')
+          "
           @click="save"
         >
           {{ t('studio.save') }}
         </UiButton>
-        <UiButton
-          class="export"
-          :aria-disabled="!canExport"
+        <StudioExportMenu
+          :enabled="canExport"
           :title="firstLayouts.dirty ? t('studio.exportSaveFirst') : t('studio.exportTitle')"
-          @click="exportPng"
-        >
-          {{ t('studio.export') }}
-        </UiButton>
+          @pick="exportAs"
+        />
       </div>
     </header>
     <p class="status" :class="{ shown: message }" role="status" data-testid="studio-status">
@@ -340,8 +400,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :number="i + 1"
         :face="face"
         :layout-id="panel === FIRST_PANEL ? layoutId : undefined"
-        :closable="panel !== FIRST_PANEL"
-        :rail="panel === FIRST_PANEL"
+        :closable="comparing"
+        :tools="panel !== FIRST_PANEL"
+        rail
         @pick="pick"
         @close="closePanel(panel)"
         @browse="browseCatalogs"
@@ -408,17 +469,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   align-items: center;
   gap: var(--fm-space-2);
   margin-inline-start: auto;
-}
-.export {
-  padding: 0 var(--fm-space-3);
-  height: 32px;
-  border-radius: var(--fm-radius-md);
-  background-color: var(--fm-bar-bg);
-  color: var(--fm-bar-fg);
-  font-weight: 600;
-}
-.export:not(:disabled):hover {
-  color: var(--fm-bar-fg);
 }
 /* Always in the page, so a screen reader hears the next message; no room while empty. */
 .status {

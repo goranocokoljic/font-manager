@@ -18,8 +18,9 @@ use fm_api::export::{
     GlyphSvgRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat,
 };
 use fm_api::layout::{
-    BlockOverflow, DuplicateLayoutRequest, ExportLayoutPngRequest, LayoutFont, LayoutPreset,
-    LayoutRef, LayoutSurface, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    BlockOverflow, BlockRole, DuplicateLayoutRequest, ExportLayoutPngRequest, LayoutFont,
+    LayoutPreset, LayoutRef, LayoutSurface, RestoreLayoutRequest, RevertLayoutRequest,
+    SaveLayoutRequest,
 };
 use fm_api::library::{
     AddSourceRequest, DragFilesRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary,
@@ -2547,7 +2548,34 @@ fn a_layout_export_makes_the_core_checks_and_names_the_file() {
     };
     assert_eq!(
         api.export_layout_png(req("book", 2)).expect("export"),
-        "/mock/exports/book-ink-2x.png"
+        "/mock/exports/Inter-Inter-book.png"
+    );
+    // A context names its Headline and Body roles' families and the context (E45.4).
+    let magazine = api
+        .get_layout(LayoutRef {
+            id: "studio-magazine".into(),
+        })
+        .expect("magazine")
+        .layout;
+    let first = |role: BlockRole| {
+        let r = magazine
+            .roles
+            .iter()
+            .find(|r| r.role == role)
+            .expect("role");
+        r.blocks[0] as usize
+    };
+    let mut paired = req("studio-magazine", 1);
+    paired.block_fonts = vec![None; magazine.blocks.len()];
+    paired.block_fonts[first(BlockRole::Headline)] = Some(LayoutFont {
+        face: FaceId(7),
+        ..font.clone()
+    });
+    let headline = api.get_face(FaceId(7)).expect("face 7").face.family_name;
+    assert_ne!(headline, "Inter");
+    assert_eq!(
+        api.export_layout_png(paired).expect("export"),
+        format!("/mock/exports/{headline}-Inter-magazine.png")
     );
     let code = |r: ExportLayoutPngRequest| api.export_layout_png(r).unwrap_err().code;
     assert_eq!(code(req("book", 3)), ErrorCode::InvalidRequest);

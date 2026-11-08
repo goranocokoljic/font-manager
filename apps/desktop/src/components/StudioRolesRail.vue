@@ -102,7 +102,7 @@ const tryRole = computed<LayoutRole | null>(
 );
 /** The list of `tryRole`, once the store holds it. */
 const tryList = computed(() => {
-  const list = studio.tries;
+  const list = studio.triesOf(props.scope);
   const role = tryRole.value;
   return list && role && list.key === studio.roleKey(props.scope, role.role) ? list : null;
 });

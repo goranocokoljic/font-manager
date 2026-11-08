@@ -3334,16 +3334,19 @@ fn layout_png(layout: &str, face: FaceId, scale: u8) -> ExportLayoutPngRequest {
 #[test]
 fn a_layout_exports_to_a_png_in_the_export_folder() {
     let (lib, _, _) = Lib::scanned("api-layout-png");
-    let face = first_face(&lib, "Archivo").id;
+    let archivo = first_face(&lib, "Archivo");
+    let face = archivo.id;
     let path = lib
         .api
         .export_layout_png(layout_png("magazine", face, 2))
         .expect("export");
     let path = PathBuf::from(path);
     assert_eq!(path.parent(), Some(lib.paths.exports_dir().as_path()));
+    // `<Headline>-<Body>-<context>` (E45.4); a preset has no context, so its id.
+    let family = &archivo.family_name;
     assert_eq!(
         path.file_name().and_then(|n| n.to_str()),
-        Some("magazine-paper-2x.png")
+        Some(format!("{family}-{family}-magazine.png").as_str())
     );
     let image =
         crate::preview::png_decode::decode(&std::fs::read(&path).expect("file")).expect("a PNG");
@@ -3363,6 +3366,33 @@ fn a_layout_exports_to_a_png_in_the_export_folder() {
         .expect("export");
     assert_ne!(PathBuf::from(again), path);
     assert!(path.is_file());
+}
+
+#[test]
+fn a_context_export_is_named_after_its_headline_and_body_families() {
+    let (lib, _, _) = Lib::scanned("api-layout-png-name");
+    let asap = first_face(&lib, "Asap Sharp");
+    let archivo = first_face(&lib, "Archivo");
+    let id = crate::layout::store::context_id(fm_api::layout::StudioContext::WebHero);
+    let layout = lib
+        .api
+        .get_layout(fm_api::layout::LayoutRef { id: id.clone() })
+        .expect("web hero")
+        .layout;
+    let headline = layout
+        .roles
+        .iter()
+        .find(|r| r.role == fm_api::layout::BlockRole::Headline)
+        .expect("a headline role")
+        .blocks[0] as usize;
+    let mut req = layout_png(&id, archivo.id, 1);
+    req.block_fonts = vec![None; layout.blocks.len()];
+    req.block_fonts[headline] = Some(layout_png(&id, asap.id, 1).font);
+    let path = PathBuf::from(lib.api.export_layout_png(req).expect("export"));
+    assert_eq!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some(format!("{}-{}-web-hero.png", asap.family_name, archivo.family_name).as_str())
+    );
 }
 
 #[test]

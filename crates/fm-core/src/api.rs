@@ -1749,18 +1749,21 @@ impl LayoutService for CoreApi {
             .as_deref()
             .ok_or_else(|| not_available("Exporting layouts"))?;
         let (fonts, _) = preview::page::request_fonts(&req, saved.layout.blocks.len())?;
-        let located = {
+        let (located, offered) = {
             let index = self.lock();
-            fonts
+            let located = fonts
                 .iter()
                 .map(|font| index.face_file(font.face))
-                .collect::<FmResult<Vec<_>>>()?
+                .collect::<FmResult<Vec<_>>>()?;
+            let ids: Vec<FaceId> = fonts.iter().map(|font| font.face).collect();
+            (located, index.offered_faces(&ids)?)
         };
         let files: Vec<(&Path, u32)> = located
             .iter()
             .map(|f| (f.path.as_path(), f.collection_index))
             .collect();
-        let path = preview::page::export_layout(&saved, &req, &files, dir)?;
+        let families: Vec<&str> = offered.iter().map(|f| f.family.as_str()).collect();
+        let path = preview::page::export_layout(&saved, &req, &files, &families, dir)?;
         Ok(path.display().to_string())
     }
 }

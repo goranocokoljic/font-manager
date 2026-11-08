@@ -234,6 +234,40 @@ function textLayoutsSetup() {
     return after(await run(() => useClient().duplicateLayout({ id: s.id, name })), true);
   }
 
+  /**
+   * `name`, or the first of "`name` 2", "`name` 3"... that no listed layout has: names are
+   * unique, whatever their case.
+   */
+  function freeName(name: string): string {
+    const taken = new Set(entries.value.map((e) => e.name.toLowerCase()));
+    let free = name;
+    for (let n = 2; taken.has(free.toLowerCase()); n++) free = `${name} ${n}`;
+    return free;
+  }
+
+  /**
+   * Stores the draft as a new template file named `wanted`, or `wanted` with the first free
+   * number after it (`freeName`) (Pairing Studio's Save, E45.4): a copy
+   * of the open file, then the draft with that name saved into the copy (`saveLayout`), which
+   * opens. The file it came from keeps its saved content and loses the unsaved changes, which
+   * are in the copy now. When a call fails the open file and its draft stay as they were.
+   */
+  async function saveAs(wanted: string): Promise<SavedLayout | null> {
+    const s = saved.value;
+    const layout = draft.value;
+    if (!s || !layout) return null;
+    await loadList();
+    if (saved.value !== s) return null;
+    const name = freeName(wanted);
+    const copy = await run(() => useClient().duplicateLayout({ id: s.id, name }));
+    if (!copy || saved.value !== s) return null;
+    const named: Layout = { ...structuredClone(toRaw(layout)), name };
+    const stored = await run(() => useClient().saveLayout({ id: copy.id, layout: named }));
+    if (!stored || saved.value !== s) return null;
+    parked.delete(s.id);
+    return after(stored, true);
+  }
+
   /** Drops the unsaved changes: the draft becomes the saved file again. */
   async function revert(): Promise<SavedLayout | null> {
     const s = saved.value;
@@ -288,6 +322,7 @@ function textLayoutsSetup() {
     widthLocked,
     setWidthLock,
     save,
+    saveAs,
     duplicate,
     revert,
     resetToOriginal,

@@ -52,16 +52,20 @@ fn preset_of_id(id: &str) -> Option<LayoutPreset> {
     PRESETS.into_iter().find(|p| preset_id(*p) == id)
 }
 
-/// The template file id of a context ("studio-web-hero").
-pub fn context_id(c: StudioContext) -> String {
-    let slug = match c {
+/// A context in a file name ("web-hero"): its template file id and its exports (E45.4).
+pub fn context_slug(c: StudioContext) -> &'static str {
+    match c {
         StudioContext::Magazine => "magazine",
         StudioContext::WebHero => "web-hero",
         StudioContext::MobileUi => "mobile-ui",
         StudioContext::VideoTitle => "video-title",
         StudioContext::Poster => "poster",
-    };
-    format!("studio-{slug}")
+    }
+}
+
+/// The template file id of a context ("studio-web-hero").
+pub fn context_id(c: StudioContext) -> String {
+    format!("studio-{}", context_slug(c))
 }
 
 /// The context whose shipped file has this id.
