@@ -399,3 +399,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E44.1 #469] apps/desktop/e2e/selection.spec.ts:115 — Ctrl/Cmd-A is checked with no filter active, so the test cannot tell "the filtered set" from every family.
 - [E44.1 #469] apps/desktop/src/styles/theme.css:82 — in the dark theme the #141413 selection bar on #1c1c1e separates from the page only by its shadow.
+- [E44.4 #472] crates/fm-platform/src/pdf.rs:161 — pdf::file_url (lossy, no UNC) and fm_core::font_switch::file_url (byte-exact, UNC) are two diverging file:// encoders; E44.4 added a third (drag::file_uri).
