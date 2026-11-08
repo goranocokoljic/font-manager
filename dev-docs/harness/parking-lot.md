@@ -405,3 +405,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E45.1 #473] crates/fm-core/src/layout/store.rs:306 — `LayoutStore::seed` stops at the first `write_atomic` error, so one unwritable shipped file fails the whole list or open call.
 - [E45.1 #473] crates/fm-core/src/layout/store.rs:306 — a user file already named `studio-magazine.json` is kept but recorded as written in `.presets`, so the Magazine context is never seeded for that user.
 - [E45.1 #473] apps/desktop/src/components/ui/UiButton.vue — a pressed button (`aria-pressed='true'`) is marked only by a 16 % accent tint and a muted-to-fg text change, probably under 3:1.
+- [E45.2 #474] apps/desktop/src/views/StudioView.vue:110 — `pairingLoaded` keeps one key, so going to another context and back re-runs `loadPairing` and resets the fonts picked in the first context.
+- [E45.2 #474] apps/desktop/src/components/ui/UiSelect.vue — in remote mode, Enter pressed before the parent's search answers takes the previous list's active option.
+- [E45.2 #474] apps/desktop/src/components/FontLayout.vue:121 — FontLayout, CompareSheet and StudioRolesRail each keep their own `held` set over the face loader's acquire/release.
