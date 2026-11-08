@@ -356,6 +356,27 @@ function ruleOf(file: string, selector: string): string {
   return rule!.body;
 }
 
+// E45.1 (review A11Y-1): the Studio's context switch puts the chosen context on a chip of
+// surface-2 over a surface track. In dark both are #262628, so the chip needs a ring that
+// reaches 3:1 against the track in both themes.
+describe('the chosen Studio context', () => {
+  const SELECTOR = ".contexts :deep(.seg[aria-pressed='true'])";
+
+  it('is ringed with the control border', () => {
+    expect(ruleOf('views/StudioView.vue', SELECTOR)).toMatch(
+      /box-shadow:\s*0 0 0 1px var\(--fm-control-border\)/,
+    );
+  });
+
+  it.each([
+    ['light', light],
+    ['dark', dark],
+  ])('has a ring of at least 3:1 against the track and the chip in %s', (_, p) => {
+    for (const under of [p.surface!, p['surface-2']!])
+      expect(contrast(rgb(p['control-border']!), rgb(under))).toBeGreaterThanOrEqual(3);
+  });
+});
+
 const ACCENT_FILL = /(^|[\s;])background(-color)?:\s*var\(--fm-accent\)/;
 const TEXT_COLOR = /(^|[\s;])color:\s*([^;]+)/;
 

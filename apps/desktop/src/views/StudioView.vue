@@ -306,7 +306,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Board 5: a quiet track, the chosen context on a raised chip. */
+/* Board 5: a quiet track, the chosen context on a raised chip. The chip's colour is the
+   track's in dark, so a 1 px control-border ring marks the chosen context at 3:1 (WCAG 1.4.11). */
 .contexts {
   flex: none;
   border: 0;
@@ -319,7 +320,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .contexts :deep(.seg[aria-pressed='true']) {
   background-color: var(--fm-surface-2);
   color: var(--fm-fg);
-  box-shadow: var(--fm-shadow-1);
+  box-shadow:
+    0 0 0 1px var(--fm-control-border),
+    var(--fm-shadow-1);
 }
 .actions {
   display: flex;
