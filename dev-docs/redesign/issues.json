@@ -819,6 +819,131 @@
       "labels": [
         "redesign"
       ]
+    },
+    {
+      "id": "E48",
+      "title": "Compare — a sheet that grows to the room you need",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E41",
+        "E42",
+        "E44"
+      ],
+      "summary": "Board 7. Compare answers 'which of these?' and nothing else: a bottom sheet over the wall that drags from 40 % to full height, Stacked first, a two-up Grid instead of side by side, Overlay kept. One compare icon everywhere with two states (outline adds, filled removes). A clear base font: C and the family page start a new comparison, the card icon adds to the set, 'Only this' resets to one face. Under the set, alternatives: fonts similar to the base, set in the same text at half size, grouped by the reason they are similar; the pairing suggestions leave Compare for the Family page and the Studio, which own 'what goes with this?'. Toasts leave the action zone. Targets: dev-docs/design/redesign/7-compare-partial.png, 7-compare-full-grid.png, 7-compare-overlay.png.",
+      "labels": [
+        "redesign"
+      ],
+      "stories": [
+        {
+          "id": "E48.1",
+          "title": "Compare as a bottom sheet that resizes to full height",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E40.4"
+          ],
+          "criteria": [
+            "The Compare sheet is anchored to the bottom of the window and slides up over the wall (`UiDrawer` semantics, `fm-motion-base`, MOTION.md); the wall stays visible above it under a 28 % scrim; clicking the scrim or Escape closes it",
+            "A drag handle on the top edge resizes the sheet between 40 % and 100 % of the window height; double-clicking the handle or the maximize button toggles full height; at full height the radius and scrim go away and the sheet is the whole window — matches dev-docs/design/redesign/7-compare-partial.png and 7-compare-full-grid.png",
+            "The last height is remembered as a view preference (localStorage, the one allowed use) and restored when the sheet next opens; the specimen size in Auto scales with the sheet height (56 px at 40 %, 80 px at full)",
+            "The header is one row: title, '<n> of 4 · base <name>', layout switch, size switch, name field + Save, saved-comparisons button, maximize, close; nothing wraps at 1280 px wide",
+            "Keyboard: Tab cycles inside the sheet as today; focus returns to the row that opened it; the e2e spec covers open → drag → full → close"
+          ]
+        },
+        {
+          "id": "E48.2",
+          "title": "Layouts: Stacked first, Grid of two, Overlay kept",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E48.1"
+          ],
+          "criteria": [
+            "The layout switch offers Stacked · Grid · Overlay with icons, in that order; Stacked is the default for a new comparison",
+            "Grid lays the faces out two per row (2 faces = one row, 3–4 = 2×2); the Side by side layout is removed from the UI",
+            "No `fm-api` change: the `CompareMode` value `sideBySide` stays as the stored value for Grid, so saved comparisons reopen unchanged and old saves show as Grid; the UI label is Grid everywhere (en, de)",
+            "Overlay keeps its two colours and shared baseline; the legend names the two faces and their styles; the pick of the two faces when more than two are pinned stays"
+          ]
+        },
+        {
+          "id": "E48.3",
+          "title": "Similar to the base, in the same text, grouped by reason",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E48.1",
+            "E48.5"
+          ],
+          "criteria": [
+            "`PairingsPanel` is removed from the Compare sheet (pairing is answered on the Family page, E42.7, and in the Studio, E45.3); in its place a 'Similar to <base>' section lists alternatives from `findSimilar` for the base face (up to 8), best first",
+            "Every row is the comparison's own sample text set in that face at 0.5× the compare size (so the list continues the comparison: one text, one scale), with the family name and style under it in muted 12 px; no match percent anywhere",
+            "The section is visibly a second list, not more of the set: it sits on a full-width sunken paper band (`--fm-surface`), opens with a 15 px semibold title 'Similar to <base>' and a muted one-line hint, and its rows are white cards with a hairline ring — in Stacked layout the set and the list must never read as one continuous list",
+            "Rows are grouped under a small running header naming the shared reason ('Same designer · similar x-height'); a reason is never repeated row by row; a face already in the set shows the filled icon and is not listed twice",
+            "The compare icon (E48.4) on the right of a row adds the face to the set (filled once added, click again removes); a row's text is not clickable; with a full set the icon is disabled with the reason in its title",
+            "A new base (E48.5) reloads the section; loading, error and empty states keep their copy; reduced motion disables the row-to-face transition — matches the lower part of dev-docs/design/redesign/7-compare-partial.png"
+          ]
+        },
+        {
+          "id": "E48.4",
+          "title": "One compare icon, two states, everywhere",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E41.1",
+            "E44.1"
+          ],
+          "criteria": [
+            "`icons.ts` gains `compare` (two side-by-side rounded rectangles); outline = not in the set, filled in the accent = in the set; the same glyph is used on wall cards, list and table rows, the family page action, the selection bar, the suggestion cards and each face in the sheet",
+            "On a wall card the icon sits top-right, hidden at rest, shown on hover or focus-within, and always shown while the family is in the set; clicking toggles add/remove with the aria-label saying which (en, de)",
+            "In the sheet every face has, on hover or focus, 'Only this' (E48.5) and the filled icon as Remove; the text Remove button is gone; focus after a remove lands on the next face's icon as today",
+            "The selection bar's compare action reads 'Compare <n>' with the icon and adds the selection to the set (up to 4, the toast says how many were skipped)",
+            "Icon buttons are 28 px targets with a visible focus ring; `FontViews` and `SelectionBar` tests cover both states"
+          ]
+        },
+        {
+          "id": "E48.5",
+          "title": "Base font: start a new comparison, add to it, or keep only one",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E48.1"
+          ],
+          "criteria": [
+            "The compare store has a `base`: the first pin. The header and the suggestions name it; the base face shows a small '· base' tag in the accent",
+            "`compareFresh(face)` clears the set and makes `face` the base, opens the sheet; it is what `C` on the selected row, the family page's Compare action, and the command palette's Compare do — a new `C` while a set exists replaces it (fixes the stale-pins bug)",
+            "`pin(face)` (the card icon, the suggestion card icon, the selection bar) adds to the current set and never clears it; with an empty set it behaves as `compareFresh`",
+            "'Only this' on a face keeps that face alone and makes it the base; the suggestions reload for it; undo is one `C`-free step: the toast offers 'Undo' for 5 s and restores the set",
+            "Pins live in memory only and never survive a restart (as today, now a test); saved comparisons remain the way to keep one",
+            "`stores/compare.test.ts` covers fresh vs add vs only-this, including a set that already holds the face"
+          ]
+        },
+        {
+          "id": "E48.6",
+          "title": "Toasts out of the action zone",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E40.4"
+          ],
+          "criteria": [
+            "Toasts appear top-right under the toolbar (not bottom-centre), stack newest on top up to three, and have `pointer-events: none` so they never block a control underneath; the selection bar and the sheet's handle are never covered — matches the toast in dev-docs/design/redesign/7-compare-partial.png",
+            "A toast with an action (Undo in E48.5) is the one exception: only its button takes the pointer; the rest of the toast stays click-through",
+            "Enter and leave follow MOTION.md (fade + 8 px rise, `fm-motion-fast`), reduced motion fades only; `ToastMessage` test updated"
+          ]
+        },
+        {
+          "id": "E48.7",
+          "title": "Export the Compare board as target images",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "dev-docs/design/redesign/ gains 7-compare-partial.png (height = Partial, mode = Stacked, toast = on), 7-compare-full-grid.png (Full, Grid, toast off) and 7-compare-overlay.png (Full, Overlay, toast off), exported from board 7 of the concept canvas at 2× with the Export-state tweaks set as the README says; the README table and export date are updated"
+          ]
+        }
+      ]
     }
   ]
 }

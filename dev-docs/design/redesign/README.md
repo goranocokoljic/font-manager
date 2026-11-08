@@ -12,7 +12,7 @@ Boards 1, 2 and 3 have several states. Each state is a Tweak, so an export is re
 3. **Share › Export** the board as PNG at 2× and save it under the file name in the table.
 4. Put the files in this folder; fill in the export date at the bottom.
 
-Boards 4, 5 and 6 have one state each: export them as they are.
+Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks.
 
 ## The files
 
@@ -36,9 +36,12 @@ Boards 4, 5 and 6 have one state each: export them as they are.
 | `4-drag.png` | 4 · Select and drag | — | selection, ghost, drop target, selection bar | E44.1, E44.2 |
 | `5-studio.png` | 5 · Pairing Studio | — | toolbar, roles rail, paper | E45.1, E45.2, E45.3 |
 | `6-motion.png` | 6 · Motion spec | — | the motion table | E46 (and MOTION.md) |
+| `7-compare-partial.png` | 7 · Compare | height = Partial, mode = Stacked, toast = on | sheet at 40 %, wall and toast behind, stacked faces, the similar band in the same text grouped by reason | E48.1, E48.3, E48.4, E48.6 |
+| `7-compare-full-grid.png` | 7 | height = Full, mode = Grid, toast = off | the sheet as the whole window, two faces per row | E48.1, E48.2 |
+| `7-compare-overlay.png` | 7 | height = Full, mode = Overlay, toast = off | two faces on one baseline | E48.2 |
 
 A UI story is reviewed against its image, not against the previous screenshot. The boards show
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-03 (18 of 18).
+Export date: 2026-11-03 (18 of 18); board 7's three images (E48.7) still to export.
