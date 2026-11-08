@@ -1,0 +1,19 @@
+{
+  "id": "a-test-of-an-action-on-dragged-or-picked-items-must-use-item",
+  "title": "A test of an action on dragged or picked items must use items that differ from the selection",
+  "category": "testing",
+  "rule": "When an action works on the items a gesture carries (a drop, a context-menu target, a hovered row) and the app also has a selection, test it with an item outside the selection, so the carried set and the selection differ, and assert the exact ids the action received (a URL, a call argument), not only a pattern. Dragging a selected item carries the whole selection, so a test that does only that still passes when the action reads the selection instead. Check that the mutation 'use the selection' fails the test.",
+  "rationale": "E44.2 (#470): the Studio-drop e2e test dragged a selected card and matched only `face=<id>&headline=<id>` as a pattern, so a drop that opened the selection instead of the dropped fonts would have passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    470
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-11-08T01:58:17.964Z",
+  "last_seen": "2026-11-08T01:58:17.964Z"
+}

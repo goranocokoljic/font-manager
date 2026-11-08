@@ -607,6 +607,67 @@ fn a_family_lists_the_manual_and_smart_collections_that_hold_it() {
 }
 
 #[test]
+fn drop_counts_come_from_the_index_and_match_the_drop() {
+    let (lib, _, _) = Lib::scanned("api-drop-counts");
+    let family = lib
+        .api
+        .list_families(ListFamiliesRequest::default())
+        .expect("families")
+        .items
+        .into_iter()
+        .find(|f| f.style_count > 1)
+        .expect("a family with several faces");
+    let faces: Vec<_> = lib
+        .api
+        .get_family(family.id)
+        .expect("family")
+        .faces
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    let picks = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Picks".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+            color: None,
+        })
+        .expect("manual");
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: picks.id,
+            faces: vec![faces[0]],
+            families: Vec::new(),
+        })
+        .expect("added");
+    let counts = lib
+        .api
+        .drop_counts(SelectionTagsRequest {
+            faces: Vec::new(),
+            families: vec![family.id],
+        })
+        .expect("counts");
+    let c = counts
+        .collections
+        .iter()
+        .find(|c| c.collection == picks.id)
+        .expect("listed");
+    assert_eq!((c.before, c.after), (1, faces.len() as u32));
+    let after = lib
+        .api
+        .add_to_collection(CollectionFacesRequest {
+            collection: picks.id,
+            faces: Vec::new(),
+            families: vec![family.id],
+        })
+        .expect("dropped")
+        .face_count;
+    assert_eq!(c.after, after, "the preview is what the drop does");
+}
+
+#[test]
 fn a_family_counts_its_files_once_and_sums_their_sizes() {
     let (lib, _, _) = Lib::scanned("api-family-files");
     let archivo = lib

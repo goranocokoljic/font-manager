@@ -471,6 +471,19 @@ export type Collection = {
 	color?: string | null,
 };
 
+/**  One collection of a [`DropCounts`]. */
+export type CollectionDropCount = {
+	/**  The collection. */
+	collection: CollectionId,
+	/**  Its face count now, as [`Collection::face_count`] gives it. */
+	before: number,
+	/**
+	 *  Its face count after the drop: the faces the library shows that it
+	 *  does not hold yet are added; a face it holds counts once.
+	 */
+	after: number,
+};
+
 /**  Add faces to, or remove them from, a manual collection. */
 export type CollectionFacesRequest = {
 	/**  The collection; a smart one is `InvalidRequest`. */
@@ -868,6 +881,27 @@ export type DownloadFamilyResponse = {
 	 *  call instead.
 	 */
 	error?: ApiError | null,
+};
+
+/**
+ *  What a drop of the fonts a drag names would do to every manual
+ *  collection and every tag (E44.2): its face count now and after the drop.
+ *  The sidebar shows the pair as "31 → 34" while a drag is over the target.
+ */
+export type DropCounts = {
+	/**
+	 *  Every face the drag names, each once: the faces first, then the
+	 *  faces of each family.
+	 */
+	faces: FaceId[],
+	/**
+	 *  Every manual collection, in [`OrganizationService::list_collections`]
+	 *  order. A smart collection fills itself, so it is not a drop target
+	 *  and is left out.
+	 */
+	collections: CollectionDropCount[],
+	/**  Every tag, A to Z. */
+	tags: TagDropCount[],
 };
 
 /**  One file of a duplicate group. */
@@ -3361,6 +3395,19 @@ export type Tag = {
 	name: string,
 	/**  Faces carrying it. */
 	faceCount: number,
+};
+
+/**  One tag of a [`DropCounts`]. */
+export type TagDropCount = {
+	/**  The tag. */
+	tag: TagId,
+	/**  Its face count now, as [`Tag::face_count`] gives it. */
+	before: number,
+	/**
+	 *  Its face count after the drop: the faces the library shows that do
+	 *  not carry it yet are added.
+	 */
+	after: number,
 };
 
 /**  Attach tags to faces; tags that do not exist yet are created. */

@@ -132,6 +132,7 @@ routes! {
     tag_faces(req),
     untag_faces(req),
     selection_tags(req),
+    drop_counts(req),
     update_user_meta(req),
     list_sets(),
     create_set(req),

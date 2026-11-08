@@ -13,15 +13,20 @@ import UiPopover from './ui/UiPopover.vue';
 // "Export license inventory…" for the open one (a row button too). The row
 // buttons show on the open collection and under keyboard focus. "New smart" and a
 // smart collection's "Edit rules" open the rule editor (E14.1).
+// While fonts are dragged (E44.2), the row under the pointer shows the accent ring and its
+// count now and after the drop ("31 → 34"); the drop flies the ghost into it and the count
+// crossfades to the new one. A smart collection is no drop target and says why.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { COLLECTION_COLORS, collectionColorVar } from '../api/collectionColors';
 import type { CollectionId } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
 import { useFolded } from './useFolded';
 import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
+import { FmFade } from '../motion';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
+import { useFontDragStore, type DropTarget } from '../stores/fontDrag';
 import { useFontListStore } from '../stores/fontList';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useRuleEditorStore } from '../stores/ruleEditor';
@@ -39,6 +44,13 @@ const listShown = computed(() => !quick.open && catalogs.open === null);
 const fontList = useFontListStore();
 const commands = useCommandsStore();
 const ruleEditor = useRuleEditorStore();
+const fontDrag = useFontDragStore();
+/** The smart collection a font drag is over: it says why it takes no fonts. */
+const refused = ref<CollectionId | null>(null);
+const dropTarget = (row: CollectionRow): DropTarget => ({
+  kind: 'collection',
+  id: row.collection.id,
+});
 onMounted(() => void store.refresh());
 
 /** A name being typed: for a new collection (under `parent`) or a rename (`id`). */
@@ -110,10 +122,16 @@ function onDragStart(row: CollectionRow, e: DragEvent): void {
 
 function onDragOver(row: CollectionRow, e: DragEvent): void {
   if (isFontDrag(e)) {
-    if (row.collection.rules) return; // a smart collection fills itself
+    if (row.collection.rules) {
+      // A smart collection fills itself: no drop, and the row says why.
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+      refused.value = row.collection.id;
+      return;
+    }
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     target.value = { id: row.collection.id, zone: 'inside' };
+    fontDrag.enter(dropTarget(row));
   } else if (dragged.value != null && dragged.value !== row.collection.id) {
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -121,13 +139,22 @@ function onDragOver(row: CollectionRow, e: DragEvent): void {
   }
 }
 
+function onDragLeave(row: CollectionRow): void {
+  target.value = null;
+  refused.value = null;
+  fontDrag.leave(dropTarget(row));
+}
+
 function onDrop(row: CollectionRow, e: DragEvent): void {
   e.preventDefault();
   const zone = target.value?.zone ?? 'inside';
   target.value = null;
+  refused.value = null;
   const fonts = readFontDrop(e);
   if (fonts) {
-    void store.add(row.collection.id, fonts);
+    if (row.collection.rules) return;
+    if (fontDrag.land(e.currentTarget as Element | null, e))
+      void store.add(row.collection.id, fonts);
     return;
   }
   const id = dragged.value;
@@ -147,6 +174,27 @@ function onDrop(row: CollectionRow, e: DragEvent): void {
 function onDragEnd(): void {
   dragged.value = null;
   target.value = null;
+}
+// Any drag that ends (dropped elsewhere, cancelled) takes the smart row's note with it.
+watch(
+  () => fontDrag.active,
+  (on) => {
+    if (!on) refused.value = null;
+  },
+);
+
+/** The count a row shows: "31 → 34" while a font drag is over it, else its face count. */
+function countText(row: CollectionRow): string {
+  const c = fontDrag.isTarget(dropTarget(row)) ? fontDrag.countOf(dropTarget(row)) : null;
+  return c
+    ? t('drag.count', { before: formatNumber(c.before), after: formatNumber(c.after) })
+    : formatNumber(row.collection.faceCount);
+}
+function countAria(row: CollectionRow): string {
+  const c = fontDrag.isTarget(dropTarget(row)) ? fontDrag.countOf(dropTarget(row)) : null;
+  return c
+    ? t('drag.countLabel', { before: countLabel(c.before), after: countLabel(c.after) })
+    : countLabel(row.collection.faceCount);
 }
 
 /** The selected rows of the list, or the cursor row when nothing is selected. */
@@ -329,7 +377,10 @@ const { folded, toggle } = useFolded('collections');
       <template v-for="row in store.rows" :key="row.collection.id">
         <li
           class="item"
-          :class="{ [`drop-${target?.zone}`]: target?.id === row.collection.id }"
+          :class="{
+            [`drop-${target?.zone}`]: target?.id === row.collection.id,
+            refused: refused === row.collection.id,
+          }"
           :style="{ paddingInlineStart: `${row.depth * 14}px` }"
           :data-collection="row.collection.id"
           :data-depth="row.depth"
@@ -337,7 +388,7 @@ const { folded, toggle } = useFolded('collections');
           draggable="true"
           @dragstart="onDragStart(row, $event)"
           @dragover="onDragOver(row, $event)"
-          @dragleave="target = null"
+          @dragleave="onDragLeave(row)"
           @drop="onDrop(row, $event)"
           @dragend="onDragEnd"
         >
@@ -388,9 +439,16 @@ const { folded, toggle } = useFolded('collections');
             >
               {{ row.collection.name }}
             </button>
-            <span class="side-count count" :aria-label="countLabel(row.collection.faceCount)">{{
-              formatNumber(row.collection.faceCount)
-            }}</span>
+            <FmFade speed="fast" mode="out-in">
+              <span
+                :key="countText(row)"
+                class="side-count count"
+                :class="{ preview: fontDrag.isTarget(dropTarget(row)) }"
+                data-testid="collection-count"
+                :aria-label="countAria(row)"
+                >{{ countText(row) }}</span
+              >
+            </FmFade>
             <span class="side-actions">
               <UiIconButton
                 class="more"
@@ -402,6 +460,13 @@ const { folded, toggle } = useFolded('collections');
               />
             </span>
           </div>
+          <span
+            v-if="refused === row.collection.id"
+            class="refused-why"
+            role="tooltip"
+            data-testid="collection-refused"
+            >{{ t('drag.smartRefused') }}</span
+          >
         </li>
         <li
           v-if="editing && editing.id == null && editing.parent === row.collection.id"
@@ -537,6 +602,28 @@ const { folded, toggle } = useFolded('collections');
 }
 .drop-inside {
   outline: 2px solid var(--fm-accent);
+}
+.refused {
+  position: relative;
+}
+/* Why a smart collection takes no fonts: a note under its row while a drag is over it. */
+.refused-why {
+  position: absolute;
+  top: 100%;
+  inset-inline: var(--fm-space-2);
+  z-index: 3;
+  padding: var(--fm-space-1) var(--fm-space-2);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bar-bg);
+  box-shadow: var(--fm-shadow-2);
+  color: var(--fm-bar-fg);
+  font-size: var(--fm-text-sm);
+  pointer-events: none;
+}
+/* "31 → 34": the count a drop would give, in the row's text colour. */
+.count.preview {
+  color: var(--fm-fg);
+  font-weight: 600;
 }
 .drop-before {
   box-shadow: inset 0 2px 0 var(--fm-accent);

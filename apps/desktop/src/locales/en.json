@@ -1895,5 +1895,11 @@
       "search": "Type to filter",
       "noMatches": "No matches"
     }
+  },
+  "drag": {
+    "more": { "one": "+ {count} more", "other": "+ {count} more" },
+    "count": "{before} → {after}",
+    "countLabel": "{before}, {after} after the drop",
+    "smartRefused": "A smart collection fills itself from its rules, so fonts cannot be dropped on it."
   }
 }

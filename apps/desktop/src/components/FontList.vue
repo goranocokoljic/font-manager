@@ -33,6 +33,7 @@ import { useActivationStore } from '../stores/activation';
 import { useCompareStore } from '../stores/compare';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useFontListStore } from '../stores/fontList';
+import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
@@ -66,6 +67,7 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const fontSwitch = useFontSwitchStore();
+const fontDrag = useFontDragStore();
 const library = useLibraryStore();
 const catalogs = useCatalogsStore();
 
@@ -292,6 +294,7 @@ function onToggle(row: ListRow): void {
         :class="{
           face: item.row.kind === 'face',
           selected: list.isSelected(item.row.key),
+          origin: fontDrag.isOrigin(item.row.key),
           cursor: item.id === activeId,
         }"
         role="treeitem"
@@ -548,5 +551,9 @@ function onToggle(row: ListRow): void {
 .quick-mark {
   color: var(--fm-fg);
   font-size: var(--fm-text-xs);
+}
+/* A dragged row stays in place, faded, while its ghost travels (E44.2). */
+.slot.origin {
+  opacity: 0.35;
 }
 </style>

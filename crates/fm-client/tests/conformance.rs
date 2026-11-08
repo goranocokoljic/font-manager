@@ -143,6 +143,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; tag_faces, json!({ "faces": [1], "tags": ["http"] }));
     same!(seen, d, c; untag_faces, json!({ "faces": [1], "tags": [1] }));
     same!(seen, d, c; selection_tags, json!({ "faces": [1] }));
+    same!(seen, d, c; drop_counts, json!({ "faces": [1] }));
     same!(seen, d, c; update_user_meta, json!({ "faces": [1], "favorite": true }));
     same!(seen, d, c; list_sets);
     same!(seen, d, c; create_set, json!({ "name": "Set", "faces": [1] }));

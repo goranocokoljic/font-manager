@@ -68,6 +68,7 @@ import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow, type RowKey } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
+import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { usePalettesStore } from '../stores/palettes';
@@ -109,6 +110,7 @@ const FALLBACK_WIDTH = 800;
 
 const list = useFontListStore();
 const fontSwitch = useFontSwitchStore();
+const fontDrag = useFontDragStore();
 const library = useLibraryStore();
 const thumbnails = useThumbnailsStore();
 const palettes = usePalettesStore();
@@ -638,6 +640,7 @@ function onToggle(row: ListRow): void {
         :class="{
           face: item.row.kind === 'face',
           selected: list.isSelected(item.row.key),
+          origin: fontDrag.isOrigin(item.row.key),
           cursor: item.id === activeId,
         }"
         role="option"
@@ -684,6 +687,7 @@ function onToggle(row: ListRow): void {
           <span
             v-if="item.row.kind === 'family' && !item.row.single"
             class="twisty fm-directional"
+            data-ghost="hide"
             :class="{ open: item.row.expanded }"
             aria-hidden="true"
             @click.stop="onToggle(item.row)"
@@ -694,10 +698,15 @@ function onToggle(row: ListRow): void {
               <ActivationDot :state="rowActivation(item.row)" />
               <bdi class="name" data-family-name>{{ item.name }}</bdi>
             </span>
-            <span v-if="item.face?.isVariable" class="detail" data-testid="card-variable">
+            <span
+              v-if="item.face?.isVariable"
+              class="detail"
+              data-testid="card-variable"
+              data-ghost="hide"
+            >
               <span class="count">{{ t('list.variable') }}</span>
             </span>
-            <span v-else-if="item.row.kind === 'family'" class="detail">
+            <span v-else-if="item.row.kind === 'family'" class="detail" data-ghost="hide">
               <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
               <span
                 v-if="item.row.family.weightRange"
@@ -911,5 +920,9 @@ function onToggle(row: ListRow): void {
 .note {
   color: var(--fm-warning);
   font-size: var(--fm-text-xs);
+}
+/* A dragged row stays in place, faded, while its ghost travels (E44.2). */
+.slot.origin {
+  opacity: 0.35;
 }
 </style>
