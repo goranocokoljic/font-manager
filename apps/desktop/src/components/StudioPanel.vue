@@ -12,14 +12,21 @@
 // The first panel has no bar of its own (E45.1): the Studio's one toolbar picks its context,
 // saves and exports it, and the command palette prints it. Its heading stays for screen
 // readers. The compared panel keeps its bar: layout, file actions, Print and Close.
+//
+// With `rail` and a layout that has roles (a context, E45.2), the roles rail sits left of the
+// page: a card per role with its font picker and lock, in place of a picker beside each block.
+// The page's blocks show their role only on hover; a click (or the focus) selects a block, its
+// card in the rail gets the ring and scrolls into view. A layout without roles keeps the
+// per-block pickers (E24.2).
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
-import { blockScope, layoutsOf, useStudioStore } from '../stores/studio';
+import { blockScope, layoutsOf, roleOf, useStudioStore } from '../stores/studio';
 import { LAYOUT_PRESETS, PRESET_LABELS } from '../stores/views';
 import BlockFontPicker from './BlockFontPicker.vue';
 import FontLayout from './FontLayout.vue';
 import LayoutActions from './LayoutActions.vue';
+import StudioRolesRail from './StudioRolesRail.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 
@@ -34,6 +41,8 @@ const props = defineProps<{
   layoutId?: string;
   /** Whether the panel has a "Close panel" button. */
   closable: boolean;
+  /** Whether the panel shows the roles rail for a layout with roles (E45.2). */
+  rail?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -92,6 +101,37 @@ const blockFaces = computed(() =>
   (layouts.draft?.blocks ?? []).map((_, i) => studio.faceOf(scope.value, i)),
 );
 
+/** The layout's roles, when the panel shows them in the rail. */
+const roles = computed(() => (props.rail ? (layouts.draft?.roles ?? []) : []));
+const hasRail = computed(() => roles.value.length > 0 && scope.value !== null);
+/** Each block's role name, the mark it shows in the margin on hover and while selected. */
+const roleMarks = computed(() =>
+  hasRail.value
+    ? (layouts.draft?.blocks ?? []).map((_, i) => {
+        const r = roleOf(roles.value, i);
+        return r ? t(`studio.role.${r.role}`) : null;
+      })
+    : undefined,
+);
+
+/** The selected block; another layout starts with none. */
+const selectedBlock = ref<number | null>(null);
+watch(
+  () => layouts.saved?.id,
+  () => (selectedBlock.value = null),
+);
+const selectedRole = computed(() =>
+  selectedBlock.value === null ? null : (roleOf(roles.value, selectedBlock.value)?.role ?? null),
+);
+const railRef = ref<InstanceType<typeof StudioRolesRail> | null>(null);
+
+/** A block was clicked or focused: it is the selected one, and its card comes into view. */
+function select(index: number): void {
+  selectedBlock.value = index;
+  const role = roleOf(roles.value, index);
+  if (role) railRef.value?.reveal(role.role);
+}
+
 const printing = computed(() => studio.printPanel === props.panel);
 const printError = computed(() =>
   studio.printError?.panel === props.panel ? studio.printError.error : null,
@@ -136,27 +176,40 @@ onMounted(() => {
       />
     </header>
     <p v-if="printError" class="error fm-no-print" role="alert">{{ printError.message }}</p>
-    <FontLayout
-      :layout="layouts.draft"
-      :face="face"
-      editable
-      :bounds="layouts.bounds"
-      :set-props="layouts.setBlockProps"
-      :width="layouts.width"
-      :set-width-lock="layouts.setWidthLock"
-      bare
-      :block-faces="blockFaces"
-      @edit-text="layouts.setBlockText"
-    >
-      <template v-if="scope" #block-tools="{ index, label: blockLabel }">
-        <BlockFontPicker
-          :layout-id="scope"
-          :index="index"
-          :label="blockLabel"
-          :face="blockFaces[index] ?? null"
-        />
-      </template>
-    </FontLayout>
+    <div class="body">
+      <StudioRolesRail
+        v-if="hasRail && layouts.draft && scope"
+        ref="railRef"
+        :scope="scope"
+        :layout="layouts.draft"
+        :face="face"
+        :selected="selectedRole"
+      />
+      <FontLayout
+        :layout="layouts.draft"
+        :face="face"
+        editable
+        :bounds="layouts.bounds"
+        :set-props="layouts.setBlockProps"
+        :width="layouts.width"
+        :set-width-lock="layouts.setWidthLock"
+        bare
+        :block-faces="blockFaces"
+        :role-marks="roleMarks"
+        :selected="hasRail ? selectedBlock : undefined"
+        @edit-text="layouts.setBlockText"
+        @select="select"
+      >
+        <template v-if="scope && !hasRail" #block-tools="{ index, label: blockLabel }">
+          <BlockFontPicker
+            :layout-id="scope"
+            :index="index"
+            :label="blockLabel"
+            :face="blockFaces[index] ?? null"
+          />
+        </template>
+      </FontLayout>
+    </div>
   </section>
 </template>
 
@@ -166,6 +219,12 @@ onMounted(() => {
   flex: 1 1 0;
   flex-direction: column;
   min-width: 26rem;
+  min-height: 0;
+}
+/* The rail beside the page; the page takes the rest. */
+.body {
+  display: flex;
+  flex: 1;
   min-height: 0;
 }
 .panel + .panel {

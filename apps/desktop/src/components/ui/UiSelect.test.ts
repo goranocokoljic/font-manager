@@ -152,6 +152,43 @@ describe('UiSelect', () => {
     expect(menu()).toBeNull();
   });
 
+  it('remote: hands the typed text to the parent and shows its options unfiltered', async () => {
+    const few = [
+      { value: 'a', label: 'Alpha', fontFamily: '"fm-face-1", serif' },
+      { value: 'b', label: 'Beta', fontFamily: '"fm-face-2", serif' },
+    ];
+    const { w } = mountSelect({ modelValue: 'a', options: few, remote: true });
+    const button = w.get('button');
+    // Two options are a short list, but a remote picker always has the filter line.
+    await button.trigger('click');
+    await nextTick();
+    expect(w.emitted('search')).toEqual([['']]);
+    expect(document.body.querySelector('.filter')).not.toBeNull();
+    for (const key of ['z', 'q']) await button.trigger('keydown', { key });
+    await nextTick();
+    expect(w.emitted('search')).toEqual([[''], ['z'], ['zq']]);
+    // Nothing is filtered here: the parent's answer is what shows.
+    expect(options().map((o) => o.textContent?.trim())).toEqual(['Alpha', 'Beta']);
+    await w.setProps({ options: [{ value: 'c', label: 'Zq Sans', fontFamily: '"fm-face-3"' }] });
+    expect(options().map((o) => o.textContent?.trim())).toEqual(['Zq Sans']);
+    await button.trigger('keydown', { key: 'Enter' });
+    expect(w.emitted('update:modelValue')).toEqual([['c']]);
+  });
+
+  it('sets an option with a font family in it, in the menu and on the button', async () => {
+    const few = [
+      { value: 'a', label: 'Alpha', fontFamily: '"fm-face-1", serif' },
+      { value: 'b', label: 'Beta' },
+    ];
+    const { w } = mountSelect({ modelValue: 'a', options: few });
+    expect((w.get('.value').element as HTMLElement).style.fontFamily).toContain('fm-face-1');
+    await w.get('button').trigger('click');
+    await nextTick();
+    const labels = [...document.body.querySelectorAll<HTMLElement>('.option .label')];
+    expect(labels[0]!.style.fontFamily).toContain('fm-face-1');
+    expect(labels[1]!.style.fontFamily).toBe('');
+  });
+
   it('shows the placeholder while no option has the value', () => {
     const { w } = mountSelect({ modelValue: null, placeholder: 'Add…', fit: false });
     expect(w.get('.value').text()).toBe('Add…');

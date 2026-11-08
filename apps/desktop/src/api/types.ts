@@ -192,6 +192,33 @@ export type BlockRange = {
 	perPx: number | null,
 };
 
+/**
+ *  What a block does on the page (E45.2): the Pairing Studio's rail shows one
+ *  card per role, and a role's font sets every block that has the role. Each
+ *  context defines its own roles.
+ */
+export type BlockRole = 
+/**  The largest text: the headline of a page, a hero, a poster. */
+"headline" | 
+/**  The sentence under the headline (a standfirst or subhead). */
+"deck" | 
+/**  The running text. */
+"body" | 
+/**  Small print around the text: a kicker, a figure caption. */
+"caption" | 
+/**  The small line above a web hero's headline. */
+"eyebrow" | 
+/**  A call to action, set like a button's label. */
+"action" | 
+/**  A screen's large title. */
+"title" | 
+/**  Small supporting text at the end of a screen. */
+"footnote" | 
+/**  The line under a video title. */
+"subtitle" | 
+/**  The practical lines of a poster: when and where. */
+"details";
+
 /**  Pick fonts for a design brief. */
 export type BriefRequest = {
 	/**  The brief, in plain words ("a calm bilingual brand"). */
@@ -2096,6 +2123,11 @@ export type Layout = {
 	page?: LayoutPage | null,
 	/**  The Pairing Studio context this layout is, or started from (E45.1). */
 	context?: StudioContext | null,
+	/**
+	 *  The layout's roles in the order the Pairing Studio's rail lists them (E45.2);
+	 *  none for a layout without roles. A block is in at most one role.
+	 */
+	roles?: LayoutRole[],
 };
 
 /**
@@ -2180,6 +2212,14 @@ export type LayoutPreset =
 export type LayoutRef = {
 	/**  The template file's id. */
 	id: string,
+};
+
+/**  One role of a layout (E45.2) and the blocks that have it, by index. */
+export type LayoutRole = {
+	/**  The role. */
+	role: BlockRole,
+	/**  The indices of the blocks that have the role, in page order; never empty. */
+	blocks: number[],
 };
 
 /**  The colours a layout is exported on. */
@@ -3751,4 +3791,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 25, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 26, patch: 0 };

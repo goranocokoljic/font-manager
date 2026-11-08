@@ -45,6 +45,44 @@ pub enum StudioContext {
     Poster,
 }
 
+/// What a block does on the page (E45.2): the Pairing Studio's rail shows one
+/// card per role, and a role's font sets every block that has the role. Each
+/// context defines its own roles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum BlockRole {
+    /// The largest text: the headline of a page, a hero, a poster.
+    Headline,
+    /// The sentence under the headline (a standfirst or subhead).
+    Deck,
+    /// The running text.
+    Body,
+    /// Small print around the text: a kicker, a figure caption.
+    Caption,
+    /// The small line above a web hero's headline.
+    Eyebrow,
+    /// A call to action, set like a button's label.
+    Action,
+    /// A screen's large title.
+    Title,
+    /// Small supporting text at the end of a screen.
+    Footnote,
+    /// The line under a video title.
+    Subtitle,
+    /// The practical lines of a poster: when and where.
+    Details,
+}
+
+/// One role of a layout (E45.2) and the blocks that have it, by index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutRole {
+    /// The role.
+    pub role: BlockRole,
+    /// The indices of the blocks that have the role, in page order; never empty.
+    pub blocks: Vec<u32>,
+}
+
 /// The page a layout is set on (E45.1): the text keeps the page's inner width and
 /// the page is shown at its real size.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -185,6 +223,10 @@ pub struct Layout {
     /// The Pairing Studio context this layout is, or started from (E45.1).
     #[serde(default)]
     pub context: Option<StudioContext>,
+    /// The layout's roles in the order the Pairing Studio's rail lists them (E45.2);
+    /// none for a layout without roles. A block is in at most one role.
+    #[serde(default)]
+    pub roles: Vec<LayoutRole>,
 }
 
 /// A layout's width is locked unless it says otherwise.

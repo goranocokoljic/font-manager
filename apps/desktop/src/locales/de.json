@@ -309,7 +309,10 @@
         "one": "{covered} von {count} Familie",
         "other": "{covered} von {count} Familien"
       },
-      "tail": { "one": "zeigt Ihren Text vollständig", "other": "zeigen Ihren Text vollständig" },
+      "tail": {
+        "one": "zeigt Ihren Text vollständig",
+        "other": "zeigen Ihren Text vollständig"
+      },
       "hide": {
         "one": "Die {count} mit fehlenden Zeichen ausblenden",
         "other": "Die {count} mit fehlenden Zeichen ausblenden"
@@ -846,7 +849,10 @@
       "one": "CSS für {count} eingeschaltetes kopieren",
       "other": "CSS für {count} eingeschaltete kopieren"
     },
-    "more": { "one": "{count} weiteres", "other": "{count} weitere" },
+    "more": {
+      "one": "{count} weiteres",
+      "other": "{count} weitere"
+    },
     "rare": "Seltene Features"
   },
   "palettes": {
@@ -970,8 +976,14 @@
     "chooseReceipt": "Beleg auswählen",
     "bar": {
       "label": "Auswahl",
-      "families": { "one": "{count} Familie", "other": "{count} Familien" },
-      "fonts": { "one": "{count} Schrift", "other": "{count} Schriften" },
+      "families": {
+        "one": "{count} Familie",
+        "other": "{count} Familien"
+      },
+      "fonts": {
+        "one": "{count} Schrift",
+        "other": "{count} Schriften"
+      },
       "activate": "Aktivieren",
       "deactivate": "Deaktivieren",
       "collection": "Sammlung",
@@ -1550,7 +1562,10 @@
       "no": "{what} ✗",
       "allowed": "{what}: erlaubt",
       "notAllowed": "{what}: nicht erlaubt",
-      "files": { "one": "{count} Datei", "other": "{count} Dateien" },
+      "files": {
+        "one": "{count} Datei",
+        "other": "{count} Dateien"
+      },
       "separator": ", "
     },
     "designer": "Designer",
@@ -1653,7 +1668,26 @@
     "exported": "Exportiert nach {path}",
     "printPage": "Die Studio-Seite drucken",
     "pageScale": "{page} · {scale} %",
-    "hint": "Zeige auf einen Block, um seine Steuerelemente zu sehen · klicke ihn an, um seinen Text zu bearbeiten · zieh seitwärts für die Größe, auf und ab für den Zeilenabstand"
+    "hint": "Zeige auf einen Block, um seine Rolle zu sehen · klicke ihn an, um ihn auszuwählen und in der Leiste zu bearbeiten · zieh seitwärts für die Größe, auf und ab für den Zeilenabstand · Eingabe bearbeitet den Text",
+    "roles": "Rollen",
+    "rolesNote": "Sperre, was dir gefällt, mische den Rest",
+    "role": {
+      "headline": "Überschrift",
+      "deck": "Vorspann",
+      "body": "Fließtext",
+      "caption": "Bildunterschrift",
+      "eyebrow": "Dachzeile",
+      "action": "Schaltfläche",
+      "title": "Titel",
+      "footnote": "Fußnote",
+      "subtitle": "Untertitel",
+      "details": "Details"
+    },
+    "roleFont": "Schrift für {role}",
+    "roleBlock": "{role}, {label}",
+    "lockRole": "{role} sperren",
+    "lockedTitle": "Gesperrt: Mischen lässt diese Rolle, wie sie ist",
+    "unlockedTitle": "Diese Rolle sperren, damit Mischen sie lässt, wie sie ist"
   },
   "conflicts": {
     "title": "Schriftkonflikte",
@@ -1934,7 +1968,10 @@
     }
   },
   "drag": {
-    "more": { "one": "+ {count} weitere", "other": "+ {count} weitere" },
+    "more": {
+      "one": "+ {count} weitere",
+      "other": "+ {count} weitere"
+    },
     "count": "{before} → {after}",
     "countLabel": "{before}, nach dem Ablegen {after}",
     "smartRefused": "Eine intelligente Sammlung füllt sich selbst nach ihren Regeln; Schriften lassen sich dort nicht ablegen."

@@ -11,7 +11,9 @@ use fm_api::layout::{
 pub mod context;
 pub mod store;
 
-pub use context::{CONTEXTS, clamp_page, context_layout, context_layouts, context_name};
+pub use context::{
+    CONTEXTS, clamp_page, clamp_roles, context_layout, context_layouts, context_name, context_roles,
+};
 
 /// The range of a block value and what a value that is not a number becomes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -239,6 +241,7 @@ pub fn preset(preset: LayoutPreset) -> Layout {
         width_px: None,
         page: None,
         context: None,
+        roles: Vec::new(),
     }
 }
 
@@ -292,9 +295,12 @@ pub fn bounds() -> LayoutBounds {
 }
 
 /// A layout with every block clamped, its locked width inside [`WIDTH_PX`]
-/// (a width that is not a number is dropped) and its page clamped ([`clamp_page`]).
+/// (a width that is not a number is dropped), its page clamped ([`clamp_page`])
+/// and its roles made consistent ([`clamp_roles`]).
 pub fn clamp_layout(layout: Layout) -> Layout {
+    let roles = clamp_roles(layout.roles, layout.context, layout.blocks.len());
     Layout {
+        roles,
         blocks: layout.blocks.into_iter().map(clamp_block).collect(),
         width_px: layout
             .width_px
@@ -545,6 +551,7 @@ mod tests {
             width_px: Some(640.0),
             page: None,
             context: None,
+            roles: Vec::new(),
         };
         let c = clamp_layout(l);
         assert!(!c.width_locked);
@@ -566,6 +573,7 @@ mod tests {
             width_px: None,
             page: None,
             context: None,
+            roles: Vec::new(),
         }
     }
 

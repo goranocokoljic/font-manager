@@ -82,6 +82,7 @@ import {
   type LicenseType,
   type Layout,
   type LayoutPage,
+  type LayoutRole,
   type StudioContext,
   type LayoutBounds,
   type LayoutEntry,
@@ -1612,7 +1613,7 @@ export const MOCK_LAYOUT_PRESETS: readonly Layout[] = (
       ),
     },
   ] as Layout[]
-).map((l) => ({ ...l, widthLocked: true, widthPx: null }));
+).map((l) => ({ ...l, widthLocked: true, widthPx: null, roles: [] }));
 
 const pageOf = (
   name: string,
@@ -1626,6 +1627,37 @@ const pageOf = (
 const PT_PER_PX = 0.75;
 const pxBlock = (text: string, px: number, leadingPx: number, more: Partial<TextBlock> = {}) =>
   layoutBlock(text, px * PT_PER_PX, leadingPx / px, more);
+
+/** `fm_core::layout::context_roles` (E45.2): each context's roles in rail order, with their blocks. */
+export const MOCK_CONTEXT_ROLES: Record<StudioContext, LayoutRole[]> = {
+  magazine: [
+    { role: 'headline', blocks: [1] },
+    { role: 'deck', blocks: [2] },
+    { role: 'body', blocks: [3] },
+    { role: 'caption', blocks: [0, 4] },
+  ],
+  webHero: [
+    { role: 'eyebrow', blocks: [0] },
+    { role: 'headline', blocks: [1] },
+    { role: 'body', blocks: [2] },
+    { role: 'action', blocks: [3] },
+  ],
+  mobileUi: [
+    { role: 'title', blocks: [0] },
+    { role: 'headline', blocks: [1] },
+    { role: 'body', blocks: [2] },
+    { role: 'footnote', blocks: [3] },
+  ],
+  videoTitle: [
+    { role: 'headline', blocks: [0] },
+    { role: 'subtitle', blocks: [1] },
+  ],
+  poster: [
+    { role: 'headline', blocks: [0] },
+    { role: 'deck', blocks: [1] },
+    { role: 'details', blocks: [2] },
+  ],
+};
 
 /**
  * The mock's copy of the core's Pairing Studio contexts (`fm_core::layout::context`, E45.1): the
@@ -1730,7 +1762,16 @@ export const MOCK_STUDIO_CONTEXTS: readonly { id: string; layout: Layout }[] = (
   ] as [string, StudioContext, string, LayoutPage, TextBlock[]][]
 ).map(([id, context, name, page, blocks]) => ({
   id,
-  layout: { preset: null, name, blocks, widthLocked: true, widthPx: null, page, context },
+  layout: {
+    preset: null,
+    name,
+    blocks,
+    widthLocked: true,
+    widthPx: null,
+    page,
+    context,
+    roles: MOCK_CONTEXT_ROLES[context],
+  },
 }));
 
 /** `fm_core::layout::clamp_page`: sides 100–20,000 px, a margin under half the smaller side. */
@@ -1749,6 +1790,24 @@ function mockClampPage(page: LayoutPage): LayoutPage {
       .filter((x): x is number => x !== null && Number.isFinite(x))
       .map((x) => Math.min(0.25, Math.max(0, x))),
   };
+}
+
+/**
+ * `fm_core::layout::clamp_roles`: a context layout without roles gets its context's; a block past
+ * the last one or already in a role, a role listed again and a role left empty are dropped.
+ */
+function mockClampRoles(layout: Layout): LayoutRole[] {
+  const given = layout.roles ?? [];
+  const roles = !given.length && layout.context ? MOCK_CONTEXT_ROLES[layout.context] : given;
+  const taken = new Set<number>();
+  const out: LayoutRole[] = [];
+  for (const r of roles) {
+    if (out.some((o) => o.role === r.role)) continue;
+    const blocks = r.blocks.filter((i) => i < layout.blocks.length && !taken.has(i));
+    blocks.forEach((i) => taken.add(i));
+    if (blocks.length) out.push({ role: r.role, blocks });
+  }
+  return out;
 }
 
 /** The ranges and steps of `fm_core::layout::bounds` (the fm-api mock has the same). */
@@ -1773,6 +1832,7 @@ export function mockClampLayout(layout: Layout, bounds: LayoutBounds = MOCK_LAYO
   const b = bounds;
   return {
     ...layout,
+    roles: mockClampRoles(layout),
     widthPx: mockWidthPx(layout.widthPx),
     ...(layout.page ? { page: mockClampPage(layout.page) } : {}),
     blocks: layout.blocks.map((x) => ({

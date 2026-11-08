@@ -7,7 +7,9 @@
 //! of type at `s * 0.75` pt. The web hero, the phone and the video frame are
 //! designed in pixels, so their sizes below say both.
 
-use fm_api::layout::{BlockAlign, Layout, LayoutPage, StudioContext, TextBlock};
+use fm_api::layout::{
+    BlockAlign, BlockRole, Layout, LayoutPage, LayoutRole, StudioContext, TextBlock,
+};
 
 use super::{BODY, HEADLINE, STANDFIRST, block};
 
@@ -193,7 +195,76 @@ pub fn context_layout(context: StudioContext) -> Layout {
         width_px: None,
         page: Some(context_page(context)),
         context: Some(context),
+        roles: context_roles(context),
     }
+}
+
+/// The roles of a context (E45.2), in the order the rail lists them, with the
+/// blocks of [`context_layout`] that have each one. The magazine's kicker and
+/// caption are both small print, so they share the Caption role.
+pub fn context_roles(context: StudioContext) -> Vec<LayoutRole> {
+    use BlockRole::*;
+    let roles: &[(BlockRole, &[u32])] = match context {
+        StudioContext::Magazine => &[
+            (Headline, &[1]),
+            (Deck, &[2]),
+            (Body, &[3]),
+            (Caption, &[0, 4]),
+        ],
+        StudioContext::WebHero => &[
+            (Eyebrow, &[0]),
+            (Headline, &[1]),
+            (Body, &[2]),
+            (Action, &[3]),
+        ],
+        StudioContext::MobileUi => &[
+            (Title, &[0]),
+            (Headline, &[1]),
+            (Body, &[2]),
+            (Footnote, &[3]),
+        ],
+        StudioContext::VideoTitle => &[(Headline, &[0]), (Subtitle, &[1])],
+        StudioContext::Poster => &[(Headline, &[0]), (Deck, &[1]), (Details, &[2])],
+    };
+    roles
+        .iter()
+        .map(|(role, blocks)| LayoutRole {
+            role: *role,
+            blocks: blocks.to_vec(),
+        })
+        .collect()
+}
+
+/// The roles of a layout with `block_count` blocks, made consistent: a block
+/// index past the last block, or one an earlier role already has, is dropped,
+/// and so is a role then left without blocks or listed a second time. A context
+/// layout saved before roles existed (no roles at all) gets its context's
+/// roles, so the Studio's rail is never empty for it.
+pub fn clamp_roles(
+    roles: Vec<LayoutRole>,
+    context: Option<StudioContext>,
+    block_count: usize,
+) -> Vec<LayoutRole> {
+    let roles = match (roles.is_empty(), context) {
+        (true, Some(c)) => context_roles(c),
+        _ => roles,
+    };
+    let mut taken = std::collections::HashSet::new();
+    let mut out: Vec<LayoutRole> = Vec::new();
+    for r in roles {
+        if out.iter().any(|o| o.role == r.role) {
+            continue;
+        }
+        let blocks: Vec<u32> = r
+            .blocks
+            .into_iter()
+            .filter(|&i| (i as usize) < block_count && taken.insert(i))
+            .collect();
+        if !blocks.is_empty() {
+            out.push(LayoutRole { blocks, ..r });
+        }
+    }
+    out
 }
 
 /// The five context layouts, in [`CONTEXTS`] order.
@@ -354,5 +425,96 @@ mod tests {
         });
         assert!(wide_margin.margin_px < 195.0, "{}", wide_margin.margin_px);
         assert_eq!(wide_margin.name, "390 \u{d7} 844");
+    }
+    #[test]
+    fn each_context_defines_its_own_roles_in_rail_order() {
+        use BlockRole::*;
+        let roles =
+            |c| -> Vec<BlockRole> { context_roles(c).into_iter().map(|r| r.role).collect() };
+        assert_eq!(
+            roles(StudioContext::Magazine),
+            [Headline, Deck, Body, Caption]
+        );
+        assert_eq!(
+            roles(StudioContext::WebHero),
+            [Eyebrow, Headline, Body, Action]
+        );
+        assert_eq!(
+            roles(StudioContext::MobileUi),
+            [Title, Headline, Body, Footnote]
+        );
+        assert_eq!(roles(StudioContext::VideoTitle), [Headline, Subtitle]);
+        assert_eq!(roles(StudioContext::Poster), [Headline, Deck, Details]);
+        // The magazine's kicker and caption are both small print.
+        assert_eq!(context_roles(StudioContext::Magazine)[3].blocks, [0, 4]);
+    }
+
+    #[test]
+    fn every_block_of_a_context_has_exactly_one_role() {
+        for layout in context_layouts() {
+            let mut blocks: Vec<u32> = layout.roles.iter().flat_map(|r| r.blocks.clone()).collect();
+            blocks.sort_unstable();
+            let all: Vec<u32> = (0..layout.blocks.len() as u32).collect();
+            assert_eq!(blocks, all, "{}", layout.name);
+            assert_eq!(
+                clamp_layout(layout.clone()).roles,
+                layout.roles,
+                "{}",
+                layout.name
+            );
+        }
+    }
+
+    #[test]
+    fn a_context_layout_saved_without_roles_gets_its_contexts_roles_back() {
+        let mut layout = context_layout(StudioContext::Magazine);
+        layout.roles.clear();
+        let json = serde_json::to_string(&layout)
+            .unwrap()
+            .replace(",\"roles\":[]", "");
+        assert!(!json.contains("roles"));
+        let read: Layout = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            clamp_layout(read).roles,
+            context_roles(StudioContext::Magazine)
+        );
+    }
+
+    #[test]
+    fn a_layout_without_a_context_has_no_roles_unless_it_names_them() {
+        assert!(clamp_roles(Vec::new(), None, 3).is_empty());
+        let own = vec![LayoutRole {
+            role: BlockRole::Body,
+            blocks: vec![2],
+        }];
+        assert_eq!(clamp_roles(own.clone(), None, 3), own);
+    }
+
+    #[test]
+    fn roles_are_made_consistent_with_the_blocks() {
+        use BlockRole::*;
+        let role = |role, blocks: &[u32]| LayoutRole {
+            role,
+            blocks: blocks.to_vec(),
+        };
+        let clamped = clamp_roles(
+            vec![
+                // Block 9 is past the last block.
+                role(Headline, &[0, 9]),
+                // Block 0 is the headline's already.
+                role(Body, &[0, 1]),
+                // Body again: dropped, its block stays free.
+                role(Body, &[2]),
+                // Nothing left: dropped.
+                role(Caption, &[0, 7]),
+                role(Deck, &[2]),
+            ],
+            Some(StudioContext::Magazine),
+            3,
+        );
+        assert_eq!(
+            clamped,
+            [role(Headline, &[0]), role(Body, &[1]), role(Deck, &[2])]
+        );
     }
 }

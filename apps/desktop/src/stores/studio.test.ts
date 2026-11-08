@@ -7,11 +7,13 @@ import {
   MAX_PANELS,
   STUDIO_RESULTS,
   blockScope,
+  blocksOf,
   headlineBlock,
   layoutsOf,
+  roleOf,
   useStudioStore,
 } from './studio';
-import type { TextBlock } from '../api/types';
+import type { LayoutRole, TextBlock } from '../api/types';
 import { useTextLayoutsStore } from './textLayouts';
 
 let client: ReturnType<typeof createMockClient>;
@@ -264,7 +266,7 @@ describe('studio pairings (E42.7)', () => {
     const studio = useStudioStore();
     await studio.setBlockFace('book', 0, mono.id);
     await studio.setBlockFace('book', 2, mono.id);
-    await studio.loadPairing('book', [block(12), block(36), block(10)], inter.id);
+    await studio.loadPairing('book', { blocks: [block(12), block(36), block(10)] }, inter.id, null);
     expect(studio.faceOf('book', 1)?.id).toBe(inter.id);
     expect(studio.faceOf('book', 0)).toBeNull();
     expect(studio.faceOf('book', 2)).toBeNull();
@@ -272,7 +274,7 @@ describe('studio pairings (E42.7)', () => {
 
   it('a layout without blocks loads nothing', async () => {
     const studio = useStudioStore();
-    await studio.loadPairing('book', [], inter.id);
+    await studio.loadPairing('book', { blocks: [] }, inter.id, null);
     expect(studio.blockFaces).toEqual({});
   });
 });
@@ -336,5 +338,86 @@ describe('the Studio toolbar (E45.1)', () => {
     const studio = useStudioStore();
     expect(await studio.exportPng(FIRST_PANEL, inter.id)).toBeNull();
     expect(exportPng).not.toHaveBeenCalled();
+  });
+});
+
+describe('the roles rail (E45.2)', () => {
+  const MAGAZINE: LayoutRole[] = [
+    { role: 'headline', blocks: [1] },
+    { role: 'deck', blocks: [2] },
+    { role: 'body', blocks: [3] },
+    { role: 'caption', blocks: [0, 4] },
+  ];
+  const magazine = {
+    blocks: [block(8), block(40), block(15), block(9.5), block(8)],
+    roles: MAGAZINE,
+  };
+
+  it('finds the role of a block and the blocks of a role', () => {
+    expect(roleOf(MAGAZINE, 4)?.role).toBe('caption');
+    expect(roleOf(MAGAZINE, 9)).toBeNull();
+    expect(blocksOf(magazine, 'caption')).toEqual([0, 4]);
+    expect(blocksOf(magazine, 'subtitle')).toEqual([]);
+    // Without roles, the headline is the largest block and there is no body.
+    expect(blocksOf({ blocks: magazine.blocks }, 'headline')).toEqual([1]);
+    expect(blocksOf({ blocks: magazine.blocks }, 'body')).toEqual([]);
+  });
+
+  it('a pairing fills the Headline and Body roles and puts the rest on the panel face', async () => {
+    const studio = useStudioStore();
+    await studio.setBlockFace('studio-magazine', 0, inter.id);
+    await studio.loadPairing('studio-magazine', magazine, inter.id, mono.id);
+    expect(studio.faceOf('studio-magazine', 1)?.id).toBe(inter.id);
+    expect(studio.faceOf('studio-magazine', 3)?.id).toBe(mono.id);
+    for (const i of [0, 2, 4]) expect(studio.faceOf('studio-magazine', i)).toBeNull();
+  });
+
+  it('a pairing without a body face fills the Headline alone', async () => {
+    const studio = useStudioStore();
+    await studio.loadPairing('studio-magazine', magazine, mono.id, null);
+    expect(studio.faceOf('studio-magazine', 1)?.id).toBe(mono.id);
+    expect(studio.faceOf('studio-magazine', 3)).toBeNull();
+  });
+
+  it('a role picker searches for its card alone and sets every block of the role', async () => {
+    const getFace = vi.spyOn(client, 'getFace');
+    const studio = useStudioStore();
+    await studio.searchRole('studio-magazine', 'caption', 'mono');
+    expect(studio.searchFor).toBe('studio-magazine@caption');
+    const hit = studio.results[0]!;
+    await studio.pickRoleFamily('studio-magazine', MAGAZINE[3]!, hit);
+    // One face lookup for the two blocks of the role.
+    expect(getFace).toHaveBeenCalledTimes(1);
+    expect(studio.faceOf('studio-magazine', 0)?.id).toBe(hit.faces[0]);
+    expect(studio.faceOf('studio-magazine', 4)?.id).toBe(hit.faces[0]);
+    expect(studio.roleFace('studio-magazine', MAGAZINE[3]!)?.id).toBe(hit.faces[0]);
+    expect(studio.faceOf('studio-magazine', 1)).toBeNull();
+  });
+
+  it('a later pick for one block of a role wins over the role pick still on its way', async () => {
+    const studio = useStudioStore();
+    const role = studio.setBlocksFace('studio-magazine', [0, 4], inter.id);
+    await studio.setBlockFace('studio-magazine', 4, mono.id);
+    await role;
+    expect(studio.faceOf('studio-magazine', 0)?.id).toBe(inter.id);
+    expect(studio.faceOf('studio-magazine', 4)?.id).toBe(mono.id);
+  });
+
+  it('locks a role per layout and panel, and a closed panel forgets its locks', () => {
+    const studio = useStudioStore();
+    expect(studio.isLocked('studio-magazine', 'headline')).toBe(false);
+    studio.toggleLock('studio-magazine', 'headline');
+    expect(studio.isLocked('studio-magazine', 'headline')).toBe(true);
+    expect(studio.isLocked('studio-magazine', 'body')).toBe(false);
+    expect(studio.isLocked('studio-poster', 'headline')).toBe(false);
+    expect(studio.isLocked(null, 'headline')).toBe(false);
+    const second = studio.addPanel(FIRST_PANEL)!;
+    const scope = blockScope(second, 'studio-magazine');
+    studio.toggleLock(scope, 'body');
+    expect(studio.isLocked(scope, 'body')).toBe(true);
+    studio.closePanel(second);
+    expect(studio.locks).toEqual({ 'studio-magazine@headline': true });
+    studio.toggleLock('studio-magazine', 'headline');
+    expect(studio.isLocked('studio-magazine', 'headline')).toBe(false);
   });
 });

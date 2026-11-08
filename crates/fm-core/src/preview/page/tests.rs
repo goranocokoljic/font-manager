@@ -93,6 +93,7 @@ fn layout_of(blocks: Vec<TextBlock>) -> Layout {
         width_px: Some(600.0),
         page: None,
         context: None,
+        roles: Vec::new(),
     }
 }
 
