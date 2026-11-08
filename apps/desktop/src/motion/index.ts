@@ -6,3 +6,4 @@ export { default as FmSlide } from './FmSlide.vue';
 export type { MotionSpeed } from './speed';
 export { useReducedMotion } from './useReducedMotion';
 export { withViewTransition } from './withViewTransition';
+export { crossfade } from './crossfade';

@@ -143,9 +143,12 @@ test('one toolbar: Back, title, pairing, the five contexts, Compare, Shuffle, Sa
     .locator('button, h1')
     .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top / 8)));
   expect(new Set(tops).size).toBe(1);
-  // Shuffle comes with the roles: it says so and does nothing yet.
-  await expect(barButton(page, 'Shuffle unlocked')).toHaveAttribute('aria-disabled', 'true');
-  await expect(barButton(page, 'Shuffle unlocked')).toHaveAttribute('title', /Not available yet/);
+  // Shuffle works on the roles (E45.3).
+  await expect(barButton(page, 'Shuffle unlocked')).toHaveAttribute('aria-disabled', 'false');
+  await expect(barButton(page, 'Shuffle unlocked')).toHaveAttribute(
+    'title',
+    /^Give every unlocked/,
+  );
 });
 
 const CONTEXTS = [
@@ -908,4 +911,144 @@ test('opening the Studio with two faces (a pairing card or a drop) fills Headlin
   await contextButton(page, 'Mobile UI').click();
   await expect(rolePicker(page, 'Headline')).toHaveText(headlineName);
   await expect(rolePicker(page, 'Body')).toHaveText(bodyName);
+});
+
+// ---- E45.3 shuffle and suggestions --------------------------------------------------------
+
+const ROLES = ['Headline', 'Deck', 'Body', 'Caption'] as const;
+const pickers = (page: Page) => Promise.all(ROLES.map((r) => rolePicker(page, r).textContent()));
+const tryList = (page: Page) => rail(page).getByTestId('studio-try');
+const candidates = (page: Page) => tryList(page).getByTestId('studio-try-candidate');
+const UNDO_HINT = /(Ctrl\+Z|⌘Z) takes it back\./;
+
+/** Opens the Studio on the Magazine context, with twenty sample families that pair with Inter. */
+async function openWithLibrary(page: Page) {
+  await open(page);
+  await page.goto('/?mockFaces=20#/studio?face=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  // Every crossfade the page starts, by its keyframes.
+  await page.evaluate(() => {
+    const w = window as unknown as { fades: string[] };
+    w.fades = [];
+    const real = Element.prototype.animate;
+    Element.prototype.animate = function (frames, options) {
+      w.fades.push(JSON.stringify(frames));
+      return real.call(this, frames, options);
+    };
+  });
+  return region;
+}
+const fades = (page: Page) =>
+  page.evaluate(() => (window as unknown as { fades: string[] }).fades.length);
+
+test('Shuffle unlocked keeps the locked role, gives the others the next face and crossfades', async ({
+  page,
+}) => {
+  const region = await openWithLibrary(page);
+  const shuffle = barButton(page, 'Shuffle unlocked');
+  await expect(shuffle).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(shuffle).toHaveAttribute('title', /pairs with the locked ones/);
+  await expect(rolePicker(page, 'Headline')).toHaveText('Inter');
+  await roleCard(page, 'Headline').getByRole('button', { name: 'Lock Headline' }).click();
+  const headlineFamily = await familyOf(blocks(region).nth(1));
+
+  await shuffle.click();
+  await expect(status(page)).toHaveText(new RegExp(`^Shuffled 3 roles\\. ${UNDO_HINT.source}`));
+  const first = await pickers(page);
+  expect(first[0]).toBe('Inter');
+  // Each unlocked role has a face of its own from the library, a different family each.
+  for (const name of first.slice(1)) expect(name).not.toBe('Inter');
+  expect(new Set(first.slice(1)).size).toBe(3);
+  expect(await familyOf(blocks(region).nth(1))).toBe(headlineFamily);
+  await expect.poll(() => familyOf(blocks(region).nth(3))).not.toBe(headlineFamily);
+  // The blocks crossfaded: a fade in and a fade out per changed block (Caption has two).
+  await expect.poll(() => fades(page)).toBe(8);
+  // The copies go when the fade ends: five blocks again.
+  await expect(blocks(region)).toHaveCount(5);
+
+  // The next press moves on to the next candidate of each role.
+  await shuffle.click();
+  await expect.poll(() => pickers(page).then((p) => p[2])).not.toBe(first[2]);
+  const second = await pickers(page);
+  expect(second[0]).toBe('Inter');
+  for (let i = 1; i < 4; i++) expect(second[i]).not.toBe(first[i]);
+
+  // Ctrl/Cmd-Z takes back one shuffle, then the one before.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(status(page)).toHaveText('Undone.');
+  expect(await pickers(page)).toEqual(first);
+  await page.keyboard.press('ControlOrMeta+z');
+  expect(await pickers(page)).toEqual(['Inter', 'Inter', 'Inter', 'Inter']);
+  await expect(pairing(page)).toHaveText('Inter + Inter');
+
+  // Every role locked: nothing to shuffle, and it says so.
+  for (const r of ROLES.slice(1))
+    await roleCard(page, r)
+      .getByRole('button', { name: `Lock ${r}` })
+      .click();
+  await shuffle.click();
+  await expect(status(page)).toHaveText('Every role is locked: unlock one to shuffle it.');
+});
+
+test('Try for <role>: three candidates with reasons; a click sets that role alone; Ctrl+Z undoes it', async ({
+  page,
+}) => {
+  const region = await openWithLibrary(page);
+  // No block selected: the first role.
+  await expect(tryList(page).getByRole('heading')).toHaveText('Try for Headline');
+  await blocks(region).nth(3).click();
+  await expect(tryList(page).getByRole('heading')).toHaveText('Try for Body');
+  await expect(candidates(page)).toHaveCount(3);
+  for (const c of await candidates(page).all()) {
+    await expect(c.getByTestId('studio-try-reasons')).not.toBeEmpty();
+    expect(
+      await c.locator('.family').evaluate((el) => (el as HTMLElement).style.fontFamily),
+    ).toMatch(/fm-face-\d+/);
+  }
+  const name = (await candidates(page).first().locator('.family').textContent())!.trim();
+  const reasons = (await candidates(page).first().getByTestId('studio-try-reasons').textContent())!;
+  await expect(candidates(page).first()).toHaveAccessibleName(
+    `Set Body in ${name}: ${reasons.split(' · ').join(', ')}`,
+  );
+  await candidates(page).first().click();
+  await expect(rolePicker(page, 'Body')).toHaveText(name);
+  expect(await pickers(page)).toEqual(['Inter', 'Inter', name, 'Inter']);
+  // The list moves on: the picked family is the one being replaced now.
+  await expect(candidates(page).filter({ hasText: name })).toHaveCount(0);
+  await expect.poll(() => fades(page)).toBe(2);
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(rolePicker(page, 'Body')).toHaveText('Inter');
+
+  // Typing in a field keeps Ctrl/Cmd-Z for the field: the shuffle is not undone.
+  await barButton(page, 'Shuffle unlocked').click();
+  await expect(status(page)).toHaveText(UNDO_HINT);
+  const shuffled = await pickers(page);
+  await blocks(region).nth(3).press('Enter');
+  const field = region.getByRole('textbox');
+  await expect(field).toBeFocused();
+  await page.keyboard.type('x');
+  await page.keyboard.press('ControlOrMeta+z');
+  expect(await pickers(page)).toEqual(shuffled);
+});
+
+test('with nothing in the library to pair, the Try list links to the catalogs', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?face=1');
+  const region = layout(studio(page), 'Magazine page');
+  await expect(region).toHaveAttribute('data-state', 'ready');
+  // Suggestions come from the library only: the mock library has nothing that pairs with Inter.
+  await barButton(page, 'Shuffle unlocked').click();
+  await expect(status(page)).toHaveText(
+    'Nothing else in your library pairs with the locked roles.',
+  );
+  const empty = tryList(page).getByTestId('studio-try-empty');
+  await expect(empty).toContainText('Nothing in your library pairs with this for Headline yet.');
+  await expect(candidates(page)).toHaveCount(0);
+  await empty.getByRole('button', { name: 'Browse catalogs' }).click();
+  await expect(studio(page)).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Google Fonts', level: 1 })).toBeVisible();
 });

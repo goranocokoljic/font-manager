@@ -69,6 +69,14 @@ your team, read [Shared libraries](shared-libraries.md).
   letters. The font you choose sets all blocks of that role. Under the font are the style,
   the size and the line height. The lock button locks the role, so **Shuffle unlocked**
   does not change it.
+- **Shuffle unlocked** gives each role that is not locked a new font from your library:
+  the next font that pairs with the locked roles (with no lock, with the page's font).
+  Each click goes on to the next font. The blocks fade to the new fonts. Press Ctrl+Z
+  (⌘Z on a Mac) to go back one shuffle.
+- Under the cards, **Try for** (the role of the selected block) shows three fonts from
+  your library that pair well, each with the reasons. Click one to set that role only.
+  Ctrl+Z (⌘Z) takes it back. When your library has no font to suggest, click **Browse
+  catalogs** to look for fonts online.
 - Point to a block on the page to see its role in the margin. Click the block to select
   it: its card in the rail gets a ring. Drag a block sideways for size, up and down for
   line height. Press Enter to edit its text.
