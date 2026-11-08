@@ -1,5 +1,11 @@
 import { prefersReducedMotion } from './useReducedMotion';
 
+/** Whether a page change animates through a view transition: the webview has them, and the OS
+ * does not ask for reduced motion. Otherwise withViewTransition just runs the change. */
+export function viewTransitionsRun(): boolean {
+  return typeof document.startViewTransition === 'function' && !prefersReducedMotion();
+}
+
 /**
  * Runs `fn`, which changes the page, inside a view transition when the webview has them.
  * Without them, or under reduced motion (the spec's "cut"), it just runs `fn`. Resolves when
@@ -11,7 +17,7 @@ export async function withViewTransition(
   fn: () => void | Promise<void>,
   finished?: () => void,
 ): Promise<void> {
-  if (typeof document.startViewTransition !== 'function' || prefersReducedMotion()) {
+  if (!viewTransitionsRun()) {
     try {
       await fn();
     } finally {
