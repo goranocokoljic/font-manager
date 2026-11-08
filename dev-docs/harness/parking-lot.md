@@ -408,3 +408,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E45.2 #474] apps/desktop/src/views/StudioView.vue:110 — `pairingLoaded` keeps one key, so going to another context and back re-runs `loadPairing` and resets the fonts picked in the first context.
 - [E45.2 #474] apps/desktop/src/components/ui/UiSelect.vue — in remote mode, Enter pressed before the parent's search answers takes the previous list's active option.
 - [E45.2 #474] apps/desktop/src/components/FontLayout.vue:121 — FontLayout, CompareSheet and StudioRolesRail each keep their own `held` set over the face loader's acquire/release.
+- [E45.3 #475] apps/desktop/src/styles/motion.test.ts:19 — the no-`.animate(` rule misses new `.ts` files on Windows (it passed locally with `.animate(` in a .ts), so only the macOS/Linux CI catches it.

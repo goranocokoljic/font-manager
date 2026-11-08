@@ -9,6 +9,8 @@ import type {
   FamilyHit,
   Layout,
   LayoutRole,
+  PairingRole,
+  PairingSuggestion,
   TextBlock,
 } from '../api/types';
 import {
@@ -67,6 +69,89 @@ export function blocksOf(layout: Pick<Layout, 'blocks' | 'roles'>, role: BlockRo
   if (role !== 'headline') return [];
   const index = headlineBlock(layout.blocks);
   return index === null ? [] : [index];
+}
+
+/** Candidates Shuffle (E45.3) asks for per role; it moves through them press by press. */
+export const SHUFFLE_POOL = 12;
+
+/** Candidates the rail's "Try for <role>" list shows (E45.3). */
+export const TRY_COUNT = 3;
+
+/** The most shuffles and Try picks Ctrl/Cmd-Z can take back, per layout. */
+export const UNDO_DEPTH = 20;
+
+/**
+ * The pairing role (ADR 0021) a block role asks `suggestPairings` for, by the size of its type:
+ * large type is a headline, running text is body, small type around it is a caption.
+ */
+export function pairingRoleOf(role: BlockRole): PairingRole {
+  switch (role) {
+    case 'headline':
+    case 'title':
+    case 'deck':
+    case 'subtitle':
+      return 'headline';
+    case 'body':
+      return 'body';
+    case 'caption':
+    case 'eyebrow':
+    case 'action':
+    case 'footnote':
+    case 'details':
+      return 'caption';
+  }
+}
+
+/**
+ * The face the suggestions for `role` must go with (E45.3): the face of the first locked role
+ * in the rail's order other than `role` itself, else the panel's face. `faceOf` answers a role's
+ * face (its own or the panel's); `locked` whether a role is locked.
+ */
+export function partnerOf(
+  roles: readonly LayoutRole[],
+  role: BlockRole,
+  faceOf: (r: LayoutRole) => FaceSummary | null,
+  locked: (r: BlockRole) => boolean,
+  panelFace: FaceSummary | null,
+): FaceSummary | null {
+  for (const r of roles) {
+    if (r.role === role || !locked(r.role)) continue;
+    const face = faceOf(r);
+    if (face) return face;
+  }
+  return panelFace;
+}
+
+/**
+ * The next candidate of `list` for a role (E45.3): the first whose family is not `current`, not
+ * in `shown` (what earlier shuffles gave the role) and not in `taken` (given to another role in
+ * the same shuffle). When every candidate was shown, the round starts over: `restart` is true
+ * and `shown` no longer counts. Null when nothing is left.
+ */
+export function nextCandidate(
+  list: readonly PairingSuggestion[],
+  current: number | null,
+  shown: ReadonlySet<number>,
+  taken: ReadonlySet<number>,
+): { suggestion: PairingSuggestion; restart: boolean } | null {
+  const free = list.filter((s) => s.face.family !== current && !taken.has(s.face.family));
+  const fresh = free.find((s) => !shown.has(s.face.family));
+  if (fresh) return { suggestion: fresh, restart: false };
+  return free[0] ? { suggestion: free[0], restart: true } : null;
+}
+
+/** What a shuffle did: how many roles it changed, or why it changed none. */
+export type ShuffleResult =
+  { changed: number } | { none: 'allLocked' | 'noFace' | 'noCandidates' | 'failed' | 'stale' };
+
+/** The "Try for <role>" list of one role (E45.3). */
+export interface TryList {
+  /** The role's card key (`scope@role`). */
+  key: string;
+  role: BlockRole;
+  suggestions: PairingSuggestion[];
+  loading: boolean;
+  error: ApiError | null;
 }
 
 /**
@@ -140,6 +225,14 @@ export const useStudioStore = defineStore('studio', () => {
     locks.value = Object.fromEntries(
       Object.entries(locks.value).filter(([k]) => !k.startsWith(prefix)),
     );
+    fades.value = Object.fromEntries(
+      Object.entries(fades.value).filter(([k]) => !k.startsWith(prefix)),
+    );
+    undoStacks.value = Object.fromEntries(
+      Object.entries(undoStacks.value).filter(([k]) => !k.startsWith(prefix)),
+    );
+    for (const k of [...shown.keys()]) if (k.startsWith(prefix)) shown.delete(k);
+    if (tries.value?.key.startsWith(prefix)) tries.value = null;
     if (searchFor.value?.startsWith(prefix)) searchFor.value = null;
     if (printPanel.value === panel) printPanel.value = null;
     if (printError.value?.panel === panel) printError.value = null;
@@ -240,6 +333,197 @@ export const useStudioStore = defineStore('studio', () => {
     } catch (e) {
       if (mine === searchRequest) error.value = e as ApiError;
     }
+  }
+
+  /**
+   * Crossfades by `layoutId#index` (E45.3): bumped when Shuffle, a Try pick or Undo sets a
+   * block's face, so the page crossfades that block; a picker's change just shows.
+   */
+  const fades = ref<Record<string, number>>({});
+
+  /** The crossfade count of block `index`; 0 when it never faded. */
+  function fadeOf(layoutId: string | null | undefined, index: number): number {
+    return layoutId ? (fades.value[key(layoutId, index)] ?? 0) : 0;
+  }
+
+  /**
+   * Sets the blocks of each entry in its face (null: the panel's) at once, with a crossfade, and
+   * drops any pick still on its way for them.
+   */
+  function applyFaces(
+    layoutId: string,
+    entries: readonly { blocks: readonly number[]; face: FaceSummary | null }[],
+  ): void {
+    const faces = { ...blockFaces.value };
+    const fading = { ...fades.value };
+    for (const { blocks, face } of entries) {
+      for (const i of blocks) {
+        const k = key(layoutId, i);
+        picks.set(k, (picks.get(k) ?? 0) + 1);
+        if (face) faces[k] = face;
+        else delete faces[k];
+        fading[k] = (fading[k] ?? 0) + 1;
+      }
+    }
+    blockFaces.value = faces;
+    fades.value = fading;
+  }
+
+  /** Undo stacks by layout scope: the role faces before each shuffle or Try pick, newest last. */
+  const undoStacks = ref<Record<string, { blocks: number[]; face: FaceSummary | null }[][]>>({});
+
+  /** Keeps the faces `roles` have now, so Ctrl/Cmd-Z can bring them back. */
+  function remember(scope: string, roles: readonly LayoutRole[]): void {
+    const step = roles.map((r) => ({ blocks: [...r.blocks], face: roleFace(scope, r) }));
+    const stack = [...(undoStacks.value[scope] ?? []), step].slice(-UNDO_DEPTH);
+    undoStacks.value = { ...undoStacks.value, [scope]: stack };
+  }
+
+  /** Whether layout scope `scope` has a shuffle or Try pick to undo. */
+  function canUndo(scope: string | null | undefined): boolean {
+    return Boolean(scope && undoStacks.value[scope]?.length);
+  }
+
+  /** Takes back the last shuffle or Try pick of `scope`, with a crossfade; false when none. */
+  function undo(scope: string | null | undefined): boolean {
+    const stack = scope ? undoStacks.value[scope] : undefined;
+    const step = stack?.[stack.length - 1];
+    if (!scope || !stack || !step) return false;
+    undoStacks.value = { ...undoStacks.value, [scope]: stack.slice(0, -1) };
+    applyFaces(scope, step);
+    return true;
+  }
+
+  /** Families each role's shuffles showed, by `scope@role`, so the next press moves on. */
+  const shown = new Map<string, Set<number>>();
+  let shuffleRequest = 0;
+
+  /**
+   * "Shuffle unlocked" (E45.3): each unlocked role of `layout` asks `suggestPairings` for faces of
+   * its pairing role (`pairingRoleOf`) that go with the locked roles (`partnerOf`), from the
+   * library only, and takes its next candidate (`nextCandidate`). Every changed role crossfades;
+   * the faces before go on the undo stack. A newer shuffle drops an older one's answers.
+   */
+  async function shuffle(
+    scope: string,
+    layout: Pick<Layout, 'roles'>,
+    panelFace: FaceSummary | null,
+  ): Promise<ShuffleResult> {
+    const roles = layout.roles ?? [];
+    const open = roles.filter((r) => !isLocked(scope, r.role) && r.blocks.length);
+    if (!open.length) return { none: 'allLocked' };
+    const faceOf = (r: LayoutRole) => roleFace(scope, r) ?? panelFace;
+    const mine = ++shuffleRequest;
+    const asks = open.map((r) => {
+      const current = faceOf(r);
+      const partner = partnerOf(roles, r.role, faceOf, (x) => isLocked(scope, x), panelFace);
+      if (!current || !partner) return Promise.resolve(null);
+      return useClient().suggestPairings({
+        face: current.id,
+        limit: SHUFFLE_POOL,
+        role: pairingRoleOf(r.role),
+        partnerOf: partner.id,
+      });
+    });
+    let answers: (PairingSuggestion[] | null)[];
+    try {
+      answers = await Promise.all(asks);
+    } catch (e) {
+      if (mine !== shuffleRequest) return { none: 'stale' };
+      error.value = e as ApiError;
+      return { none: 'failed' };
+    }
+    if (mine !== shuffleRequest) return { none: 'stale' };
+    error.value = null;
+    if (answers.every((a) => a === null)) return { none: 'noFace' };
+    const taken = new Set<number>();
+    const changes: { role: LayoutRole; face: FaceSummary }[] = [];
+    open.forEach((r, i) => {
+      const list = answers[i];
+      if (!list) return;
+      const k = roleKey(scope, r.role);
+      // Locked while the answers were on their way: left as it is.
+      if (isLocked(scope, r.role)) return;
+      const current = faceOf(r)?.family ?? null;
+      // The face the role has now counts as shown, so the next presses do not go back to it.
+      const seen = shown.get(k) ?? new Set<number>();
+      if (current !== null) seen.add(current);
+      const next = nextCandidate(list, current, seen, taken);
+      if (!next) return;
+      if (next.restart) {
+        seen.clear();
+        if (current !== null) seen.add(current);
+      }
+      const family = next.suggestion.face.family;
+      seen.add(family);
+      shown.set(k, seen);
+      taken.add(family);
+      changes.push({ role: r, face: next.suggestion.face });
+    });
+    if (!changes.length) return { none: 'noCandidates' };
+    remember(
+      scope,
+      changes.map((c) => c.role),
+    );
+    applyFaces(
+      scope,
+      changes.map((c) => ({ blocks: c.role.blocks, face: c.face })),
+    );
+    return { changed: changes.length };
+  }
+
+  /** The rail's "Try for <role>" list; null before the first ask. */
+  const tries = ref<TryList | null>(null);
+  let tryRequest = 0;
+
+  /**
+   * Asks for the `TRY_COUNT` faces of the library that pair best in `role` of `layout` with the
+   * locked roles (`partnerOf`), with their reasons; the role's own family is left out.
+   */
+  async function loadTries(
+    scope: string,
+    layout: Pick<Layout, 'roles'>,
+    role: LayoutRole,
+    panelFace: FaceSummary | null,
+  ): Promise<void> {
+    const mine = ++tryRequest;
+    const k = roleKey(scope, role.role);
+    const faceOf = (r: LayoutRole) => roleFace(scope, r) ?? panelFace;
+    const current = faceOf(role);
+    const locked = (x: BlockRole) => isLocked(scope, x);
+    const partner = partnerOf(layout.roles ?? [], role.role, faceOf, locked, panelFace);
+    const list = (patch: Partial<TryList>): TryList => ({
+      key: k,
+      role: role.role,
+      suggestions: [],
+      loading: false,
+      error: null,
+      ...patch,
+    });
+    if (!current || !partner) {
+      tries.value = list({});
+      return;
+    }
+    const kept = tries.value?.key === k ? tries.value.suggestions : [];
+    tries.value = list({ suggestions: kept, loading: true });
+    try {
+      const got = await useClient().suggestPairings({
+        face: current.id,
+        limit: TRY_COUNT,
+        role: pairingRoleOf(role.role),
+        partnerOf: partner.id,
+      });
+      if (mine === tryRequest) tries.value = list({ suggestions: got.slice(0, TRY_COUNT) });
+    } catch (e) {
+      if (mine === tryRequest) tries.value = list({ error: e as ApiError });
+    }
+  }
+
+  /** A Try candidate was clicked: it sets `role` alone, with a crossfade; Ctrl/Cmd-Z undoes it. */
+  function applySuggestion(scope: string, role: LayoutRole, suggestion: PairingSuggestion): void {
+    if (!role.blocks.length) return;
+    remember(scope, [role]);
+    applyFaces(scope, [{ blocks: role.blocks, face: suggestion.face }]);
   }
 
   /** Sets block `index` in face `face`. */
@@ -370,5 +654,13 @@ export const useStudioStore = defineStore('studio', () => {
     pickFamily,
     resetBlock,
     loadPairing,
+    fades,
+    fadeOf,
+    shuffle,
+    tries,
+    loadTries,
+    applySuggestion,
+    canUndo,
+    undo,
   };
 });

@@ -458,4 +458,38 @@ describe('FontLayout block properties (E12.3)', () => {
       w.unmount();
     });
   });
+
+  it('crossfades a block whose fade count goes up, from its old face to the new one (E45.3)', async () => {
+    document.documentElement.style.setProperty('--fm-motion-move', '200ms');
+    const ghosts = () => document.querySelectorAll('.cell > .fm-crossfade[aria-hidden="true"]');
+    try {
+      const w = mount(FontLayout, {
+        props: { layout: preset('book'), face: inter, blockFaces: [null, null], fades: [0, 0] },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      // A face change without a count change is a cut.
+      await w.setProps({ blockFaces: [null, mono] });
+      await flushPromises();
+      expect(ghosts()).toHaveLength(0);
+      await w.setProps({ blockFaces: [mono, mono], fades: [1, 0] });
+      await flushPromises();
+      const cell = w.get('.cell[data-index="0"]').element;
+      const ghost = cell.lastElementChild as HTMLElement;
+      // The copy over block 0 shows its old face and fades out; the block has the new one.
+      expect(ghosts()).toHaveLength(1);
+      expect(ghost.classList.contains('fm-crossfade-hidden')).toBe(true);
+      expect(ghost.querySelector('.block')!.getAttribute('style')).toContain(`fm-face-${inter.id}`);
+      expect(style(w, 0).fontFamily).toContain(`fm-face-${mono.id}`);
+      expect(cell.querySelector(':scope > .host:not([aria-hidden])')!.classList).toContain(
+        'fm-crossfade',
+      );
+      // Only block 0 faded; the copy is not counted as a block.
+      expect(w.get('.cell[data-index="1"]').element.children).toHaveLength(1);
+      expect(blocks(w)).toHaveLength(2);
+      w.unmount();
+    } finally {
+      document.documentElement.style.removeProperty('--fm-motion-move');
+    }
+  });
 });

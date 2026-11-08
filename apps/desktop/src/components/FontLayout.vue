@@ -30,6 +30,9 @@
 // With `roleMarks` (the Studio's roles, E45.2), a block with a role carries no mark at rest; on
 // hover its role's name shows in the margin and a hairline ring around it. A press or the focus
 // selects it (`select`); the `selected` block keeps its mark and gets the accent ring.
+//
+// With `fades` (the Studio's Shuffle, E45.3), a block whose count goes up crossfades from how it
+// looked to its new face (`crossfade`, opacity only, a cut under reduced motion).
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch, watchEffect } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
@@ -43,6 +46,7 @@ import { ALL_FONTS_VIEW } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
 import { specimenOf } from '../preview/tofu';
 import LayoutBlock from './LayoutBlock.vue';
+import { crossfade } from '../motion';
 
 const props = defineProps<{
   /** The layout to show; null while the presets load. */
@@ -68,6 +72,8 @@ const props = defineProps<{
   roleMarks?: readonly (string | null)[];
   /** The selected block (E45.2): its mark stays and it has the accent ring. */
   selected?: number | null;
+  /** A count per block (E45.3): when a block's count goes up, its change crossfades. */
+  fades?: readonly number[];
 }>();
 defineSlots<{
   /** Controls for one block, beside its size badge. */
@@ -139,6 +145,22 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => holdBlocks([]));
+
+// A block whose fade count went up crossfades. The watcher runs before the page renders the new
+// faces, so the copy shows the old one; the same layout only (another layout is a cut).
+const layoutKey = (l: Layout | null) => (l ? (l.preset ?? l.name) : null);
+watch(
+  () => [layoutKey(props.layout), ...(props.fades ?? [])] as const,
+  ([key, ...now], before) => {
+    if (!before || before[0] !== key || !page.value) return;
+    const plays = now.flatMap((n, i) => {
+      if (n <= ((before[i + 1] as number | undefined) ?? 0)) return [];
+      const host = page.value?.querySelector<HTMLElement>(`.cell[data-index="${i}"] > .host`);
+      return host ? [crossfade(host)] : [];
+    });
+    if (plays.length) void nextTick(() => plays.forEach((play) => play()));
+  },
+);
 
 /** The block whose properties editor is open. */
 const editing = ref<number | null>(null);
@@ -387,7 +409,7 @@ function blockFamily(i: number): string {
             </button>
             <slot name="block-tools" :index="i" :block="block" :label="blockLabel(i)" />
           </div>
-          <div class="cell">
+          <div class="cell" :data-index="i">
             <BlockProperties
               v-if="hasEditor && editing === i"
               class="fm-no-print"
@@ -429,6 +451,10 @@ function blockFamily(i: number): string {
 </template>
 
 <style scoped>
+/* A crossfade's copy of the old block lies over the block (E45.3). */
+.cell {
+  position: relative;
+}
 .layout {
   flex: 1;
   min-width: 0;

@@ -1,0 +1,8 @@
+/* The crossfade of `motion/crossfade.ts` (E45.3): opacity only, at the helper's speed token
+   (`--fm-transition-time`, set per element) on the one curve. */
+.fm-crossfade {
+  transition: opacity var(--fm-transition-time, var(--fm-motion-move)) var(--fm-ease);
+}
+.fm-crossfade-hidden {
+  opacity: 0;
+}

@@ -24,6 +24,11 @@
 // A pairing card of the family page (E42.7) or a drop on the Studio (E44.2) opens
 // `?face=<body>&headline=<face>`: the panel's face sets the body, and the first panel's Headline
 // and Body roles (E45.2) are set in the two faces, once for each layout the panel shows.
+//
+// "Shuffle unlocked" (E45.3) gives each unlocked role of the first panel the next face of the
+// library that pairs with the locked roles, crossfading the blocks; Ctrl/Cmd-Z takes the last
+// shuffle or Try pick back (a text field keeps the key for its own undo). The rail's "Browse
+// catalogs" goes to the library with the first online catalog open.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { StudioContext } from '../api/types';
@@ -32,6 +37,8 @@ import UiButton from '../components/ui/UiButton.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
 import UiSegmentedControl, { type SegmentOption } from '../components/ui/UiSegmentedControl.vue';
 import { errorMessage, t } from '../i18n';
+import { formatChord, matches, type Chord } from '../keyboard/keymap';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { FIRST_PANEL, blockScope, blocksOf, layoutsOf, useStudioStore } from '../stores/studio';
@@ -162,6 +169,63 @@ async function exportPng(): Promise<void> {
   }
 }
 
+/** Undo of a shuffle or Try pick: Ctrl/Cmd-Z. */
+const UNDO: Chord = { key: 'z', mod: true };
+const undoLabel = computed(() => formatChord(UNDO));
+
+const canShuffle = computed(() =>
+  Boolean(face.value && firstScope.value && firstLayouts.draft?.roles?.length),
+);
+const shuffling = ref(false);
+async function shuffle(): Promise<void> {
+  const scope = firstScope.value;
+  const draft = firstLayouts.draft;
+  if (!canShuffle.value || !scope || !draft || shuffling.value) return;
+  shuffling.value = true;
+  status.value = null;
+  try {
+    const result = await studio.shuffle(scope, draft, face.value);
+    if ('changed' in result) {
+      const n = result.changed;
+      status.value = () => t('studio.shuffled', { count: n, undo: undoLabel.value });
+    } else if (result.none === 'failed') {
+      const { error } = studio;
+      status.value = () => (error ? errorMessage(error) : '');
+    } else if (result.none !== 'stale') {
+      const why = result.none;
+      status.value = () => t(`studio.shuffleNone.${why}`);
+    }
+  } finally {
+    shuffling.value = false;
+  }
+}
+
+/** Ctrl/Cmd-Z: takes back the last shuffle or Try pick of the first panel. */
+function undo(): boolean {
+  if (!studio.undo(firstScope.value)) return false;
+  status.value = () => t('studio.undone');
+  return true;
+}
+
+/** A field that types text keeps Ctrl/Cmd-Z for its own undo. */
+function typesText(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLInputElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+/** Nothing in the library to suggest: the library opens on the first online catalog. */
+const catalogs = useCatalogsStore();
+async function browseCatalogs(): Promise<void> {
+  await catalogs.load();
+  const first = catalogs.catalogs[0];
+  if (first) catalogs.show(first.id);
+  const query = faceId.value !== null ? { face: String(faceId.value) } : {};
+  await router.push({ name: 'home', query });
+}
+
 // Getters: the palette shows the title in the language chosen now.
 useActions([
   {
@@ -187,6 +251,10 @@ function close(): void {
 }
 
 function onKey(e: KeyboardEvent): void {
+  if (matches(e, UNDO) && !e.defaultPrevented && !commands.open && !typesText(e.target)) {
+    if (undo()) e.preventDefault();
+    return;
+  }
   if (e.key === 'Escape' && !commands.open && !e.defaultPrevented) {
     e.preventDefault();
     close();
@@ -236,7 +304,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         >
           <UiIcon name="compare" />{{ t('studio.compare') }}
         </UiButton>
-        <UiButton aria-disabled="true" :title="t('studio.shuffleTitle')">
+        <UiButton
+          :aria-disabled="!canShuffle || shuffling"
+          :aria-busy="shuffling ? 'true' : undefined"
+          :title="t('studio.shuffleTitle', { undo: undoLabel })"
+          @click="shuffle"
+        >
           <UiIcon name="rescan" />{{ t('studio.shuffle') }}
         </UiButton>
         <UiButton
@@ -271,6 +344,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :rail="panel === FIRST_PANEL"
         @pick="pick"
         @close="closePanel(panel)"
+        @browse="browseCatalogs"
       />
     </div>
   </section>

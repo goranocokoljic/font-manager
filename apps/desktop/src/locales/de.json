@@ -1658,7 +1658,21 @@
     "compare": "2 Paarungen vergleichen",
     "compareTitle": "Eine zweite Paarung neben dieser zeigen",
     "shuffle": "Offene mischen",
-    "shuffleTitle": "Noch nicht verfügbar: Mischen braucht Rollen, die du sperren kannst",
+    "shuffleTitle": "Jede offene Rolle bekommt die nächste Schrift aus deiner Bibliothek, die zu den gesperrten passt ({undo} nimmt es zurück)",
+    "shuffled": {
+      "one": "{count} Rolle gemischt. {undo} nimmt es zurück.",
+      "other": "{count} Rollen gemischt. {undo} nimmt es zurück."
+    },
+    "shuffleNone": {
+      "allLocked": "Alle Rollen sind gesperrt: entsperre eine, um sie zu mischen.",
+      "noFace": "Wähle zuerst eine Schrift: Mischen sucht Partner für sie.",
+      "noCandidates": "Sonst passt nichts in deiner Bibliothek zu den gesperrten Rollen."
+    },
+    "undone": "Rückgängig gemacht.",
+    "tryFor": "Probier für {role}",
+    "tryNone": "Noch passt nichts in deiner Bibliothek hierzu für {role}.",
+    "tryApply": "{role} in {family} setzen: {reasons}",
+    "tryApplied": "{role} in {family} gesetzt.",
     "save": "Sichern",
     "saveTitle": "Die Layout-Datei sichern",
     "saved": "Gesichert.",

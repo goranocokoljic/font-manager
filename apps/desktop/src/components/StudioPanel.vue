@@ -18,6 +18,8 @@
 // The page's blocks show their role only on hover; a click (or the focus) selects a block, its
 // card in the rail gets the ring and scrolls into view. A layout without roles keeps the
 // per-block pickers (E24.2).
+//
+// Shuffle, a Try pick and Undo (E45.3) crossfade the blocks they change (`fades`).
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
@@ -50,6 +52,8 @@ const emit = defineEmits<{
   pick: [id: string];
   /** "Close panel" was pressed. */
   close: [];
+  /** The rail's "Browse catalogs": the library has nothing to suggest (E45.3). */
+  browse: [];
 }>();
 
 const studio = useStudioStore();
@@ -99,6 +103,10 @@ function pick(id: string): void {
 const scope = computed(() => (layouts.saved ? blockScope(props.panel, layouts.saved.id) : null));
 const blockFaces = computed(() =>
   (layouts.draft?.blocks ?? []).map((_, i) => studio.faceOf(scope.value, i)),
+);
+/** Each block's crossfade count: Shuffle, a Try pick and Undo crossfade a block (E45.3). */
+const blockFades = computed(() =>
+  (layouts.draft?.blocks ?? []).map((_, i) => studio.fadeOf(scope.value, i)),
 );
 
 /** The layout's roles, when the panel shows them in the rail. */
@@ -184,6 +192,7 @@ onMounted(() => {
         :layout="layouts.draft"
         :face="face"
         :selected="selectedRole"
+        @browse="emit('browse')"
       />
       <FontLayout
         :layout="layouts.draft"
@@ -195,6 +204,7 @@ onMounted(() => {
         :set-width-lock="layouts.setWidthLock"
         bare
         :block-faces="blockFaces"
+        :fades="blockFades"
         :role-marks="roleMarks"
         :selected="hasRail ? selectedBlock : undefined"
         @edit-text="layouts.setBlockText"

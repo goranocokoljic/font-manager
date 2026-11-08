@@ -1658,7 +1658,21 @@
     "compare": "Compare 2 pairings",
     "compareTitle": "Show a second pairing beside this one",
     "shuffle": "Shuffle unlocked",
-    "shuffleTitle": "Not available yet: shuffling needs roles you can lock",
+    "shuffleTitle": "Give every unlocked role the next font from your library that pairs with the locked ones ({undo} takes it back)",
+    "shuffled": {
+      "one": "Shuffled {count} role. {undo} takes it back.",
+      "other": "Shuffled {count} roles. {undo} takes it back."
+    },
+    "shuffleNone": {
+      "allLocked": "Every role is locked: unlock one to shuffle it.",
+      "noFace": "Choose a font first: Shuffle pairs with it.",
+      "noCandidates": "Nothing else in your library pairs with the locked roles."
+    },
+    "undone": "Undone.",
+    "tryFor": "Try for {role}",
+    "tryNone": "Nothing in your library pairs with this for {role} yet.",
+    "tryApply": "Set {role} in {family}: {reasons}",
+    "tryApplied": "{role} set in {family}.",
     "save": "Save",
     "saveTitle": "Save the layout file",
     "saved": "Saved.",
