@@ -927,20 +927,19 @@ async function openWithLibrary(page: Page) {
   await page.goto('/?mockFaces=20#/studio?face=1');
   const region = layout(studio(page), 'Magazine page');
   await expect(region).toHaveAttribute('data-state', 'ready');
-  // Every crossfade the page starts, by its keyframes.
+  // Every crossfade the page starts: a copy of the old block laid over the new one.
   await page.evaluate(() => {
-    const w = window as unknown as { fades: string[] };
-    w.fades = [];
-    const real = Element.prototype.animate;
-    Element.prototype.animate = function (frames, options) {
-      w.fades.push(JSON.stringify(frames));
-      return real.call(this, frames, options);
-    };
+    const w = window as unknown as { fades: number };
+    w.fades = 0;
+    new MutationObserver((records) => {
+      for (const r of records)
+        for (const n of r.addedNodes)
+          if (n instanceof HTMLElement && n.matches('.fm-crossfade[aria-hidden="true"]')) w.fades++;
+    }).observe(document.body, { childList: true, subtree: true });
   });
   return region;
 }
-const fades = (page: Page) =>
-  page.evaluate(() => (window as unknown as { fades: string[] }).fades.length);
+const fades = (page: Page) => page.evaluate(() => (window as unknown as { fades: number }).fades);
 
 test('Shuffle unlocked keeps the locked role, gives the others the next face and crossfades', async ({
   page,
@@ -962,8 +961,8 @@ test('Shuffle unlocked keeps the locked role, gives the others the next face and
   expect(new Set(first.slice(1)).size).toBe(3);
   expect(await familyOf(blocks(region).nth(1))).toBe(headlineFamily);
   await expect.poll(() => familyOf(blocks(region).nth(3))).not.toBe(headlineFamily);
-  // The blocks crossfaded: a fade in and a fade out per changed block (Caption has two).
-  await expect.poll(() => fades(page)).toBe(8);
+  // The blocks crossfaded: one copy per changed block (Caption has two).
+  await expect.poll(() => fades(page)).toBe(4);
   // The copies go when the fade ends: five blocks again.
   await expect(blocks(region)).toHaveCount(5);
 
@@ -1016,7 +1015,7 @@ test('Try for <role>: three candidates with reasons; a click sets that role alon
   expect(await pickers(page)).toEqual(['Inter', 'Inter', name, 'Inter']);
   // The list moves on: the picked family is the one being replaced now.
   await expect(candidates(page).filter({ hasText: name })).toHaveCount(0);
-  await expect.poll(() => fades(page)).toBe(2);
+  await expect.poll(() => fades(page)).toBe(1);
 
   await page.keyboard.press('ControlOrMeta+z');
   await expect(rolePicker(page, 'Body')).toHaveText('Inter');

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
 import {
   MOCK_LAYOUT_BOUNDS,
@@ -460,13 +460,8 @@ describe('FontLayout block properties (E12.3)', () => {
   });
 
   it('crossfades a block whose fade count goes up, from its old face to the new one (E45.3)', async () => {
-    const animated: { el: Element; frames: Keyframe[] }[] = [];
-    const animate = vi.fn(function (this: Element, frames: Keyframe[]) {
-      animated.push({ el: this, frames });
-      return { finished: new Promise(() => undefined) } as unknown as Animation;
-    });
-    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true });
     document.documentElement.style.setProperty('--fm-motion-move', '200ms');
+    const ghosts = () => document.querySelectorAll('.cell > .fm-crossfade[aria-hidden="true"]');
     try {
       const w = mount(FontLayout, {
         props: { layout: preset('book'), face: inter, blockFaces: [null, null], fades: [0, 0] },
@@ -476,25 +471,24 @@ describe('FontLayout block properties (E12.3)', () => {
       // A face change without a count change is a cut.
       await w.setProps({ blockFaces: [null, mono] });
       await flushPromises();
-      expect(animate).not.toHaveBeenCalled();
+      expect(ghosts()).toHaveLength(0);
       await w.setProps({ blockFaces: [mono, mono], fades: [1, 0] });
       await flushPromises();
       const cell = w.get('.cell[data-index="0"]').element;
       const ghost = cell.lastElementChild as HTMLElement;
-      // The copy over block 0 shows its old face; the block itself has the new one.
-      expect(ghost.getAttribute('aria-hidden')).toBe('true');
+      // The copy over block 0 shows its old face and fades out; the block has the new one.
+      expect(ghosts()).toHaveLength(1);
+      expect(ghost.classList.contains('fm-crossfade-hidden')).toBe(true);
       expect(ghost.querySelector('.block')!.getAttribute('style')).toContain(`fm-face-${inter.id}`);
       expect(style(w, 0).fontFamily).toContain(`fm-face-${mono.id}`);
-      expect(animated.map((a) => a.frames)).toEqual([
-        [{ opacity: 0 }, { opacity: 1 }],
-        [{ opacity: 1 }, { opacity: 0 }],
-      ]);
+      expect(cell.querySelector(':scope > .host:not([aria-hidden])')!.classList).toContain(
+        'fm-crossfade',
+      );
       // Only block 0 faded; the copy is not counted as a block.
       expect(w.get('.cell[data-index="1"]').element.children).toHaveLength(1);
       expect(blocks(w)).toHaveLength(2);
       w.unmount();
     } finally {
-      Reflect.deleteProperty(HTMLElement.prototype, 'animate');
       document.documentElement.style.removeProperty('--fm-motion-move');
     }
   });

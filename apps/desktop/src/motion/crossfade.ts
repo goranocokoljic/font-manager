@@ -1,5 +1,5 @@
 import { prefersReducedMotion } from './useReducedMotion';
-import type { MotionSpeed } from './speed';
+import { setMotionSpeed, type MotionSpeed } from './speed';
 
 /** A CSS time token's value in ms: `200ms`, `0.2s`; 0 when it is not a time. */
 export function tokenMs(value: string): number {
@@ -9,22 +9,24 @@ export function tokenMs(value: string): number {
   return m[2] === 's' ? n * 1000 : n;
 }
 
+/** Extra time after the token before the copy goes, in case `transitionend` never comes. */
+const SETTLE_MS = 50;
+
 /**
  * A crossfade of one element whose content is about to change (E45.3, the Studio's Shuffle).
  * Call it BEFORE the change: it copies the element as it looks now. Call the answer AFTER the
- * change: the copy lies over the element and fades out while the element fades in, at the
- * `speed` token with `--fm-ease`. The copy is inert and hidden from assistive technology and
- * from tests (no test ids), and goes when the fade ends.
+ * change: the copy lies over the element and fades out while the element fades in. The fade is
+ * a CSS transition of opacity (styles/motion.css: `fm-crossfade`, `fm-crossfade-hidden`) at the
+ * `speed` token on `--fm-ease`, so no duration or curve lives in a script. The copy is inert and
+ * hidden from assistive technology and from tests (no test ids), and goes when the fade ends.
  *
- * The parent of the element must be its containing block (`position: relative`). Without the
- * Web Animations API, under reduced motion or with a 0 ms token, the change is a cut.
+ * The parent of the element must be its containing block (`position: relative`). Under reduced
+ * motion or with a 0 ms token the change is a cut.
  */
 export function crossfade(el: HTMLElement, speed: MotionSpeed = 'move'): () => void {
-  if (typeof el.animate !== 'function' || prefersReducedMotion()) return () => undefined;
-  const style = getComputedStyle(el);
-  const ms = tokenMs(style.getPropertyValue(`--fm-motion-${speed}`));
-  if (ms <= 0 || !el.parentElement) return () => undefined;
-  const easing = style.getPropertyValue('--fm-ease').trim() || 'ease';
+  if (prefersReducedMotion() || !el.parentElement) return () => undefined;
+  const ms = tokenMs(getComputedStyle(el).getPropertyValue(`--fm-motion-${speed}`));
+  if (ms <= 0) return () => undefined;
   const ghost = el.cloneNode(true) as HTMLElement;
   for (const node of [ghost, ...ghost.querySelectorAll<HTMLElement>('*')]) {
     node.removeAttribute('data-testid');
@@ -47,11 +49,25 @@ export function crossfade(el: HTMLElement, speed: MotionSpeed = 'move'): () => v
       margin: '0',
       pointerEvents: 'none',
     });
+    setMotionSpeed(el, speed);
+    setMotionSpeed(ghost, speed);
+    // The start: the new content hidden, the copy shown, no transition yet.
+    el.classList.remove('fm-crossfade');
+    el.classList.add('fm-crossfade-hidden');
+    ghost.classList.add('fm-crossfade');
     parent.appendChild(ghost);
-    const timing = { duration: ms, easing };
-    el.animate([{ opacity: 0 }, { opacity: 1 }], timing);
-    const out = ghost.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, fill: 'forwards' });
-    const done = () => ghost.remove();
-    out.finished.then(done, done);
+    void el.offsetWidth; // Applies the start before the transition begins.
+    el.classList.add('fm-crossfade');
+    el.classList.remove('fm-crossfade-hidden');
+    ghost.classList.add('fm-crossfade-hidden');
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      ghost.remove();
+      el.classList.remove('fm-crossfade');
+    };
+    ghost.addEventListener('transitionend', finish, { once: true });
+    setTimeout(finish, ms + SETTLE_MS);
   };
 }
