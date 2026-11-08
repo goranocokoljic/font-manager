@@ -166,6 +166,7 @@ test.describe('the selection bar', () => {
       'Tag',
       'Compare',
       'Studio',
+      'Files',
       '',
     ]);
     await expect(bar(page).getByRole('combobox', { name: 'Add to collection' })).toHaveText(
