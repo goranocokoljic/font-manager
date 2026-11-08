@@ -53,13 +53,14 @@ use crate::library::{
     SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
-    COLLECTION_COLORS, Collection, CollectionFacesRequest, CreateCollectionRequest,
-    CreateSetRequest, FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
-    MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
-    ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp,
-    SET_FILE_EXTENSION, SaveSetFileRequest, SavedSetFile, SelectionTag, SelectionTags,
-    SelectionTagsRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
-    UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
+    CreateCollectionRequest, CreateSetRequest, DropCounts, FamilyNotesUpdate, ImportSetResponse,
+    LicenseDeclaration, LoadSetFileRequest, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
+    QuickCollection, QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest,
+    Rule, RuleGroup, RuleOp, SET_FILE_EXTENSION, SaveSetFileRequest, SavedSetFile, SelectionTag,
+    SelectionTags, SelectionTagsRequest, SetEntry, SetExport, Tag, TagDropCount, TagFacesRequest,
+    UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use crate::preview::{
     COMPARE_FACES, ComparePreviewRequest, CssValues, CssValuesRequest, FontSource,
@@ -3548,6 +3549,51 @@ impl OrganizationService for MockApi {
             })
             .collect();
         Ok(SelectionTags { faces, tags })
+    }
+
+    fn drop_counts(&self, req: SelectionTagsRequest) -> ApiResult<DropCounts> {
+        let st = self.state();
+        let faces = faces_of(&st, &req.faces, &req.families)?;
+        let mut ordered = Vec::new();
+        st.walk_collections(None, &mut ordered);
+        let collections = ordered
+            .into_iter()
+            .filter(|c| c.rule_group.is_none())
+            .map(|c| {
+                let before = st.collection_view(c).face_count;
+                let added = faces
+                    .iter()
+                    .filter(|id| !st.members.get(&c.id).is_some_and(|m| m.contains(id)))
+                    .count() as u32;
+                CollectionDropCount {
+                    collection: c.id,
+                    before,
+                    after: before + added,
+                }
+            })
+            .collect();
+        let mut tags: Vec<&Tag> = st.tags.iter().collect();
+        tags.sort_by_key(|t| t.name.to_lowercase());
+        let tags = tags
+            .into_iter()
+            .map(|t| {
+                let before = tag_view(&st, t).face_count;
+                let added = faces
+                    .iter()
+                    .filter(|f| !st.face_tags.get(f).is_some_and(|s| s.contains(&t.id)))
+                    .count() as u32;
+                TagDropCount {
+                    tag: t.id,
+                    before,
+                    after: before + added,
+                }
+            })
+            .collect();
+        Ok(DropCounts {
+            faces,
+            collections,
+            tags,
+        })
     }
 
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {

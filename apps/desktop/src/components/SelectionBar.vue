@@ -9,14 +9,19 @@
 // the system cannot) and × (clears the selection). The parent shows it in an
 // `<FmSlide from="bottom" distance="16px">`, the motion table's rise. A toolbar of plain
 // buttons: each one is a Tab stop; Esc in it clears the selection like Esc in the list.
+// Studio is also a drop target for a font drag (E44.2): the accent ring while the drag is
+// over it, and a drop opens the Studio with the dropped fonts. Collection and Tag are the
+// keyboard's way to every sidebar drop.
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { t } from '../i18n';
 import { rowActivation } from '../list/activation';
-import { pickOf } from '../list/drag';
+import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
+import { faceKey, familyKey, type RowKey } from '../list/rows';
 import { useActivationStore } from '../stores/activation';
 import { MAX_PINS, useCompareStore } from '../stores/compare';
 import { pastEdge, useFileDragStore } from '../stores/fileDrag';
+import { useFontDragStore, type DropTarget } from '../stores/fontDrag';
 import { useFontListStore } from '../stores/fontList';
 import { useTaggingStore } from '../stores/tagging';
 import { useToastStore } from '../stores/toast';
@@ -32,6 +37,8 @@ const compare = useCompareStore();
 const tagging = useTaggingStore();
 const fileDrag = useFileDragStore();
 const router = useRouter();
+const fontDrag = useFontDragStore();
+const STUDIO: DropTarget = { kind: 'studio' };
 
 const rows = computed(() => list.selectedRows);
 const onlyFamilies = computed(() => rows.value.every((r) => r.kind === 'family'));
@@ -61,7 +68,12 @@ async function compareSelection(): Promise<void> {
 }
 
 async function studio(): Promise<void> {
-  const [face, headline] = await list.selectedFaces(2);
+  await openStudio(list.selection.selected);
+}
+
+/** Opens the Studio with the first face of `keys`, and the second as the headline. */
+async function openStudio(keys: ReadonlySet<RowKey>): Promise<void> {
+  const [face, headline] = await list.facesOfKeys(keys, 2);
   if (!face) return;
   const query: Record<string, string> = { face: String(face.id) };
   if (headline) query.headline = String(headline.id);
@@ -86,6 +98,21 @@ function onFilesMove(e: PointerEvent): void {
 /** A click (or Enter) cannot drag: say how the grip works. */
 function onFilesClick(): void {
   if (fileDrag.available) useToastStore().show(t('selection.bar.filesHint'));
+}
+
+function onStudioOver(e: DragEvent): void {
+  if (!isFontDrag(e)) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  fontDrag.enter(STUDIO);
+}
+
+function onStudioDrop(e: DragEvent): void {
+  e.preventDefault();
+  const fonts = readFontDrop(e);
+  if (!fonts || !fontDrag.land(e.currentTarget as Element | null, e)) return;
+  const keys = new Set<RowKey>([...fonts.families.map(familyKey), ...fonts.faces.map(faceKey)]);
+  void openStudio(keys);
 }
 
 function clear(): void {
@@ -140,7 +167,16 @@ function onKey(e: KeyboardEvent): void {
         <UiIcon name="compare" />
         {{ t('selection.bar.compare') }}
       </button>
-      <button type="button" class="action" data-testid="bar-studio" @click="studio">
+      <button
+        type="button"
+        class="action"
+        :class="{ drop: fontDrag.isTarget(STUDIO) }"
+        data-testid="bar-studio"
+        @click="studio"
+        @dragover="onStudioOver"
+        @dragleave="fontDrag.leave(STUDIO)"
+        @drop="onStudioDrop"
+      >
         <UiIcon name="layout" />
         {{ t('selection.bar.studio') }}
       </button>
@@ -227,6 +263,11 @@ function onKey(e: KeyboardEvent): void {
 .action:focus-visible,
 .bar :deep(.action:focus-visible) {
   outline: 2px solid var(--fm-bar-fg);
+  outline-offset: -2px;
+}
+/* A font drag over Studio: the accent ring of every drop target. */
+.action.drop {
+  outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
 }
 .action:disabled,

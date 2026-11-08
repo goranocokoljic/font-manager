@@ -8,6 +8,7 @@ import CollectionHeader from '../components/CollectionHeader.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
 import DocumentFontsPanel from '../components/DocumentFontsPanel.vue';
+import DragGhost from '../components/DragGhost.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
 import FontLayout from '../components/FontLayout.vue';
@@ -774,6 +775,7 @@ async function openFace(face: FaceId): Promise<void> {
           <FmSlide from="bottom" distance="16px">
             <SelectionBar v-if="showSelectionBar" @cleared="focusList" />
           </FmSlide>
+          <DragGhost />
         </div>
       </template>
       <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />

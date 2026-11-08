@@ -2855,6 +2855,69 @@ fn tagging_a_family_tags_its_faces_and_the_selection_shows_mixed_tags() {
     assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
 }
 
+/// E44.2: a drop's counts add only the faces a collection or tag lacks,
+/// and leave smart collections out, like fm-core.
+#[test]
+fn drop_counts_add_only_what_a_target_lacks() {
+    let api = api();
+    let made = api
+        .create_collection(CreateCollectionRequest {
+            name: "Drop here".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+            color: None,
+        })
+        .unwrap();
+    api.add_to_collection(CollectionFacesRequest {
+        collection: made.id,
+        faces: vec![FaceId(1)],
+        families: vec![],
+    })
+    .unwrap();
+    let tag = api
+        .tag_faces(TagFacesRequest {
+            faces: vec![FaceId(2)],
+            tags: vec!["Drop tag".into()],
+            families: vec![],
+        })
+        .unwrap()[0]
+        .id;
+    let got = api
+        .drop_counts(SelectionTagsRequest {
+            faces: vec![FaceId(1), FaceId(2), FaceId(3)],
+            families: vec![],
+        })
+        .unwrap();
+    assert_eq!(got.faces.len(), 3);
+    let c = got
+        .collections
+        .iter()
+        .find(|c| c.collection == made.id)
+        .unwrap();
+    assert_eq!((c.before, c.after), (1, 3));
+    let t = got.tags.iter().find(|t| t.tag == tag).unwrap();
+    assert_eq!((t.before, t.after), (1, 3));
+    let smart: Vec<_> = api
+        .list_collections()
+        .unwrap()
+        .into_iter()
+        .filter(|c| c.rule_group.is_some())
+        .map(|c| c.id)
+        .collect();
+    assert!(
+        got.collections
+            .iter()
+            .all(|c| !smart.contains(&c.collection)),
+        "smart collections are not drop targets"
+    );
+    let unknown = api.drop_counts(SelectionTagsRequest {
+        faces: vec![FaceId(9999)],
+        families: vec![],
+    });
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+}
+
 /// E14.1: the mock refuses the rules fm-core refuses, updates a smart
 /// collection's rule, applies a draft rule to search and counts foundries.
 #[test]

@@ -33,6 +33,7 @@ import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { keepRowInView, tableRowHeight } from '../list/density';
 import { useFontListStore } from '../stores/fontList';
+import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { useSettingsStore } from '../stores/settings';
@@ -62,6 +63,7 @@ const FALLBACK_HEIGHT = 600;
 
 const list = useFontListStore();
 const fontSwitch = useFontSwitchStore();
+const fontDrag = useFontDragStore();
 const library = useLibraryStore();
 const views = useViewsStore();
 const settings = useSettingsStore();
@@ -386,6 +388,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           :class="{
             face: item.row.kind === 'face',
             selected: list.isSelected(item.row.key),
+            origin: fontDrag.isOrigin(item.row.key),
             cursor: item.id === activeId,
           }"
           role="row"
@@ -632,5 +635,9 @@ span.sort {
 }
 .mark.italic {
   background-color: var(--fm-bg);
+}
+/* A dragged row stays in place, faded, while its ghost travels (E44.2). */
+.tr.origin {
+  opacity: 0.35;
 }
 </style>

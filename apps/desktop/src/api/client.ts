@@ -108,6 +108,7 @@ import type {
   SearchRequest,
   SearchResponse,
   SelectionTags,
+  DropCounts,
   SelectionTagsRequest,
   SetSourcePausedRequest,
   Settings,
@@ -211,6 +212,8 @@ export interface FmClient {
   untagFaces(req: UntagFacesRequest): Promise<void>;
   /** The tags the faces of a selection carry, with how many carry each (E13.4). */
   selectionTags(req: SelectionTagsRequest): Promise<SelectionTags>;
+  /** What a font drop would do to each manual collection's and tag's face count (E44.2). */
+  dropCounts(req: SelectionTagsRequest): Promise<DropCounts>;
   /** Favorite, rating (0 clears it) and notes; fields left out stay. */
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
   /** A family's own notes; an empty string clears them. */
@@ -448,6 +451,7 @@ export const tauriClient: FmClient = {
   tagFaces: (req) => invoke<Tag[]>('tag_faces', { req }),
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
   selectionTags: (req) => invoke<SelectionTags>('selection_tags', { req }),
+  dropCounts: (req) => invoke<DropCounts>('drop_counts', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
   declareLicense: (req) => invoke<void>('declare_license', { req }),

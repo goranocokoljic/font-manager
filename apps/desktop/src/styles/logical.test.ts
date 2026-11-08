@@ -19,7 +19,10 @@ const SOURCES = Object.fromEntries(
  * Physical declarations that stay, as `file: declaration` (the declaration as
  * `physicalDeclarations` reports it), each with the reason it must not mirror.
  */
-const ALLOWED: Record<string, string> = {};
+const ALLOWED: Record<string, string> = {
+  'components/DragGhost.vue: left: 0':
+    "The drag ghost is placed with translate() from the pointer's clientX, a physical window coordinate; its origin is the window's left edge in every direction.",
+};
 
 /** Properties that name a physical side. */
 const PHYSICAL_PROPERTY =

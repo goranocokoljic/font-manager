@@ -257,6 +257,49 @@ pub struct SelectionTag {
     pub all: bool,
 }
 
+/// What a drop of the fonts a drag names would do to every manual
+/// collection and every tag (E44.2): its face count now and after the drop.
+/// The sidebar shows the pair as "31 → 34" while a drag is over the target.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DropCounts {
+    /// Every face the drag names, each once: the faces first, then the
+    /// faces of each family.
+    pub faces: Vec<FaceId>,
+    /// Every manual collection, in [`OrganizationService::list_collections`]
+    /// order. A smart collection fills itself, so it is not a drop target
+    /// and is left out.
+    pub collections: Vec<CollectionDropCount>,
+    /// Every tag, A to Z.
+    pub tags: Vec<TagDropCount>,
+}
+
+/// One collection of a [`DropCounts`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionDropCount {
+    /// The collection.
+    pub collection: CollectionId,
+    /// Its face count now, as [`Collection::face_count`] gives it.
+    pub before: u32,
+    /// Its face count after the drop: the faces the library shows that it
+    /// does not hold yet are added; a face it holds counts once.
+    pub after: u32,
+}
+
+/// One tag of a [`DropCounts`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TagDropCount {
+    /// The tag.
+    pub tag: TagId,
+    /// Its face count now, as [`Tag::face_count`] gives it.
+    pub before: u32,
+    /// Its face count after the drop: the faces the library shows that do
+    /// not carry it yet are added.
+    pub after: u32,
+}
+
 /// Detach tags from faces.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -546,6 +589,10 @@ pub trait OrganizationService {
     /// The tags the faces of a selection carry, with how many carry each
     /// (E13.4). An unknown face or family is `NotFound`.
     fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags>;
+    /// What dropping the fonts of a drag on each manual collection and on
+    /// each tag would do to its face count (E44.2). An unknown face or
+    /// family is `NotFound`.
+    fn drop_counts(&self, req: SelectionTagsRequest) -> ApiResult<DropCounts>;
     /// Favorite, rating, notes.
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()>;
     /// Every project set.

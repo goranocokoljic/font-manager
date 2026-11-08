@@ -78,6 +78,10 @@ const selectRows = (process.env.FM_SCREENS_SELECT ?? '')
 // FM_SCREENS_HOVER=2 leaves the pointer over that list row (1-based) for the shot, so hover-only
 // row actions (Find similar) are in it.
 const hoverRow = Number(process.env.FM_SCREENS_HOVER ?? 0);
+// FM_SCREENS_DRAG=Editorial takes the first selected card (or the first card) with the pointer
+// and holds it over that sidebar collection for the shot: the ghost, the faded cards, the
+// ring and "31 → 34" (E44.2).
+const dragTo = process.env.FM_SCREENS_DRAG;
 // FM_SCREENS_COLLECTION=Empty makes a collection of that name in the sidebar and opens it
 // (browser mode starts without collections).
 const collectionName = process.env.FM_SCREENS_COLLECTION;
@@ -291,6 +295,24 @@ test.describe('@screens', () => {
               .nth(hoverRow - 1)
               .hover();
             await page.waitForTimeout(200); // the row's actions fade in
+          }
+          if (dragTo) {
+            const from = (await listRows(page).first().boundingBox())!;
+            const to = (await page
+              .getByRole('region', { name: 'Collections' })
+              .getByRole('listitem', { name: dragTo, exact: true })
+              .boundingBox())!;
+            // Taken at its top edge and held on the row's lower edge, the ghost hangs below the
+            // row, as on the board, and the row's "31 → 34" stays in view.
+            await page.mouse.move(from.x + 24, from.y + 2);
+            await page.mouse.down();
+            await page.mouse.move(from.x + 44, from.y + 22, { steps: 4 });
+            await page.mouse.move(to.x + 40, to.y + to.height - 2, { steps: 8 });
+            await page.mouse.move(to.x + 41, to.y + to.height - 2, { steps: 2 });
+            await expect(
+              page.getByTestId('collection-count').filter({ hasText: '→' }),
+            ).toBeVisible();
+            await page.waitForTimeout(300); // the ghost lifts, the count crossfades
           }
           await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });
         });

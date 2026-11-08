@@ -175,6 +175,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("tag_faces", r#"{"faces":[1],"tags":["http"]}"#.into()),
         ("untag_faces", r#"{"faces":[1],"tags":[1]}"#.into()),
         ("selection_tags", r#"{"faces":[1]}"#.into()),
+        ("drop_counts", r#"{"faces":[1]}"#.into()),
         (
             "update_user_meta",
             r#"{"faces":[1],"favorite":true}"#.into(),
