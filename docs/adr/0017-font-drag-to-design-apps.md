@@ -78,7 +78,9 @@ the same. The app uses no Tauri file-drop events, so nothing is lost. A test
   `public.file-url` as a file promise) does not get one from this drag:
   `text/uri-list` arrives as a URL. Adding a native file drag would need an
   OS drag source per platform in `fm-platform`; it is left out until a
-  target needs it, and would come with its own ADR.
+  target needs it, and would come with its own ADR. ADR 0022 (E44.4) adds it
+  as a separate gesture (the selection bar's Files grip); the row drag stays
+  as described here.
 - The webviews' conversions above are engine behaviour, not a Tauri API.
   A webview update that changes them is caught by trying the drag on the
   three platforms before a release, as the other platform stories do.

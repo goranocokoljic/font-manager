@@ -978,6 +978,16 @@
       "tag": "Tag",
       "compare": "Vergleichen",
       "studio": "Studio",
+      "files": "Dateien",
+      "filesHint": "Halten und über den Fensterrand ziehen, um die Schriftdateien in einer anderen App abzulegen",
+      "filesUnavailable": "Schriftdateien lassen sich hier nicht herausziehen.",
+      "filesNone": "Keine dieser Schriftdateien ist noch auf dem Datenträger.",
+      "filesMissing": {
+        "one": "{count} Schriftdatei ist nicht mehr auf dem Datenträger und wurde ausgelassen.",
+        "other": "{count} Schriftdateien sind nicht mehr auf dem Datenträger und wurden ausgelassen."
+      },
+      "filesFailed": "Die Schriftdateien konnten nicht herausgezogen werden: {reason}",
+      "filesFailedReason": "das System hat das Ziehen abgelehnt",
       "clear": "Auswahl aufheben"
     }
   },

@@ -74,6 +74,18 @@ With the keyboard: press `Enter` on the font to open its family page, open
 **Developer** at the end of the right column and choose **Copy for Font Switch**. This copies the same data to
 the clipboard.
 
+## Drag font files to another app
+
+To give the font files themselves to another app (Explorer, Finder, a file
+manager, a mail or chat app), select the fonts, then hold **Files** in the
+selection bar and drag the pointer past the edge of the window. Drop the files
+where you want them. The other app gets a copy of each font file. Font Manager
+does not move or change your files. A file that is no longer on the disk is
+left out, and a message tells you how many.
+
+If your system cannot drag files out of the window, **Files** is dimmed. Hold
+the pointer on it to see why.
+
 ## Fonts a document needs
 
 The Font Manager plugins for design apps (Photoshop, Illustrator, InDesign and

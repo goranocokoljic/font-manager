@@ -22,9 +22,10 @@ use fm_api::layout::{
     LayoutRef, LayoutSurface, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
 };
 use fm_api::library::{
-    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
-    GlyphsRequest, ImportMode, KeepCopyRequest, LicensePermissionsSource, LicenseType,
-    ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest, TrashMoveStatus,
+    AddSourceRequest, DragFilesRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary,
+    GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicensePermissionsSource,
+    LicenseType, ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest,
+    TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -3665,6 +3666,60 @@ fn font_switch_payload_names_the_face_and_its_file() {
     assert_eq!(
         api.font_switch_payload(FaceId(999)).unwrap_err().code,
         ErrorCode::NotFound
+    );
+}
+
+/// E44.4: a file drag carries each face's file once, a family's faces too.
+#[test]
+fn drag_files_lists_each_file_once_and_refuses_unknown_ids() {
+    let api = api();
+    let family = api.get_face(FaceId(1)).unwrap().face.family;
+    let members: Vec<FaceId> = api
+        .get_family(family)
+        .unwrap()
+        .faces
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    let files = api
+        .drag_files(DragFilesRequest {
+            faces: vec![FaceId(1), FaceId(1)],
+            families: vec![family],
+        })
+        .unwrap();
+    let mut want: Vec<String> = Vec::new();
+    for id in std::iter::once(FaceId(1)).chain(members) {
+        let path = api.get_face(id).unwrap().path;
+        if !want.contains(&path) {
+            want.push(path);
+        }
+    }
+    assert_eq!(files.paths, want);
+    assert_eq!(files.missing, 0);
+    assert!(
+        api.drag_files(DragFilesRequest::default())
+            .unwrap()
+            .paths
+            .is_empty()
+    );
+    let unknown = DragFilesRequest {
+        faces: vec![FaceId(999)],
+        families: Vec::new(),
+    };
+    assert_eq!(
+        api.drag_files(unknown).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}
+
+/// E44.4: the mock has no window, so it says why files cannot be dragged out.
+#[test]
+fn the_mock_cannot_drag_files_out_and_says_why() {
+    let info = api().app_info().unwrap();
+    assert!(!info.file_drag.available);
+    assert_eq!(
+        info.file_drag.reason.as_deref(),
+        Some(fm_api::mock::MOCK_NO_FILE_DRAG)
     );
 }
 

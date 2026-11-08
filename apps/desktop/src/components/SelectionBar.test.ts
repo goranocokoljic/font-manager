@@ -3,14 +3,17 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
-import { createMockClient, EXTRA_ID_BASE } from '../api/mock';
+import type { DragFilesRequest } from '../api/types';
+import { createMockClient, EXTRA_ID_BASE, MOCK_NO_FILE_DRAG } from '../api/mock';
 import { faceKey, familyKey } from '../list/rows';
 import { useActivationStore } from '../stores/activation';
+import { useAppStore } from '../stores/app';
 import { useCollectionsStore } from '../stores/collections';
 import { MAX_PINS, useCompareStore } from '../stores/compare';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useTaggingStore } from '../stores/tagging';
+import { useToastStore } from '../stores/toast';
 import SelectionBar from './SelectionBar.vue';
 
 const push = vi.fn();
@@ -21,11 +24,14 @@ let wrapper: VueWrapper | undefined;
 const A = EXTRA_ID_BASE;
 const B = EXTRA_ID_BASE + 1;
 
-async function setup() {
+async function setup(
+  opts: { fileDrag?: 'off' | 'on'; onFileDrag?: (req: DragFilesRequest) => void } = {},
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  setClient(createMockClient({ extraFaces: 7, stylesPerFamily: 2 }));
+  setClient(createMockClient({ extraFaces: 7, stylesPerFamily: 2, ...opts }));
   await useLibraryStore().load();
+  await useAppStore().load();
   const list = useFontListStore();
   wrapper = mount(SelectionBar, { global: { plugins: [pinia] }, attachTo: document.body });
   await flushPromises();
@@ -56,6 +62,7 @@ describe('SelectionBar', () => {
       'Tag',
       'Compare',
       'Studio',
+      'Files',
       'Clear the selection',
     ]);
     for (const b of stops) expect(b.attributes('tabindex')).not.toBe('-1');
@@ -144,5 +151,75 @@ describe('SelectionBar', () => {
     await w.get('[data-testid="bar-tag"]').trigger('keydown', { key: 'Escape' });
     expect(list.selectedCount).toBe(0);
     expect(w.emitted('cleared')).toHaveLength(2);
+  });
+
+  describe('Files (E44.4): drag the font files out of the window', () => {
+    const ptr = async (el: Element, type: string, clientX: number, clientY = 300) => {
+      el.dispatchEvent(new MouseEvent(type, { clientX, clientY, button: 0, bubbles: true }));
+      await flushPromises();
+    };
+
+    it('starts the native drag of the whole selection only once the pointer reaches the window edge', async () => {
+      const drags: DragFilesRequest[] = [];
+      const { w, list } = await setup({ fileDrag: 'on', onFileDrag: (r) => drags.push(r) });
+      list.click(familyKey(A));
+      list.click(familyKey(B), 'toggle');
+      await flushPromises();
+      const files = w.get('[data-testid="bar-files"]');
+      expect(files.attributes('aria-disabled')).toBe('false');
+      expect(files.attributes('title')).toBe(
+        'Hold and drag past the window edge to drop the font files into another app',
+      );
+      await ptr(files.element, 'pointerdown', 400);
+      expect(files.classes()).toContain('holding');
+      await ptr(files.element, 'pointermove', 200);
+      expect(drags).toEqual([]);
+      await ptr(files.element, 'pointermove', -3);
+      expect(drags).toEqual([{ faces: [], families: [A, B] }]);
+      expect(files.classes()).not.toContain('holding');
+      // Moving on outside the window does not start a second drag.
+      await ptr(files.element, 'pointermove', -40);
+      expect(drags).toHaveLength(1);
+    });
+
+    it('lets go inside the window without dragging anything', async () => {
+      const drags: DragFilesRequest[] = [];
+      const { w, list } = await setup({ fileDrag: 'on', onFileDrag: (r) => drags.push(r) });
+      list.click(familyKey(A));
+      await flushPromises();
+      const files = w.get('[data-testid="bar-files"]');
+      await ptr(files.element, 'pointerdown', 400);
+      await ptr(files.element, 'pointerup', 400);
+      await ptr(files.element, 'pointermove', -3);
+      expect(drags).toEqual([]);
+    });
+
+    it('a click says how the grip works', async () => {
+      const { w, list } = await setup({ fileDrag: 'on' });
+      list.click(familyKey(A));
+      await flushPromises();
+      const show = vi.spyOn(useToastStore(), 'show');
+      await w.get('[data-testid="bar-files"]').trigger('click');
+      expect(show).toHaveBeenCalledWith(
+        'Hold and drag past the window edge to drop the font files into another app',
+      );
+    });
+
+    it('is disabled with the reason as its tooltip where the system cannot drag files out', async () => {
+      const drags: DragFilesRequest[] = [];
+      const { w, list } = await setup({ onFileDrag: (r) => drags.push(r) });
+      list.click(familyKey(A));
+      await flushPromises();
+      const files = w.get('[data-testid="bar-files"]');
+      expect(files.attributes('aria-disabled')).toBe('true');
+      expect(files.attributes('title')).toBe(MOCK_NO_FILE_DRAG);
+      const show = vi.spyOn(useToastStore(), 'show');
+      await ptr(files.element, 'pointerdown', 400);
+      await ptr(files.element, 'pointermove', -3);
+      await files.trigger('click');
+      expect(files.classes()).not.toContain('holding');
+      expect(drags).toEqual([]);
+      expect(show).not.toHaveBeenCalled();
+    });
   });
 });

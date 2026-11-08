@@ -25,6 +25,7 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type DragFilesRequest,
   type Catalog,
   type CatalogDownload,
   type CatalogUpdate,
@@ -114,6 +115,9 @@ import {
   DocumentFormat,
   ThemeDefinition,
 } from './types';
+
+/** Why the mock (browser mode) cannot drag files out, as the Rust mock says (E44.4). */
+export const MOCK_NO_FILE_DRAG = 'Dragging font files out needs the desktop app.';
 
 export const mockAppInfo: AppInfo = {
   name: 'Font Manager (mock)',
@@ -931,6 +935,14 @@ export interface MockOptions {
   colorFace?: boolean;
   /** Adds the Latin + Hebrew face `mockHebrewFace` (family "Frank רוחל", E19.3). */
   hebrewFace?: boolean;
+  /**
+   * Dragging font files out of the window (E44.4): `off` (the default, as in browser
+   * mode: `getAppInfo` says why and `startFileDrag` is refused) or `on` (a desktop app
+   * that can).
+   */
+  fileDrag?: 'off' | 'on';
+  /** Called with every file drag the mock starts (tests). */
+  onFileDrag?: (req: DragFilesRequest) => void;
   /**
    * Where the mock keeps its settings, as the app keeps `settings.json`, so a saved
    * setting is there after a reload (browser mode). In memory when absent.
@@ -2706,7 +2718,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   let activateFaces: FmClient['activate'] = async () => [];
   const client: FmClient = {
     getAppInfo: async () => {
-      const info = options.platform ? { ...mockAppInfo, platform: options.platform } : mockAppInfo;
+      const base: AppInfo = {
+        ...mockAppInfo,
+        fileDrag:
+          options.fileDrag === 'on'
+            ? { available: true, reason: null }
+            : { available: false, reason: MOCK_NO_FILE_DRAG },
+      };
+      const info = options.platform ? { ...base, platform: options.platform } : base;
       return options.update === 'managed'
         ? { ...info, platformNotes: [...(info.platformNotes ?? []), managedReason] }
         : info;
@@ -2851,6 +2870,31 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         style: f.face.style,
         fileUrl: mockFileUrl(f.path),
       };
+    },
+    startFileDrag: async (req) => {
+      if (options.fileDrag !== 'on')
+        throw { code: 'unsupported' as const, message: MOCK_NO_FILE_DRAG, detail: null };
+      const paths: string[] = [];
+      const add = (path: string) => {
+        if (!paths.includes(path)) paths.push(path);
+      };
+      for (const id of req.faces ?? []) {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        add(f.path);
+      }
+      for (const family of req.families ?? []) {
+        const list = byFamily.get(family);
+        if (!list)
+          throw {
+            code: 'notFound' as const,
+            message: `Family ${family} was not found.`,
+            detail: null,
+          };
+        for (const f of list) add(f.path);
+      }
+      options.onFileDrag?.(req);
+      return { paths, missing: 0 };
     },
     getFace: async (id) => {
       const f = find(id);
@@ -4012,6 +4056,17 @@ export const mockClient: FmClient = createMockClient({
   ],
   // `?mockPlatform=windows|macos|linux` sets the OS the app reports.
   platform: platformFromUrl(),
+  // `?mockFileDrag=1`: the system can drag font files out (E44.4); the drags the mock
+  // starts are kept in `window.__fmMockFileDrags` for the browser specs.
+  ...(countFromUrl('mockFileDrag', 1)
+    ? {
+        fileDrag: 'on' as const,
+        onFileDrag: (req: DragFilesRequest) => {
+          const w = globalThis as { __fmMockFileDrags?: DragFilesRequest[] };
+          (w.__fmMockFileDrags ??= []).push(req);
+        },
+      }
+    : {}),
   // `?mockUpdate=1` offers a patch, `=2` a major update, `=3` cannot reach the
   // server, `=4` offers an unsigned package, `=5` is a Flatpak (no update section).
   update: (['patch', 'major', 'offline', 'unsigned', 'managed'] as const)[

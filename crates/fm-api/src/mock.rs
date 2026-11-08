@@ -43,14 +43,14 @@ use crate::layout::{
     SavedLayout, TextBlock,
 };
 use crate::library::{
-    AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
-    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
-    FontNames, FontSwitchPayload, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest,
-    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions,
-    LicensePermissionsSource, LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem,
-    ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
-    SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
-    TrashMoveStatus, WebUse,
+    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
+    DuplicateKind, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary,
+    FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphDetail,
+    GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest,
+    LicenseInfo, LicensePermissions, LicensePermissionsSource, LicenseType, ListFamiliesRequest,
+    OpenLicense, Platform, Problem, ProblemKind, Resolution, ResolveFontRequest,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
@@ -1586,6 +1586,9 @@ fn mock_glyph_matches(g: &GlyphInfo, query: &str) -> bool {
         .is_some_and(|n| n.to_lowercase().contains(&query.to_lowercase()))
 }
 
+/// Why the mock cannot drag files out: it has no window of its own.
+pub const MOCK_NO_FILE_DRAG: &str = "Dragging font files out needs the desktop app.";
+
 impl LibraryService for MockApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
         Ok(AppInfo {
@@ -1600,6 +1603,10 @@ impl LibraryService for MockApi {
                 Platform::Linux
             },
             platform_notes: Vec::new(),
+            file_drag: FileDragSupport {
+                available: false,
+                reason: Some(MOCK_NO_FILE_DRAG.into()),
+            },
         })
     }
 
@@ -2110,6 +2117,19 @@ impl LibraryService for MockApi {
             style: s.style.clone(),
             file_url,
         })
+    }
+
+    /// The faces' paths, each once; the mock's files are never missing.
+    fn drag_files(&self, req: DragFilesRequest) -> ApiResult<DragFiles> {
+        let st = self.state();
+        let mut paths: Vec<String> = Vec::new();
+        for id in faces_of(&st, &req.faces, &req.families)? {
+            let path = &st.face(id)?.detail.path;
+            if !paths.contains(path) {
+                paths.push(path.clone());
+            }
+        }
+        Ok(DragFiles { paths, missing: 0 })
     }
 
     /// Over the faces of unpaused sources; the full name is the family and

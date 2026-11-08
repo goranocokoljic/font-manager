@@ -96,6 +96,12 @@ export type AppInfo = {
 	 *  About → Platform notes). Empty when nothing does.
 	 */
 	platformNotes?: string[],
+	/**
+	 *  Whether font files can be dragged out of the window into another app
+	 *  (E44.4, ADR 0022), and why not when they cannot. Absent from an older
+	 *  build: not available.
+	 */
+	fileDrag?: FileDragSupport,
 };
 
 /**  An update the release server offers. */
@@ -884,6 +890,28 @@ export type DownloadFamilyResponse = {
 };
 
 /**
+ *  The font files a file drag carries, where the user keeps them; never a
+ *  copy (rule 2).
+ */
+export type DragFiles = {
+	/**  Absolute paths, each once, in the order of the request's faces. */
+	paths: string[],
+	/**  Files of the request's faces that are not on disk any more; left out. */
+	missing: number,
+};
+
+/**
+ *  The fonts a file drag out of the window carries (E44.4): faces and whole
+ *  families, as a selection holds them.
+ */
+export type DragFilesRequest = {
+	/**  Faces. */
+	faces?: FaceId[],
+	/**  Every face of these families. */
+	families?: FamilyId[],
+};
+
+/**
  *  What a drop of the fonts a drag names would do to every manual
  *  collection and every tag (E44.2): its face count now and after the drop.
  *  The sidebar shows the pair as "31 → 34" while a drag is over the target.
@@ -1459,6 +1487,14 @@ export type FetchedFont = {
 	family: string,
 	/**  The faces of the family's files in the library, by id. */
 	faces: FaceId[],
+};
+
+/**  Whether this system can drag font files out of the window (E44.4). */
+export type FileDragSupport = {
+	/**  The drag works here. */
+	available: boolean,
+	/**  Why it does not, one sentence for a tooltip; absent when it works. */
+	reason?: string | null,
 };
 
 /**  One filter value and how many family groups it would give. */

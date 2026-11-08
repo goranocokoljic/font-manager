@@ -4,7 +4,9 @@
 // it through the calls the rest of the app already makes: Activate (the A key's bulk toggle),
 // Collection (the family page's menu, with the whole selection), Tag (the tagging panel),
 // Compare (pins the selection's faces, up to the sheet's four), Studio (the first face, and
-// the second as the headline) and × (clears the selection). The parent shows it in an
+// the second as the headline), Files (E44.4: hold it and drag past the window edge to drop
+// the selection's font files into another app; disabled with the reason as its tooltip where
+// the system cannot) and × (clears the selection). The parent shows it in an
 // `<FmSlide from="bottom" distance="16px">`, the motion table's rise. A toolbar of plain
 // buttons: each one is a Tab stop; Esc in it clears the selection like Esc in the list.
 // Studio is also a drop target for a font drag (E44.2): the accent ring while the drag is
@@ -18,9 +20,11 @@ import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
 import { faceKey, familyKey, type RowKey } from '../list/rows';
 import { useActivationStore } from '../stores/activation';
 import { MAX_PINS, useCompareStore } from '../stores/compare';
+import { pastEdge, useFileDragStore } from '../stores/fileDrag';
 import { useFontDragStore, type DropTarget } from '../stores/fontDrag';
 import { useFontListStore } from '../stores/fontList';
 import { useTaggingStore } from '../stores/tagging';
+import { useToastStore } from '../stores/toast';
 import FamilyCollectionMenu from './FamilyCollectionMenu.vue';
 import UiIcon from './ui/UiIcon.vue';
 
@@ -31,6 +35,7 @@ const list = useFontListStore();
 const activation = useActivationStore();
 const compare = useCompareStore();
 const tagging = useTaggingStore();
+const fileDrag = useFileDragStore();
 const router = useRouter();
 const fontDrag = useFontDragStore();
 const STUDIO: DropTarget = { kind: 'studio' };
@@ -73,6 +78,26 @@ async function openStudio(keys: ReadonlySet<RowKey>): Promise<void> {
   const query: Record<string, string> = { face: String(face.id) };
   if (headline) query.headline = String(headline.id);
   await router.push({ name: 'studio', query });
+}
+
+/** The "Files" grip went down: hold the pointer until it reaches the window edge. */
+function onFilesDown(e: PointerEvent): void {
+  if (e.button !== 0 || !fileDrag.hold()) return;
+  e.preventDefault();
+  (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+}
+
+function onFilesMove(e: PointerEvent): void {
+  if (!fileDrag.holding) return;
+  if (!pastEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight)) return;
+  const grip = e.currentTarget as Element;
+  if (grip.hasPointerCapture?.(e.pointerId)) grip.releasePointerCapture(e.pointerId);
+  void fileDrag.dragOut(pick.value);
+}
+
+/** A click (or Enter) cannot drag: say how the grip works. */
+function onFilesClick(): void {
+  if (fileDrag.available) useToastStore().show(t('selection.bar.filesHint'));
 }
 
 function onStudioOver(e: DragEvent): void {
@@ -155,6 +180,23 @@ function onKey(e: KeyboardEvent): void {
         <UiIcon name="layout" />
         {{ t('selection.bar.studio') }}
       </button>
+      <button
+        type="button"
+        class="action files"
+        :class="{ holding: fileDrag.holding }"
+        data-testid="bar-files"
+        :aria-disabled="!fileDrag.available"
+        :title="fileDrag.available ? t('selection.bar.filesHint') : fileDrag.reason"
+        @pointerdown="onFilesDown"
+        @pointermove="onFilesMove"
+        @pointerup="fileDrag.release()"
+        @pointercancel="fileDrag.release()"
+        @lostpointercapture="fileDrag.release()"
+        @click="onFilesClick"
+      >
+        <UiIcon name="export" />
+        {{ t('selection.bar.files') }}
+      </button>
       <span class="divider" aria-hidden="true" />
       <button
         type="button"
@@ -228,8 +270,19 @@ function onKey(e: KeyboardEvent): void {
   outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
 }
-.action:disabled {
+.action:disabled,
+.action[aria-disabled='true'] {
   opacity: 0.55;
+}
+.files {
+  cursor: grab;
+  touch-action: none;
+}
+.files.holding {
+  cursor: grabbing;
+}
+.files[aria-disabled='true'] {
+  cursor: default;
 }
 .clear {
   padding: 0 var(--fm-space-2);

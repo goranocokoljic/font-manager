@@ -25,9 +25,9 @@ use fm_api::layout::{
     LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary,
-    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
-    KeepCopyRequest, LibraryService, ListFamiliesRequest, Problem, Resolution,
+    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, FaceDetail, Family,
+    FamilySummary, FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles,
+    GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest, Problem, Resolution,
     ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
@@ -522,6 +522,41 @@ async fn font_switch_payload(
     face: FaceId,
 ) -> ApiResult<FontSwitchPayload> {
     call(&state, move |api| api.font_switch_payload(face)).await
+}
+
+/// Drags the font files of a selection out of the window (E44.4, ADR 0022):
+/// the core lists the files where the user keeps them, then the OS drag runs
+/// on the UI thread while the mouse button is still down. Answers the files
+/// the drag carried (none when every file is gone; no drag starts then).
+#[tauri::command]
+async fn start_file_drag<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    req: DragFilesRequest,
+) -> ApiResult<DragFiles> {
+    let files = call(&state, move |api| api.drag_files(req)).await?;
+    if files.paths.is_empty() {
+        return Ok(files);
+    }
+    let paths: Vec<std::path::PathBuf> = files.paths.iter().map(Into::into).collect();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let failed = |detail: String| {
+        ApiError::new(
+            ErrorCode::Internal,
+            "The font files could not be dragged out.",
+        )
+        .with_detail(detail)
+    };
+    app.run_on_main_thread(move || {
+        let _ = tx.send(fm_platform::drag::system().start(&paths));
+    })
+    .map_err(|e| failed(e.to_string()))?;
+    tauri::async_runtime::spawn_blocking(move || rx.recv())
+        .await
+        .map_err(|e| failed(e.to_string()))?
+        .map_err(|e| failed(e.to_string()))?
+        .map_err(|e| failed(e.0))?;
+    Ok(files)
 }
 
 /// One page of families.
@@ -1414,6 +1449,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
                 }
                 None => TraySupport::Unavailable("no tray item".into()),
             };
+            if let Some(core) = &core {
+                core.set_file_drag_support(fm_platform::drag::system().support());
+            }
             launch(app.handle(), &support, std::env::args_os().skip(1));
             let handle = app.handle().clone();
             std::thread::Builder::new()
@@ -1441,6 +1479,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_glyph,
             glyph_styles,
             font_switch_payload,
+            start_file_drag,
             list_families,
             get_family,
             search,

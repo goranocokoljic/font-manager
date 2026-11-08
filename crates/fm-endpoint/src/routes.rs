@@ -95,6 +95,7 @@ routes! {
     glyph_styles(req),
     resolve_font(req),
     font_switch_payload(face),
+    drag_files(req),
     // search
     search(req),
     check_coverage(req),

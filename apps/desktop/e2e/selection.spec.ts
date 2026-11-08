@@ -166,6 +166,7 @@ test.describe('the selection bar', () => {
       'Tag',
       'Compare',
       'Studio',
+      'Files',
       '',
     ]);
     await expect(bar(page).getByRole('combobox', { name: 'Add to collection' })).toHaveText(
@@ -236,5 +237,56 @@ test.describe('the selection bar', () => {
     await expect(collection).toBeFocused();
     // Empty before; now the faces of both families (the count is of fonts).
     await expect(item).toHaveText(/^Editorial[1-9][0-9]*$/);
+  });
+});
+
+// E44.4: the bar's Files grip drags the selection's font files out of the window.
+test.describe('dragging font files out', () => {
+  test('the grip is disabled with the reason as its tooltip where files cannot be dragged out', async ({
+    page,
+  }) => {
+    const wall = await openWall(page);
+    await cards(wall).nth(0).click();
+    const files = bar(page).getByTestId('bar-files');
+    await expect(files).toHaveText('Files');
+    await expect(files).toHaveAttribute('aria-disabled', 'true');
+    await expect(files).toHaveAttribute('title', 'Dragging font files out needs the desktop app.');
+  });
+
+  test('holding the grip starts the drag of the selection only at the window edge', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.route('**/fmfont/*', (route) =>
+      route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+    );
+    await page.goto('/?mockLibrary=wall&mockFileDrag=1#/');
+    await viewButton(page, 'Grid').click();
+    const wall = page.getByRole('listbox', { name: 'Font grid' });
+    await cards(wall).nth(0).click();
+    await cards(wall)
+      .nth(2)
+      .click({ modifiers: ['Shift'] });
+    const files = bar(page).getByTestId('bar-files');
+    await expect(files).toHaveAttribute('aria-disabled', 'false');
+    await expect(files).toHaveAttribute(
+      'title',
+      'Hold and drag past the window edge to drop the font files into another app',
+    );
+    const drags = () =>
+      page.evaluate(
+        () => (globalThis as { __fmMockFileDrags?: unknown[] }).__fmMockFileDrags ?? [],
+      );
+    const box = (await files.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(700, 450, { steps: 4 });
+    expect(await drags()).toEqual([]);
+    await page.mouse.move(1439, 450, { steps: 4 });
+    await expect.poll(drags).toHaveLength(1);
+    const [req] = (await drags()) as { faces: number[]; families: number[] }[];
+    expect(req!.faces).toEqual([]);
+    expect(req!.families).toHaveLength(3);
+    await page.mouse.up();
   });
 });

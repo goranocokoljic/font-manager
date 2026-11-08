@@ -63,6 +63,7 @@ service!(LibraryService {
     glyph_styles(req: GlyphRequest) -> GlyphStyles;
     resolve_font(req: ResolveFontRequest) -> FontMatches;
     font_switch_payload(face: FaceId) -> FontSwitchPayload;
+    drag_files(req: DragFilesRequest) -> DragFiles;
 });
 
 service!(SearchService {
