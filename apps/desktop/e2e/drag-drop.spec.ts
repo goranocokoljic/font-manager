@@ -174,15 +174,42 @@ test.describe('dragging fonts to a target', () => {
     await expect(count).toHaveCount(0);
   });
 
-  test('the Studio button takes a drop and opens the Studio with the fonts', async ({ page }) => {
+  test('the Studio button takes a drop and opens the Studio with the dropped fonts', async ({
+    page,
+  }) => {
     const wall = await openWall(page);
-    await selectFirst(wall, 2);
+    // The face the Studio gets for card 3 alone: select it and use the bar's Studio button.
+    await cards(wall).nth(2).click();
+    await bar(page).getByTestId('bar-studio').click();
+    await expect(page).toHaveURL(/#\/studio\?face=\d+$/);
+    const alone = new URL(page.url()).hash;
+    await page.goBack();
+    await expect(wall).toBeVisible();
+
+    // Cards 1 and 2 are selected; card 3, not in the selection, is dragged onto Studio. The
+    // drop opens the Studio with card 3's face only, not with the selection's two faces.
+    await cards(wall).nth(0).click();
+    await cards(wall)
+      .nth(1)
+      .click({ modifiers: ['Shift'] });
+    await expect(cards(wall).nth(2)).toHaveAttribute('aria-selected', 'false');
     const studio = bar(page).getByTestId('bar-studio');
-    await dragOver(page, cards(wall).nth(0), studio);
+    await dragOver(page, cards(wall).nth(2), studio);
     await expect(studio).toHaveClass(/drop/);
     await expect(studio).toHaveCSS('outline-style', 'solid');
     await page.mouse.up();
-    await expect(page).toHaveURL(/#\/studio\?face=\d+&headline=\d+/);
+    await expect.poll(() => new URL(page.url()).hash).toBe(alone);
+
+    // Dragging a selected card carries the whole selection: face and headline.
+    await page.goBack();
+    await expect(wall).toBeVisible();
+    await cards(wall).nth(0).click();
+    await cards(wall)
+      .nth(1)
+      .click({ modifiers: ['Shift'] });
+    await dragOver(page, cards(wall).nth(0), bar(page).getByTestId('bar-studio'));
+    await page.mouse.up();
+    await expect(page).toHaveURL(/#\/studio\?face=\d+&headline=\d+$/);
   });
 
   test('a smart collection takes no drop and says why', async ({ page }) => {
