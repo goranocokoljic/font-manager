@@ -20,6 +20,7 @@ pub mod document_fonts;
 pub mod endpoint;
 pub mod error;
 pub mod features;
+pub mod file_drag;
 mod filter;
 pub mod fingerprint;
 pub mod font_file;

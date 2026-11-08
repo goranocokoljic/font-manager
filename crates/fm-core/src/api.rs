@@ -57,11 +57,12 @@ use fm_api::layout::{
     SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
-    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
-    ImportMode, KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem,
-    Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
-    SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
+    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, FaceDetail, Family,
+    FamilySummary, FileDragSupport, FontMatches, FontSwitchPayload, GlyphDetail, GlyphPage,
+    GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
+    ListFamiliesRequest, Platform, Problem, Resolution, ResolveFontRequest,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -93,7 +94,7 @@ use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
     FamilyId, JobId, ResolutionId, SetId, SourceId, VirtualStyleId,
 };
-use fm_platform::{AppPaths, FontActivator, Os, PdfPrinter, Trash, TraySupport};
+use fm_platform::{AppPaths, DragSupport, FontActivator, Os, PdfPrinter, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::catalog::Catalogs;
@@ -169,6 +170,9 @@ pub struct CoreApi {
     /// What the shell found when it made the tray item; `None` before (and
     /// without a shell). Feeds the platform notes of [`AppInfo`].
     tray: Mutex<Option<TraySupport>>,
+    /// Whether the shell can drag font files out of its window (E44.4);
+    /// `None` without a shell. Feeds [`AppInfo::file_drag`].
+    file_drag: Mutex<Option<DragSupport>>,
 }
 
 impl std::fmt::Debug for CoreApi {
@@ -245,6 +249,7 @@ impl CoreApi {
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
             tray: Mutex::new(None),
+            file_drag: Mutex::new(None),
         }
     }
 
@@ -252,6 +257,12 @@ impl CoreApi {
     /// notes (Settings → About).
     pub fn set_tray_support(&self, support: TraySupport) {
         *lock(&self.tray) = Some(support);
+    }
+
+    /// Records whether the shell can drag font files out of its window
+    /// (E44.4), for [`AppInfo::file_drag`].
+    pub fn set_file_drag_support(&self, support: DragSupport) {
+        *lock(&self.file_drag) = Some(support);
     }
 
     /// The same API, moving "Keep this one" copies through `trash`.
@@ -763,6 +774,7 @@ impl LibraryService for CoreApi {
                 Os::Linux => Platform::Linux,
             },
             platform_notes,
+            file_drag: file_drag_support(lock(&self.file_drag).as_ref()),
         })
     }
 
@@ -936,6 +948,40 @@ impl LibraryService for CoreApi {
 
     fn font_switch_payload(&self, face: FaceId) -> ApiResult<FontSwitchPayload> {
         Ok(self.lock().font_switch_payload(face)?)
+    }
+
+    /// Reads the faces' files from the index, then checks the disk outside the lock.
+    fn drag_files(&self, req: DragFilesRequest) -> ApiResult<DragFiles> {
+        let files = {
+            let index = self.lock();
+            let faces = index.faces_of(&req.faces, &req.families)?;
+            faces
+                .into_iter()
+                .map(|face| index.face_file(face).map(|f| f.path))
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        Ok(crate::file_drag::drag_files(files))
+    }
+}
+
+/// Why files cannot be dragged out without a shell window.
+pub const NO_FILE_DRAG_WINDOW: &str = "Dragging font files out needs the app window.";
+
+/// What [`AppInfo::file_drag`] says for the shell's `support` (`None`: no shell).
+fn file_drag_support(support: Option<&DragSupport>) -> FileDragSupport {
+    match support {
+        Some(DragSupport::Available) => FileDragSupport {
+            available: true,
+            reason: None,
+        },
+        Some(DragSupport::Unavailable(reason)) => FileDragSupport {
+            available: false,
+            reason: Some(reason.clone()),
+        },
+        None => FileDragSupport {
+            available: false,
+            reason: Some(NO_FILE_DRAG_WINDOW.into()),
+        },
     }
 }
 

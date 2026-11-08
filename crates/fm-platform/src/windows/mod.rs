@@ -1,13 +1,16 @@
 //! Windows: Known Folders through their environment variables, and the
 //! per-user registry activator (ADR 0008), the Recycle Bin (E8.3), the `Run`
 //! value that starts the app at login (ADR 0011), and the WebView2 PDF
-//! printer (ADR 0013).
+//! printer (ADR 0013), and the file drag out of the window (ADR 0022).
 
 #[cfg(windows)]
 #[allow(unsafe_code)] // Win32 registry and messaging FFI; every block has a SAFETY note.
 mod activator;
 #[cfg(windows)]
 mod autostart;
+#[cfg(windows)]
+#[allow(unsafe_code)] // Shell, OLE and clipboard calls; every block has a SAFETY note.
+pub(crate) mod drag;
 #[cfg(windows)]
 #[allow(unsafe_code)] // DirectWrite COM calls; every block has a SAFETY note.
 mod dwrite;
@@ -43,6 +46,8 @@ mod tray;
 pub use activator::{FONTS_KEY, LEDGER_KEY, WindowsActivator};
 #[cfg(windows)]
 pub use autostart::{RUN_KEY, WindowsAutostart};
+#[cfg(windows)]
+pub use drag::WindowsFileDrag;
 #[cfg(windows)]
 pub(crate) use memory::release_free_memory;
 pub(crate) use open_url::command as open_url_command;

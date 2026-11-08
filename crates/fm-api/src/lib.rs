@@ -172,6 +172,9 @@ pub fn types() -> specta::Types {
         library::ResolveFontRequest,
         library::FontMatches,
         library::FontSwitchPayload,
+        library::FileDragSupport,
+        library::DragFilesRequest,
+        library::DragFiles,
         // search
         search::SearchRequest,
         search::SearchResponse,

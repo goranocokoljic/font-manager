@@ -975,6 +975,16 @@
       "tag": "Tag",
       "compare": "Compare",
       "studio": "Studio",
+      "files": "Files",
+      "filesHint": "Hold and drag past the window edge to drop the font files into another app",
+      "filesUnavailable": "Dragging font files out is not available here.",
+      "filesNone": "None of these font files are on disk any more.",
+      "filesMissing": {
+        "one": "{count} font file is not on disk any more and was left out.",
+        "other": "{count} font files are not on disk any more and were left out."
+      },
+      "filesFailed": "The font files could not be dragged out: {reason}",
+      "filesFailedReason": "the system refused the drag",
       "clear": "Clear the selection"
     }
   },

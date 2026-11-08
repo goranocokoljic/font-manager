@@ -41,6 +41,22 @@ pub struct AppInfo {
     /// About → Platform notes). Empty when nothing does.
     #[serde(default)]
     pub platform_notes: Vec<String>,
+    /// Whether font files can be dragged out of the window into another app
+    /// (E44.4, ADR 0022), and why not when they cannot. Absent from an older
+    /// build: not available.
+    #[serde(default)]
+    pub file_drag: FileDragSupport,
+}
+
+/// Whether this system can drag font files out of the window (E44.4).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDragSupport {
+    /// The drag works here.
+    pub available: bool,
+    /// Why it does not, one sentence for a tooltip; absent when it works.
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 /// Where a source's fonts come from.
@@ -1296,6 +1312,30 @@ pub struct FontSwitchPayload {
     pub file_url: String,
 }
 
+/// The fonts a file drag out of the window carries (E44.4): faces and whole
+/// families, as a selection holds them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DragFilesRequest {
+    /// Faces.
+    #[serde(default)]
+    pub faces: Vec<FaceId>,
+    /// Every face of these families.
+    #[serde(default)]
+    pub families: Vec<FamilyId>,
+}
+
+/// The font files a file drag carries, where the user keeps them; never a
+/// copy (rule 2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DragFiles {
+    /// Absolute paths, each once, in the order of the request's faces.
+    pub paths: Vec<String>,
+    /// Files of the request's faces that are not on disk any more; left out.
+    pub missing: u32,
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -1372,6 +1412,11 @@ pub trait LibraryService {
     /// What dragging `face` to another app carries (E34.1): its PostScript
     /// name, family, style and file URL. `NotFound` for an unknown face.
     fn font_switch_payload(&self, face: FaceId) -> ApiResult<FontSwitchPayload>;
+    /// The font files of `req`'s faces and families for a file drag out of
+    /// the window (E44.4): each file once (a collection file holds several
+    /// faces), files no longer on disk counted in `missing`. An unknown face
+    /// or family is `NotFound`.
+    fn drag_files(&self, req: DragFilesRequest) -> ApiResult<DragFiles>;
 }
 
 #[cfg(test)]

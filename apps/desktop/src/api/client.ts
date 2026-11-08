@@ -55,6 +55,8 @@ import type {
   FaceDetail,
   FaceId,
   FontSwitchPayload,
+  DragFiles,
+  DragFilesRequest,
   Family,
   FamilyId,
   FamilyNotesUpdate,
@@ -166,6 +168,11 @@ export interface FmClient {
   glyphStyles(req: GlyphRequest): Promise<GlyphStyles>;
   /** What dragging a face to another app carries: its names and its file as a `file://` URL (E34.1). */
   fontSwitchPayload(face: FaceId): Promise<FontSwitchPayload>;
+  /**
+   * Drags the font files of `req` out of the window (E44.4): a native file drag the
+   * app runs while the mouse button is down. Answers the files it carried.
+   */
+  startFileDrag(req: DragFilesRequest): Promise<DragFiles>;
   listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
   getFamily(family: FamilyId): Promise<Family>;
   /** Free text and filters, grouped by family, with the count of every filter value. */
@@ -419,6 +426,7 @@ export const tauriClient: FmClient = {
   getGlyph: (req) => invoke<GlyphDetail>('get_glyph', { req }),
   glyphStyles: (req) => invoke<GlyphStyles>('glyph_styles', { req }),
   fontSwitchPayload: (face) => invoke<FontSwitchPayload>('font_switch_payload', { face }),
+  startFileDrag: (req) => invoke<DragFiles>('start_file_drag', { req }),
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
   search: (req) => invoke<SearchResponse>('search', { req }),

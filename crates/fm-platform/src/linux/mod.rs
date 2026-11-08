@@ -15,6 +15,8 @@ mod autostart;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod fontconfig;
 // Shared with macOS, which sets the socket's mode its own way.
+#[cfg(target_os = "linux")]
+pub(crate) mod drag;
 #[cfg(unix)]
 pub(crate) mod ipc;
 #[cfg(target_os = "linux")]
@@ -36,6 +38,8 @@ pub use activator::LinuxActivator;
 pub use autostart::LinuxAutostart;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 pub(crate) use autostart::{FLATPAK_INFO, in_flatpak, system_entry};
+#[cfg(target_os = "linux")]
+pub use drag::LinuxFileDrag;
 #[cfg(target_os = "linux")]
 pub(crate) use memory::release_free_memory;
 pub(crate) use open_url::command as open_url_command;

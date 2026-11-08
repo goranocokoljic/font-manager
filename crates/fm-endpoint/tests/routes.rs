@@ -109,6 +109,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("glyph_styles", r#"{"face":1,"codePoint":65}"#.into()),
         ("resolve_font", r#"{"font":"1"}"#.into()),
         ("font_switch_payload", "1".into()),
+        ("drag_files", r#"{"faces":[1]}"#.into()),
         // search
         ("search", r#"{"query":"sans"}"#.into()),
         (

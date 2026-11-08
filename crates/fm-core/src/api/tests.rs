@@ -741,6 +741,88 @@ fn font_switch_payload_comes_from_the_index() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+/// E44.4 criteria 1 and 2: a file drag carries the files where the library
+/// has them (never a copy), each once; a file that is gone is counted, an
+/// unknown face or family refused.
+#[test]
+fn drag_files_are_the_library_files_in_place() {
+    use fm_api::library::DragFilesRequest;
+    let (lib, _, _) = Lib::scanned("api-drag-files");
+    let archivo = lib
+        .api
+        .get_family(lib.family("Archivo").id)
+        .expect("family");
+    let paths: Vec<String> = archivo
+        .faces
+        .iter()
+        .map(|f| lib.api.get_face(f.id).expect("detail").path)
+        .collect();
+    let first = archivo.faces[0].id;
+
+    let files = lib
+        .api
+        .drag_files(DragFilesRequest {
+            faces: vec![first],
+            families: vec![archivo.summary.id],
+        })
+        .expect("files");
+    let mut want: Vec<String> = Vec::new();
+    for p in &paths {
+        if !want.contains(p) {
+            want.push(p.clone());
+        }
+    }
+    assert_eq!(files.paths, want, "the first face's file first, each once");
+    assert_eq!(files.missing, 0);
+    for p in &files.paths {
+        assert!(Path::new(p).is_file(), "{p} is the library's own file");
+    }
+
+    std::fs::remove_file(&paths[0]).expect("remove a file");
+    let files = lib
+        .api
+        .drag_files(DragFilesRequest {
+            faces: vec![first],
+            families: Vec::new(),
+        })
+        .expect("files");
+    assert!(files.paths.is_empty());
+    assert_eq!(files.missing, 1);
+
+    for req in [
+        DragFilesRequest {
+            faces: vec![FaceId(99_999)],
+            families: Vec::new(),
+        },
+        DragFilesRequest {
+            faces: Vec::new(),
+            families: vec![FamilyId(99_999)],
+        },
+    ] {
+        let err = lib.api.drag_files(req).expect_err("unknown");
+        assert_eq!(err.code, ErrorCode::NotFound);
+    }
+}
+
+/// E44.4 criterion 3: `app_info` says whether files can be dragged out, and
+/// why not; without a shell window it cannot.
+#[test]
+fn app_info_says_whether_files_can_be_dragged_out() {
+    let lib = Lib::new("api-file-drag-support");
+    let info = lib.api.app_info().expect("info").file_drag;
+    assert!(!info.available);
+    assert_eq!(info.reason.as_deref(), Some(NO_FILE_DRAG_WINDOW));
+    lib.api.set_file_drag_support(DragSupport::Available);
+    let info = lib.api.app_info().expect("info").file_drag;
+    assert!(info.available);
+    assert_eq!(info.reason, None);
+    lib.api
+        .set_file_drag_support(DragSupport::Unavailable("no display".into()));
+    let info = lib.api.app_info().expect("info").file_drag;
+    assert!(!info.available);
+    assert_eq!(info.reason.as_deref(), Some("no display"));
+}
+
 /// E10.4 criteria 1 and 2: `get_face` names stylistic sets and character
 /// variants with the font's own names, read from the index: the file is gone
 /// when `get_face` runs, so it cannot have been opened again.

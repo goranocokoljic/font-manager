@@ -14,6 +14,9 @@ mod autostart;
 #[allow(unsafe_code)] // CoreText / CoreFoundation FFI; every block has a SAFETY note.
 mod coretext;
 #[cfg(target_os = "macos")]
+#[allow(unsafe_code)] // AppKit statics and a defined class; every block has a SAFETY note.
+pub(crate) mod drag;
+#[cfg(target_os = "macos")]
 pub(crate) mod ipc;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod ledger;
@@ -36,6 +39,8 @@ mod tray;
 pub use activator::MacosActivator;
 #[cfg(target_os = "macos")]
 pub use autostart::MacosAutostart;
+#[cfg(target_os = "macos")]
+pub use drag::MacosFileDrag;
 #[cfg(target_os = "macos")]
 pub use ledger::LEDGER_FILE;
 #[cfg(target_os = "macos")]
