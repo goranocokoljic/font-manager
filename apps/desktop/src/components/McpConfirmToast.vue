@@ -6,6 +6,8 @@
 import { computed, onMounted } from 'vue';
 import { t } from '../i18n';
 import { useMcpConfirmStore } from '../stores/mcpConfirm';
+import { FmSlide } from '../motion';
+import { retireToast } from './retireToast';
 
 const store = useMcpConfirmStore();
 
@@ -28,37 +30,39 @@ const message = computed(() => {
 
 <template>
   <div class="region" aria-live="assertive">
-    <section
-      v-if="store.current"
-      :key="store.current.id"
-      class="confirm"
-      data-testid="mcp-confirm"
-      :aria-label="t('mcpConfirm.label')"
-      aria-describedby="mcp-confirm-message mcp-confirm-timeout"
-    >
-      <p id="mcp-confirm-message" class="message">{{ message }}</p>
-      <p id="mcp-confirm-timeout" class="hint">
-        {{ t('mcpConfirm.timeout', { seconds: store.current.timeoutSecs }) }}
-      </p>
-      <div class="actions">
-        <button
-          type="button"
-          class="allow"
-          :disabled="store.busy"
-          @click="store.answer(store.current.id, true)"
-        >
-          {{ t('mcpConfirm.allow') }}
-        </button>
-        <button
-          type="button"
-          class="deny"
-          :disabled="store.busy"
-          @click="store.answer(store.current.id, false)"
-        >
-          {{ t('mcpConfirm.deny') }}
-        </button>
-      </div>
-    </section>
+    <FmSlide from="bottom" distance="16px" reduced="fade" @before-leave="retireToast">
+      <section
+        v-if="store.current"
+        :key="store.current.id"
+        class="confirm"
+        data-testid="mcp-confirm"
+        :aria-label="t('mcpConfirm.label')"
+        aria-describedby="mcp-confirm-message mcp-confirm-timeout"
+      >
+        <p id="mcp-confirm-message" class="message">{{ message }}</p>
+        <p id="mcp-confirm-timeout" class="hint">
+          {{ t('mcpConfirm.timeout', { seconds: store.current.timeoutSecs }) }}
+        </p>
+        <div class="actions">
+          <button
+            type="button"
+            class="allow"
+            :disabled="store.busy"
+            @click="store.answer(store.current.id, true)"
+          >
+            {{ t('mcpConfirm.allow') }}
+          </button>
+          <button
+            type="button"
+            class="deny"
+            :disabled="store.busy"
+            @click="store.answer(store.current.id, false)"
+          >
+            {{ t('mcpConfirm.deny') }}
+          </button>
+        </div>
+      </section>
+    </FmSlide>
   </div>
 </template>
 
@@ -117,15 +121,10 @@ button:disabled {
   color: var(--fm-on-accent);
   font-weight: 600;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .confirm {
-    animation: rise var(--fm-motion-fast) var(--fm-ease);
-  }
-}
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+/* A leaving one fades out on top of the next, without moving it. */
+.confirm.fm-slide-leave-active {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
 }
 </style>

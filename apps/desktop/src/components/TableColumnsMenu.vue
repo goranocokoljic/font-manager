@@ -5,6 +5,7 @@
 import { computed, nextTick, ref, useId } from 'vue';
 import UiButton from './ui/UiButton.vue';
 import { columnById, type ColumnId } from '../list/columns';
+import { FmSlide } from '../motion';
 import { t } from '../i18n';
 import { useViewsStore } from '../stores/views';
 
@@ -62,49 +63,51 @@ function onFocusOut(e: FocusEvent): void {
     <UiButton ref="button" :aria-expanded="open" :aria-controls="`${uid}-panel`" @click="toggle">
       {{ t('table.columnsMenu.button') }}
     </UiButton>
-    <div
-      v-if="open"
-      :id="`${uid}-panel`"
-      ref="panel"
-      class="panel"
-      role="group"
-      :aria-label="t('table.columnsMenu.label')"
-      @focusout="onFocusOut"
-    >
-      <ul>
-        <li v-for="item in items" :key="item.id">
-          <input
-            :id="`${uid}-${item.id}`"
-            type="checkbox"
-            :checked="item.shown"
-            :disabled="!item.hideable"
-            @change="views.toggleColumn(view, item.id)"
-          />
-          <label :for="`${uid}-${item.id}`">{{ item.label }}</label>
-          <button
-            type="button"
-            class="move"
-            :aria-label="t('table.columnsMenu.moveUp', { column: item.label })"
-            :disabled="item.index === 0"
-            @click="move(item.id, item.index - 1, $event)"
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            class="move"
-            :aria-label="t('table.columnsMenu.moveDown', { column: item.label })"
-            :disabled="item.index === items.length - 1"
-            @click="move(item.id, item.index + 1, $event)"
-          >
-            ↓
-          </button>
-        </li>
-      </ul>
-      <button type="button" class="reset" @click="views.resetColumns(view)">
-        {{ t('table.columnsMenu.reset') }}
-      </button>
-    </div>
+    <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
+      <div
+        v-if="open"
+        :id="`${uid}-panel`"
+        ref="panel"
+        class="panel"
+        role="group"
+        :aria-label="t('table.columnsMenu.label')"
+        @focusout="onFocusOut"
+      >
+        <ul>
+          <li v-for="item in items" :key="item.id">
+            <input
+              :id="`${uid}-${item.id}`"
+              type="checkbox"
+              :checked="item.shown"
+              :disabled="!item.hideable"
+              @change="views.toggleColumn(view, item.id)"
+            />
+            <label :for="`${uid}-${item.id}`">{{ item.label }}</label>
+            <button
+              type="button"
+              class="move"
+              :aria-label="t('table.columnsMenu.moveUp', { column: item.label })"
+              :disabled="item.index === 0"
+              @click="move(item.id, item.index - 1, $event)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="move"
+              :aria-label="t('table.columnsMenu.moveDown', { column: item.label })"
+              :disabled="item.index === items.length - 1"
+              @click="move(item.id, item.index + 1, $event)"
+            >
+              ↓
+            </button>
+          </li>
+        </ul>
+        <button type="button" class="reset" @click="views.resetColumns(view)">
+          {{ t('table.columnsMenu.reset') }}
+        </button>
+      </div>
+    </FmSlide>
   </div>
 </template>
 

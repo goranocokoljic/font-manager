@@ -6,6 +6,7 @@
 // `view`, which every row of that list reads.
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { t } from '../i18n';
+import { FmSlide } from '../motion';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { wallLayout, type WallPreset } from '../list/grid';
 import { languageName } from '../search/chips';
@@ -298,142 +299,144 @@ function colorFrom(e: Event): string {
         />
       </span>
     </div>
-    <div
-      v-show="optionsOpen"
-      :id="optionsId"
-      ref="panel"
-      class="more"
-      role="group"
-      :aria-label="t('preview.options')"
-      @keydown.esc="closeOptions"
-    >
-      <div class="field">
-        <label :for="`${uid}-sample`">{{ t('preview.sample') }}</label>
-        <UiSelect
-          :id="`${uid}-sample`"
-          :model-value="s.sample"
-          :options="SAMPLE_KINDS"
-          @update:model-value="set({ sample: $event })"
-        />
-      </div>
-      <div class="field">
-        <span>{{ t('preview.size') }}</span>
-        <UiNumberField
-          class="number"
-          :aria-label="t('preview.sizeInPixels')"
-          :min="size.min"
-          :max="size.max"
-          :step="size.step"
-          :model-value="shownSize"
-          @update:model-value="typed(KEY.size, $event, false)"
-          @commit="typed(KEY.size, $event, true)"
-        />
-      </div>
-      <div class="field">
-        <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
-          t('preview.autoSize')
-        }}</label>
-        <UiSelect
-          :id="`${uid}-auto-size`"
-          :model-value="s.autoSize"
-          :options="autoSizeOptions"
-          @update:model-value="set({ autoSize: $event })"
-        />
-      </div>
-      <div class="field">
-        <span>{{ t('preview.lineHeight') }}</span>
-        <UiNumberField
-          class="number"
-          :aria-label="t('preview.lineHeight')"
-          :min="LINE_HEIGHT.min"
-          :max="LINE_HEIGHT.max"
-          :step="LINE_HEIGHT.step"
-          :model-value="shownLineHeight"
-          @update:model-value="typed(KEY.lineHeight, $event, false)"
-          @commit="typed(KEY.lineHeight, $event, true)"
-        />
-      </div>
-      <div class="field" role="group" :aria-labelledby="`${uid}-tracking`">
-        <span :id="`${uid}-tracking`">{{ t('preview.tracking') }}</span>
-        <input
-          type="range"
-          :aria-label="t('preview.trackingSlider')"
-          :min="TRACKING.min"
-          :max="TRACKING.max"
-          :step="TRACKING.step"
-          :value="s.trackingEm"
-          @input="slid(KEY.tracking, $event)"
-        />
-        <UiNumberField
-          class="number"
-          :aria-label="t('preview.trackingInEm')"
-          :min="TRACKING.min"
-          :max="TRACKING.max"
-          :step="TRACKING.step"
-          :model-value="s.trackingEm"
-          @update:model-value="typed(KEY.tracking, $event, false)"
-          @commit="typed(KEY.tracking, $event, true)"
-        />
-      </div>
-      <label class="field" :title="t('preview.metricsHint')">
-        <input
-          type="checkbox"
-          :checked="s.metrics"
-          @change="set({ metrics: ($event.target as HTMLInputElement).checked })"
-        />
-        <span>{{ t('preview.metrics') }}</span>
-      </label>
-      <label class="field">
-        <input
-          type="checkbox"
-          :checked="s.outline"
-          @change="set({ outline: ($event.target as HTMLInputElement).checked })"
-        />
-        <span>{{ t('preview.outline') }}</span>
-      </label>
+    <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
+      <div
+        v-show="optionsOpen"
+        :id="optionsId"
+        ref="panel"
+        class="more"
+        role="group"
+        :aria-label="t('preview.options')"
+        @keydown.esc="closeOptions"
+      >
+        <div class="field">
+          <label :for="`${uid}-sample`">{{ t('preview.sample') }}</label>
+          <UiSelect
+            :id="`${uid}-sample`"
+            :model-value="s.sample"
+            :options="SAMPLE_KINDS"
+            @update:model-value="set({ sample: $event })"
+          />
+        </div>
+        <div class="field">
+          <span>{{ t('preview.size') }}</span>
+          <UiNumberField
+            class="number"
+            :aria-label="t('preview.sizeInPixels')"
+            :min="size.min"
+            :max="size.max"
+            :step="size.step"
+            :model-value="shownSize"
+            @update:model-value="typed(KEY.size, $event, false)"
+            @commit="typed(KEY.size, $event, true)"
+          />
+        </div>
+        <div class="field">
+          <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
+            t('preview.autoSize')
+          }}</label>
+          <UiSelect
+            :id="`${uid}-auto-size`"
+            :model-value="s.autoSize"
+            :options="autoSizeOptions"
+            @update:model-value="set({ autoSize: $event })"
+          />
+        </div>
+        <div class="field">
+          <span>{{ t('preview.lineHeight') }}</span>
+          <UiNumberField
+            class="number"
+            :aria-label="t('preview.lineHeight')"
+            :min="LINE_HEIGHT.min"
+            :max="LINE_HEIGHT.max"
+            :step="LINE_HEIGHT.step"
+            :model-value="shownLineHeight"
+            @update:model-value="typed(KEY.lineHeight, $event, false)"
+            @commit="typed(KEY.lineHeight, $event, true)"
+          />
+        </div>
+        <div class="field" role="group" :aria-labelledby="`${uid}-tracking`">
+          <span :id="`${uid}-tracking`">{{ t('preview.tracking') }}</span>
+          <input
+            type="range"
+            :aria-label="t('preview.trackingSlider')"
+            :min="TRACKING.min"
+            :max="TRACKING.max"
+            :step="TRACKING.step"
+            :value="s.trackingEm"
+            @input="slid(KEY.tracking, $event)"
+          />
+          <UiNumberField
+            class="number"
+            :aria-label="t('preview.trackingInEm')"
+            :min="TRACKING.min"
+            :max="TRACKING.max"
+            :step="TRACKING.step"
+            :model-value="s.trackingEm"
+            @update:model-value="typed(KEY.tracking, $event, false)"
+            @commit="typed(KEY.tracking, $event, true)"
+          />
+        </div>
+        <label class="field" :title="t('preview.metricsHint')">
+          <input
+            type="checkbox"
+            :checked="s.metrics"
+            @change="set({ metrics: ($event.target as HTMLInputElement).checked })"
+          />
+          <span>{{ t('preview.metrics') }}</span>
+        </label>
+        <label class="field">
+          <input
+            type="checkbox"
+            :checked="s.outline"
+            @change="set({ outline: ($event.target as HTMLInputElement).checked })"
+          />
+          <span>{{ t('preview.outline') }}</span>
+        </label>
 
-      <div class="field" role="group" :aria-label="t('preview.alignment')">
-        <UiButton
-          v-for="a in alignments"
-          :key="a"
-          :aria-pressed="s.align === a"
-          @click="set({ align: a })"
-        >
-          {{ t(`preview.aligns.${a}`) }}
+        <div class="field" role="group" :aria-label="t('preview.alignment')">
+          <UiButton
+            v-for="a in alignments"
+            :key="a"
+            :aria-pressed="s.align === a"
+            @click="set({ align: a })"
+          >
+            {{ t(`preview.aligns.${a}`) }}
+          </UiButton>
+        </div>
+
+        <label class="field">
+          <span>{{ t('preview.text') }}</span>
+          <input
+            type="color"
+            :aria-label="t('preview.textColor')"
+            :value="textWell"
+            @input="set({ textColor: colorFrom($event) })"
+          />
+        </label>
+        <label class="field">
+          <span>{{ t('preview.background') }}</span>
+          <input
+            type="color"
+            :aria-label="t('preview.backgroundColor')"
+            :value="backgroundWell"
+            @input="set({ backgroundColor: colorFrom($event) })"
+          />
+        </label>
+        <div class="field">
+          <label :for="`${uid}-surface`">{{ t('preview.surface') }}</label>
+          <UiSelect
+            :id="`${uid}-surface`"
+            :model-value="s.surface"
+            :options="surfaceOptions"
+            @update:model-value="set({ surface: $event })"
+          />
+        </div>
+        <UiButton @click="store.reset(view)">
+          {{ t('common.reset') }}
         </UiButton>
       </div>
-
-      <label class="field">
-        <span>{{ t('preview.text') }}</span>
-        <input
-          type="color"
-          :aria-label="t('preview.textColor')"
-          :value="textWell"
-          @input="set({ textColor: colorFrom($event) })"
-        />
-      </label>
-      <label class="field">
-        <span>{{ t('preview.background') }}</span>
-        <input
-          type="color"
-          :aria-label="t('preview.backgroundColor')"
-          :value="backgroundWell"
-          @input="set({ backgroundColor: colorFrom($event) })"
-        />
-      </label>
-      <div class="field">
-        <label :for="`${uid}-surface`">{{ t('preview.surface') }}</label>
-        <UiSelect
-          :id="`${uid}-surface`"
-          :model-value="s.surface"
-          :options="surfaceOptions"
-          @update:model-value="set({ surface: $event })"
-        />
-      </div>
-      <UiButton @click="store.reset(view)">
-        {{ t('common.reset') }}
-      </UiButton>
-    </div>
+    </FmSlide>
   </div>
 </template>
 

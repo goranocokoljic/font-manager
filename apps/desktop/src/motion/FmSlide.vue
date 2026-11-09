@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { setMotionSpeed, type MotionSpeed } from './speed';
+import { setMotionSpeed, setReducedMotion, type MotionSpeed, type ReducedMotion } from './speed';
 
 /**
  * Slides its one child in over a fade, and back out the same way. `from` is the side it
  * comes from: `start` and `end` follow the reading direction, so they mirror in
  * right-to-left chrome. Other `<Transition>` props (`mode`, `appear`) pass through.
+ * `reduced`: under reduced motion, `cut` (the default) or the reduced `fade` without the slide.
  */
 const props = withDefaults(
   defineProps<{
@@ -12,8 +13,9 @@ const props = withDefaults(
     /** A CSS length or percentage: the spec's page slide is 24px, its drawer 100%. */
     distance?: string;
     speed?: MotionSpeed;
+    reduced?: ReducedMotion;
   }>(),
-  { from: 'end', distance: '24px', speed: 'move' },
+  { from: 'end', distance: '24px', speed: 'move', reduced: 'cut' },
 );
 
 function prepare(el: Element): void {
@@ -24,6 +26,7 @@ function prepare(el: Element): void {
   style.setProperty('--fm-slide-inline', inline ? offset : '0px');
   style.setProperty('--fm-slide-block', inline ? '0px' : offset);
   setMotionSpeed(el, props.speed);
+  setReducedMotion(el, props.reduced);
 }
 </script>
 

@@ -226,6 +226,30 @@ describe('FmFade and FmSlide', () => {
   });
 });
 
+describe('the reduced prop of FmFade and FmSlide (E46.3)', () => {
+  it.each([
+    ['FmFade', FmFade],
+    ['FmSlide', FmSlide],
+  ] as const)('%s marks its child for the reduced fade only when asked', async (_, helper) => {
+    for (const [props, mark] of [
+      [{}, undefined],
+      [{ reduced: 'cut' }, undefined],
+      [{ reduced: 'fade' }, 'fade'],
+    ] as const) {
+      const { wrapper, show, child } = mountToggle(helper, props);
+      show.value = true;
+      await nextTick();
+      expect(child().dataset.fmReduced).toBe(mark);
+      const el = child();
+      show.value = false;
+      await nextTick();
+      // The leave reads the same mark.
+      expect(el.dataset.fmReduced).toBe(mark);
+      wrapper.unmount();
+    }
+  });
+});
+
 describe('FmFlipGroup', () => {
   it('is a transition group with the fm-flip classes that passes its tag through', async () => {
     const items = ref(['a']);

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { t } from '../../i18n';
+import { FmFade, FmSlide } from '../../motion';
 
 /**
- * A panel that slides in from the inline-start edge. It does not dim the page:
- * what it controls (a filter) changes the list behind it, live. Esc or a press
- * outside closes it, and focus goes back to what opened it.
+ * A panel that slides in from the inline-start edge, its full width, over a 6 % scrim
+ * (E46.3, the motion table's "Filters drawer"). The scrim only tints: what the drawer
+ * controls (a filter) changes the list behind it, live, and a press there still reaches
+ * it. Esc or a press outside closes it, and focus goes back to what opened it. Under
+ * reduced motion both only fade.
  */
 const props = defineProps<{
   open: boolean;
@@ -47,7 +50,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown,
 
 <template>
   <Teleport to="body">
-    <Transition name="drawer">
+    <FmFade reduced="fade">
+      <div v-if="open" class="scrim" data-testid="drawer-scrim" aria-hidden="true" />
+    </FmFade>
+    <FmSlide from="start" distance="100%" reduced="fade">
       <aside
         v-if="open"
         ref="panel"
@@ -79,11 +85,19 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown,
         </header>
         <div class="body"><slot /></div>
       </aside>
-    </Transition>
+    </FmSlide>
   </Teleport>
 </template>
 
 <style scoped>
+/* Under the drawer, over everything else; the pointer goes through it. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--fm-z-popover);
+  background-color: var(--fm-scrim-drawer);
+  pointer-events: none;
+}
 .drawer {
   position: fixed;
   inset-block: 0;
@@ -123,26 +137,5 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown,
   flex: 1;
   padding: var(--fm-space-3) var(--fm-space-4) var(--fm-space-5);
   overflow-y: auto;
-}
-.drawer-enter-active,
-.drawer-leave-active {
-  transition:
-    transform var(--fm-motion-move) var(--fm-ease),
-    opacity var(--fm-motion-move) var(--fm-ease);
-}
-.drawer-enter-from,
-.drawer-leave-to {
-  transform: translateX(-24px);
-  opacity: 0;
-}
-[dir='rtl'] .drawer-enter-from,
-[dir='rtl'] .drawer-leave-to {
-  transform: translateX(24px);
-}
-@media (prefers-reduced-motion: reduce) {
-  .drawer-enter-active,
-  .drawer-leave-active {
-    transition: none;
-  }
 }
 </style>

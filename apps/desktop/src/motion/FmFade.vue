@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { setMotionSpeed, type MotionSpeed } from './speed';
+import { setMotionSpeed, setReducedMotion, type MotionSpeed, type ReducedMotion } from './speed';
 
-/** Fades its one child in and out. Other `<Transition>` props (`mode`, `appear`) pass through. */
-const props = withDefaults(defineProps<{ speed?: MotionSpeed }>(), { speed: 'move' });
+/**
+ * Fades its one child in and out. Other `<Transition>` props (`mode`, `appear`) pass through.
+ * `reduced`: under reduced motion, `cut` (the default) or the reduced `fade`.
+ */
+const props = withDefaults(defineProps<{ speed?: MotionSpeed; reduced?: ReducedMotion }>(), {
+  speed: 'move',
+  reduced: 'cut',
+});
 
-const prepare = (el: Element) => setMotionSpeed(el, props.speed);
+function prepare(el: Element): void {
+  setMotionSpeed(el, props.speed);
+  setReducedMotion(el, props.reduced);
+}
 </script>
 
 <template>
