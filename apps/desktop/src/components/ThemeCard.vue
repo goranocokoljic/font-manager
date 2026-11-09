@@ -17,6 +17,11 @@ const emit = defineEmits<{ choose: [id: string] }>();
 const style = computed(() => tokenStyle(props.theme[props.scheme]));
 /** Three specimens, the way the wall sets them: a serif, the UI sans and a mono. */
 const SPECIMENS = ['serif', 'sans', 'mono'] as const;
+/**
+ * The glyph pair each specimen shows. A type sample, not a word: it is the same in every
+ * locale and hidden from assistive tech (the wall is aria-hidden), so it is not in the catalog.
+ */
+const SAMPLE = 'Ag';
 </script>
 
 <template>
@@ -42,7 +47,7 @@ const SPECIMENS = ['serif', 'sans', 'mono'] as const;
         class="specimen"
         :class="[kind, { selected: i === 1 }]"
         data-testid="theme-specimen"
-        >Ag</span
+        >{{ SAMPLE }}</span
       >
     </span>
     <span class="name">{{ theme.name }}</span>
