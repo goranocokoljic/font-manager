@@ -17,6 +17,9 @@ const SOURCES = import.meta.glob<string>(
     '../components/SelectionBar.vue',
     '../components/ToastMessage.vue',
     '../components/McpConfirmToast.vue',
+    '../components/WallCountLine.vue',
+    '../components/TableColumnsMenu.vue',
+    '../components/PreviewControls.vue',
     '../views/HomeView.vue',
   ],
   { query: '?raw', import: 'default', eager: true },
@@ -73,6 +76,9 @@ describe('the overlay moments go through the helpers (E46.3)', () => {
     'components/SelectionBar.vue',
     'components/ToastMessage.vue',
     'components/McpConfirmToast.vue',
+    'components/WallCountLine.vue',
+    'components/TableColumnsMenu.vue',
+    'components/PreviewControls.vue',
   ])('%s has no keyframes, animation or Vue transition of its own', (file) => {
     expect(source(file)).not.toBe('');
     expect(ownMotion(file)).toEqual([]);
@@ -93,6 +99,21 @@ describe('the overlay moments go through the helpers (E46.3)', () => {
       'from="bottom" distance="4px" speed="fast" reduced="fade"',
     ]);
     expect(source('components/ui/UiSelect.vue')).toMatch(/<UiPopover\b/);
+  });
+
+  // The popovers that live in the page, not in a UiPopover layer: the sort menu, the table's
+  // columns menu and the Preview options. Each panel is the slide's one child.
+  it.each([
+    ['components/WallCountLine.vue', 'v-if="open"', 'menu'],
+    ['components/TableColumnsMenu.vue', 'v-if="open"', 'panel'],
+    ['components/PreviewControls.vue', 'v-show="optionsOpen"', 'more'],
+  ])('%s rises its popover 4 px at the fast speed', (file, shown, cls) => {
+    expect(tags(file, 'FmSlide')).toEqual([
+      'from="bottom" distance="4px" speed="fast" reduced="fade"',
+    ]);
+    const slide = template(file).match(/<FmSlide\b[^>]*>\s*<div\b([^>]*)>/)?.[1] ?? '';
+    expect(slide).toContain(shown);
+    expect(slide).toMatch(new RegExp(`class="${cls}"`));
   });
 
   it('the selection bar and both toasts rise 16 px at the move speed', () => {

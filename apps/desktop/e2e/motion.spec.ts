@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // The motion tokens as the page really resolves them (E40.4). styles/motion.test.ts checks
 // that components read nothing else, and a11y.spec.ts that nothing moves under "reduce".
@@ -137,6 +137,16 @@ async function openDrawer(page: Page) {
   return (await probe(page, 'enterSeen'))!;
 }
 
+const SORT_MENU = '[role="group"][aria-label="Sort order"]';
+const OPTIONS = '[role="group"][aria-label="Preview options"]';
+
+/** Opens a popover that lives in the page with `opener`, and reports its enter. */
+async function enterPanel(page: Page, panel: string, opener: Locator) {
+  await probe(page, 'watchEnter', [panel]);
+  await opener.click();
+  return (await probe(page, 'enterSeen'))![panel];
+}
+
 /** Selects two rows (the bar comes up), then activates them (the toast comes up). */
 async function selectAndActivate(page: Page) {
   await probe(page, 'watchEnter', [BAR]);
@@ -173,6 +183,28 @@ test.describe('drawers, popovers, selection bar and toasts (E46.3)', () => {
       { property: 'opacity', duration: 120, easing: EASE, from: '0' },
       { property: 'transform', duration: 120, easing: EASE, from: 'translate(0px, 4px)' },
     ]);
+  });
+
+  test('the sort menu and the Preview options popover rise 4 px in 120 ms, too', async ({
+    page,
+  }) => {
+    const RISE = [
+      { property: 'opacity', duration: 120, easing: EASE, from: '0' },
+      { property: 'transform', duration: 120, easing: EASE, from: 'translate(0px, 4px)' },
+    ];
+    await open(page);
+    expect(
+      await enterPanel(page, SORT_MENU, page.getByRole('button', { name: 'change sort order' })),
+    ).toEqual(RISE);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(SORT_MENU)).toHaveCount(0);
+    expect(
+      await enterPanel(
+        page,
+        OPTIONS,
+        page.getByRole('button', { name: 'Preview options' }).first(),
+      ),
+    ).toEqual(RISE);
   });
 
   test('the selection bar and the toast rise 16 px over a fade in 200 ms', async ({ page }) => {

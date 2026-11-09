@@ -147,14 +147,24 @@ export function watchEnter(selectors: string[]) {
       await frame();
       resolve(Object.fromEntries(selectors.map((s) => [s, transitionsOf(s)])));
     };
-    const all = () => selectors.every((s) => document.querySelector(s));
+    // Shown, not only in the page: a v-show panel is there while hidden.
+    const shown = (s: string) => {
+      const el = document.querySelector(s);
+      return !!el && el.getClientRects().length > 0;
+    };
+    const all = () => selectors.every(shown);
     if (all()) return void report();
     const observer = new MutationObserver(() => {
       if (!all()) return;
       observer.disconnect();
       void report();
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+    });
   });
 }
 
