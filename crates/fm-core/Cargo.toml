@@ -19,7 +19,7 @@ harfrust = "0.14"
 notify = "8.2"
 read-fonts = "0.45"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
-rusqlite = { version = "0.40.2", features = ["bundled"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 skera = "0.8"
