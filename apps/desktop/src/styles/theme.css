@@ -499,6 +499,11 @@ hr {
   animation-duration: var(--fm-motion-page);
   animation-timing-function: var(--fm-ease);
 }
+/* A theme change (E47.2, stores/themes.ts) crossfades the whole window at the move time. */
+:root.fm-theme-change::view-transition-old(root),
+:root.fm-theme-change::view-transition-new(root) {
+  animation-duration: var(--fm-motion-move);
+}
 
 /* The OS reduce-motion setting turns every animation and transition off. */
 @media (prefers-reduced-motion: reduce) {

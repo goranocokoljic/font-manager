@@ -14,6 +14,8 @@ const drag = useFontDragStore();
 const reduced = useReducedMotion();
 
 const body = ref<HTMLElement | null>(null);
+const liftEl = ref<HTMLElement | null>(null);
+const flightEl = ref<HTMLElement | null>(null);
 const flyBody = ref<HTMLElement | null>(null);
 /** False for the first frame, so the lift animates from the card's own size. */
 const lifted = ref(false);
@@ -48,8 +50,10 @@ watch(
     if (!on || !source) return;
     await nextTick();
     mount(body.value, source.el);
-    // Two frames, as for the flight: the card's own size must paint before the lift is set,
-    // or a busy frame applies both at once and nothing lifts (E46.4: the lift is 120 ms).
+    // The card's own size must be the computed style before the lift is set, or both land
+    // in one style pass and nothing lifts (E46.4: the lift is 120 ms). Frames alone do not
+    // promise that on a slow machine, so read the style now: that fixes the start state.
+    if (liftEl.value) void getComputedStyle(liftEl.value).transform;
     requestAnimationFrame(() => requestAnimationFrame(() => (lifted.value = true)));
   },
 );
@@ -86,10 +90,17 @@ watch(
     }
     await nextTick();
     mount(flyBody.value, f.source.el);
-    // Two frames: the start state paints before the end state is set.
-    requestAnimationFrame(() => requestAnimationFrame(() => (flying.value = true)));
-    // The move token is 200 ms; land even when no `transitionend` comes.
-    landTimer = setTimeout(() => drag.landed(), 400);
+    // The start state is the computed style before the end state is set (as for the lift).
+    if (flightEl.value) void getComputedStyle(flightEl.value).transform;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (drag.flight !== f) return;
+        flying.value = true;
+        // The move token is 200 ms; land even when no `transitionend` comes. Counted from
+        // the start of the flight: two slow frames must not land it before it flies.
+        landTimer = setTimeout(() => drag.landed(), 400);
+      }),
+    );
   },
 );
 
@@ -109,7 +120,12 @@ onBeforeUnmount(() => clearTimeout(landTimer));
       aria-hidden="true"
       :style="place"
     >
-      <div class="lift" :class="{ lifted, still: reduced }" data-testid="drag-ghost-lift">
+      <div
+        ref="liftEl"
+        class="lift"
+        :class="{ lifted, still: reduced }"
+        data-testid="drag-ghost-lift"
+      >
         <div ref="body" class="body" />
         <span v-if="drag.count > 1" class="badge" data-testid="drag-ghost-badge">{{
           formatNumber(drag.count)
@@ -119,6 +135,7 @@ onBeforeUnmount(() => clearTimeout(landTimer));
     </div>
     <div
       v-if="drag.flight"
+      ref="flightEl"
       class="ghost flight"
       data-testid="drag-ghost-flight"
       aria-hidden="true"

@@ -427,3 +427,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E46.2 #479] apps/desktop/e2e/wall.spec.ts:273 — on the macOS runner the 1,000-family fps sweep is skipped (runner idle 20–30 fps), so the 55 fps budget is enforced on Windows and Linux only.
 - [E46.2 #479] apps/desktop/src/views/HomeView.vue:455 — a view-mode switch from the command palette while focus is in the list drops focus to body.
 - [E48.1 #524] .harness/notes/issue-524.md:19 — the criterion names `7-compare-full-grid.png`, but the design file is `7-compare-grid-full.png` and neither is in the repo yet (E48.7 exports them).
+- [E47.2 #483] apps/desktop/src/components/PreviewControls.vue:228 — `isDarkSurface()` has its own copy of the Light/Dark-else-OS rule (not reactive to OS changes); `resolveScheme` in src/themes/tokens.ts now does the same.
+- [E47.2 #483] apps/desktop/src/api/mock.ts:441 — `themeTokens` and `src/themes/tokens.ts` `TOKEN_PROPERTIES` both list the six theme token names; a new token needs both.

@@ -55,7 +55,9 @@ const englishOnly: RegExp[] = (() => {
 /** Library data of the mock, not UI text: the source folder `/Users/demo/Fonts`. */
 // The font's own axis name is data too: the axis row shows it as the font has it, and the Info
 // section's Design group with its range (E42.8).
-const MOCK_DATA = new Set(['Fonts', 'Weight', 'Weight 100–900']);
+// Theme names are data too: `listThemes()` reads them from data/themes (E47.1), the picker
+// shows them as they are (data/themes/README.md), so "Paper" is not an untranslated string.
+const MOCK_DATA = new Set(['Fonts', 'Weight', 'Weight 100–900', 'Paper']);
 
 /** Every text the user reads or hears now: text nodes and text attributes. */
 function shownTexts(page: Page): Promise<string[]> {
