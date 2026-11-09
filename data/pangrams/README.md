@@ -44,5 +44,7 @@ a pangram for every script in `data/charsets`, and a pangram for every preset th
 - **Project (`"source": "project"`)** — the Chinese and Korean sample sentences are
   written here only from the characters of the `data/charsets` basics sets, so a font
   that passes the preset can show them. The Bosnian and Macedonian pangrams are also
-  marked `project`: no published source was found for them. The tests check only their
+  marked `project`: no published source was found for them. Persian, Marathi, Nepali,
+  Basque, Maltese and Albanian have no well-known pangram, so they carry a plain sample
+  sentence (`"kind": "sample"`, `"source": "project"`). The tests check only their
   letters, so a native speaker should check their wording.

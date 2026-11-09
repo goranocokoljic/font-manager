@@ -6,3 +6,22 @@
 .fm-crossfade-hidden {
   opacity: 0;
 }
+
+/* The fade-in of `motion/fadeIn.ts` (E46.1): a page, or a page's content, that just changed
+   comes up from transparent at the helper's speed token, on the one curve. */
+.fm-fade-in {
+  animation: fm-fade-in var(--fm-transition-time, var(--fm-motion-move)) var(--fm-ease);
+}
+@keyframes fm-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* Reduced motion turns every animation off (theme.css), but the board keeps one fade for a
+   page change: 120 ms, on a token the setting does not zero. A class beats the `*` rule, and
+   both are !important, so this one wins. */
+@media (prefers-reduced-motion: reduce) {
+  .fm-fade-in {
+    animation: fm-fade-in var(--fm-motion-reduced-fade) var(--fm-ease) !important;
+  }
+}

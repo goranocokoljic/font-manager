@@ -10,7 +10,7 @@ a reduced-motion fallback (an instant cut or a plain fade), and the app reads
 
 ## Tokens
 
-In `apps/desktop/src/styles/theme.css`. All three durations are `0ms` under
+In `apps/desktop/src/styles/theme.css`. All durations but the reduced fade are `0ms` under
 `prefers-reduced-motion: reduce`.
 
 | Token              | Value                     | For                                                                                  |
@@ -20,13 +20,16 @@ In `apps/desktop/src/styles/theme.css`. All three durations are `0ms` under
 | `--fm-motion-page` | 280 ms                    | family page push and pop, Studio open, Quick Look                                    |
 | `--fm-ease`        | `cubic-bezier(.2, 0, 0, 1)` | the only curve; exits may use `--fm-ease-exit` at 0.8× the duration                |
 | `--fm-ease-exit`   | `ease-in`                 | exits, such as "Back to the wall"                                                    |
+| `--fm-motion-page-exit` | 220 ms               | "Back to the wall", the page's exit (0.8× the page time, as the board rounds it)    |
+| `--fm-motion-reduced-fade` | 120 ms (also under reduce) | the fade a page change keeps under reduced motion; only `.fm-fade-in` reads it |
 
 ## Moments
 
 | Moment | What moves | How | Duration | Reduced motion |
 |--------|------------|-----|----------|----------------|
 | Open a family | The card grows into the page: specimen scales up to the hero position, the wall fades under it, the top bar crossfades to the back button | Shared-element (View Transitions); fallback: page slides in 24 px from the right over a fade | 280 ms | Cut, with a 120 ms fade of the new page |
-| Back to the wall | The hero shrinks back into its card; the wall fades in; scroll position is where it was | Reverse of open, exit curve | 220 ms | Cut |
+| Back to the wall | The hero shrinks back into its card; the wall fades in; scroll position is where it was | Reverse of open, exit curve | 220 ms | Cut, with a 120 ms fade of the wall |
+| ← → between families | The page content under the top bar crossfades; the bar stays | View transition of the content only; fallback: the new content fades in | 200 ms | Cut, with a 120 ms fade of the content |
 | Size slider | Every visible card resizes and the grid reflows; cards keep their identity | FLIP on the visible cards; off-screen cards jump | 200 ms | Instant reflow |
 | Switch view (wall → lines → table) | Rows crossfade; the toolbar segmented thumb slides to the new segment | Opacity crossfade of the two lists; thumb translateX | 200 ms / 120 ms | Cut; thumb jumps |
 | Filters drawer | Slides in from the left edge over the sidebar; the wall does not move; a 6 % scrim | translateX(−100 % → 0) + scrim opacity | 200 ms | Fade only |
@@ -48,7 +51,8 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 | `<FmFade speed>` | crossfades and fade-ins: a ring, a count, a list (`mode="out-in"` passes through) |
 | `<FmSlide from distance speed>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar |
 | `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`) |
-| `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion |
+| `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion (`viewTransitionsRun()` says which) |
+| `fadeIn(el, speed)` | a page or a page's content that just changed; under reduced motion it is the 120 ms reduced fade |
 
 `speed` is `fast`, `move` (the default) or `page`.
 
@@ -57,13 +61,14 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 The story that builds each moment decides these, without a literal value in a component:
 
 - **Fades under reduced motion.** The board keeps a fade in some rows ("Fade only", "Cut, with
-  a 120 ms fade"), but all three tokens are `0ms` and `theme.css` turns every transition off
-  under reduced motion. Today those rows are a cut. A fade needs its own token and a way past
-  that rule.
+  a 120 ms fade"), but the duration tokens are `0ms` and `theme.css` turns every transition off
+  under reduced motion. The family page's push, pop and arrows (E46.1) have the way past that
+  rule: `--fm-motion-reduced-fade` and the `.fm-fade-in` class of `styles/motion.css`
+  (`fadeIn()`). The other "Fade only" rows are still a cut.
 - **Hover under reduced motion.** The board keeps the tint ("Same"); today it is instant, for
   the same reason.
 - **Exits.** The board allows `ease-in` at 0.8× the duration (220 ms for "Back to the wall").
-  The curve is `--fm-ease-exit`; the time is `calc(var(--fm-motion-page) * 0.8)` (224 ms).
+  The curve is `--fm-ease-exit`; the time of "Back to the wall" is `--fm-motion-page-exit` (220 ms).
   The helpers leave on the same time and curve as they enter.
 - **Other properties.** "Hover anything" animates `background-color`, and the ghost's shadow
   is not a transform. Those are not the helpers' job; the helpers stay transform and opacity.

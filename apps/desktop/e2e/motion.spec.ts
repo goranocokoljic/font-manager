@@ -25,9 +25,9 @@ async function open(page: Page) {
 const token = (page: Page, name: string) =>
   page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
 
-for (const [reducedMotion, fast, move, pageTime] of [
-  ['no-preference', '120ms', '200ms', '280ms'],
-  ['reduce', '0ms', '0ms', '0ms'],
+for (const [reducedMotion, fast, move, pageTime, pageExit] of [
+  ['no-preference', '120ms', '200ms', '280ms', '220ms'],
+  ['reduce', '0ms', '0ms', '0ms', '0ms'],
 ] as const) {
   test(`the duration tokens under ${reducedMotion}`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion });
@@ -35,6 +35,9 @@ for (const [reducedMotion, fast, move, pageTime] of [
     expect(await token(page, '--fm-motion-fast')).toBe(fast);
     expect(await token(page, '--fm-motion-move')).toBe(move);
     expect(await token(page, '--fm-motion-page')).toBe(pageTime);
+    expect(await token(page, '--fm-motion-page-exit')).toBe(pageExit);
+    // The one fade reduced motion keeps (E46.1).
+    expect(await token(page, '--fm-motion-reduced-fade')).toBe('120ms');
     expect(await token(page, '--fm-ease')).toBe('cubic-bezier(0.2, 0, 0, 1)');
   });
 }

@@ -302,8 +302,8 @@ function onKey(e: KeyboardEvent): void {
   }
   if (typing || el?.closest('input, [role="slider"], [data-keeps-arrows]')) return;
   const key = inlineKey(e.key);
-  if (key === 'ArrowLeft') step(page.previous);
-  else if (key === 'ArrowRight') step(page.next);
+  if (key === 'ArrowLeft') void step(-1);
+  else if (key === 'ArrowRight') void step(1);
   else return;
   e.preventDefault();
 }
@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
           :label="t('family.previous')"
           aria-keyshortcuts="ArrowLeft"
           :disabled="page.previous === null"
-          @click="step(page.previous)"
+          @click="step(-1)"
         />
         <UiIconButton
           class="key"
@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
           :label="t('family.next')"
           aria-keyshortcuts="ArrowRight"
           :disabled="page.next === null"
-          @click="step(page.next)"
+          @click="step(1)"
         />
         {{ t('family.nextHint') }}
       </p>
@@ -696,11 +696,30 @@ html.fm-family-opening::view-transition-new(*) {
   animation-duration: var(--fm-motion-page);
   animation-timing-function: var(--fm-ease);
 }
-/* "Back to the wall": the reverse, on the exit curve at 0.8× the time. */
+/* "Back to the wall": the reverse, on the exit curve at 0.8× the time (220 ms). */
 html.fm-family-closing::view-transition-group(*),
 html.fm-family-closing::view-transition-old(*),
 html.fm-family-closing::view-transition-new(*) {
-  animation-duration: calc(var(--fm-motion-page) * 0.8);
+  animation-duration: var(--fm-motion-page-exit);
   animation-timing-function: var(--fm-ease-exit);
+}
+/* The arrows (E46.1): only the content under the top bar crossfades. It is its own snapshot,
+   with the hero inside it; the rest of the page (the bar) is the root, which does not move. */
+html.fm-family-stepping .family-page > .scroll {
+  view-transition-name: fm-family-content;
+}
+html.fm-family-stepping .family-page .specimen {
+  view-transition-name: none;
+}
+html.fm-family-stepping::view-transition-group(root),
+html.fm-family-stepping::view-transition-old(root),
+html.fm-family-stepping::view-transition-new(root) {
+  animation: none;
+}
+html.fm-family-stepping::view-transition-group(fm-family-content),
+html.fm-family-stepping::view-transition-old(fm-family-content),
+html.fm-family-stepping::view-transition-new(fm-family-content) {
+  animation-duration: var(--fm-motion-move);
+  animation-timing-function: var(--fm-ease);
 }
 </style>

@@ -409,3 +409,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E45.2 #474] apps/desktop/src/components/ui/UiSelect.vue — in remote mode, Enter pressed before the parent's search answers takes the previous list's active option.
 - [E45.2 #474] apps/desktop/src/components/FontLayout.vue:121 — FontLayout, CompareSheet and StudioRolesRail each keep their own `held` set over the face loader's acquire/release.
 - [E45.3 #475] apps/desktop/src/styles/motion.test.ts:19 — the no-`.animate(` rule misses new `.ts` files on Windows (it passed locally with `.animate(` in a .ts), so only the macOS/Linux CI catches it.
+
+## 2026-11-09
+
+- [E46.1 #478] apps/desktop/src/views/FamilyView.vue:136 — the fallback slide checks `typeof document.startViewTransition` itself rather than `viewTransitionsRun()`, so it ignores reduced motion (theme.css's `*` reduce rule hides that today).
+- [E46.1 #478] apps/desktop/src/views/FamilyView.vue:351 — the Next button disables itself on the last family while it has the focus, so the focus drops to body.
+- [E46.1 #478] apps/desktop/e2e/family.spec.ts:83 — the push test checks only the specimen group's 280 ms, not the `--fm-ease` curve, the root crossfade or the 24 px fallback offset.
+- [E46.1 #478] apps/desktop/src/views/useFamilyNavigation.ts:146 — `share()` in a back callback that is still running can override a newer open's shared row; it is not gated on `latest`.
