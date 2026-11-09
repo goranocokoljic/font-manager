@@ -32,7 +32,7 @@ clap_mangen = "0.3"
 comfy-table = "7"
 # The MCP server (E27.1): named in the spec's library table (rmcp) and the
 # story; only the server and its streamable HTTP transport.
-rmcp = { version = "3.7", default-features = false, features = ["server", "transport-streamable-http-server"] }
+rmcp = { version = "3.9", default-features = false, features = ["server", "transport-streamable-http-server"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
