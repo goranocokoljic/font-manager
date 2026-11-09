@@ -643,6 +643,7 @@ async function openFace(face: FaceId): Promise<void> {
             :model-value="mode"
             :options="modeOptions"
             :label="t('home.viewMode')"
+            slide
             @update:model-value="views.setMode(ALL_FONTS_VIEW, $event)"
           />
           <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
@@ -692,56 +693,59 @@ async function openFace(face: FaceId): Promise<void> {
           />
           <WallCountLine :view="ALL_FONTS_VIEW" :rows="wallRows" />
           <ActivationNotice />
-          <template v-if="fontList.families.length && mode === 'table'">
-            <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
-            <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openRow" />
-          </template>
-          <template v-else-if="fontList.families.length && mode === 'layout'">
-            <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
-              <UiButton
-                class="studio"
-                :disabled="!canOpenStudio"
-                :title="t('home.openStudioTitle')"
-                @click="openStudio"
-              >
-                {{ t('home.openStudio') }}
-              </UiButton>
-            </LayoutActions>
-            <FontLayout
-              :layout="shownLayout"
-              :face="layoutFace"
-              editable
-              :bounds="textLayouts.bounds"
-              :set-props="textLayouts.setBlockProps"
-              :width="textLayouts.width"
-              :set-width-lock="textLayouts.setWidthLock"
-              @edit-text="textLayouts.setBlockText"
-              @settled="layoutSettled"
-            />
-          </template>
-          <FmFade
-            v-else-if="fontList.families.length && mode === 'grid'"
-            @before-leave="pinLeaving"
-          >
+          <!-- One fade over every view mode (E46.2): switching crossfades the two lists. The
+               leaving one is pinned where it was, so the new one takes its place at once. Inside
+               the families test, so the first list of a start does not fade in. -->
+          <FmFade v-if="fontList.families.length" @before-leave="pinLeaving">
+            <div v-if="mode === 'table'" key="table" class="pane">
+              <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+              <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openRow" />
+            </div>
+            <div v-else-if="mode === 'layout'" key="layout" class="pane">
+              <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
+                <UiButton
+                  class="studio"
+                  :disabled="!canOpenStudio"
+                  :title="t('home.openStudioTitle')"
+                  @click="openStudio"
+                >
+                  {{ t('home.openStudio') }}
+                </UiButton>
+              </LayoutActions>
+              <FontLayout
+                :layout="shownLayout"
+                :face="layoutFace"
+                editable
+                :bounds="textLayouts.bounds"
+                :set-props="textLayouts.setBlockProps"
+                :width="textLayouts.width"
+                :set-width-lock="textLayouts.setWidthLock"
+                @edit-text="textLayouts.setBlockText"
+                @settled="layoutSettled"
+              />
+            </div>
             <FontGrid
-              :key="wallRows ? 'rows' : 'wall'"
+              v-else-if="mode === 'grid'"
+              :key="wallRows ? 'grid-rows' : 'grid-wall'"
+              :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+              @cursor-face="showFace"
+              @open="openRow"
+            />
+            <FontWaterfall
+              v-else-if="mode === 'waterfall'"
+              key="waterfall"
+              :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+              @cursor-face="showFace"
+              @open="openRow"
+            />
+            <FontList
+              v-else
+              key="list"
               :preview="preview.settingsFor(ALL_FONTS_VIEW)"
               @cursor-face="showFace"
               @open="openRow"
             />
           </FmFade>
-          <FontWaterfall
-            v-else-if="fontList.families.length && mode === 'waterfall'"
-            :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-            @cursor-face="showFace"
-            @open="openRow"
-          />
-          <FontList
-            v-else-if="fontList.families.length"
-            :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-            @cursor-face="showFace"
-            @open="openRow"
-          />
           <section v-else class="empty" :aria-label="t('home.fontList')">
             <p v-if="library.error" role="alert" class="error">{{ errorMessage(library.error) }}</p>
             <UiEmptyState
@@ -810,6 +814,14 @@ async function openFace(face: FaceId): Promise<void> {
 <style scoped>
 .browse {
   position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+/* The table and the layout mode have two parts each: one box, so the fade has one child. It
+   lays them out as the browse column does. */
+.pane {
   display: flex;
   flex: 1;
   flex-direction: column;

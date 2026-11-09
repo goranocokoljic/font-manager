@@ -52,6 +52,7 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 | `<FmSlide from distance speed>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar |
 | `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`) |
 | `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion (`viewTransitionsRun()` says which) |
+| `<UiSegmentedControl slide>` | the toolbar's view switch (E46.2): a thumb under the chosen segment that glides by `transform` at `--fm-motion-fast`; the lists under it crossfade through one `<FmFade>` in `HomeView.vue` |
 | `fadeIn(el, speed)` | a page or a page's content that just changed; under reduced motion it is the 120 ms reduced fade |
 
 `speed` is `fast`, `move` (the default) or `page`.
