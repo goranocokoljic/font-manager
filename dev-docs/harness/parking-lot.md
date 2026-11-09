@@ -417,3 +417,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E46.1 #478] apps/desktop/e2e/family.spec.ts:83 — the push test checks only the specimen group's 280 ms, not the `--fm-ease` curve, the root crossfade or the 24 px fallback offset.
 - [E46.1 #478] apps/desktop/src/views/useFamilyNavigation.ts:146 — `share()` in a back callback that is still running can override a newer open's shared row; it is not gated on `latest`.
 - [E45.4 #476] apps/desktop/src/components/FamilyCollectionMenu.vue:65 — the combobox-over-listbox key handling is copied in UiSelect, FamilyCollectionMenu and StudioExportMenu, and the copies already differ (only Export opens on ArrowDown and has Home/End).
+- [E46.3 #480] apps/desktop/src/components/TaggingPanel.vue:346 — the tagging panel keeps its own `@keyframes rise` (−4 px, fast) instead of the motion helpers.
+- [E46.3 #480] apps/desktop/src/styles/theme.css:46 — the comment (and MOTION.md's token row) still say `.fm-fade-in` is the only reader of `--fm-motion-reduced-fade`; E46.3's helper rule in motion.css reads it too.
+- [E46.3 #480] apps/desktop/src/components/CommandPalette.vue:256 — CommandPalette and QuickLookSheet (:279) keep their own `@keyframes rise`.
+- [E46.3 #480] apps/desktop/src/components/ui/UiDrawer.vue:57 — a closing drawer stays focusable and pointer-reachable during its leave transition (no inert on before-leave).
+- [E46.3 #480] apps/desktop/src/components/FilterChips.vue — "Save as smart collection" at the top of the filters drawer looks under 4.5:1 in the light theme (exempt only if disabled).

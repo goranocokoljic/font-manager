@@ -778,7 +778,7 @@ async function openFace(face: FaceId): Promise<void> {
               </button>
             </UiEmptyState>
           </section>
-          <FmSlide from="bottom" distance="16px">
+          <FmSlide from="bottom" distance="16px" reduced="fade">
             <SelectionBar v-if="showSelectionBar" @cleared="focusList" />
           </FmSlide>
           <DragGhost />

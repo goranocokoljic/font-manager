@@ -1,0 +1,19 @@
+{
+  "id": "a-criterion-that-names-a-kind-of-ui-element-covers-every-ins",
+  "title": "A criterion that names a kind of UI element covers every instance, not only the shared component",
+  "category": "correctness",
+  "rule": "When a criterion names a kind of element (popovers, menus, dialogs, toasts) and the change goes into the shared component for it (UiPopover, UiDialog), also list the elements of that kind that do not use the shared component: grep for panels on the same z-index token (`--fm-z-popover`), `role=\"group\"`/`role=\"menu\"` panels behind `v-if`/`v-show`, and files whose comments call themselves that kind. Change each one or record in the notes, with a constraint, why it is out of scope. Add every file to the test that pins the behavior, so a new in-page instance is not silently left out.",
+  "rationale": "E46.3 (#480): criterion 1 asked popovers to fade and rise 4 px; only UiPopover was changed, and the sort menu (WallCountLine), the table columns menu and the Preview options panel kept opening with no motion.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    480
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-11-09T07:03:24.784Z",
+  "last_seen": "2026-11-09T07:03:24.784Z"
+}

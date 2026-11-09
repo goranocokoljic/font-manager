@@ -25,3 +25,20 @@
     animation: fm-fade-in var(--fm-motion-reduced-fade) var(--fm-ease) !important;
   }
 }
+
+/* The reduced fade of `<FmFade reduced="fade">` and `<FmSlide reduced="fade">` (E46.3): the
+   drawer, the popovers, the selection bar and the toasts keep a fade under reduced motion, on
+   the same 120 ms token, and a slide drops its movement. The attribute and the class beat the
+   `*` rule of theme.css, and both are !important, so these win. */
+@media (prefers-reduced-motion: reduce) {
+  .fm-fade-enter-active[data-fm-reduced='fade'],
+  .fm-fade-leave-active[data-fm-reduced='fade'],
+  .fm-slide-enter-active[data-fm-reduced='fade'],
+  .fm-slide-leave-active[data-fm-reduced='fade'] {
+    transition: opacity var(--fm-motion-reduced-fade) var(--fm-ease) !important;
+  }
+  .fm-slide-enter-from[data-fm-reduced='fade'],
+  .fm-slide-leave-to[data-fm-reduced='fade'] {
+    transform: none !important;
+  }
+}

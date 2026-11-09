@@ -7,6 +7,7 @@
 // missing glyphs (E43.3): a filter remembered with the view, shown as a chip by the Filters.
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { errorMessage, t, type MessageKey } from '../i18n';
+import { FmSlide } from '../motion';
 import { columnById, SORT_COLUMNS, type ColumnId } from '../list/columns';
 import { rowStateLabel, styleName } from '../list/rows';
 import { useActiveFilters } from '../search/activeFilters';
@@ -186,34 +187,36 @@ function onFocusOut(e: FocusEvent): void {
         {{ t('home.sort.change') }}
       </button>
       <!-- tabindex: in WebKit a click on a radio does not focus it; the focus stays in here. -->
-      <div
-        v-if="open"
-        :id="`${uid}-menu`"
-        ref="panel"
-        class="menu"
-        role="group"
-        tabindex="-1"
-        :aria-label="t('home.sort.menu')"
-        @focusout="onFocusOut"
-      >
-        <label v-if="typing">
-          <input type="radio" :name="uid" :checked="column === null" @change="choose(null)" />
-          {{ t('home.sort.bestMatch') }}
-        </label>
-        <label v-for="id in SORT_COLUMNS" :key="id">
-          <input type="radio" :name="uid" :checked="isCurrent(id)" @change="choose(id)" />
-          {{ columnById(id).label }}
-        </label>
-        <label class="direction">
-          <input
-            type="checkbox"
-            :checked="!!sort?.descending"
-            :disabled="column === null"
-            @change="setDescending(($event.target as HTMLInputElement).checked)"
-          />
-          {{ t('home.sort.descending') }}
-        </label>
-      </div>
+      <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
+        <div
+          v-if="open"
+          :id="`${uid}-menu`"
+          ref="panel"
+          class="menu"
+          role="group"
+          tabindex="-1"
+          :aria-label="t('home.sort.menu')"
+          @focusout="onFocusOut"
+        >
+          <label v-if="typing">
+            <input type="radio" :name="uid" :checked="column === null" @change="choose(null)" />
+            {{ t('home.sort.bestMatch') }}
+          </label>
+          <label v-for="id in SORT_COLUMNS" :key="id">
+            <input type="radio" :name="uid" :checked="isCurrent(id)" @change="choose(id)" />
+            {{ columnById(id).label }}
+          </label>
+          <label class="direction">
+            <input
+              type="checkbox"
+              :checked="!!sort?.descending"
+              :disabled="column === null"
+              @change="setDescending(($event.target as HTMLInputElement).checked)"
+            />
+            {{ t('home.sort.descending') }}
+          </label>
+        </div>
+      </FmSlide>
     </div>
   </div>
 </template>

@@ -115,6 +115,24 @@ describe('motion tokens', () => {
     expect(reduce).toMatch(/\.fm-fade-in\s*\{[^}]*var\(--fm-motion-reduced-fade\)[^;]*!important/);
   });
 
+  it('the helpers keep the reduced fade when asked, and drop the slide (E46.3)', () => {
+    const blocks = [
+      ...motionCss.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g),
+    ].map((m) => m[1]!);
+    const helpers = blocks.find((b) => b.includes("[data-fm-reduced='fade']")) ?? '';
+    for (const name of ['fm-fade', 'fm-slide']) {
+      for (const phase of ['enter', 'leave']) {
+        expect(helpers).toContain(`.${name}-${phase}-active[data-fm-reduced='fade']`);
+      }
+    }
+    expect(helpers).toMatch(
+      /transition: opacity var\(--fm-motion-reduced-fade\) var\(--fm-ease\) !important;/,
+    );
+    expect(helpers).toMatch(
+      /\.fm-slide-enter-from\[data-fm-reduced='fade'\],\s*\.fm-slide-leave-to\[data-fm-reduced='fade'\] \{\s*transform: none !important;/,
+    );
+  });
+
   it('the reduced values come after the base values, so they win', () => {
     expect(theme.indexOf('--fm-motion-page: 0ms')).toBeGreaterThan(
       theme.indexOf('--fm-motion-page: 280ms'),
