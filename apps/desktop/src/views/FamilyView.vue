@@ -302,8 +302,8 @@ function onKey(e: KeyboardEvent): void {
   }
   if (typing || el?.closest('input, [role="slider"], [data-keeps-arrows]')) return;
   const key = inlineKey(e.key);
-  if (key === 'ArrowLeft') void step(page.previous);
-  else if (key === 'ArrowRight') void step(page.next);
+  if (key === 'ArrowLeft') void step(-1);
+  else if (key === 'ArrowRight') void step(1);
   else return;
   e.preventDefault();
 }
@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
           :label="t('family.previous')"
           aria-keyshortcuts="ArrowLeft"
           :disabled="page.previous === null"
-          @click="step(page.previous)"
+          @click="step(-1)"
         />
         <UiIconButton
           class="key"
@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
           :label="t('family.next')"
           aria-keyshortcuts="ArrowRight"
           :disabled="page.next === null"
-          @click="step(page.next)"
+          @click="step(1)"
         />
         {{ t('family.nextHint') }}
       </p>

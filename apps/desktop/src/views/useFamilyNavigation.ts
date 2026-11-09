@@ -62,6 +62,8 @@ function share(el: HTMLElement | null): void {
 }
 
 let latest = 0;
+/** Where the arrow presses in flight are going; null when none is. */
+let stepTarget: FamilyId | null = null;
 
 /**
  * Runs a page change with the root class that picks the timing, and cleans up after it. A
@@ -150,19 +152,30 @@ export function useFamilyNavigation() {
   }
 
   /**
-   * The arrows: another family on the same history entry, so Back still goes to the library.
-   * Only the content under the top bar crossfades (200 ms); the bar stays where it is. The new
-   * snapshot waits for the family's read, or the crossfade would be to an empty page. Without
-   * view transitions, and under reduced motion, the new content fades in.
+   * The arrows: the family `by` places on, on the same history entry, so Back still goes to the
+   * library. Only the content under the top bar crossfades (200 ms); the bar stays where it is.
+   * The new snapshot waits for the family's read, or the crossfade would be to an empty page.
+   * Without view transitions, and under reduced motion, the new content fades in.
+   *
+   * The route changes only once the old page is captured, a frame or more later. A press in
+   * that time counts from the family the step before it goes to, not from the page on screen,
+   * so two quick presses move two places.
    */
-  async function step(family: FamilyId | null): Promise<void> {
+  async function step(by: -1 | 1): Promise<void> {
+    const from = stepTarget ?? page.id;
+    const family = from === null ? null : page.neighbor(from, by);
     if (family === null) return;
+    stepTarget = family;
     const animated = viewTransitionsRun();
-    await transition(STEPPING, async () => {
-      await router.replace({ name: 'family', params: { id: String(family) } });
-      await nextTick();
-      if (animated) await page.settled();
-    });
+    try {
+      await transition(STEPPING, async () => {
+        await router.replace({ name: 'family', params: { id: String(family) } });
+        await nextTick();
+        if (animated) await page.settled();
+      });
+    } finally {
+      if (stepTarget === family) stepTarget = null;
+    }
     if (!animated) fadeIn(familyContent());
   }
 

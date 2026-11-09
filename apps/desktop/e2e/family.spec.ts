@@ -695,6 +695,30 @@ test.describe('page motion', () => {
     await expect(page.getByTestId('family-meta')).toBeVisible();
   });
 
+  test('two quick presses move two places while the first change is still pending', async ({
+    page,
+  }) => {
+    await setup(page);
+    // A slow webview: the route changes a while after the press, as on a loaded macOS runner.
+    await page.addInitScript(() => {
+      const start = document.startViewTransition.bind(document);
+      document.startViewTransition = ((cb: () => Promise<void>) =>
+        start(async () => {
+          await new Promise((r) => setTimeout(r, 300));
+          await cb();
+        })) as typeof document.startViewTransition;
+    });
+    await page.goto('/?mockLibrary=wall#/family/502');
+    await expect(position(page)).toContainText('3 of 60');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(position(page)).toContainText('1 of 60');
+    // At the first family a third press has nowhere to go.
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowRight');
+    await expect(position(page)).toContainText('2 of 60');
+  });
+
   test('without view transitions the arrows fade the new content in', async ({ page }) => {
     await setup(page);
     await page.addInitScript(() => {
