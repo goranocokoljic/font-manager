@@ -270,6 +270,47 @@ test.describe('nothing animates while the user types or moves by keyboard (E46.4
     expect(await recorded(page)).toEqual([]);
   });
 
+  // The List and Waterfall key their rows by slot: a search or a scroll puts another family into
+  // the same row element. With an active face in the list, its dot must not fill or empty there.
+  for (const mode of ['List', 'Waterfall'] as const) {
+    test(`the ${mode} view's dots do not animate as a search and a scroll recycle its rows`, async ({
+      page,
+    }) => {
+      await serveFonts(page);
+      await page.goto('/?mockActive=1#/');
+      const tree = page.getByRole('tree', { name: 'Font list' });
+      await expect(tree.getByRole('treeitem').first()).toBeVisible();
+      if (mode === 'Waterfall')
+        await page
+          .getByRole('group', { name: 'View mode' })
+          .getByRole('button', { name: 'Waterfall' })
+          .click();
+      const active = page.locator('[data-activation="active"], [data-activation="partial"]');
+      await expect(active.first()).toBeAttached();
+      const box = page.getByRole('searchbox', { name: 'Search fonts' });
+      await box.click();
+      await page.waitForTimeout(200);
+      await record(page);
+      // The active family moves to another row and back as the results change.
+      for (const text of ['a', 'mono', '']) {
+        await box.fill(text);
+        await page.waitForTimeout(150);
+      }
+      await expect(active.first()).toBeAttached();
+      // A scroll reuses the rows that left the screen for the ones that come in.
+      const list = page.locator('[data-activation]').first();
+      await list.hover();
+      for (let i = 0; i < 4; i++) {
+        await page.mouse.wheel(0, 400);
+        await page.waitForTimeout(80);
+      }
+      await page.mouse.wheel(0, -1600);
+      await page.waitForTimeout(200);
+      const dots = (await recorded(page)).filter((m) => m.classes.split(' ').includes('dot'));
+      expect(dots).toEqual([]);
+    });
+  }
+
   test('on the Table view nothing animates: the cursor, activation, a search', async ({ page }) => {
     await open(page);
     await page

@@ -228,7 +228,7 @@ function onToggle(row: ListRow): void {
             @click.stop="onToggle(item.row)"
             ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
           /></span>
-          <ActivationDot :state="rowActivation(item.row)" />
+          <ActivationDot :key="item.row.key" :state="rowActivation(item.row)" />
           <bdi class="name" data-family-name>{{
             item.row.kind === 'face'
               ? `${item.row.family.name} ${styleName(item.row)}`
