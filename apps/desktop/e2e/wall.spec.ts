@@ -376,6 +376,12 @@ test.describe('the wall', () => {
       expect(fps).toBeGreaterThanOrEqual(idle - 5);
       test.skip(true, `not measured: animation frames run at ${idle.toFixed(1)} fps when idle`);
     }
-    expect(fps).toBeGreaterThanOrEqual(55);
+    // The CI macOS VM idles at 60 but renders the slider's frames at half rate (30 fps
+    // median, measured on 2026-11-09 across three branches, a Cargo-only one among them);
+    // it runs this page 2-3x slower than the other runners (see wall-text.spec.ts). There
+    // the test holds the slider to that half rate, so a regression to a crawl still fails;
+    // the 60 fps target itself is proven on the Linux and Windows runners and on a desktop.
+    const budget = process.env.CI && process.platform === 'darwin' ? 28 : 55;
+    expect(fps).toBeGreaterThanOrEqual(budget);
   });
 });
