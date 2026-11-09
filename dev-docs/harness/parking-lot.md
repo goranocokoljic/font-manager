@@ -429,3 +429,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.1 #524] .harness/notes/issue-524.md:19 — the criterion names `7-compare-full-grid.png`, but the design file is `7-compare-grid-full.png` and neither is in the repo yet (E48.7 exports them).
 - [E47.2 #483] apps/desktop/src/components/PreviewControls.vue:228 — `isDarkSurface()` has its own copy of the Light/Dark-else-OS rule (not reactive to OS changes); `resolveScheme` in src/themes/tokens.ts now does the same.
 - [E47.2 #483] apps/desktop/src/api/mock.ts:441 — `themeTokens` and `src/themes/tokens.ts` `TOKEN_PROPERTIES` both list the six theme token names; a new token needs both.
+- [fix-main 38af3e9 #540] apps/desktop/e2e/motion-probe.ts — `movedFromStyle` reads the computed style when a late `transitionrun` comes; by then `crossfade()` may have removed `fm-crossfade`, so the move records 0 ms and the drag test's count check fails (seen under a 7x CPU throttle, not yet on CI).
