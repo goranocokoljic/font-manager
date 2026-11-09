@@ -7,6 +7,8 @@ import {
   FmSlide,
   useReducedMotion,
   withViewTransition,
+  fadeIn,
+  viewTransitionsRun,
   type MotionSpeed,
 } from './index';
 
@@ -318,5 +320,45 @@ describe('what the helpers animate', () => {
     const css = styleOf(file);
     expect(animated(css)).toEqual({ properties, usesKeyframes: false });
     expect(statesSet(css)).toEqual(states);
+  });
+});
+
+describe('viewTransitionsRun', () => {
+  it('is true only with the engine and without reduced motion', () => {
+    fakeOsSetting(false);
+    expect(viewTransitionsRun()).toBe(false);
+    Object.defineProperty(document, 'startViewTransition', { value: vi.fn(), configurable: true });
+    expect(viewTransitionsRun()).toBe(true);
+    fakeOsSetting(true);
+    expect(viewTransitionsRun()).toBe(false);
+  });
+});
+
+describe('fadeIn', () => {
+  it('puts the fade class on at the speed token and takes it off when its animation ends', () => {
+    const el = document.createElement('div');
+    fadeIn(el, 'page');
+    expect(el.classList.contains('fm-fade-in')).toBe(true);
+    expect(el.style.getPropertyValue('--fm-transition-time')).toBe('var(--fm-motion-page)');
+    // A child's animation ending is not the fade's.
+    const child = document.createElement('span');
+    el.append(child);
+    child.dispatchEvent(new Event('animationend', { bubbles: true }));
+    expect(el.classList.contains('fm-fade-in')).toBe(true);
+    el.dispatchEvent(new Event('animationend'));
+    expect(el.classList.contains('fm-fade-in')).toBe(false);
+  });
+
+  it('defaults to the move speed, and a cancelled fade also takes the class off', () => {
+    const el = document.createElement('div');
+    fadeIn(el);
+    expect(el.style.getPropertyValue('--fm-transition-time')).toBe('var(--fm-motion-move)');
+    el.dispatchEvent(new Event('animationcancel'));
+    expect(el.classList.contains('fm-fade-in')).toBe(false);
+  });
+
+  it('does nothing without an element', () => {
+    expect(() => fadeIn(null)).not.toThrow();
+    expect(() => fadeIn(undefined)).not.toThrow();
   });
 });

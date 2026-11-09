@@ -40,6 +40,11 @@
   --fm-ease: cubic-bezier(0.2, 0, 0, 1);
   /* The curve an exit may use, at 0.8× the duration (MOTION.md). */
   --fm-ease-exit: ease-in;
+  /* "Back to the wall" (E46.1): the page's exit, 0.8× the page time as the board rounds it. */
+  --fm-motion-page-exit: 220ms;
+  /* The one fade reduced motion keeps (E46.1): a page that changed fades in, it does not cut.
+     It stays 120ms under reduce; motion.css's .fm-fade-in is the only rule that reads it. */
+  --fm-motion-reduced-fade: 120ms;
 
   /* Stacking order. */
   --fm-z-raised: 1;
@@ -497,7 +502,9 @@ hr {
     --fm-motion-fast: 0ms;
     --fm-motion-move: 0ms;
     --fm-motion-page: 0ms;
+    --fm-motion-page-exit: 0ms;
   }
+  /* Except the reduced fade of styles/motion.css, which is the board's reduced-motion row. */
   *,
   *::before,
   *::after {

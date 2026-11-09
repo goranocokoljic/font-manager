@@ -5,5 +5,6 @@ export { default as FmFlipGroup } from './FmFlipGroup.vue';
 export { default as FmSlide } from './FmSlide.vue';
 export type { MotionSpeed } from './speed';
 export { useReducedMotion } from './useReducedMotion';
-export { withViewTransition } from './withViewTransition';
+export { viewTransitionsRun, withViewTransition } from './withViewTransition';
+export { fadeIn } from './fadeIn';
 export { crossfade } from './crossfade';

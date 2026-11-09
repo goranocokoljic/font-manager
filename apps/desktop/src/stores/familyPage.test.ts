@@ -24,6 +24,45 @@ beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => setClient(undefined));
 
 describe('the family page store', () => {
+  it('names the neighbour of any family in the list, not only of the one shown', async () => {
+    const { page, list } = await setup();
+    const [a, b, c] = list.families.map((f) => f.id);
+    await page.show(a!);
+    expect(page.neighbor(b!, -1)).toBe(a);
+    expect(page.neighbor(b!, 1)).toBe(c);
+    expect(page.neighbor(a!, -1)).toBeNull();
+    expect(page.neighbor(list.families.at(-1)!.id, 1)).toBeNull();
+    expect(page.neighbor(-1, 1)).toBeNull();
+  });
+
+  it('settles when the family it shows has been read, also when the read fails (E46.1)', async () => {
+    const { page } = await setup();
+    const family = (await client.listFamilies({})).items[0]!.id;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const real = client.getFamily.bind(client);
+    client.getFamily = async (id) => {
+      await gate;
+      return real(id);
+    };
+    void page.show(family);
+    let settled = false;
+    void page.settled().then(() => (settled = true));
+    await flushPromises();
+    expect(settled).toBe(false);
+    release();
+    await flushPromises();
+    expect(settled).toBe(true);
+    expect(page.detail?.summary.id).toBe(family);
+
+    client.getFamily = () => Promise.reject(new Error('gone'));
+    void page.show(family);
+    await expect(page.settled()).resolves.toBeUndefined();
+    expect(page.error).not.toBeNull();
+    void page.show(null);
+    await expect(page.settled()).resolves.toBeUndefined();
+  });
+
   it('shows the default face, not the first, unless the route chooses one', async () => {
     const { page } = await setup();
     const family = (await client.listFamilies({})).items.find((f) => f.styleCount > 1)!.id;

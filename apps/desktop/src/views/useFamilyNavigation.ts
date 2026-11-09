@@ -1,11 +1,14 @@
 // Going from the library to a family page and back (E42.1). The specimen of the row or card
 // and the page's hero share a `view-transition-name`, so the browser moves one into the other
 // (MOTION.md, "Open a family"); a webview without view transitions gets the page's own slide.
+// Back reverses it on the exit curve; the arrows crossfade the page content only (E46.1).
+// Under reduced motion each of them is a 120 ms fade of the new page.
 import { nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import type { FaceId, FamilyId } from '../api/types';
 import { familyKey } from '../list/rows';
-import { withViewTransition } from '../motion';
+import { fadeIn, viewTransitionsRun, withViewTransition } from '../motion';
+import { prefersReducedMotion } from '../motion/useReducedMotion';
 import { useFamilyPageStore } from '../stores/familyPage';
 import { useFamilyRailStore, withLanguage } from '../stores/familyRail';
 import { useFontListStore } from '../stores/fontList';
@@ -16,6 +19,17 @@ import { useSearchStore } from '../stores/search';
 export const SHARED_SPECIMEN = 'fm-family-specimen';
 const OPENING = 'fm-family-opening';
 const CLOSING = 'fm-family-closing';
+const STEPPING = 'fm-family-stepping';
+
+/** The page the router shows: the root element of the route's view. */
+function routeView(): Element | null | undefined {
+  return document.getElementById('app')?.firstElementChild;
+}
+
+/** The family page's content under its top bar, which the arrows change. */
+function familyContent(): Element | null {
+  return document.querySelector('.family-page > .scroll');
+}
 
 /** The first text block on screen of a Layout view that shows `family`. */
 function layoutSpecimenOf(family: FamilyId): HTMLElement | null {
@@ -47,11 +61,22 @@ function share(el: HTMLElement | null): void {
   el?.style.setProperty('view-transition-name', SHARED_SPECIMEN);
 }
 
-/** Runs a page change with the root class that picks the timing, and cleans up after it. */
+let latest = 0;
+/** Where the arrow presses in flight are going; null when none is. */
+let stepTarget: FamilyId | null = null;
+
+/**
+ * Runs a page change with the root class that picks the timing, and cleans up after it. A
+ * change that starts while one runs skips that one; the skipped one leaves the class and the
+ * name alone, as they belong to the newer change now.
+ */
 function transition(rootClass: string, change: () => Promise<void>): Promise<void> {
   const root = document.documentElement;
+  const mine = ++latest;
+  root.classList.remove(OPENING, CLOSING, STEPPING);
   root.classList.add(rootClass);
   return withViewTransition(change, () => {
+    if (mine !== latest) return;
     root.classList.remove(rootClass);
     share(null);
   });
@@ -83,6 +108,8 @@ export function useFamilyNavigation() {
       await nextTick();
       list.holdScroll(false);
     });
+    // Reduced motion: no shared element and no slide, the new page fades in.
+    if (prefersReducedMotion()) fadeIn(routeView());
   }
 
   /** The entry to go back to, when the page was opened from the library. */
@@ -121,11 +148,35 @@ export function useFamilyNavigation() {
       // The list takes the keyboard again, as it had it before the page opened.
       specimen?.closest<HTMLElement>('[tabindex="0"]')?.focus({ preventScroll: true });
     });
+    if (prefersReducedMotion()) fadeIn(routeView());
   }
 
-  /** The arrows: another family on the same history entry, so Back still goes to the library. */
-  function step(family: FamilyId | null): void {
-    if (family !== null) void router.replace({ name: 'family', params: { id: String(family) } });
+  /**
+   * The arrows: the family `by` places on, on the same history entry, so Back still goes to the
+   * library. Only the content under the top bar crossfades (200 ms); the bar stays where it is.
+   * The new snapshot waits for the family's read, or the crossfade would be to an empty page.
+   * Without view transitions, and under reduced motion, the new content fades in.
+   *
+   * The route changes only once the old page is captured, a frame or more later. A press in
+   * that time counts from the family the step before it goes to, not from the page on screen,
+   * so two quick presses move two places.
+   */
+  async function step(by: -1 | 1): Promise<void> {
+    const from = stepTarget ?? page.id;
+    const family = from === null ? null : page.neighbor(from, by);
+    if (family === null) return;
+    stepTarget = family;
+    const animated = viewTransitionsRun();
+    try {
+      await transition(STEPPING, async () => {
+        await router.replace({ name: 'family', params: { id: String(family) } });
+        await nextTick();
+        if (animated) await page.settled();
+      });
+    } finally {
+      if (stepTarget === family) stepTarget = null;
+    }
+    if (!animated) fadeIn(familyContent());
   }
 
   return { open, back, step };

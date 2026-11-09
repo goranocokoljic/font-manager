@@ -162,25 +162,6 @@ test.describe('opening a family page', () => {
     await expect(page.locator('.family-page')).toBeVisible();
     await expect(page.locator('.family-page.slide-in')).toHaveCount(0);
   });
-
-  test('under reduced motion the page cuts in', async ({ page }) => {
-    await setup(page);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.addInitScript(() => {
-      const w = window as unknown as { started: number };
-      w.started = 0;
-      const start = document.startViewTransition.bind(document);
-      document.startViewTransition = ((cb: () => void) => {
-        w.started++;
-        return start(cb);
-      }) as typeof document.startViewTransition;
-    });
-    await page.goto('/?mockLibrary=wall#/');
-    await familyRows(page).nth(1).click();
-    await page.keyboard.press('o');
-    await onFamilyPage(page);
-    expect(await page.evaluate(() => (window as never as { started: number }).started)).toBe(0);
-  });
 });
 
 test.describe('going back', () => {
@@ -600,5 +581,179 @@ test.describe('deep links', () => {
     await expect(page.getByRole('alert')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(tree(page)).toBeVisible();
+  });
+});
+
+// E46.1: push, pop and the arrows, as the browser runs them.
+const EASE = 'cubic-bezier(0.2, 0, 0, 1)';
+type Seen = { pseudo: string; duration: number; easing: string };
+type Probe = {
+  transitions: { rootClass: string; seen: Seen[] }[];
+  fades: { page: boolean; content: boolean; duration: string }[];
+};
+
+/**
+ * Records every view transition (the root class it ran under and the pseudo-elements it
+ * animated, read once it is ready) and every start of the fade-in of motion/fadeIn.ts.
+ */
+async function record(page: Page) {
+  await page.addInitScript(() => {
+    const probe: Probe = { transitions: [], fades: [] };
+    (window as unknown as { probe: Probe }).probe = probe;
+    document.addEventListener(
+      'animationstart',
+      (e) => {
+        const el = e.target as HTMLElement;
+        if (e.animationName !== 'fm-fade-in') return;
+        probe.fades.push({
+          page: el.parentElement?.id === 'app',
+          content: el.matches('.family-page > .scroll'),
+          duration: getComputedStyle(el).animationDuration,
+        });
+      },
+      true,
+    );
+    const start = document.startViewTransition?.bind(document);
+    if (!start) return;
+    document.startViewTransition = ((cb: () => Promise<void>) => {
+      const entry = { rootClass: document.documentElement.className, seen: [] as Seen[] };
+      probe.transitions.push(entry);
+      const t = start(cb);
+      void t.ready.then(() => {
+        for (const a of document.getAnimations()) {
+          const fx = a.effect as KeyframeEffect;
+          if (!fx.pseudoElement?.startsWith('::view-transition')) continue;
+          // A CSS animation's timing function is the easing of its keyframes.
+          entry.seen.push({
+            pseudo: fx.pseudoElement,
+            duration: Number(fx.getComputedTiming().duration),
+            easing: String(fx.getKeyframes()[0]?.easing),
+          });
+        }
+      });
+      return t;
+    }) as typeof document.startViewTransition;
+  });
+}
+const probe = (page: Page) => page.evaluate(() => (window as unknown as { probe: Probe }).probe);
+const lastTransition = async (page: Page) => (await probe(page)).transitions.at(-1);
+
+/** The wall, with the second family opened from it, and the page's content drawn. */
+async function openSecond(page: Page) {
+  await page.goto('/?mockLibrary=wall#/');
+  await familyRows(page).nth(1).click();
+  await page.keyboard.press('o');
+  await onFamilyPage(page);
+  await expect(page.getByTestId('family-meta')).toBeVisible();
+}
+
+test.describe('page motion', () => {
+  test('Back reverses the push at 220 ms on the exit curve', async ({ page }) => {
+    await setup(page);
+    await record(page);
+    await openSecond(page);
+    await expect(page.locator('html')).not.toHaveClass(/fm-family-opening/);
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/family/);
+    await expect.poll(async () => (await lastTransition(page))?.seen.length).toBeGreaterThan(0);
+    const back = (await lastTransition(page))!;
+    expect(back.rootClass).toContain('fm-family-closing');
+    // The wall comes back in the root, the hero shrinks back into its card.
+    for (const pseudo of [
+      '::view-transition-old(root)',
+      '::view-transition-new(root)',
+      '::view-transition-group(fm-family-specimen)',
+    ]) {
+      expect(back.seen).toContainEqual({ pseudo, duration: 220, easing: 'ease-in' });
+    }
+    expect(back.seen.every((s) => s.duration === 220 && s.easing === 'ease-in')).toBe(true);
+  });
+
+  test('the arrows crossfade only the page content, at 200 ms', async ({ page }) => {
+    await setup(page);
+    await record(page);
+    await openSecond(page);
+    await expect(page.locator('html')).not.toHaveClass(/fm-family-opening/);
+    const before = page.url();
+    const bar = await page.locator('.family-page > .bar').boundingBox();
+    await page.keyboard.press('ArrowRight');
+    await expect(page).not.toHaveURL(before);
+    await expect.poll(async () => (await lastTransition(page))?.seen.length).toBeGreaterThan(0);
+    const stepped = (await lastTransition(page))!;
+    expect(stepped.rootClass).toContain('fm-family-stepping');
+    // The content's old and new snapshots fade over each other; the root (the top bar) and
+    // the hero on its own do not move.
+    expect([...new Set(stepped.seen.map((s) => s.pseudo))].sort()).toEqual([
+      '::view-transition-group(fm-family-content)',
+      '::view-transition-new(fm-family-content)',
+      '::view-transition-old(fm-family-content)',
+    ]);
+    expect(stepped.seen.every((s) => s.duration === 200 && s.easing === EASE)).toBe(true);
+    await expect(page.locator('html')).not.toHaveClass(/fm-family-stepping/);
+    expect(await page.locator('.family-page > .bar').boundingBox()).toEqual(bar);
+    // The new snapshot was the next family's page, not an empty one.
+    await expect(page.getByTestId('family-meta')).toBeVisible();
+  });
+
+  test('two quick presses move two places while the first change is still pending', async ({
+    page,
+  }) => {
+    await setup(page);
+    // A slow webview: the route changes a while after the press, as on a loaded macOS runner.
+    await page.addInitScript(() => {
+      const start = document.startViewTransition.bind(document);
+      document.startViewTransition = ((cb: () => Promise<void>) =>
+        start(async () => {
+          await new Promise((r) => setTimeout(r, 300));
+          await cb();
+        })) as typeof document.startViewTransition;
+    });
+    await page.goto('/?mockLibrary=wall#/family/502');
+    await expect(position(page)).toContainText('3 of 60');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(position(page)).toContainText('1 of 60');
+    // At the first family a third press has nowhere to go.
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowRight');
+    await expect(position(page)).toContainText('2 of 60');
+  });
+
+  test('without view transitions the arrows fade the new content in', async ({ page }) => {
+    await setup(page);
+    await page.addInitScript(() => {
+      Object.defineProperty(document, 'startViewTransition', { value: undefined });
+    });
+    await record(page);
+    await openSecond(page);
+    const before = page.url();
+    await page.keyboard.press('ArrowRight');
+    await expect(page).not.toHaveURL(before);
+    await expect
+      .poll(async () => (await probe(page)).fades)
+      .toContainEqual({ page: false, content: true, duration: '0.2s' });
+  });
+
+  test('under reduced motion push, arrows and pop are a 120 ms fade', async ({ page }) => {
+    await setup(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await record(page);
+    await openSecond(page);
+    // No shared element, no slide: the new page fades in.
+    await expect
+      .poll(async () => (await probe(page)).fades)
+      .toEqual([{ page: true, content: false, duration: '0.12s' }]);
+    await expect(page.locator('.family-page.slide-in')).toHaveCount(0);
+    const before = page.url();
+    await page.keyboard.press('ArrowRight');
+    await expect(page).not.toHaveURL(before);
+    await expect.poll(async () => (await probe(page)).fades.length).toBe(2);
+    expect((await probe(page)).fades[1]).toEqual({ page: false, content: true, duration: '0.12s' });
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/family/);
+    await expect.poll(async () => (await probe(page)).fades.length).toBe(3);
+    expect((await probe(page)).fades[2]).toEqual({ page: true, content: false, duration: '0.12s' });
+    // Reduced motion runs no view transition at all.
+    expect((await probe(page)).transitions).toEqual([]);
   });
 });

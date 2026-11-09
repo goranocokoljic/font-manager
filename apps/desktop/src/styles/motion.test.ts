@@ -2,6 +2,7 @@
 // change, and one thing the OS setting turns off, because components only read the tokens.
 // This fails on a literal duration or curve in a transition or animation anywhere in src.
 import { describe, expect, it } from 'vitest';
+import motionCss from './motion.css?raw';
 import theme from './theme.css?raw';
 
 /** Every .vue and .css file under src, by its path from src (`components/X.vue`). */
@@ -79,20 +80,39 @@ describe('motion tokens', () => {
     expect(base['--fm-motion-move']).toBe('200ms');
     expect(base['--fm-motion-page']).toBe('280ms');
     expect(base['--fm-ease']).toBe('cubic-bezier(0.2, 0, 0, 1)');
-    expect(Object.keys(base).filter((name) => name.startsWith('--fm-motion-'))).toHaveLength(3);
+    // With the family page's exit and the reduced fade (E46.1), below.
+    expect(Object.keys(base).filter((name) => name.startsWith('--fm-motion-'))).toHaveLength(5);
   });
 
   it('name the curve an exit may use', () => {
     expect(base['--fm-ease-exit']).toBe('ease-in');
   });
 
-  it('all go to 0ms under prefers-reduced-motion: reduce', () => {
+  it('name the family page exit and the one fade reduced motion keeps (E46.1)', () => {
+    expect(base['--fm-motion-page-exit']).toBe('220ms');
+    expect(base['--fm-motion-reduced-fade']).toBe('120ms');
+  });
+
+  it('all but the reduced fade go to 0ms under prefers-reduced-motion: reduce', () => {
     const block = theme.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/)?.[1];
     expect(rootTokens(block ?? '')).toEqual({
       '--fm-motion-fast': '0ms',
       '--fm-motion-move': '0ms',
       '--fm-motion-page': '0ms',
+      '--fm-motion-page-exit': '0ms',
     });
+  });
+
+  it('only the fade-in class reads the reduced fade, and it wins over the reduce rule', () => {
+    const readers = Object.entries(SOURCES)
+      .filter(([, source]) => source.includes('var(--fm-motion-reduced-fade)'))
+      // The glob keys the files next to this test `./x.css`.
+      .map(([file]) => file.replace(/^\.\//, 'styles/'));
+    expect(readers).toEqual(['styles/motion.css']);
+    const reduce = motionCss.match(
+      /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/,
+    )?.[1];
+    expect(reduce).toMatch(/\.fm-fade-in\s*\{[^}]*var\(--fm-motion-reduced-fade\)[^;]*!important/);
   });
 
   it('the reduced values come after the base values, so they win', () => {

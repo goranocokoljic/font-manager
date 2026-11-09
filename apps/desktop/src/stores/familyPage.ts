@@ -66,6 +66,8 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
   /** Bumped by every read; an answer to an older one is dropped. */
   let request = 0;
   let pinRequest = 0;
+  /** The read `show` started last. It never rejects: a failed read is `error`. */
+  let reading: Promise<void> = Promise.resolve();
 
   function takePushed(): boolean {
     const was = pushed.value;
@@ -82,6 +84,11 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
   const next = computed<FamilyId | null>(
     () => (index.value >= 0 && fontList.families[index.value + 1]?.id) || null,
   );
+  /** The family `by` places from `of` in the list; null at an end or when the list hides `of`. */
+  function neighbor(of: FamilyId, by: -1 | 1): FamilyId | null {
+    const at = fontList.families.findIndex((f) => f.id === of);
+    return (at >= 0 && fontList.families[at + by]?.id) || null;
+  }
 
   /** The list's summary when it has one: activation events keep that one current. */
   const summary = computed<FamilySummary | null>(
@@ -153,9 +160,16 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
       request++;
       pinRequest++;
       pins.value = [];
+      reading = Promise.resolve();
       return;
     }
-    await read(family);
+    reading = read(family);
+    await reading;
+  }
+
+  /** Resolves when the family the page shows has been read (or failed), so its page is drawn. */
+  function settled(): Promise<void> {
+    return reading;
   }
 
   // A scan or a change elsewhere may have changed or removed the family.
@@ -256,6 +270,7 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     total,
     previous,
     next,
+    neighbor,
     summary,
     faces,
     chosenFace,
@@ -263,6 +278,7 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     pins,
     readPins,
     show,
+    settled,
     familyOf,
     toggleActivation,
     toggleFace,
