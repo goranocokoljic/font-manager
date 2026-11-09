@@ -264,6 +264,18 @@ onBeforeUnmount(() => {
 // spacer has its new height. The post watcher is queued when the size changes, so it runs
 // before the FlipGroup measures where the cards went: a card then glides only by its
 // distance from the anchor, not by the whole scroll.
+// Only the slider or a resize glides the cards (motion table "Size slider"). A search or a
+// preview text that reorders them is a cut (E46.4: nothing animates in search results), so
+// the move class has no transition unless the size just changed.
+const gliding = ref(false);
+let glideTimer: ReturnType<typeof setTimeout> | undefined;
+watch([linePx, columns], () => {
+  gliding.value = true;
+  clearTimeout(glideTimer);
+  // After the move has started (the group reads the class once, as it starts it).
+  glideTimer = setTimeout(() => (gliding.value = false));
+});
+onBeforeUnmount(() => clearTimeout(glideTimer));
 watch([linePx, columns], () => {
   const i = list.anchorIndex;
   if (i >= 0) scrollTop.value = Math.floor(i / columns.value) * linePx.value;
@@ -627,6 +639,7 @@ function onToggle(row: ListRow): void {
   >
     <FmFlipGroup
       tag="div"
+      :move-class="gliding ? undefined : 'fm-flip-still'"
       :css="false"
       class="spacer"
       role="none"

@@ -594,18 +594,30 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--fm-space-1);
 }
+/* The state dot: activation fills it, the fill scaling 0 → 1 (E46.4, motion table "Activate"). */
 .dot {
+  position: relative;
   width: 7px;
   height: 7px;
   border: 1px solid var(--fm-muted);
   border-radius: 50%;
+  transition: border-color var(--fm-motion-fast) var(--fm-ease);
 }
-.state[data-state='active'] .dot {
-  border-color: var(--fm-success);
+.dot::before {
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
   background-color: var(--fm-success);
+  transform: scale(0);
+  transition: transform var(--fm-motion-fast) var(--fm-ease);
+  content: '';
 }
+.state[data-state='active'] .dot,
 .state[data-state='partial'] .dot {
   border-color: var(--fm-success);
+}
+.state[data-state='active'] .dot::before {
+  transform: scale(1);
 }
 .specimen {
   overflow: hidden;

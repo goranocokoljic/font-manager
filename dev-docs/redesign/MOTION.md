@@ -50,14 +50,33 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 | `useReducedMotion()` | motion that a script decides on; CSS follows the tokens by itself |
 | `<FmFade speed reduced>` | crossfades and fade-ins: a ring, a count, a list, the drawer's scrim (`mode="out-in"` passes through) |
 | `<FmSlide from distance speed reduced>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar and the toasts, `from="bottom" distance="4px" speed="fast"` for a popover |
-| `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`) |
+| `<FmCrossfade value speed tag>` | one element whose content crossfades, old over new, when `value` changes: the collection count after a drop (E46.4) |
+| `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`); the grid passes `move-class="fm-flip-still"` except while the size changes, so a search or typed text never glides the cards |
 | `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion (`viewTransitionsRun()` says which) |
 | `<UiSegmentedControl slide>` | the toolbar's view switch (E46.2): a thumb under the chosen segment that glides by `transform` at `--fm-motion-fast`; the lists under it crossfade through one `<FmFade>` in `HomeView.vue` |
 | `fadeIn(el, speed)` | a page or a page's content that just changed; under reduced motion it is the 120 ms reduced fade |
 
 `speed` is `fast`, `move` (the default) or `page`. `reduced` is what the helper does under
 reduced motion: `cut` (the default) or `fade`, a plain fade at `--fm-motion-reduced-fade`
-without the slide (E46.3: the drawer and its scrim, the popovers, the selection bar, the toasts).
+without the slide (E46.3: the drawer and its scrim, the popovers, the selection bar, the toasts;
+E46.4: Quick Look's sheet and the Studio's roles rail).
+
+## The moments of E46.4
+
+- **Drag to a collection.** `DragGhost.vue` (E44.2) lifts over `--fm-motion-fast` and flies over
+  `--fm-motion-move`; the Collections count is an `<FmCrossfade speed="fast">`.
+- **Activate.** `ActivationDot.vue` and the family page's state dot fill through a `::before`
+  that scales 0 → 1; `UiSwitch`'s knob moves by `transform`. The Table view's dot is `still`.
+- **Quick Look.** The sheet is an `<FmSlide from="bottom" distance="8px" reduced="fade" appear>`
+  over a backdrop whose `backdrop-filter: blur(12px)` is there at once (none under reduced
+  motion); the arrows `crossfade()` the specimen at `fast`.
+- **Open the Studio.** The page takes `.fm-paper-in` (styles/motion.css: scale .98 → 1 over a
+  fade at `--fm-motion-page`; the reduced fade under reduced motion) and the roles rail an
+  `<FmSlide from="start" speed="page" reduced="fade" appear>`, once per panel: a context
+  picked later shows at once.
+- **Nothing moves** while the user types in the preview field or the search, on the Table
+  view, or when the focus moves by keyboard. `e2e/motion-moments.spec.ts` records what the
+  engine runs and asserts it.
 
 ## Where the board and the tokens do not line up yet
 
@@ -68,8 +87,8 @@ The story that builds each moment decides these, without a literal value in a co
   under reduced motion. The family page's push, pop and arrows (E46.1) have the way past that
   rule: `--fm-motion-reduced-fade` and the `.fm-fade-in` class of `styles/motion.css`
   (`fadeIn()`). The drawer, the popovers, the selection bar and the toasts (E46.3) use
-  `reduced="fade"` on the helpers, which reads the same token. The other "Fade only" rows are
-  still a cut.
+  `reduced="fade"` on the helpers, which reads the same token. Quick Look and the Studio (E46.4)
+  keep their fade the same way; the other "Fade only" rows are still a cut.
 - **Hover under reduced motion.** The board keeps the tint ("Same"); today it is instant, for
   the same reason.
 - **Exits.** The board allows `ease-in` at 0.8× the duration (220 ms for "Back to the wall").

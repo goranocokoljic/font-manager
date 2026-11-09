@@ -450,7 +450,8 @@ describe('the accent in the style sheets', () => {
       "input[type='range']::-moz-range-thumb",
       ACCENT_FILL,
     ],
-    ['activation dot', 'components/ActivationDot.vue', '.dot.active', ACCENT_FILL],
+    // The fill is a layer that scales 0 → 1 as the face activates (E46.4).
+    ['activation dot', 'components/ActivationDot.vue', '.dot::before', ACCENT_FILL],
     [
       'check box',
       'styles/theme.css',
@@ -459,6 +460,15 @@ describe('the accent in the style sheets', () => {
     ],
   ])('%s takes the accent (%s)', (_, file, selector, pattern) => {
     expect(ruleOf(file, selector)).toMatch(pattern);
+  });
+
+  it('shows the activation dot fill when the face is active (E46.4)', () => {
+    expect(ruleOf('components/ActivationDot.vue', '.dot.active::before')).toMatch(
+      /transform:\s*scale\(1\)/,
+    );
+    expect(ruleOf('components/ActivationDot.vue', '.dot.active, .dot.partial')).toMatch(
+      /border-color:\s*var\(--fm-accent\)/,
+    );
   });
 
   it('draws the check mark, radio dot and switch knob in on-accent', () => {

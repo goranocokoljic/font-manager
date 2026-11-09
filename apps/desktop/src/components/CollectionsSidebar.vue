@@ -22,7 +22,7 @@ import type { CollectionId } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
 import { useFolded } from './useFolded';
 import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
-import { FmFade } from '../motion';
+import { FmCrossfade } from '../motion';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
@@ -439,16 +439,15 @@ const { folded, toggle } = useFolded('collections');
             >
               {{ row.collection.name }}
             </button>
-            <FmFade speed="fast" mode="out-in">
-              <span
-                :key="countText(row)"
-                class="side-count count"
-                :class="{ preview: fontDrag.isTarget(dropTarget(row)) }"
-                data-testid="collection-count"
-                :aria-label="countAria(row)"
-                >{{ countText(row) }}</span
-              >
-            </FmFade>
+            <FmCrossfade
+              :value="countText(row)"
+              speed="fast"
+              class="side-count count"
+              :class="{ preview: fontDrag.isTarget(dropTarget(row)) }"
+              data-testid="collection-count"
+              :aria-label="countAria(row)"
+              >{{ countText(row) }}</FmCrossfade
+            >
             <span class="side-actions">
               <UiIconButton
                 class="more"
