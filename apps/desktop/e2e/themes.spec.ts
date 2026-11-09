@@ -108,6 +108,8 @@ test('a choice crossfades the window at 200 ms and saves themeId', async ({ page
   await card(page, 'indigo').click();
   await expect(page.getByRole('radio', { name: 'Indigo' })).toBeChecked();
   await expect.poll(() => rootToken(page, '--fm-accent')).toBe(indigo.light.accent);
+  // The class goes once the transition is finished, so `ready` has filled the record by now.
+  await expect(page.locator('html')).not.toHaveClass(/fm-theme-change/);
   // One transition; both root layers (each may run several animations) last 200 ms.
   const transitions = await page.evaluate(
     () => (window as unknown as { fmTransitions: string[][] }).fmTransitions,
@@ -115,7 +117,6 @@ test('a choice crossfades the window at 200 ms and saves themeId', async ({ page
   expect(transitions.map((seen) => [...new Set(seen)].sort())).toEqual([
     ['::view-transition-new(root) 200', '::view-transition-old(root) 200'],
   ]);
-  await expect(page.locator('html')).not.toHaveClass(/fm-theme-change/);
   const saved = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem('fm.mock.settings.v1') ?? '{}'),
   );
