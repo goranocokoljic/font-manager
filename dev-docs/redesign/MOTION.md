@@ -53,6 +53,7 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 | `<FmCrossfade value speed tag>` | one element whose content crossfades, old over new, when `value` changes: the collection count after a drop (E46.4) |
 | `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`); the grid passes `move-class="fm-flip-still"` except while the size changes, so a search or typed text never glides the cards |
 | `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion (`viewTransitionsRun()` says which) |
+| `<UiSegmentedControl slide>` | the toolbar's view switch (E46.2): a thumb under the chosen segment that glides by `transform` at `--fm-motion-fast`; the lists under it crossfade through one `<FmFade>` in `HomeView.vue` |
 | `fadeIn(el, speed)` | a page or a page's content that just changed; under reduced motion it is the 120 ms reduced fade |
 
 `speed` is `fast`, `move` (the default) or `page`. `reduced` is what the helper does under

@@ -22,6 +22,8 @@ const SOURCES = Object.fromEntries(
 const ALLOWED: Record<string, string> = {
   'components/DragGhost.vue: left: 0':
     "The drag ghost is placed with translate() from the pointer's clientX, a physical window coordinate; its origin is the window's left edge in every direction.",
+  'components/ui/UiSegmentedControl.vue: left: 0':
+    "The view switch's thumb is placed with translate() from the chosen segment's offsetLeft, a physical coordinate; its origin is the track's left edge in every direction, so it still lands under the mirrored segment.",
 };
 
 /** Properties that name a physical side. */
