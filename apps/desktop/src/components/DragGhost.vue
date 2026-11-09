@@ -48,7 +48,9 @@ watch(
     if (!on || !source) return;
     await nextTick();
     mount(body.value, source.el);
-    requestAnimationFrame(() => (lifted.value = true));
+    // Two frames, as for the flight: the card's own size must paint before the lift is set,
+    // or a busy frame applies both at once and nothing lifts (E46.4: the lift is 120 ms).
+    requestAnimationFrame(() => requestAnimationFrame(() => (lifted.value = true)));
   },
 );
 

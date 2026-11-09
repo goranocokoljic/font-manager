@@ -330,6 +330,7 @@ describe('what the helpers animate', () => {
 
   it('every helper is covered', () => {
     expect(Object.keys(SOURCES).sort()).toEqual([
+      './FmCrossfade.vue',
       './FmFade.vue',
       './FmFlipGroup.vue',
       './FmSlide.vue',
@@ -340,6 +341,8 @@ describe('what the helpers animate', () => {
     ['./FmFade.vue', ['opacity'], ['opacity']],
     ['./FmSlide.vue', ['transform', 'opacity'], ['opacity', 'transform', 'transform']],
     ['./FmFlipGroup.vue', ['transform'], []],
+    // Its opacity fade is crossfade()'s, in styles/motion.css (E46.4): no style of its own.
+    ['./FmCrossfade.vue', [], []],
   ])('%s animates only transform and opacity', (file, properties, states) => {
     const css = styleOf(file);
     expect(animated(css)).toEqual({ properties, usesKeyframes: false });

@@ -342,7 +342,7 @@ function onToggle(row: ListRow): void {
           :show-variable="item.row.kind === 'family'"
         >
           <template #lead>
-            <ActivationDot :state="rowActivation(item.row)" />
+            <ActivationDot :key="item.row.key" :state="rowActivation(item.row)" />
             <span
               v-if="quick.holds(item.row)"
               class="quick-mark"
@@ -408,9 +408,10 @@ function onToggle(row: ListRow): void {
           :data-state="motion.settled.value ? undefined : 'deferred'"
         >
           <span class="label"
-            ><ActivationDot :state="rowActivation(item.row)" /><bdi data-family-name>{{
-              item.row.family.name
-            }}</bdi></span
+            ><ActivationDot :key="item.row.key" :state="rowActivation(item.row)" /><bdi
+              data-family-name
+              >{{ item.row.family.name }}</bdi
+            ></span
           >
           <span v-if="library.failed.has(item.row.family.id)" class="note">
             {{ t('list.stylesUnavailable') }}
