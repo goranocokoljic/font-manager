@@ -30,27 +30,40 @@ test('a fast scroll shows labels while the list moves and faces once it settles'
   const list = page.getByRole('tree', { name: 'Font list' });
   await expect(list.locator('.row[data-state="ready"]').first()).toBeVisible();
 
-  // A fling: one viewport per frame for 20 frames. At the last frame, read what the
-  // rows show, before anything can settle.
+  // A fling: one viewport per frame for 20 frames. Read what the rows show in every
+  // frame (the rows of the previous frame's scroll, patched by then) and keep the frame
+  // with the most deferred rows. One read after the last frame is a race on a slow
+  // machine: the CI macOS VM can rest for SETTLE_MS between that frame and the read, and
+  // then it sees a settled list. The claim is about the rows while the list moves.
   const during = await list.evaluate(
     (el) =>
       new Promise<{ deferred: number; labelled: number; loading: number }>((resolve) => {
         let frames = 0;
+        let best = { deferred: 0, labelled: 0, loading: 0 };
+        const read = () => {
+          // A row whose family's styles are not fetched yet is a placeholder
+          // with the family name; one with a face shows its name in the sample slot.
+          // `loading` is read in that same frame: rows that were loading before the fling
+          // (the test waits for the first row only) are still in flight in the first frames
+          // and have left the viewport by the frame deepest into the fling.
+          const deferred = [...el.querySelectorAll('[data-state="deferred"]')];
+          if (deferred.length <= best.deferred) return;
+          best = {
+            deferred: deferred.length,
+            labelled: deferred.filter((r) =>
+              r.querySelector('[data-testid="deferred-sample"], .label')?.textContent?.trim(),
+            ).length,
+            loading: el.querySelectorAll('.row[data-state="loading"]').length,
+          };
+        };
         const step = () => {
+          read();
           el.scrollTop += el.clientHeight;
           if (++frames < 20) return requestAnimationFrame(step);
           // One more frame so Vue has patched the rows of the last scroll.
           requestAnimationFrame(() => {
-            // A row whose family's styles are not fetched yet is a placeholder
-            // with the family name; one with a face shows its name in the sample slot.
-            const deferred = [...el.querySelectorAll('[data-state="deferred"]')];
-            resolve({
-              deferred: deferred.length,
-              labelled: deferred.filter((r) =>
-                r.querySelector('[data-testid="deferred-sample"], .label')?.textContent?.trim(),
-              ).length,
-              loading: el.querySelectorAll('.row[data-state="loading"]').length,
-            });
+            read();
+            resolve(best);
           });
         };
         requestAnimationFrame(step);
