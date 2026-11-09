@@ -482,6 +482,8 @@ test.describe('the wall', () => {
   });
 
   test('the slider holds 60 fps with 1,000 families', async ({ page }) => {
+    // Up to three rounds of 300 frames: 15 s each on a runner that drops to 20 fps.
+    test.setTimeout(90_000);
     const wall = await openWall(page, '?mockLibrary=wall&mockFaces=940');
     // 1,000 families at 4 per line: 250 lines, a little over 144 px each at the default size.
     await expect
@@ -523,6 +525,19 @@ test.describe('the wall', () => {
           }),
         [work, frames] as const,
       );
+    // The wall is at rest: nothing animates and every card in the window has its thumbnail.
+    const settle = () =>
+      expect
+        .poll(
+          () =>
+            wall.evaluate(
+              (el) =>
+                el.getAnimations({ subtree: true }).length +
+                el.querySelectorAll('[data-testid="thumbnail"]:not([data-state="ready"])').length,
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe(0);
     // What this machine's animation frames run at when nothing happens: 60 on a display at
     // 60 Hz. The macOS runners switch between 30 and 60 on their own, during a test too (one
     // gave "slider 59.5, idle 29.9"), so a sweep only counts when the idle rate before AND
@@ -531,8 +546,12 @@ test.describe('the wall', () => {
     // test says so as a skip, and still fails if the slider costs frames there.
     let last = { before: 0, fps: 0, after: 0 };
     for (let round = 0; round < 3; round++) {
+      await settle();
       const before = await measure(false, 60);
       const fps = await measure(true, 180);
+      // The sweep's last size still reflows (200 ms) and paints the thumbnails that came
+      // into the window: that is work, not idle. Count the idle rate once the wall is at rest.
+      await settle();
       const after = await measure(false, 60);
       last = { before, fps, after };
       console.log(
