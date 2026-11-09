@@ -181,19 +181,177 @@ test.describe('the wall', () => {
     // The wall now has fewer columns: the sixth card moved along both axes.
     await expect(wall).toHaveAttribute('data-columns', '2');
 
-    const moved = await page.evaluate(async () => {
+    const { moved, entered } = await page.evaluate(async () => {
+      const keys = () =>
+        new Set(
+          [...document.querySelectorAll('.slot[data-key]')].map((c) => c.getAttribute('data-key')),
+        );
+      const before = keys();
       const input = document.querySelector<HTMLInputElement>('input[aria-label="Size slider"]')!;
       input.value = '60';
       input.dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise((r) => requestAnimationFrame(r));
-      return document
+      const running = document
         .getAnimations()
-        .filter((a): a is CSSTransition => a instanceof CSSTransition)
-        .filter((a) => (a.effect as KeyframeEffect).target?.matches('.slot'))
-        .map((a) => a.transitionProperty);
+        .filter((a) => (a.effect as KeyframeEffect).target?.matches('.slot'));
+      const isNew = (a: Animation) =>
+        !before.has((a.effect as KeyframeEffect).target!.getAttribute('data-key'));
+      return {
+        moved: running
+          .filter((a) => !isNew(a))
+          .map((a) => ({
+            property: a instanceof CSSTransition ? a.transitionProperty : 'animation',
+            duration: a.effect!.getComputedTiming().duration,
+          })),
+        // Cards that came into the window with the reflow: they were not there to glide from.
+        entered: {
+          count: [...keys()].filter((k) => !before.has(k)).length,
+          animated: running.filter(isNew).length,
+        },
+      };
     });
     expect(moved.length).toBeGreaterThan(0);
-    expect(new Set(moved)).toEqual(new Set(['transform']));
+    // FLIP: transform only, at the move token (200 ms).
+    expect(new Set(moved.map((m) => m.property))).toEqual(new Set(['transform']));
+    expect(new Set(moved.map((m) => m.duration))).toEqual(new Set([200]));
+    // The 60 families all fit in the window here; the next test proves the cards that enter.
+    expect(entered.animated).toBe(0);
+  });
+
+  test('cards that enter the window with a reflow appear without animation', async ({ page }) => {
+    const wall = await openWall(page, '?mockLibrary=wall&mockFaces=940');
+    await setSize(page, 100);
+    await expect(wall).toHaveAttribute('data-columns', '2');
+    await page.waitForTimeout(300);
+    const seen = await page.evaluate(async () => {
+      const keys = () =>
+        new Set(
+          [...document.querySelectorAll('.slot[data-key]')].map((c) => c.getAttribute('data-key')),
+        );
+      const before = keys();
+      const input = document.querySelector<HTMLInputElement>('input[aria-label="Size slider"]')!;
+      input.value = '40';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => requestAnimationFrame(r));
+      const running = document
+        .getAnimations()
+        .map((a) => (a.effect as KeyframeEffect).target as Element)
+        .filter((t) => t.matches('.slot'))
+        .map((t) => t.getAttribute('data-key'));
+      return {
+        entered: [...keys()].filter((k) => !before.has(k)).length,
+        animatedNew: running.filter((k) => !before.has(k)).length,
+        animatedOld: running.filter((k) => before.has(k)).length,
+      };
+    });
+    expect(seen.entered).toBeGreaterThan(0);
+    expect(seen.animatedOld).toBeGreaterThan(0);
+    expect(seen.animatedNew).toBe(0);
+  });
+
+  test('switching view crossfades the lists (200 ms) while the thumb slides (120 ms)', async ({
+    page,
+  }) => {
+    const wall = await openWall(page);
+    const modes = page.getByRole('group', { name: 'View mode' });
+    const thumb = modes.locator('.thumb');
+    const grid = modes.getByRole('button', { name: 'Grid' });
+    // At rest the thumb lies under the chosen segment.
+    await expect
+      .poll(async () => {
+        const [t, b] = await Promise.all([thumb.boundingBox(), grid.boundingBox()]);
+        return Math.round(t!.x - b!.x);
+      })
+      .toBe(0);
+    // The switch to the wall has finished fading in. A switch while a fade still runs
+    // reverses it, and the browser shortens a reversed transition (a slow runner gave 198 ms).
+    await expect.poll(() => wall.evaluate((el) => el.getAnimations().length)).toBe(0);
+
+    const seen = await page.evaluate(async () => {
+      const group = document.querySelector('[role="group"][aria-label="View mode"]')!;
+      const list = [...group.querySelectorAll('button')].find(
+        (b) => b.getAttribute('aria-label') === 'List',
+      )!;
+      list.click();
+      const fades = new Map<string, number>();
+      let both = false;
+      let slide: { property: string; duration: number } | null = null;
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const grid = document.querySelector('[role="listbox"][aria-label="Font grid"]');
+        const tree = document.querySelector('[role="tree"][aria-label="Font list"]');
+        if (grid && tree) both = true;
+        for (const a of document.getAnimations()) {
+          if (!(a instanceof CSSTransition)) continue;
+          const target = (a.effect as KeyframeEffect).target as Element;
+          const ms = a.effect!.getComputedTiming().duration as number;
+          if (target === grid && a.transitionProperty === 'opacity') fades.set('grid', ms);
+          if (target === tree && a.transitionProperty === 'opacity') fades.set('tree', ms);
+          if (target.matches('.thumb')) slide = { property: a.transitionProperty, duration: ms };
+        }
+      }
+      return { both, fades: Object.fromEntries(fades), slide };
+    });
+    expect(seen.both).toBe(true);
+    expect(seen.fades).toEqual({ grid: 200, tree: 200 });
+    expect(seen.slide).toEqual({ property: 'transform', duration: 120 });
+    // The old list goes; the thumb ends under List.
+    await expect(wall).toHaveCount(0);
+    await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
+    const list = modes.getByRole('button', { name: 'List' });
+    await expect
+      .poll(async () => {
+        const [t, b] = await Promise.all([thumb.boundingBox(), list.boundingBox()]);
+        return Math.round(t!.x - b!.x);
+      })
+      .toBe(0);
+  });
+
+  test('mid-crossfade, Escape from the preview field focuses the new list, not the old', async ({
+    page,
+  }) => {
+    const wall = await openWall(page);
+    // Hold the crossfade open: the old list stays on the page, inert, while the keys run.
+    await page.evaluate(() => document.documentElement.style.setProperty('--fm-motion-move', '5s'));
+    await page
+      .getByRole('group', { name: 'View mode' })
+      .getByRole('button', { name: 'List' })
+      .click();
+    const tree = page.getByRole('tree', { name: 'Font list' });
+    await tree.focus();
+    await expect(page.locator('[role="listbox"][aria-label="Font grid"][inert]')).toHaveCount(1);
+    await page.keyboard.press('t');
+    await expect(page.getByRole('textbox', { name: 'Type to preview' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(tree).toBeFocused();
+    // The old list is still fading: the focus did not go to it.
+    await expect(wall).toHaveCount(0); // getByRole skips the inert, hidden old list
+    await expect(page.locator('[role="listbox"][aria-label="Font grid"]')).toHaveCount(1);
+  });
+
+  test('under reduced motion the switch is a cut and the thumb jumps', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openWall(page);
+    const animated = await page.evaluate(async () => {
+      const group = document.querySelector('[role="group"][aria-label="View mode"]')!;
+      [...group.querySelectorAll('button')]
+        .find((b) => b.getAttribute('aria-label') === 'List')!
+        .click();
+      let moving = 0;
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => requestAnimationFrame(r));
+        moving += document
+          .getAnimations()
+          .map((a) => (a.effect as KeyframeEffect).target as Element)
+          .filter((t) => t.matches('.thumb, [role="listbox"], [role="tree"]')).length;
+      }
+      return {
+        lists: document.querySelectorAll('[role="listbox"][aria-label="Font grid"]').length,
+        moving,
+      };
+    });
+    // Nothing fades or slides; the old list is gone within the frames Vue takes to swap.
+    expect(animated).toEqual({ lists: 0, moving: 0 });
   });
 
   test('a moved anchor card keeps its place near the top, without flying across the scroll', async ({
@@ -324,6 +482,8 @@ test.describe('the wall', () => {
   });
 
   test('the slider holds 60 fps with 1,000 families', async ({ page }) => {
+    // Up to three rounds of 300 frames: 15 s each on a runner that drops to 20 fps.
+    test.setTimeout(90_000);
     const wall = await openWall(page, '?mockLibrary=wall&mockFaces=940');
     // 1,000 families at 4 per line: 250 lines, a little over 144 px each at the default size.
     await expect
@@ -365,17 +525,45 @@ test.describe('the wall', () => {
           }),
         [work, frames] as const,
       );
+    // The wall is at rest: nothing animates and every card in the window has its thumbnail.
+    const settle = () =>
+      expect
+        .poll(
+          () =>
+            wall.evaluate(
+              (el) =>
+                el.getAnimations({ subtree: true }).length +
+                el.querySelectorAll('[data-testid="thumbnail"]:not([data-state="ready"])').length,
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe(0);
     // What this machine's animation frames run at when nothing happens: 60 on a display at
-    // 60 Hz. A machine that cannot reach 55 idle (one macOS runner gave 30, others gave 60)
-    // cannot prove the target, so the test says so as a skip; it still fails if the slider
-    // costs frames there.
-    const idle = await measure(false, 60);
-    const fps = await measure(true, 180);
-    console.log(`wall slider: ${fps.toFixed(1)} fps median (idle ${idle.toFixed(1)})`);
-    if (idle < 55) {
-      expect(fps).toBeGreaterThanOrEqual(idle - 5);
-      test.skip(true, `not measured: animation frames run at ${idle.toFixed(1)} fps when idle`);
+    // 60 Hz. The macOS runners switch between 30 and 60 on their own, during a test too (one
+    // gave "slider 59.5, idle 29.9"), so a sweep only counts when the idle rate before AND
+    // after it reached 55: then a slow sweep is the wall's, not the runner's. Up to three
+    // tries for such a sweep; a machine that never gives one cannot prove the target, so the
+    // test says so as a skip, and still fails if the slider costs frames there.
+    let last = { before: 0, fps: 0, after: 0 };
+    for (let round = 0; round < 3; round++) {
+      await settle();
+      const before = await measure(false, 60);
+      const fps = await measure(true, 180);
+      // The sweep's last size still reflows (200 ms) and paints the thumbnails that came
+      // into the window: that is work, not idle. Count the idle rate once the wall is at rest.
+      await settle();
+      const after = await measure(false, 60);
+      last = { before, fps, after };
+      console.log(
+        `wall slider: ${fps.toFixed(1)} fps median (idle ${before.toFixed(1)} before, ${after.toFixed(1)} after)`,
+      );
+      if (before >= 55 && after >= 55) {
+        expect(fps).toBeGreaterThanOrEqual(55);
+        return;
+      }
     }
-    expect(fps).toBeGreaterThanOrEqual(55);
+    const idle = Math.min(last.before, last.after);
+    expect(last.fps).toBeGreaterThanOrEqual(idle - 5);
+    test.skip(true, `not measured: animation frames run at ${idle.toFixed(1)} fps when idle`);
   });
 });
