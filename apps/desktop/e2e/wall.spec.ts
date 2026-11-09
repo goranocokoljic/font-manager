@@ -304,6 +304,28 @@ test.describe('the wall', () => {
       .toBe(0);
   });
 
+  test('mid-crossfade, Escape from the preview field focuses the new list, not the old', async ({
+    page,
+  }) => {
+    const wall = await openWall(page);
+    // Hold the crossfade open: the old list stays on the page, inert, while the keys run.
+    await page.evaluate(() => document.documentElement.style.setProperty('--fm-motion-move', '5s'));
+    await page
+      .getByRole('group', { name: 'View mode' })
+      .getByRole('button', { name: 'List' })
+      .click();
+    const tree = page.getByRole('tree', { name: 'Font list' });
+    await tree.focus();
+    await expect(page.locator('[role="listbox"][aria-label="Font grid"][inert]')).toHaveCount(1);
+    await page.keyboard.press('t');
+    await expect(page.getByRole('textbox', { name: 'Type to preview' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(tree).toBeFocused();
+    // The old list is still fading: the focus did not go to it.
+    await expect(wall).toHaveCount(0); // getByRole skips the inert, hidden old list
+    await expect(page.locator('[role="listbox"][aria-label="Font grid"]')).toHaveCount(1);
+  });
+
   test('under reduced motion the switch is a cut and the thumb jumps', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openWall(page);
@@ -499,16 +521,27 @@ test.describe('the wall', () => {
         [work, frames] as const,
       );
     // What this machine's animation frames run at when nothing happens: 60 on a display at
-    // 60 Hz. A machine that cannot reach 55 idle (one macOS runner gave 30, others gave 60)
-    // cannot prove the target, so the test says so as a skip; it still fails if the slider
-    // costs frames there.
-    const idle = await measure(false, 60);
-    const fps = await measure(true, 180);
-    console.log(`wall slider: ${fps.toFixed(1)} fps median (idle ${idle.toFixed(1)})`);
-    if (idle < 55) {
-      expect(fps).toBeGreaterThanOrEqual(idle - 5);
-      test.skip(true, `not measured: animation frames run at ${idle.toFixed(1)} fps when idle`);
+    // 60 Hz. The macOS runners switch between 30 and 60 on their own, during a test too (one
+    // gave "slider 59.5, idle 29.9"), so a sweep only counts when the idle rate before AND
+    // after it reached 55: then a slow sweep is the wall's, not the runner's. Up to three
+    // tries for such a sweep; a machine that never gives one cannot prove the target, so the
+    // test says so as a skip, and still fails if the slider costs frames there.
+    let last = { before: 0, fps: 0, after: 0 };
+    for (let round = 0; round < 3; round++) {
+      const before = await measure(false, 60);
+      const fps = await measure(true, 180);
+      const after = await measure(false, 60);
+      last = { before, fps, after };
+      console.log(
+        `wall slider: ${fps.toFixed(1)} fps median (idle ${before.toFixed(1)} before, ${after.toFixed(1)} after)`,
+      );
+      if (before >= 55 && after >= 55) {
+        expect(fps).toBeGreaterThanOrEqual(55);
+        return;
+      }
     }
-    expect(fps).toBeGreaterThanOrEqual(55);
+    const idle = Math.min(last.before, last.after);
+    expect(last.fps).toBeGreaterThanOrEqual(idle - 5);
+    test.skip(true, `not measured: animation frames run at ${idle.toFixed(1)} fps when idle`);
   });
 });

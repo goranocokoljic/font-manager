@@ -582,10 +582,12 @@ const showSelectionBar = computed(
 );
 
 /** Escape in the search box or the preview field: back to the font list the keys drive. */
+/** The list on screen; not the one a view switch is fading out (`pinLeaving` makes it inert). */
 function focusList(): void {
-  browse.value
-    ?.querySelector<HTMLElement>('[role="listbox"], [role="tree"], [role="treegrid"]')
-    ?.focus({ preventScroll: true });
+  const lists = browse.value?.querySelectorAll<HTMLElement>(
+    '[role="listbox"], [role="tree"], [role="treegrid"]',
+  );
+  [...(lists ?? [])].find((el) => !el.closest('[inert]'))?.focus({ preventScroll: true });
 }
 
 // A panel that came back with the library has no element to give the focus back to.
