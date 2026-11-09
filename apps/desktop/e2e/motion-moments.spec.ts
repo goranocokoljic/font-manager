@@ -100,7 +100,8 @@ async function openQuickLook(page: Page) {
   await page.keyboard.press('Space');
   const sheet = page.getByTestId('quick-look');
   await expect(sheet).toBeVisible();
-  await page.waitForTimeout(100);
+  // Its enter is over (Vue takes the class off when the transition ends), however slow the runner.
+  await expect(sheet).not.toHaveClass(/fm-slide-enter-active/);
   return { sheet, seen: await recorded(page) };
 }
 
@@ -110,7 +111,8 @@ async function openStudio(page: Page) {
   await record(page);
   await page.goto('/#/studio?face=1');
   await expect(page.getByTestId('studio-roles').first()).toBeVisible();
-  await page.waitForTimeout(100);
+  // The opening is over: the page's class goes when its animation ends.
+  await page.waitForFunction(() => !document.querySelector('.fm-paper-in'));
   return recorded(page);
 }
 
