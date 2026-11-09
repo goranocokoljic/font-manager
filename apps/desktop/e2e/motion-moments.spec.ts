@@ -81,6 +81,10 @@ async function dragToEditorial(page: Page, wall: Locator): Promise<void> {
   await page.mouse.down();
   await page.mouse.move(a.x + 20, a.y + 20, { steps: 4 });
   await expect(page.getByTestId('drag-ghost')).toBeVisible();
+  // The ghost lifts two frames after it shows. Wait for the lift before the drop: on a slow
+  // runner the drop can come first, the ghost goes before it lifts, and there is no lift to
+  // record (the lift is what the drag test measures).
+  await expect(page.locator('[data-testid="drag-ghost-lift"].lifted')).toBeVisible();
   const b = await centre(editorial);
   await page.mouse.move(b.x, b.y, { steps: 6 });
   await page.mouse.move(b.x + 1, b.y, { steps: 2 });
