@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // An on/off switch: accent when on. Attributes (aria-label, @click) fall through to the button.
+// The knob slides by a transform over `--fm-motion-fast` (E46.4, motion table "Activate").
 defineProps<{ checked: boolean }>();
 </script>
 
@@ -32,15 +33,19 @@ defineProps<{ checked: boolean }>();
   height: 10px;
   border-radius: 50%;
   background: var(--fm-control-border);
-  transform: translateY(-50%);
-  transition: inset-inline-start var(--fm-motion-fast) var(--fm-ease);
+  transform: translate(0, -50%);
+  transition: transform var(--fm-motion-fast) var(--fm-ease);
 }
 .ui-switch[aria-checked='true'] {
   border-color: var(--fm-accent);
   background: var(--fm-accent);
 }
+/* 14 px: from 3 px to 17 px inside the 32 px track. */
 .ui-switch[aria-checked='true'] .knob {
-  inset-inline-start: 17px;
   background-color: var(--fm-on-accent);
+  transform: translate(14px, -50%);
+}
+[dir='rtl'] .ui-switch[aria-checked='true'] .knob {
+  transform: translate(-14px, -50%);
 }
 </style>

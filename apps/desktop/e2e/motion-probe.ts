@@ -169,3 +169,88 @@ export function watchEnter(selectors: string[]) {
 }
 
 export const enterSeen = () => watched.fmEnter;
+
+/** One transition or animation that started in the page while the recorder ran (E46.4). */
+export interface Moved {
+  /** `transition` or `animation`. */
+  kind: string;
+  /** The `data-testid` of the element or its nearest marked ancestor, else ''. */
+  testid: string;
+  /** The element's classes. */
+  classes: string;
+  /** `::before` for a pseudo-element, else ''. */
+  pseudo: string;
+  /** The transitioned property, or the animation's name. */
+  property: string;
+  duration: number;
+  easing: string;
+  /** The first keyframe's transform and opacity, as the engine computed them. */
+  from: { transform?: string; opacity?: string };
+}
+
+const recorder = window as unknown as {
+  fmMoved?: Moved[];
+  fmStop?: () => void;
+};
+
+function movedOf(a: Animation, kind: string): Moved {
+  const effect = a.effect as KeyframeEffect;
+  const el = effect.target as HTMLElement;
+  const timing = effect.getComputedTiming();
+  const first = effect.getKeyframes()[0] ?? {};
+  return {
+    kind,
+    testid: (el.closest('[data-testid]') as HTMLElement | null)?.dataset.testid ?? '',
+    classes: typeof el.className === 'string' ? el.className : '',
+    pseudo: effect.pseudoElement ?? '',
+    property: a instanceof CSSTransition ? a.transitionProperty : (a as CSSAnimation).animationName,
+    duration: Number(timing.duration),
+    // An animation's curve is its keyframes' (`animation-timing-function`), not the effect's.
+    easing: String(a instanceof CSSTransition ? timing.easing : (first.easing ?? timing.easing)),
+    from: {
+      ...(first.transform !== undefined && { transform: String(first.transform) }),
+      ...(first.opacity !== undefined && { opacity: String(first.opacity) }),
+    },
+  };
+}
+
+/**
+ * Records every CSS transition and animation that starts in the page from now on, until
+ * `recorded()` is read. What the engine runs, not what a stylesheet says: a transition the
+ * page never starts is not there.
+ */
+export function recordMotion() {
+  recorder.fmStop?.();
+  const seen = new Set<Animation>();
+  const moved: Moved[] = [];
+  recorder.fmMoved = moved;
+  const take = () => {
+    for (const a of document.getAnimations()) {
+      if (seen.has(a)) continue;
+      if (a instanceof CSSTransition) moved.push(movedOf(a, 'transition'));
+      else if (a instanceof CSSAnimation) moved.push(movedOf(a, 'animation'));
+      else continue;
+      seen.add(a);
+    }
+  };
+  // A transition or animation can end before the next frame: read them as they start.
+  document.addEventListener('transitionrun', take, true);
+  document.addEventListener('animationstart', take, true);
+  let frame = requestAnimationFrame(function tick() {
+    take();
+    frame = requestAnimationFrame(tick);
+  });
+  recorder.fmStop = () => {
+    document.removeEventListener('transitionrun', take, true);
+    document.removeEventListener('animationstart', take, true);
+    cancelAnimationFrame(frame);
+    recorder.fmStop = undefined;
+  };
+}
+
+/** What `recordMotion()` saw; the recorder stops. */
+export async function recorded() {
+  await frame();
+  recorder.fmStop?.();
+  return recorder.fmMoved ?? [];
+}

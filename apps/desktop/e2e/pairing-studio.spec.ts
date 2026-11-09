@@ -29,6 +29,9 @@ async function open(page: Page) {
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
 }
 
+/** The Studio's opening has ended (E46.4): the page no longer scales, so its box is its size. */
+const opened = (page: Page) => page.waitForFunction(() => !document.querySelector('.fm-paper-in'));
+
 const modeButton = (page: Page, name: string) =>
   page.getByRole('group', { name: 'View mode' }).getByRole('button', { name, exact: true });
 const presetPicker = (page: Page) => page.getByRole('combobox', { name: 'Preset' });
@@ -171,6 +174,7 @@ test('each context is a layout file on its page at 100 %, on the neutral ground'
   await page.goto('/#/studio?face=1');
   const panel = studio(page);
   await expect(contextButton(page, 'Magazine')).toHaveAttribute('aria-pressed', 'true');
+  await opened(page);
 
   for (const [button, name, id, width, height, pageName, margin] of CONTEXTS) {
     await contextButton(page, button).click();
@@ -244,6 +248,7 @@ test('Mobile UI uses the iOS text styles; Video title draws title and action saf
   await page.goto('/#/studio?layout=studio-mobile-ui&face=1');
   const mobile = layout(studio(page), 'Mobile UI');
   await expect(mobile).toHaveAttribute('data-state', 'ready');
+  await opened(page);
   // Large Title 34/41, Headline 17/22, Body 17/22, Footnote 13/18 on the 390 px page.
   const sizes = await blocks(mobile).evaluateAll((els) =>
     els.map((el) => {
