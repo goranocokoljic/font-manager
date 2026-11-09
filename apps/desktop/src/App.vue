@@ -10,12 +10,15 @@ import UpdateDialog from './components/UpdateDialog.vue';
 import { HELP_PAGES } from './help';
 import { direction, locale, resolveLocale, setLocale, t, type MessageKey } from './i18n';
 import { ACTIONS } from './keyboard/keymap';
-import { useActions, useShortcuts } from './stores/commands';
+import { useActions, useCommandsStore, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
+import { useThemesStore } from './stores/themes';
 import { useUpdatesStore } from './stores/updates';
 
 const settings = useSettingsStore();
 const updates = useUpdatesStore();
+const themes = useThemesStore();
+const commands = useCommandsStore();
 const router = useRouter();
 
 useShortcuts();
@@ -69,9 +72,35 @@ onUnmounted(() => stopShellNavigate?.());
 
 // The one check without a click: only when the user turned "Check automatically" on.
 onMounted(async () => {
-  await settings.load();
+  await Promise.all([settings.load(), themes.load()]);
   await updates.checkAtStart(settings.settings);
 });
+
+// The named theme (E47.2) comes from the settings, so a restart keeps it: its token set for
+// the current light or dark mode goes onto the root element whenever either changes.
+watchEffect(() => themes.apply());
+
+// "Theme: <name>" in the command palette, one action per theme the app ships.
+let unregisterThemes: (() => void)[] = [];
+watch(
+  () => themes.themes,
+  (list) => {
+    unregisterThemes.forEach((u) => u());
+    unregisterThemes = list.map((theme) =>
+      commands.register({
+        id: `theme.${theme.id}`,
+        get title() {
+          return t('app.themeAction', { name: theme.name });
+        },
+        get group() {
+          return t('app.groups.app');
+        },
+        run: () => themes.choose(theme.id),
+      }),
+    );
+  },
+);
+onUnmounted(() => unregisterThemes.splice(0).forEach((u) => u()));
 
 // Theme and density apply the moment a setting changes: theme.css reads them
 // from the root element.

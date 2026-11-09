@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { wallFixtures } from '../src/api/mockWall';
@@ -88,6 +88,34 @@ const collectionName = process.env.FM_SCREENS_COLLECTION;
 // FM_SCREENS_PREFIX=list names the files `<prefix>-<theme>-<w>x<h>.png` instead of using the
 // route; only for a single-route run.
 const prefix = process.env.FM_SCREENS_PREFIX;
+// FM_SCREENS_THEMES=all (or paper,moss) shoots every scene under each of those built-in themes
+// (E47.2, the review pass), named `<slug>-<theme id>-<scheme>-<w>x<h>.png`; unset, the saved
+// theme (Paper) and the names without a theme id.
+const themesDir = new URL('../../../data/themes/', import.meta.url);
+/** The built-in themes, Paper (the default) first, from data/themes. */
+function builtInThemes(): { id: string; light: { accent: string }; dark: { accent: string } }[] {
+  return readdirSync(fileURLToPath(themesDir))
+    .filter((f) => f.endsWith('.json') && f !== 'theme.schema.json')
+    .map((f) => JSON.parse(readFileSync(fileURLToPath(new URL(f, themesDir)), 'utf8')))
+    .sort(
+      (a, b) => Number(b.id === 'paper') - Number(a.id === 'paper') || a.id.localeCompare(b.id),
+    );
+}
+/** The themes a value of FM_SCREENS_THEMES names; unknown ids are an error, not a skip. */
+function screensThemes(value: string | undefined) {
+  const all = builtInThemes();
+  const ids = (value ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (ids.includes('all')) return all;
+  return ids.map((id) => {
+    const theme = all.find((t) => t.id === id);
+    if (!theme) throw new Error(`FM_SCREENS_THEMES: no built-in theme ${id}`);
+    return theme;
+  });
+}
+const shotThemes = screensThemes(process.env.FM_SCREENS_THEMES);
 // FM_SCREENS_VIEWPORTS=1280x800,1440x900 replaces the default viewports.
 const defaultViewports = [
   { width: 1280, height: 800 },
@@ -141,6 +169,14 @@ test.describe('the screenshots default (E40.2)', () => {
     }
   });
 
+  test('the theme loop knows every built-in theme, Paper first (E47.2)', () => {
+    expect(builtInThemes().map((t) => t.id)).toEqual(['paper', 'graphite', 'indigo', 'moss']);
+    expect(screensThemes('all').map((t) => t.id)).toEqual(['paper', 'graphite', 'indigo', 'moss']);
+    expect(screensThemes('moss, paper').map((t) => t.id)).toEqual(['moss', 'paper']);
+    expect(screensThemes(undefined)).toEqual([]);
+    expect(() => screensThemes('nope')).toThrow(/nope/);
+  });
+
   test('a query keeps its options and may name another library', () => {
     expect(withWall('')).toBe('?mockLibrary=wall');
     expect(withWall('?mockColor=1')).toBe('?mockColor=1&mockLibrary=wall');
@@ -153,169 +189,200 @@ test.describe('@screens', () => {
   if (locale) test.use({ locale });
 
   for (const route of routes) {
-    for (const scheme of ['light', 'dark'] as const) {
-      for (const vp of viewports) {
-        const [path, press] = route.split('@');
-        const slug = prefix ?? (route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home');
-        const name = `${slug}-${scheme}-${vp.width}x${vp.height}.png`;
-        test(name, async ({ page }) => {
-          await serveFonts(page);
-          await page.addInitScript((entries) => {
-            for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
-          }, storage);
-          await page.addInitScript((entries) => {
-            for (const [k, v] of Object.entries(entries)) sessionStorage.setItem(k, v);
-          }, session);
-          await page.setViewportSize(vp);
-          await page.emulateMedia({ colorScheme: scheme });
-          await page.goto(`/${query}#${path}`);
-          await expect(page.locator('#app')).not.toBeEmpty();
-          if (collectionName) {
-            const sidebar = page.getByRole('region', { name: 'Collections' });
-            await sidebar.getByRole('button', { name: 'New collection', exact: true }).click();
-            const input = sidebar.getByRole('textbox', { name: 'New collection name' });
-            await input.fill(collectionName);
-            await input.press('Enter');
-            const item = sidebar.getByRole('listitem', { name: collectionName, exact: true });
-            await expect(item).toBeVisible();
-            await item.getByRole('button', { name: collectionName, exact: true }).click();
-          }
-          if (rowIndex) {
-            await listRows(page)
-              .nth(rowIndex - 1)
-              .click();
-          }
-          for (const i of selectRows) {
-            await listRows(page)
-              .nth(i - 1)
-              .click({ modifiers: ['ControlOrMeta'] });
-          }
-          if (selectRows.length) {
-            await expect(page.getByRole('toolbar', { name: 'Selection' })).toBeVisible();
-            await page.waitForTimeout(300); // the bar rises (200 ms)
-          }
-          if (twistyCard) {
-            await listRows(page)
-              .nth(twistyCard - 1)
-              .locator('.twisty')
-              .click();
-            await page.waitForTimeout(200);
-          }
-          if (press) await page.keyboard.press(press);
-          if (tab) {
-            await page
-              .getByRole('group', { name: 'Section' })
-              .getByRole('button', { name: tab, exact: true })
-              .click();
-            await expect(
-              page.locator(`[data-testid="family-panel"][data-section="${tab.toLowerCase()}"]`),
-            ).toBeVisible();
-            await page.waitForTimeout(400); // the old section fades out, the new one loads
-            if (glyph) {
-              await page.getByRole('searchbox', { name: 'Search glyphs' }).fill(glyph);
-              await expect(page.getByRole('region', { name: 'Selected glyph' })).toBeVisible();
-              if (compareWith) {
-                await page.getByRole('button', { name: 'Compare with…' }).click();
-                const dialog = page.getByRole('dialog');
-                await dialog.getByRole('combobox', { name: 'Compare with font' }).fill(compareWith);
-                await expect(dialog.getByRole('option').first()).toContainText(compareWith);
-                await page.keyboard.press('Enter');
-                await expect(dialog.getByRole('list', { name: 'Legend' })).toContainText(
-                  compareWith,
-                );
+    for (const theme of shotThemes.length ? shotThemes : [undefined]) {
+      for (const scheme of ['light', 'dark'] as const) {
+        for (const vp of viewports) {
+          const [path, press] = route.split('@');
+          const slug =
+            prefix ?? (route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home');
+          const themed = theme ? `${slug}-${theme.id}` : slug;
+          const name = `${themed}-${scheme}-${vp.width}x${vp.height}.png`;
+          test(name, async ({ page }) => {
+            await serveFonts(page);
+            await page.addInitScript((entries) => {
+              for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
+            }, storage);
+            // The theme is a setting: it goes into the mock's saved settings, over any seeded ones.
+            const seeded = { ...session };
+            if (theme) {
+              const key = 'fm.mock.settings.v1';
+              seeded[key] = JSON.stringify({
+                ...JSON.parse(seeded[key] ?? '{}'),
+                themeId: theme.id,
+              });
+            }
+            await page.addInitScript((entries) => {
+              for (const [k, v] of Object.entries(entries)) sessionStorage.setItem(k, v);
+            }, seeded);
+            await page.setViewportSize(vp);
+            await page.emulateMedia({ colorScheme: scheme });
+            await page.goto(`/${query}#${path}`);
+            await expect(page.locator('#app')).not.toBeEmpty();
+            if (theme) {
+              // The scene is under the theme: its accent for this scheme is on :root.
+              await expect
+                .poll(() =>
+                  page.evaluate(() =>
+                    getComputedStyle(document.documentElement)
+                      .getPropertyValue('--fm-accent')
+                      .trim(),
+                  ),
+                )
+                .toBe(theme[scheme].accent);
+            }
+            if (collectionName) {
+              const sidebar = page.getByRole('region', { name: 'Collections' });
+              await sidebar.getByRole('button', { name: 'New collection', exact: true }).click();
+              const input = sidebar.getByRole('textbox', { name: 'New collection name' });
+              await input.fill(collectionName);
+              await input.press('Enter');
+              const item = sidebar.getByRole('listitem', { name: collectionName, exact: true });
+              await expect(item).toBeVisible();
+              await item.getByRole('button', { name: collectionName, exact: true }).click();
+            }
+            if (rowIndex) {
+              await listRows(page)
+                .nth(rowIndex - 1)
+                .click();
+            }
+            for (const i of selectRows) {
+              await listRows(page)
+                .nth(i - 1)
+                .click({ modifiers: ['ControlOrMeta'] });
+            }
+            if (selectRows.length) {
+              await expect(page.getByRole('toolbar', { name: 'Selection' })).toBeVisible();
+              await page.waitForTimeout(300); // the bar rises (200 ms)
+            }
+            if (twistyCard) {
+              await listRows(page)
+                .nth(twistyCard - 1)
+                .locator('.twisty')
+                .click();
+              await page.waitForTimeout(200);
+            }
+            if (press) await page.keyboard.press(press);
+            if (tab) {
+              await page
+                .getByRole('group', { name: 'Section' })
+                .getByRole('button', { name: tab, exact: true })
+                .click();
+              await expect(
+                page.locator(`[data-testid="family-panel"][data-section="${tab.toLowerCase()}"]`),
+              ).toBeVisible();
+              await page.waitForTimeout(400); // the old section fades out, the new one loads
+              if (glyph) {
+                await page.getByRole('searchbox', { name: 'Search glyphs' }).fill(glyph);
+                await expect(page.getByRole('region', { name: 'Selected glyph' })).toBeVisible();
+                if (compareWith) {
+                  await page.getByRole('button', { name: 'Compare with…' }).click();
+                  const dialog = page.getByRole('dialog');
+                  await dialog
+                    .getByRole('combobox', { name: 'Compare with font' })
+                    .fill(compareWith);
+                  await expect(dialog.getByRole('option').first()).toContainText(compareWith);
+                  await page.keyboard.press('Enter');
+                  await expect(dialog.getByRole('list', { name: 'Legend' })).toContainText(
+                    compareWith,
+                  );
+                }
+              }
+              if (coverageOf) {
+                const coverage = page.getByRole('region', { name: 'Coverage' });
+                const row = coverage.getByRole('button', { name: new RegExp(`^${coverageOf}:`) });
+                await row.click();
+                await expect(row).toHaveAttribute('aria-expanded', 'true');
+                await row.scrollIntoViewIfNeeded();
               }
             }
-            if (coverageOf) {
-              const coverage = page.getByRole('region', { name: 'Coverage' });
-              const row = coverage.getByRole('button', { name: new RegExp(`^${coverageOf}:`) });
-              await row.click();
-              await expect(row).toHaveAttribute('aria-expanded', 'true');
-              await row.scrollIntoViewIfNeeded();
+            if (pinRows) {
+              const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+              await rows.first().click();
+              for (let i = 0; i < pinRows; i++) {
+                await page.keyboard.press('c');
+                await expect(page.getByTestId('toast')).toContainText(`(${i + 1} of 4)`);
+                await page.keyboard.press('ArrowDown');
+              }
+              await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
+              await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
+              if (pinMode) await page.getByRole('radio', { name: pinMode }).check();
             }
-          }
-          if (pinRows) {
-            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
-            await rows.first().click();
-            for (let i = 0; i < pinRows; i++) {
-              await page.keyboard.press('c');
-              await expect(page.getByTestId('toast')).toContainText(`(${i + 1} of 4)`);
-              await page.keyboard.press('ArrowDown');
+            if (quickRows) {
+              const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+              await rows.first().click();
+              for (let i = 0; i < quickRows; i++) {
+                await page.keyboard.press('b');
+                await expect(page.getByTestId('quick-count')).not.toHaveText(String(i));
+                await page.keyboard.press('ArrowDown');
+              }
+              await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
+              await page.getByTestId('quick-collection').click();
             }
-            await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
-            await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
-            if (pinMode) await page.getByRole('radio', { name: pinMode }).check();
-          }
-          if (quickRows) {
-            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
-            await rows.first().click();
-            for (let i = 0; i < quickRows; i++) {
-              await page.keyboard.press('b');
-              await expect(page.getByTestId('quick-count')).not.toHaveText(String(i));
-              await page.keyboard.press('ArrowDown');
-            }
-            await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
-            await page.getByTestId('quick-collection').click();
-          }
-          if (tagNames.length) {
-            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
-            await rows.first().click();
-            const panel = page.getByRole('dialog', { name: /^Tags of / });
-            for (const name of tagNames) {
+            if (tagNames.length) {
+              const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+              await rows.first().click();
+              const panel = page.getByRole('dialog', { name: /^Tags of / });
+              for (const name of tagNames) {
+                await page.keyboard.press('t');
+                await panel.getByRole('combobox').fill(name);
+                await page.keyboard.press('Enter');
+                await expect(panel.locator(`[data-tag="${name}"]`)).toBeVisible();
+                await page.keyboard.press('Escape');
+              }
+              await page.keyboard.press('Shift+ArrowDown');
               await page.keyboard.press('t');
-              await panel.getByRole('combobox').fill(name);
-              await page.keyboard.press('Enter');
-              await expect(panel.locator(`[data-tag="${name}"]`)).toBeVisible();
-              await page.keyboard.press('Escape');
+              await expect(panel).toBeVisible();
             }
-            await page.keyboard.press('Shift+ArrowDown');
-            await page.keyboard.press('t');
-            await expect(panel).toBeVisible();
-          }
-          if (command) {
-            await page.keyboard.press('ControlOrMeta+k');
-            await page.keyboard.type(command);
-            await page.keyboard.press('Enter');
-            await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeHidden();
-          }
-          if (click) {
-            await page
-              .getByRole('button', { name: new RegExp(`^${click}`) })
-              .first()
-              .click();
-            await page.waitForTimeout(300); // panels and popovers finish their fade
-          }
-          if (openSelect) {
-            await page.getByRole('combobox', { name: openSelect, exact: true }).first().click();
-            await expect(page.getByRole('listbox').first()).toBeVisible();
-            // The menu fades in (120 ms); the shot waits for it to settle.
-            await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
-          }
-          if (hoverRow) {
-            await listRows(page)
-              .nth(hoverRow - 1)
-              .hover();
-            await page.waitForTimeout(200); // the row's actions fade in
-          }
-          if (dragTo) {
-            const from = (await listRows(page).first().boundingBox())!;
-            const to = (await page
-              .getByRole('region', { name: 'Collections' })
-              .getByRole('listitem', { name: dragTo, exact: true })
-              .boundingBox())!;
-            // Taken at its top edge and held on the row's lower edge, the ghost hangs below the
-            // row, as on the board, and the row's "31 → 34" stays in view.
-            await page.mouse.move(from.x + 24, from.y + 2);
-            await page.mouse.down();
-            await page.mouse.move(from.x + 44, from.y + 22, { steps: 4 });
-            await page.mouse.move(to.x + 40, to.y + to.height - 2, { steps: 8 });
-            await page.mouse.move(to.x + 41, to.y + to.height - 2, { steps: 2 });
-            await expect(
-              page.getByTestId('collection-count').filter({ hasText: '→' }),
-            ).toBeVisible();
-            await page.waitForTimeout(300); // the ghost lifts, the count crossfades
-          }
-          await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });
-        });
+            if (command) {
+              await page.keyboard.press('ControlOrMeta+k');
+              await page.keyboard.type(command);
+              await page.keyboard.press('Enter');
+              await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeHidden();
+            }
+            if (click) {
+              await page
+                .getByRole('button', { name: new RegExp(`^${click}`) })
+                .first()
+                .click();
+              await page.waitForTimeout(300); // panels and popovers finish their fade
+            }
+            if (openSelect) {
+              await page.getByRole('combobox', { name: openSelect, exact: true }).first().click();
+              await expect(page.getByRole('listbox').first()).toBeVisible();
+              // The menu fades in (120 ms); the shot waits for it to settle.
+              await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
+            }
+            if (hoverRow) {
+              await listRows(page)
+                .nth(hoverRow - 1)
+                .hover();
+              await page.waitForTimeout(200); // the row's actions fade in
+            }
+            if (dragTo) {
+              const from = (await listRows(page).first().boundingBox())!;
+              const to = (await page
+                .getByRole('region', { name: 'Collections' })
+                .getByRole('listitem', { name: dragTo, exact: true })
+                .boundingBox())!;
+              // Taken at its top edge and held on the row's lower edge, the ghost hangs below the
+              // row, as on the board, and the row's "31 → 34" stays in view.
+              await page.mouse.move(from.x + 24, from.y + 2);
+              await page.mouse.down();
+              await page.mouse.move(from.x + 44, from.y + 22, { steps: 4 });
+              await page.mouse.move(to.x + 40, to.y + to.height - 2, { steps: 8 });
+              await page.mouse.move(to.x + 41, to.y + to.height - 2, { steps: 2 });
+              await expect(
+                page.getByTestId('collection-count').filter({ hasText: '→' }),
+              ).toBeVisible();
+              await page.waitForTimeout(300); // the ghost lifts, the count crossfades
+            }
+            await page.screenshot({
+              path: `${dir}/${name}`,
+              fullPage: true,
+              animations: 'disabled',
+            });
+          });
+        }
       }
     }
   }

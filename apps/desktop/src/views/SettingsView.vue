@@ -8,6 +8,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
+import ThemeCard from '../components/ThemeCard.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
 import UiNumberField from '../components/ui/UiNumberField.vue';
@@ -26,6 +27,7 @@ import { useCatalogsStore } from '../stores/catalogs';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSourcesStore } from '../stores/sources';
+import { useThemesStore } from '../stores/themes';
 import { useToastStore } from '../stores/toast';
 import { useUpdatesStore } from '../stores/updates';
 
@@ -36,6 +38,7 @@ const commands = useCommandsStore();
 const app = useAppStore();
 const toast = useToastStore();
 const updates = useUpdatesStore();
+const themes = useThemesStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -105,6 +108,7 @@ onMounted(async () => {
     updates.support ? undefined : updates.loadSupport(),
     sources.load(),
     catalogs.load(),
+    themes.themes.length ? undefined : themes.load(),
   ]);
 });
 onBeforeUnmount(() => sources.stop());
@@ -354,6 +358,19 @@ function chooseLanguage(value: string): void {
 
         <template v-else-if="current === 'appearance' && s">
           <h2 class="heading">{{ sectionTitle('appearance') }}</h2>
+          <fieldset class="group">
+            <legend>{{ t('settings.appearance.colorTheme') }}</legend>
+            <div class="theme-cards">
+              <ThemeCard
+                v-for="theme in themes.themes"
+                :key="theme.id"
+                :theme="theme"
+                :scheme="themes.scheme"
+                :checked="themes.active?.id === theme.id"
+                @choose="themes.choose"
+              />
+            </div>
+          </fieldset>
           <fieldset class="group">
             <legend>{{ t('settings.appearance.theme') }}</legend>
             <label
@@ -786,6 +803,11 @@ function chooseLanguage(value: string): void {
 }
 .select {
   align-self: flex-start;
+}
+.theme-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--fm-space-3);
 }
 .info {
   display: grid;

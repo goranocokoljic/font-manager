@@ -1,0 +1,18 @@
+{
+  "id": "a-motion-test-must-assert-the-running-animation-s-timing-rea",
+  "title": "A motion test must assert the running animation's timing, read after the transition is finished",
+  "category": "testing",
+  "rule": "When a Playwright test proves a duration or curve of a view transition or CSS animation, read the running animations (`document.getAnimations()` filtered on the pseudo-element or element, `getComputedTiming().duration`), not the token (`getPropertyValue('--fm-motion-*')`): the token keeps its value when the rule that applies it is deleted. Fill the probe in `transition.ready.then(...)` and read it only after a wait that comes later (the transition's class or attribute being removed on `finished`), never right after a state change made in the update callback. Check that the mutation 'delete the timing rule' fails the test.",
+  "rationale": "E47.2 (#483): the 200 ms theme crossfade test read `--fm-motion-move` (always 200ms) and passed with the timing rule removed; the first fix then read the record before `ready` could have filled it, a flake on the slow macOS runner.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    483
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts"
+  ],
+  "first_seen": "2026-11-09T18:02:10.408Z",
+  "last_seen": "2026-11-09T18:02:10.408Z"
+}
