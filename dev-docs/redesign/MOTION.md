@@ -48,13 +48,15 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 | Helper | Use it for |
 |--------|------------|
 | `useReducedMotion()` | motion that a script decides on; CSS follows the tokens by itself |
-| `<FmFade speed>` | crossfades and fade-ins: a ring, a count, a list (`mode="out-in"` passes through) |
-| `<FmSlide from distance speed>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar |
+| `<FmFade speed reduced>` | crossfades and fade-ins: a ring, a count, a list, the drawer's scrim (`mode="out-in"` passes through) |
+| `<FmSlide from distance speed reduced>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar and the toasts, `from="bottom" distance="4px" speed="fast"` for a popover |
 | `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`) |
 | `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion (`viewTransitionsRun()` says which) |
 | `fadeIn(el, speed)` | a page or a page's content that just changed; under reduced motion it is the 120 ms reduced fade |
 
-`speed` is `fast`, `move` (the default) or `page`.
+`speed` is `fast`, `move` (the default) or `page`. `reduced` is what the helper does under
+reduced motion: `cut` (the default) or `fade`, a plain fade at `--fm-motion-reduced-fade`
+without the slide (E46.3: the drawer and its scrim, the popovers, the selection bar, the toasts).
 
 ## Where the board and the tokens do not line up yet
 
@@ -64,7 +66,9 @@ The story that builds each moment decides these, without a literal value in a co
   a 120 ms fade"), but the duration tokens are `0ms` and `theme.css` turns every transition off
   under reduced motion. The family page's push, pop and arrows (E46.1) have the way past that
   rule: `--fm-motion-reduced-fade` and the `.fm-fade-in` class of `styles/motion.css`
-  (`fadeIn()`). The other "Fade only" rows are still a cut.
+  (`fadeIn()`). The drawer, the popovers, the selection bar and the toasts (E46.3) use
+  `reduced="fade"` on the helpers, which reads the same token. The other "Fade only" rows are
+  still a cut.
 - **Hover under reduced motion.** The board keeps the tint ("Same"); today it is instant, for
   the same reason.
 - **Exits.** The board allows `ease-in` at 0.8× the duration (220 ms for "Back to the wall").

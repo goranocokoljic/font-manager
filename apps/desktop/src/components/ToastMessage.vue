@@ -4,35 +4,39 @@
 // each new message; the toast stays while the pointer or the focus is on it.
 import { t } from '../i18n';
 import { useToastStore } from '../stores/toast';
+import { FmSlide } from '../motion';
+import { retireToast } from './retireToast';
 
 const toasts = useToastStore();
 </script>
 
 <template>
   <div class="region" role="status" aria-live="polite">
-    <div
-      v-if="toasts.toast"
-      :key="toasts.toast.id"
-      class="toast"
-      data-testid="toast"
-      @pointerenter="toasts.hold()"
-      @pointerleave="toasts.release()"
-      @focusin="toasts.hold()"
-      @focusout="toasts.release()"
-    >
-      <span class="message">{{ toasts.toast.message }}</span>
-      <button v-if="toasts.toast.action" type="button" class="action" @click="toasts.act()">
-        {{ toasts.toast.action.label }}
-      </button>
-      <button
-        type="button"
-        class="close"
-        :aria-label="t('toast.dismiss')"
-        @click="toasts.dismiss()"
+    <FmSlide from="bottom" distance="16px" reduced="fade" @before-leave="retireToast">
+      <div
+        v-if="toasts.toast"
+        :key="toasts.toast.id"
+        class="toast"
+        data-testid="toast"
+        @pointerenter="toasts.hold()"
+        @pointerleave="toasts.release()"
+        @focusin="toasts.hold()"
+        @focusout="toasts.release()"
       >
-        ×
-      </button>
-    </div>
+        <span class="message">{{ toasts.toast.message }}</span>
+        <button v-if="toasts.toast.action" type="button" class="action" @click="toasts.act()">
+          {{ toasts.toast.action.label }}
+        </button>
+        <button
+          type="button"
+          class="close"
+          :aria-label="t('toast.dismiss')"
+          @click="toasts.dismiss()"
+        >
+          ×
+        </button>
+      </div>
+    </FmSlide>
   </div>
 </template>
 
@@ -85,15 +89,10 @@ button:focus-visible {
   height: 24px;
   color: var(--fm-muted);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .toast {
-    animation: rise var(--fm-motion-fast) var(--fm-ease);
-  }
-}
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+/* A leaving one fades out on top of the next, without moving it. */
+.toast.fm-slide-leave-active {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
 }
 </style>

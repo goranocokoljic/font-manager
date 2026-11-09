@@ -3,7 +3,10 @@
 // <body>, so no scrolling pane clips it; a pointer press outside it or a scroll elsewhere
 // asks the owner to close it; a resize moves it with its anchor. The owner keeps the focus and handles the keys —
 // the layer never takes focus, so the dialogs' focus guards never see it leave.
+// It comes up through `<FmSlide>` (E46.3): a 120 ms fade and a 4 px rise, a fade only under
+// reduced motion. Every `UiSelect` list is one of these.
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { FmSlide } from '../../motion';
 
 const props = withDefaults(
   defineProps<{
@@ -97,11 +100,11 @@ onBeforeUnmount(() => listen(false));
 
 <template>
   <Teleport to="body">
-    <Transition name="ui-pop">
+    <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
       <div v-if="open" ref="layer" class="ui-popover" data-ui-popover :style="style">
         <slot />
       </div>
-    </Transition>
+    </FmSlide>
   </Teleport>
 </template>
 
@@ -123,16 +126,5 @@ onBeforeUnmount(() => listen(false));
   font-family: var(--fm-font-ui);
   font-size: var(--fm-text-md);
   line-height: var(--fm-leading);
-}
-.ui-pop-enter-active,
-.ui-pop-leave-active {
-  transition:
-    opacity var(--fm-motion-fast) var(--fm-ease),
-    transform var(--fm-motion-fast) var(--fm-ease);
-}
-.ui-pop-enter-from,
-.ui-pop-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
 }
 </style>

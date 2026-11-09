@@ -3,7 +3,7 @@
 export { default as FmFade } from './FmFade.vue';
 export { default as FmFlipGroup } from './FmFlipGroup.vue';
 export { default as FmSlide } from './FmSlide.vue';
-export type { MotionSpeed } from './speed';
+export type { MotionSpeed, ReducedMotion } from './speed';
 export { useReducedMotion } from './useReducedMotion';
 export { viewTransitionsRun, withViewTransition } from './withViewTransition';
 export { fadeIn } from './fadeIn';
