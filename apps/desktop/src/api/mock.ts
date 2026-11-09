@@ -2462,6 +2462,10 @@ function createMockLayouts(
         throw err('invalidRequest', 'A font was given for a block that does not exist.');
       const stem = mockExportStem(req.layout, saved, req, familyOf);
       if (stem === null) throw err('notFound', 'That face is no longer in the library.');
+      // The scales asked for are kept in `window.__fmMockPngScales` for the browser
+      // specs: the file name does not carry the scale (E45.4).
+      const w = globalThis as { __fmMockPngScales?: number[] };
+      (w.__fmMockPngScales ??= []).push(req.scale);
       return `/mock/exports/${stem}.png`;
     },
     restoreLayout: async ({ id, number }) => {

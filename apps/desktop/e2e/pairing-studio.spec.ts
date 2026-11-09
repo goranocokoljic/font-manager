@@ -1101,6 +1101,9 @@ test('with nothing in the library to pair, the Try list links to the catalogs', 
 
 // ---- E45.4 compare, save, export --------------------------------------------------------
 
+/** The scales the mock's `exportLayoutPng` was asked for, in order. */
+const pngScales = () => (globalThis as { __fmMockPngScales?: number[] }).__fmMockPngScales ?? [];
+
 test('Export offers PNG at 1× and 2× and PDF; each choice gives the focus back to Export', async ({
   page,
 }) => {
@@ -1135,6 +1138,8 @@ test('Export offers PNG at 1× and 2× and PDF; each choice gives the focus back
   await expect(menu).toBeHidden();
   await expect(exportButton(page)).toBeFocused();
   await expect(status(page)).toHaveText('Exported to /mock/exports/Inter-Inter-magazine.png');
+  // PNG 1× asks the core for scale 1; the file name does not carry the scale.
+  await expect.poll(() => page.evaluate(pngScales)).toEqual([1]);
 
   // A headline face of its own names the headline.
   await pickRoleFont(page, 'Headline', 'JetBrains', 'JetBrains Mono');
@@ -1144,6 +1149,8 @@ test('Export offers PNG at 1× and 2× and PDF; each choice gives the focus back
   await expect(status(page)).toHaveText(
     'Exported to /mock/exports/JetBrains Mono-Inter-magazine.png',
   );
+  // PNG 2× asks for scale 2.
+  await expect.poll(() => page.evaluate(pngScales)).toEqual([1, 2]);
 
   // PDF goes through the print dialog, the first panel the print target.
   await exportButton(page).focus();
