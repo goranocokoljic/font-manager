@@ -66,7 +66,7 @@ test('the sheet saves the comparison under a name; the list and the palette reop
 
   // Change the pins and the mode, then reopen the saved one from the sheet's list.
   await dialog.getByRole('button', { name: /^Remove JetBrains Mono/ }).click();
-  await dialog.getByRole('radio', { name: 'Side by side' }).check();
+  await dialog.getByRole('radio', { name: 'Grid' }).check();
   await savedButton.click();
   await saved.getByRole('button', { name: 'Open comparison Body pairing' }).click();
   await expect(saved).toBeHidden();

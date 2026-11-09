@@ -151,7 +151,7 @@
     "sizeLabel": "Größe",
     "sizeAuto": "Auto",
     "modes": {
-      "sideBySide": "Nebeneinander",
+      "sideBySide": "Raster",
       "stacked": "Untereinander",
       "overlay": "Überlagert"
     },

@@ -102,9 +102,11 @@ shorter, from 40% of the window to the full window. Double-click the bar, or cli
 **Full height**, to fill the window; do it again to go back. Compare opens at the
 height you used last. Compare shows the pinned fonts in the preview text of the
 list, all at the same size. At **Auto**, the size grows with the sheet: 56 px at the
-lowest height, 80 px at full height. Choose a mode: **Side by side**,
-**Stacked** or **Overlay**. Overlay draws two fonts on one baseline in two colors;
-with three or four pinned, choose the two fonts. **Remove** takes a font out of
+lowest height, 80 px at full height. Choose a layout: **Stacked** (one font per
+row; a new comparison opens Stacked), **Grid** (two fonts per row) or **Overlay**.
+A comparison saved as Side by side opens as Grid. Overlay draws two fonts on one
+baseline in two colors, and the legend names each font and style; with three or
+four pinned, choose the two fonts. **Remove** takes a font out of
 Compare. The pins stay until you close the app.
 
 To keep a comparison, type a name and click **Save comparison**. The fonts, the

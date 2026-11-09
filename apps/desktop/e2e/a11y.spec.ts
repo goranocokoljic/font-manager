@@ -468,7 +468,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const sheet = page.getByRole('dialog', { name: 'Compare' });
       await expect(sheet).toBeVisible();
       await inTheme(page);
-      for (const mode of ['Side by side', 'Stacked', 'Overlay']) {
+      for (const mode of ['Stacked', 'Grid', 'Overlay']) {
         await sheet.getByRole('radio', { name: mode }).check();
         expect(await violations(page), mode).toEqual([]);
       }

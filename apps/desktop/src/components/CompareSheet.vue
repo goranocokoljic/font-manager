@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Compare: the pinned faces (2–4) in the list's current sample text at one size,
-// as a sheet over the list. Side by side and Stacked show one block per face;
-// Overlay draws two of them on one shared baseline, each in its own color at 50%
-// opacity. Every face is live text in the webview, registered through the shared
-// face loader while the sheet shows it.
+// as a sheet over the list. Stacked (the default) shows one row per face and Grid two
+// faces per row (E48.2; stored as the API's `sideBySide`); Overlay draws two of them on
+// one shared baseline, each in its own color at 50% opacity. Every face is live text in
+// the webview, registered through the shared face loader while the sheet shows it.
 //
 // Named comparisons (E13.2): the pins, mode and sample text are saved under a name;
 // a saved one is reopened from the list in the sheet (or the command palette) and
@@ -32,6 +32,7 @@ import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../s
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import PairingsPanel from './PairingsPanel.vue';
 import UiButton from './ui/UiButton.vue';
+import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import UiSegmentedControl, { type SegmentOption } from './ui/UiSegmentedControl.vue';
 import UiSelect from './ui/UiSelect.vue';
@@ -350,6 +351,7 @@ function onFocusIn(e: FocusEvent): void {
                 :checked="compare.mode === m.value"
                 @change="onMode"
               />
+              <UiIcon :name="m.icon" />
               {{ m.label }}
             </label>
           </div>
@@ -483,9 +485,11 @@ function onFocusIn(e: FocusEvent): void {
               </svg>
             </div>
             <ul class="legend" :aria-label="t('compare.legend')">
-              <li v-for="(f, slot) in overlayDrawn" :key="f.id">
+              <li v-for="(f, slot) in overlayDrawn" :key="f.id" :data-face="f.id">
                 <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
-                {{ fontNameSample(f) }}
+                <!-- A real space between the two, for the accessible name. -->
+                <span class="legend-family">{{ f.familyName }}</span
+                >{{ ' ' }}<span class="legend-style muted">{{ f.style }}</span>
               </li>
             </ul>
           </div>
@@ -494,11 +498,7 @@ function onFocusIn(e: FocusEvent): void {
             v-else
             class="faces"
             :class="compare.mode"
-            :aria-label="
-              compare.mode === 'stacked'
-                ? t('compare.modes.stacked')
-                : t('compare.modes.sideBySide')
-            "
+            :aria-label="t(`compare.modes.${compare.mode}`)"
           >
             <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
               <div class="label">
@@ -718,8 +718,9 @@ h2 {
 /* Same segment metrics as `UiSegmentedControl` text segments, which sit beside it (size). */
 .mode {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-1);
   height: 24px;
   padding: 0 var(--fm-space-2);
   border-radius: var(--fm-radius-sm);
@@ -776,9 +777,9 @@ h2 {
   padding: 0;
   list-style: none;
 }
+/* Grid (stored as `sideBySide`): two faces per row; 2 faces fill one row, 3–4 a 2×2. */
 .faces.sideBySide {
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .face {
   display: flex;
@@ -788,12 +789,8 @@ h2 {
   padding: var(--fm-space-4) var(--fm-space-3);
   border-block-start: 1px solid var(--fm-border);
 }
-.sideBySide .face {
-  border-block-start: 0;
+.sideBySide .face:nth-child(even) {
   border-inline-start: 1px solid var(--fm-border);
-}
-.sideBySide .face:first-child {
-  border-inline-start: 0;
 }
 .label {
   display: flex;

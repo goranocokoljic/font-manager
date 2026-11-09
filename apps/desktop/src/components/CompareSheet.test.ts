@@ -73,6 +73,17 @@ describe('compare sheet', () => {
     expect(texts[0]!.text()).toBe(pangramOf('en'));
     // Two pins: nothing to choose.
     expect(wrapper.findAll('[role="combobox"]')).toHaveLength(0);
+    // The legend names each face's family and style, by its color.
+    const legend = wrapper.findAll('.legend li');
+    expect(legend.map((li) => li.attributes('data-face'))).toEqual(['200', '201']);
+    expect(legend.map((li) => li.text())).toEqual(faces.slice(0, 2).map(name));
+    expect(
+      legend.map((li) => [li.get('.legend-family').text(), li.get('.legend-style').text()]),
+    ).toEqual(faces.slice(0, 2).map((f) => [f.familyName, f.style]));
+    expect(legend.map((li) => li.get('.swatch').classes())).toEqual([
+      ['swatch', 'color-0'],
+      ['swatch', 'color-1'],
+    ]);
   });
 
   it('with three or four pins lets the user choose the two overlaid faces', async () => {
@@ -120,13 +131,24 @@ describe('compare sheet', () => {
     expect(wrapper.get(`#${group.attributes('aria-labelledby')}`).text()).toBe('Mode');
     const radios = group.findAll('input[type="radio"]');
     expect(radios.map((r) => r.element.parentElement?.textContent?.trim())).toEqual([
-      'Side by side',
       'Stacked',
+      'Grid',
       'Overlay',
     ]);
-    expect(document.activeElement).toBe(radios[0]!.element);
-    await radios[1]!.setValue(true);
+    expect(radios.map((r) => (r.element as HTMLInputElement).value)).toEqual([
+      'stacked',
+      'sideBySide',
+      'overlay',
+    ]);
+    // Each segment has its icon before the label.
+    for (const r of radios)
+      expect(r.element.parentElement?.querySelector('svg.ui-icon')).not.toBeNull();
+    // The open mode (Grid) has the focus.
+    expect(document.activeElement).toBe(radios[1]!.element);
+    expect(wrapper.get('ul.faces').attributes('aria-label')).toBe('Grid');
+    await radios[0]!.setValue(true);
     expect(s.mode).toBe('stacked');
+    expect(wrapper.get('ul.faces').attributes('aria-label')).toBe('Stacked');
     await wrapper.get('[role="dialog"]').trigger('keydown', { key: 'Escape' });
     expect(s.open).toBe(false);
     expect(s.pins).toHaveLength(2);

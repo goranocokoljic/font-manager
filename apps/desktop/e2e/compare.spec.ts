@@ -62,7 +62,7 @@ test('C and the palette pin up to four fonts; a fifth is refused; a pin can be r
 
   // Remove one in the sheet; the fifth then fits.
   await compareButton(page).click();
-  const pinned = sheet(page).getByRole('list', { name: 'Side by side' }).getByRole('listitem');
+  const pinned = sheet(page).getByRole('list', { name: 'Stacked' }).getByRole('listitem');
   await expect(pinned).toHaveCount(4);
   await sheet(page)
     .getByRole('button', { name: /^Remove JetBrains Mono .* from Compare$/ })
@@ -89,37 +89,46 @@ test('the sheet shows the pins in the sample text at one size, in three modes', 
   await expect(dialog).toBeVisible();
 
   const modes = dialog.getByRole('radiogroup', { name: 'Mode' });
+  // Stacked · Grid · Overlay, each with an icon; a new comparison opens Stacked.
   await expect(modes.getByRole('radio')).toHaveCount(3);
-  await expect(modes.getByRole('radio', { name: 'Side by side' })).toBeChecked();
-  await expect(modes.getByRole('radio', { name: 'Side by side' })).toBeFocused();
+  await expect(modes.locator('label')).toHaveText(['Stacked', 'Grid', 'Overlay']);
+  await expect(modes.locator('label svg')).toHaveCount(3);
+  await expect(modes.getByRole('radio', { name: 'Stacked' })).toBeChecked();
+  await expect(modes.getByRole('radio', { name: 'Stacked' })).toBeFocused();
+  await expect(modes.getByRole('radio', { name: 'Side by side' })).toHaveCount(0);
 
-  // Side by side: three columns on one row, the same text at the same size.
-  const columns = dialog.getByRole('list', { name: 'Side by side' }).getByRole('listitem');
-  await expect(columns).toHaveCount(3);
+  // Stacked: the faces under each other, the same text at the same size.
+  const rows = dialog.getByRole('list', { name: 'Stacked' }).getByRole('listitem');
+  await expect(rows).toHaveCount(3);
   const samples = dialog.locator('.sample');
   await expect(samples.first()).toHaveCSS('font-family', /fm-face-/);
-  const boxes = await samples.evaluateAll((els) =>
-    els.map((e) => ({
-      text: e.textContent?.trim(),
-      size: getComputedStyle(e).fontSize,
-      top: e.getBoundingClientRect().top,
-      left: e.getBoundingClientRect().left,
-    })),
-  );
-  expect(new Set(boxes.map((b) => b.text)).size).toBe(1);
-  expect(boxes[0]!.text).toContain('quick brown fox');
+  const boxesOf = () =>
+    samples.evaluateAll((els) =>
+      els.map((e) => ({
+        text: e.textContent?.trim(),
+        size: getComputedStyle(e).fontSize,
+        top: Math.round(e.getBoundingClientRect().top),
+        left: Math.round(e.getBoundingClientRect().left),
+      })),
+    );
+  const stacked = await boxesOf();
+  expect(new Set(stacked.map((b) => b.text)).size).toBe(1);
+  expect(stacked[0]!.text).toContain('quick brown fox');
   // Auto follows the sheet's height: 64 px at the default 60 %.
-  expect(boxes.map((b) => b.size)).toEqual(['64px', '64px', '64px']);
-  expect(boxes[0]!.top).toBe(boxes[2]!.top);
-  expect(boxes[0]!.left).toBeLessThan(boxes[1]!.left);
+  expect(stacked.map((b) => b.size)).toEqual(['64px', '64px', '64px']);
+  expect(stacked[0]!.top).toBeLessThan(stacked[1]!.top);
+  expect(stacked[1]!.top).toBeLessThan(stacked[2]!.top);
 
-  // Arrow keys move through the radio group: Stacked puts the faces under each other.
+  // Arrow keys move through the radio group: Grid puts two faces per row, so three
+  // faces fill a 2×2 grid (the third starts the second row, under the first).
   await page.keyboard.press('ArrowRight');
-  await expect(modes.getByRole('radio', { name: 'Stacked' })).toBeChecked();
-  const stacked = dialog.getByRole('list', { name: 'Stacked' }).locator('.sample');
-  const tops = await stacked.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
-  expect(tops[0]!).toBeLessThan(tops[1]!);
-  expect(tops[1]!).toBeLessThan(tops[2]!);
+  await expect(modes.getByRole('radio', { name: 'Grid' })).toBeChecked();
+  await expect(dialog.getByRole('list', { name: 'Grid' }).getByRole('listitem')).toHaveCount(3);
+  const grid = await boxesOf();
+  expect(grid[0]!.top).toBe(grid[1]!.top);
+  expect(grid[0]!.left).toBeLessThan(grid[1]!.left);
+  expect(grid[2]!.top).toBeGreaterThan(grid[0]!.top);
+  expect(grid[2]!.left).toBe(grid[0]!.left);
 
   // Overlay: two faces on one baseline at 50% opacity; three pinned, so two pickers.
   await page.keyboard.press('ArrowRight');
@@ -130,9 +139,22 @@ test('the sheet shows the pins in the sample text at one size, in three modes', 
   for (const t of await texts.all()) await expect(t).toHaveCSS('fill-opacity', '0.5');
   const fills = await texts.evaluateAll((els) => els.map((e) => getComputedStyle(e).fill));
   expect(fills[0]).not.toBe(fills[1]);
+  const ys = await texts.evaluateAll((els) => els.map((e) => e.getAttribute('y')));
+  expect(ys[0]).toBe(ys[1]);
   await expect(overlay.getByRole('combobox')).toHaveCount(2);
   await selectOption(overlay.getByRole('combobox', { name: 'Second font' }), { index: 2 });
-  await expect(overlay.getByRole('list', { name: 'Legend' })).toContainText('Legacy Grotesk');
+  // The legend names the two faces, family and style.
+  const legend = overlay.getByRole('list', { name: 'Legend' }).getByRole('listitem');
+  await expect(legend).toHaveCount(2);
+  await expect(legend.nth(1)).toContainText(/Legacy Grotesk\s+\S/);
+
+  // Back to Grid with two faces: one row.
+  await modes.getByRole('radio', { name: 'Grid' }).check();
+  await dialog.getByRole('button', { name: /^Remove Legacy Grotesk/ }).click();
+  await expect(dialog.getByRole('list', { name: 'Grid' }).getByRole('listitem')).toHaveCount(2);
+  const pair = await boxesOf();
+  expect(pair[0]!.top).toBe(pair[1]!.top);
+  expect(pair[0]!.left).toBeLessThan(pair[1]!.left);
 });
 
 test('focus stays in the sheet; Escape returns to the list with the selection kept', async ({
@@ -187,9 +209,7 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
 
   // The pins stay for the session: reopening shows them again.
   await compareButton(page).click();
-  await expect(
-    dialog.getByRole('list', { name: 'Side by side' }).getByRole('listitem'),
-  ).toHaveCount(2);
+  await expect(dialog.getByRole('list', { name: 'Stacked' }).getByRole('listitem')).toHaveCount(2);
 });
 
 test('the sheet rises from the bottom, drags to full height and closes back to the row', async ({
