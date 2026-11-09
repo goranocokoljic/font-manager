@@ -131,16 +131,94 @@ async function activateFirst(page: Page) {
   return recorded(page);
 }
 
+async function installLiftDiag(page: Page): Promise<void> {
+  // Diagnostics for the CI macOS runner (the lift is sometimes not recorded there): a
+  // timeline of the ghost's class changes and of the transition events on its lift.
+  await page.evaluate(() => {
+    const log: string[] = [];
+    (window as unknown as { fmLiftLog: string[] }).fmLiftLog = log;
+    const t = () => performance.now().toFixed(0);
+    const lift = () => document.querySelector('[data-testid="drag-ghost-lift"]');
+    const anims = () =>
+      document
+        .getAnimations()
+        .map((a) => {
+          const e = a.effect as KeyframeEffect;
+          const el = e.target as HTMLElement | null;
+          const prop = a instanceof CSSTransition ? a.transitionProperty : '?';
+          return `${el?.dataset.testid ?? el?.className}:${prop}:${a.playState}`;
+        })
+        .join(',');
+    new MutationObserver((muts) => {
+      for (const m of muts) {
+        const el = m.target as HTMLElement;
+        if (m.type === 'attributes' && el.dataset?.testid === 'drag-ghost-lift')
+          log.push(`${t()} class=${el.className} anims=[${anims()}]`);
+        for (const n of m.addedNodes)
+          if (
+            n instanceof HTMLElement &&
+            (n.dataset.testid === 'drag-ghost' || n.querySelector?.('[data-testid="drag-ghost"]'))
+          )
+            log.push(`${t()} ghost added lift=${lift()?.className}`);
+        for (const n of m.removedNodes)
+          if (n instanceof HTMLElement && n.dataset.testid === 'drag-ghost')
+            log.push(`${t()} ghost removed`);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    for (const type of ['transitionrun', 'transitionstart', 'transitioncancel', 'transitionend'])
+      document.addEventListener(
+        type,
+        (e) => {
+          const el = e.target as HTMLElement;
+          if (el?.dataset?.testid === 'drag-ghost-lift')
+            log.push(`${t()} ${type} ${(e as TransitionEvent).propertyName}`);
+        },
+        true,
+      );
+    let frames = 0;
+    const tick = () => {
+      if (++frames % 10 === 0) log.push(`${t()} frame ${frames}`);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+async function readLiftDiag(page: Page, seen: Moved[]): Promise<string> {
+  const liftLog = await page.evaluate(
+    () => (window as unknown as { fmLiftLog: string[] }).fmLiftLog,
+  );
+  const ghostSeen = seen.filter((m) => /ghost|lift/.test(m.testid + ' ' + m.classes));
+  return ['', 'lift log:', ...liftLog, `ghost moves: ${JSON.stringify(ghostSeen)}`].join('\n');
+}
+
 test.describe('drag, activation, Quick Look and the Studio (E46.4)', () => {
+  test('DIAG: drag ghost timeline (always fails to print it)', async ({ page }) => {
+    const wall = await openWall(page);
+    await record(page);
+    await installLiftDiag(page);
+    await dragToEditorial(page, wall);
+    const seen = await recorded(page);
+    const diag = await readLiftDiag(page, seen);
+    expect(diag, diag).toBe('');
+  });
+
   test('drag: the ghost lifts in 120 ms, flies in in 200 ms, the count crossfades in 120 ms', async ({
     page,
   }) => {
     const wall = await openWall(page);
     await record(page);
+    await installLiftDiag(page);
     await dragToEditorial(page, wall);
     const seen = await recorded(page);
+    const diag = await readLiftDiag(page, seen);
     for (const property of ['transform', 'box-shadow'])
-      expect(movesOf(seen, 'drag-ghost-lift', property)[0]).toMatchObject({
+      expect(movesOf(seen, 'drag-ghost-lift', property)[0], diag).toMatchObject({
         duration: 120,
         easing: EASE,
       });
