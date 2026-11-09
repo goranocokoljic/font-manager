@@ -639,6 +639,10 @@ test('the focus stays in a sheet and returns to where it was when the sheet clos
   await page.keyboard.press('Enter');
   const compare = page.getByRole('dialog', { name: 'Compare' });
   await expect(compare).toBeVisible();
+  // Compare slides up from below the window (E48.1): wait until it rests on the bottom edge.
+  await expect
+    .poll(() => compare.evaluate((d) => Math.round(d.getBoundingClientRect().bottom)))
+    .toBe(page.viewportSize()!.height);
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press('Tab');
     const inside = await page.evaluate(() => !!document.activeElement?.closest('[role=dialog]'));

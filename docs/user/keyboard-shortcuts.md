@@ -96,15 +96,20 @@ In the layout view, press `Tab` to go to a block of text.
 ## In Compare
 
 Pin two to four fonts with `C`, then click **Compare** in the toolbar (or run
-**Open Compare** in the command palette). Compare shows the pinned fonts in the
-preview text of the list, all at the same size. Choose a mode: **Side by side**,
+**Open Compare** in the command palette). Compare opens as a sheet from the bottom
+of the window, over the fonts. Drag the bar on its top edge to make it taller or
+shorter, from 40% of the window to the full window. Double-click the bar, or click
+**Full height**, to fill the window; do it again to go back. Compare opens at the
+height you used last. Compare shows the pinned fonts in the preview text of the
+list, all at the same size. At **Auto**, the size grows with the sheet: 56 px at the
+lowest height, 80 px at full height. Choose a mode: **Side by side**,
 **Stacked** or **Overlay**. Overlay draws two fonts on one baseline in two colors;
 with three or four pinned, choose the two fonts. **Remove** takes a font out of
 Compare. The pins stay until you close the app.
 
 To keep a comparison, type a name and click **Save comparison**. The fonts, the
 mode and the preview text are saved. To open a saved comparison, click its name
-under **Saved** in Compare, or run **Open comparison:** and its name in the command
+under **Saved comparisons** (the bookmark button) in Compare, or run **Open comparison:** and its name in the command
 palette. If a font of the comparison is no longer in the library, Compare opens
 with the other fonts and tells you which font is missing.
 
@@ -118,7 +123,9 @@ Each suggestion shows how well it matches and why. **Add to compare** pins it.
 |-----|--------------|
 | `Left` and `Right` | Change the mode, when the focus is on the mode |
 | `Tab` | Go to the next control in Compare |
-| `Esc` | Close Compare and go back to the list |
+| `Up` and `Down` | Make Compare taller or shorter, when the focus is on its top bar |
+| `Home` and `End` | Make Compare its lowest height or the full window, when the focus is on its top bar |
+| `Esc` | Close the saved comparisons list; else close Compare and go back to the list |
 
 ## The command palette
 

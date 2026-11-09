@@ -108,7 +108,8 @@ test('the sheet shows the pins in the sample text at one size, in three modes', 
   );
   expect(new Set(boxes.map((b) => b.text)).size).toBe(1);
   expect(boxes[0]!.text).toContain('quick brown fox');
-  expect(boxes.map((b) => b.size)).toEqual(['56px', '56px', '56px']);
+  // Auto follows the sheet's height: 64 px at the default 60 %.
+  expect(boxes.map((b) => b.size)).toEqual(['64px', '64px', '64px']);
   expect(boxes[0]!.top).toBe(boxes[2]!.top);
   expect(boxes[0]!.left).toBeLessThan(boxes[1]!.left);
 
@@ -189,4 +190,105 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
   await expect(
     dialog.getByRole('list', { name: 'Side by side' }).getByRole('listitem'),
   ).toHaveCount(2);
+});
+
+test('the sheet rises from the bottom, drags to full height and closes back to the row', async ({
+  page,
+}) => {
+  const tree = await open(page);
+  await pinAndNext(page, /^Inter .*\(1 of 4\)/);
+  await pinAndNext(page, /\(2 of 4\)/);
+  await pinAndNext(page, /\(3 of 4\)/);
+  await pinAndNext(page, /\(4 of 4\)/);
+  // Opened from the command palette over the list: the focus comes back to the row.
+  const row = tree.locator('[aria-selected="true"]');
+  const key = await row.getAttribute('data-key');
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('open compare');
+  await page.keyboard.press('Enter');
+  const dialog = sheet(page);
+  await expect(dialog).toBeVisible();
+  const viewport = page.viewportSize()!;
+  const box = async () => (await dialog.boundingBox())!;
+
+  // Anchored to the bottom edge, full width, 60 % high; the wall shows above under the scrim.
+  await expect(async () => {
+    const b = await box();
+    expect(Math.round(b.y + b.height)).toBe(viewport.height);
+    expect(Math.round(b.height)).toBe(Math.round(viewport.height * 0.6));
+  }).toPass();
+  expect(Math.round((await box()).width)).toBe(viewport.width);
+  const scrim = page.getByTestId('compare-scrim');
+  await expect(scrim).toHaveCSS('background-color', 'rgba(0, 0, 0, 0.28)');
+  await expect(dialog).not.toHaveCSS('border-top-left-radius', '0px');
+
+  // The header is one row at 1280 px: every control on one line, nothing clipped.
+  const head = dialog.locator('header').first();
+  await expect(head.getByTestId('compare-count')).toHaveText(/^4 of 4 · base Inter /);
+  const line = await head.evaluate((h) => {
+    const items = [...h.children].filter(
+      (c) => c.id !== 'fm-compare-saved' && c.getBoundingClientRect().width > 0,
+    );
+    const mids = items.map((c) => {
+      const r = c.getBoundingClientRect();
+      return Math.round((r.top + r.bottom) / 2);
+    });
+    const count = h.querySelector<HTMLElement>('[data-testid="compare-count"]')!;
+    return {
+      spread: Math.max(...mids) - Math.min(...mids),
+      overflow: h.scrollWidth - h.clientWidth,
+      countClipped: count.scrollWidth - count.clientWidth,
+    };
+  });
+  expect(line.spread).toBeLessThanOrEqual(2);
+  expect(line.overflow).toBeLessThanOrEqual(0);
+  expect(line.countClipped).toBeLessThanOrEqual(0);
+
+  // Drag the handle up to 80 %: the specimen in Auto grows with it.
+  const handle = dialog.getByRole('separator', { name: 'Compare height' });
+  const drag = async (toY: number) => {
+    const h = (await handle.boundingBox())!;
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(h.x + h.width / 2, toY, { steps: 5 });
+    await page.mouse.up();
+  };
+  await drag(viewport.height * 0.2);
+  await expect(handle).toHaveAttribute('aria-valuenow', '80');
+  expect(Math.round((await box()).height)).toBe(Math.round(viewport.height * 0.8));
+  await expect(dialog.locator('.sample').first()).toHaveCSS('font-size', '72px');
+  // Down past 40 % it stops at 40 %, with 56 px specimens.
+  await drag(viewport.height - 20);
+  await expect(handle).toHaveAttribute('aria-valuenow', '40');
+  await expect(dialog.locator('.sample').first()).toHaveCSS('font-size', '56px');
+
+  // A double-click on the handle: the whole window, no radius, no scrim.
+  await handle.dblclick();
+  await expect(handle).toHaveAttribute('aria-valuenow', '100');
+  const full = await box();
+  expect(Math.round(full.y)).toBe(0);
+  expect(Math.round(full.height)).toBe(viewport.height);
+  await expect(dialog).toHaveCSS('border-top-left-radius', '0px');
+  await expect(scrim).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(dialog.locator('.sample').first()).toHaveCSS('font-size', '80px');
+  // The maximize button goes back to the last height, and up again.
+  await dialog.getByRole('button', { name: 'Restore height' }).click();
+  await expect(handle).toHaveAttribute('aria-valuenow', '40');
+  await dialog.getByRole('button', { name: 'Full height' }).click();
+  await expect(handle).toHaveAttribute('aria-valuenow', '100');
+
+  // Escape closes it; the focus is back in the list, on the row that opened it.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(tree).toBeFocused();
+  await expect(tree.locator('[aria-selected="true"]')).toHaveAttribute('data-key', key!);
+
+  // The height is remembered: the next open is full height again.
+  await compareButton(page).click();
+  await expect(handle).toHaveAttribute('aria-valuenow', '100');
+  // At 40 % again, a press on the scrim above the sheet closes it.
+  await dialog.getByRole('button', { name: 'Restore height' }).click();
+  await expect(handle).toHaveAttribute('aria-valuenow', '40');
+  await page.mouse.click(viewport.width / 2, 40);
+  await expect(dialog).toBeHidden();
 });

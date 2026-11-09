@@ -85,6 +85,8 @@
   --fm-scrim: rgb(0 0 0 / 20%);
   /* The light scrim behind the filters drawer (E46.3): the wall stays live under it. */
   --fm-scrim-drawer: rgb(0 0 0 / 6%);
+  /* The scrim over the wall above the Compare sheet (E48.1); none at full height. */
+  --fm-scrim-sheet: rgb(0 0 0 / 28%);
   /* The selection bar (E44.1, board 4): a dark bar with white on it, the same in both themes. */
   --fm-bar-bg: #141413;
   --fm-bar-fg: #ffffff;

@@ -61,5 +61,8 @@ export const ICONS = {
     '<path d="M4.5 6V2.5h7V6M4.5 11.5h-2v-5h11v5h-2"/><rect x="4.5" y="9.5" width="7" height="4"/>',
   width: '<path d="M2.5 3v10M13.5 3v10M5.5 8h5M7.5 6L5.5 8l2 2M8.5 6l2 2-2 2"/>',
   info: '<circle cx="8" cy="8" r="5.5"/><path d="M8 7.5v3.2M8 5.4h.01"/>',
+  bookmark: '<path d="M4.5 2.5h7v11L8 11l-3.5 2.5z"/>',
+  maximize: '<path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"/>',
+  minimize: '<path d="M13.5 2.5L9.5 6.5M9.5 3v3.5H13M2.5 13.5l4-4M6.5 13V9.5H3"/>',
 } as const;
 export type IconName = keyof typeof ICONS;
