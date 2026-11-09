@@ -83,28 +83,38 @@ for (const scheme of ['light', 'dark'] as const) {
 test('a choice crossfades the window at 200 ms and saves themeId', async ({ page }) => {
   await page.goto('/#/settings?section=appearance');
   await expect(card(page, 'paper')).toHaveClass(/checked/);
-  // Records each view transition and whether the theme class times it.
+  // Records the real duration of each root crossfade animation of every view transition,
+  // read from the running animations, so the 200 ms is what the window actually does.
   await page.evaluate(() => {
-    const w = window as unknown as { fmTransitions: string[] };
+    const w = window as unknown as { fmTransitions: string[][] };
     w.fmTransitions = [];
     const start = document.startViewTransition?.bind(document);
     if (!start) return;
     document.startViewTransition = ((cb: () => void) => {
-      const root = document.documentElement;
-      w.fmTransitions.push(
-        root.classList.contains('fm-theme-change')
-          ? getComputedStyle(root).getPropertyValue('--fm-motion-move').trim()
-          : 'other',
-      );
-      return start(cb);
+      const ROOT_FADE = ['::view-transition-old(root)', '::view-transition-new(root)'];
+      const seen: string[] = [];
+      w.fmTransitions.push(seen);
+      const t = start(cb);
+      void t.ready.then(() => {
+        for (const a of document.getAnimations()) {
+          const fx = a.effect as KeyframeEffect;
+          if (!ROOT_FADE.includes(fx.pseudoElement ?? '')) continue;
+          seen.push(`${fx.pseudoElement} ${Number(fx.getComputedTiming().duration)}`);
+        }
+      });
+      return t;
     }) as typeof document.startViewTransition;
   });
   await card(page, 'indigo').click();
   await expect(page.getByRole('radio', { name: 'Indigo' })).toBeChecked();
   await expect.poll(() => rootToken(page, '--fm-accent')).toBe(indigo.light.accent);
-  expect(
-    await page.evaluate(() => (window as unknown as { fmTransitions: string[] }).fmTransitions),
-  ).toEqual(['200ms']);
+  // One transition; both root layers (each may run several animations) last 200 ms.
+  const transitions = await page.evaluate(
+    () => (window as unknown as { fmTransitions: string[][] }).fmTransitions,
+  );
+  expect(transitions.map((seen) => [...new Set(seen)].sort())).toEqual([
+    ['::view-transition-new(root) 200', '::view-transition-old(root) 200'],
+  ]);
   await expect(page.locator('html')).not.toHaveClass(/fm-theme-change/);
   const saved = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem('fm.mock.settings.v1') ?? '{}'),
