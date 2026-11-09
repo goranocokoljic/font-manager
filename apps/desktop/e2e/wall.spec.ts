@@ -263,6 +263,9 @@ test.describe('the wall', () => {
         return Math.round(t!.x - b!.x);
       })
       .toBe(0);
+    // The switch to the wall has finished fading in. A switch while a fade still runs
+    // reverses it, and the browser shortens a reversed transition (a slow runner gave 198 ms).
+    await expect.poll(() => wall.evaluate((el) => el.getAnimations().length)).toBe(0);
 
     const seen = await page.evaluate(async () => {
       const group = document.querySelector('[role="group"][aria-label="View mode"]')!;
