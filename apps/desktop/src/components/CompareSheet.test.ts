@@ -7,6 +7,7 @@ import { FaceLoader, faceFamily, setFaceLoader } from '../preview/faceLoader';
 import { ALPHABET } from '../preview/sampleText';
 import { useSearchStore } from '../stores/search';
 import { useCompareStore } from '../stores/compare';
+import { COMPARE_SHEET_STORAGE_KEY, useCompareSheetStore } from '../stores/compareSheet';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import CompareSheet from './CompareSheet.vue';
 import { pickOption, selectOptions } from './ui/testing';
@@ -85,7 +86,7 @@ describe('compare sheet', () => {
     expect(ids()).toEqual(['200', '203']);
     expect(s.overlayPair.map((f) => f?.id)).toEqual([200, 203]);
     expect(wrapper.get('.stage svg').attributes('aria-label')).toBe(
-      `Overlay of ${name(faces[0]!)} and ${name(faces[3]!)}, 56 px`,
+      `Overlay of ${name(faces[0]!)} and ${name(faces[3]!)}, 64 px`,
     );
   });
 
@@ -97,7 +98,8 @@ describe('compare sheet', () => {
     expect(samples).toHaveLength(3);
     for (const p of samples) {
       expect(p.text()).toBe(ALPHABET);
-      expect((p.element as HTMLElement).style.fontSize).toBe('80px');
+      // Auto follows the sheet's height (60 % by default), not the list's size.
+      expect((p.element as HTMLElement).style.fontSize).toBe('64px');
     }
     expect((samples[2]!.element as HTMLElement).style.fontFamily).toContain(faceFamily(202));
     expect(loader.inUse).toBe(3);
@@ -160,5 +162,64 @@ describe('compare sheet', () => {
   it('asks for a second pin when only one is pinned', async () => {
     const { wrapper } = await mountWith(1, 'sideBySide');
     expect(wrapper.get('[role="status"]').text()).toContain('Pin at least two fonts');
+  });
+
+  it('is a bottom sheet whose height, scrim and Auto size follow the handle and maximize', async () => {
+    const { wrapper, s } = await mountWith(2, 'stacked');
+    const sheet = useCompareSheetStore();
+    const dialog = wrapper.get('[role="dialog"]');
+    const el = dialog.element as HTMLElement;
+    const sample = () => (wrapper.get('.face .sample').element as HTMLElement).style.fontSize;
+    expect(el.style.height).toBe('60%');
+    expect(wrapper.get('[data-testid="compare-count"]').text()).toBe(
+      `2 of 4 · base ${name(faces[0]!)}`,
+    );
+
+    // The handle's keys: Home is the lowest height (56 px), End the full one (80 px).
+    const handle = wrapper.get('[role="separator"]');
+    await handle.trigger('keydown', { key: 'Home' });
+    expect(el.style.height).toBe('40%');
+    expect(sample()).toBe('56px');
+    expect(handle.attributes('aria-valuenow')).toBe('40');
+    expect(JSON.parse(localStorage.getItem(COMPARE_SHEET_STORAGE_KEY)!).height).toBe(0.4);
+    await handle.trigger('keydown', { key: 'ArrowUp' });
+    expect(sheet.height).toBeCloseTo(0.45);
+
+    // Maximize: the whole window, no radius, no scrim; again goes back.
+    await wrapper.get('[data-testid="compare-maximize"]').trigger('click');
+    expect(el.style.height).toBe('100%');
+    expect(dialog.classes()).toContain('full');
+    expect(wrapper.get('[data-testid="compare-scrim"]').classes()).toContain('clear');
+    expect(sample()).toBe('80px');
+    expect(wrapper.get('[data-testid="compare-maximize"]').attributes('aria-label')).toBe(
+      'Restore height',
+    );
+    // A double-click on the handle toggles too.
+    await handle.trigger('dblclick');
+    expect(sheet.height).toBeCloseTo(0.45);
+    expect(dialog.classes()).not.toContain('full');
+    expect(wrapper.get('[data-testid="compare-scrim"]').classes()).not.toContain('clear');
+
+    // A press on the scrim closes the sheet.
+    await wrapper.get('[data-testid="compare-scrim"]').trigger('mousedown');
+    expect(s.open).toBe(false);
+  });
+
+  it('opens the saved comparisons from the bookmark; Escape closes the list first', async () => {
+    const { wrapper, s } = await mountWith(2, 'stacked');
+    const button = wrapper.get('button[aria-label="Saved comparisons"]');
+    expect(button.attributes('aria-expanded')).toBe('false');
+    await button.trigger('click');
+    expect(button.attributes('aria-expanded')).toBe('true');
+    expect(wrapper.get('[data-testid="compare-saved"]').text()).toContain(
+      'No saved comparisons yet.',
+    );
+    (wrapper.get('[data-testid="compare-saved"]').element as HTMLElement).focus();
+    await wrapper.get('[role="dialog"]').trigger('keydown', { key: 'Escape' });
+    expect(wrapper.find('[data-testid="compare-saved"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(button.element);
+    expect(s.open).toBe(true);
+    await wrapper.get('[role="dialog"]').trigger('keydown', { key: 'Escape' });
+    expect(s.open).toBe(false);
   });
 });

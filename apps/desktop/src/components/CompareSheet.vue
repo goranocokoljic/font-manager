@@ -12,6 +12,12 @@
 // Pairings (E23.4): a panel below the faces suggests fonts that go with the first
 // pin, each with an "Add to compare" button.
 //
+// A bottom sheet (E48.1): it slides up over the wall, which stays visible above it under
+// a 28 % scrim. A handle on its top edge resizes it from 40 % to the whole window; a
+// double-click on the handle or the maximize button toggles full height, where the
+// radius and the scrim go away. The height is a view preference (`compareSheet` store);
+// Auto's specimen size follows it.
+//
 // A modal dialog: Tab cycles inside, plain keys do not reach the list's
 // shortcuts, and Escape or Close returns focus to where it was (the list row).
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
@@ -20,6 +26,8 @@ import { locale, t } from '../i18n';
 import { sheetReturnTarget } from '../keyboard/returnFocus';
 import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
+import { FmFade, FmSlide } from '../motion';
+import { SHEET_HEIGHT, heightAtPointer, useCompareSheetStore } from '../stores/compareSheet';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import PairingsPanel from './PairingsPanel.vue';
@@ -29,6 +37,7 @@ import UiSegmentedControl, { type SegmentOption } from './ui/UiSegmentedControl.
 import UiSelect from './ui/UiSelect.vue';
 
 const compare = useCompareStore();
+const sheet = useCompareSheetStore();
 const preview = usePreviewStore();
 const loader = useFaceLoader();
 
@@ -66,8 +75,80 @@ async function onSave(): Promise<void> {
   if (canSave.value) await compare.save(saveName.value, textToSave.value);
 }
 
+// The saved comparisons: a list under the bookmark button, inside the sheet.
+const savedOpen = ref(false);
+const savedButton = ref<InstanceType<typeof UiIconButton> | null>(null);
+const savedPanel = ref<HTMLElement | null>(null);
+const savedButtonEl = () => (savedButton.value?.$el as HTMLElement | undefined) ?? null;
+
+function toggleSaved(): void {
+  savedOpen.value = !savedOpen.value;
+}
+/** Closes the list; `refocus` gives the focus back to its button (Escape). */
+function closeSaved(refocus: boolean): void {
+  savedOpen.value = false;
+  if (refocus) savedButtonEl()?.focus();
+}
+function onSavedPointer(e: PointerEvent): void {
+  const target = e.target as Node | null;
+  if (!target || savedPanel.value?.contains(target) || savedButtonEl()?.contains(target)) return;
+  closeSaved(false);
+}
+watch(savedOpen, (open) => {
+  if (open) document.addEventListener('pointerdown', onSavedPointer, true);
+  else document.removeEventListener('pointerdown', onSavedPointer, true);
+});
+
+/** The base: the first pin, the face the others are compared to. */
+const countLabel = computed(() => {
+  const base = compare.pins[0];
+  const count = compare.pins.length;
+  return base
+    ? t('compare.setCountBase', { count, max: MAX_PINS, name: fontNameSample(base) })
+    : t('compare.setCount', { count, max: MAX_PINS });
+});
+
+// The height: a drag on the handle sets it live and saves it when the drag ends.
+const dragging = ref(false);
+const heightPercent = computed(() => Math.round(sheet.height * 100));
+
+function onHandleDown(e: PointerEvent): void {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  dragging.value = true;
+  (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+}
+function onHandleMove(e: PointerEvent): void {
+  if (dragging.value) sheet.setHeight(heightAtPointer(e.clientY, window.innerHeight));
+}
+function onHandleUp(e: PointerEvent): void {
+  if (!dragging.value) return;
+  dragging.value = false;
+  (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  sheet.save();
+}
+/** Arrow keys move the handle by 5 %; Home is the lowest height, End the full one. */
+function onHandleKey(e: KeyboardEvent): void {
+  const step = 0.05;
+  const next =
+    e.key === 'ArrowUp'
+      ? sheet.height + step
+      : e.key === 'ArrowDown'
+        ? sheet.height - step
+        : e.key === 'Home'
+          ? SHEET_HEIGHT.min
+          : e.key === 'End'
+            ? SHEET_HEIGHT.max
+            : null;
+  if (next === null) return;
+  e.preventDefault();
+  sheet.setHeight(next);
+  sheet.save();
+}
+
 /** Reopens a saved comparison; the focus goes to its mode, as when the sheet opens. */
 async function onReopen(id: ComparisonId): Promise<void> {
+  savedOpen.value = false;
   await compare.reopen(id);
   await nextTick();
   dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
@@ -116,6 +197,7 @@ onMounted(async () => {
   dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
 });
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onSavedPointer, true);
   window.removeEventListener('keydown', onOutsideKey, true);
   document.removeEventListener('focusin', onFocusIn);
   for (const id of held) loader.release(id);
@@ -137,8 +219,8 @@ async function remove(face: FaceId): Promise<void> {
   next?.focus();
 }
 
-// The sheet is a specimen: it draws the list's size at twice the scale, within 40–96 px.
-// A chosen step overrides it for this sheet; "Auto" follows the list.
+// The sheet is a specimen: Auto grows with the sheet, 56 px at 40 % to 80 px at full
+// height. A chosen step overrides it for this sheet.
 const sizeChoice = ref<'auto' | '48' | '72' | '96'>('auto');
 const sizeOptions = computed<SegmentOption<'auto' | '48' | '72' | '96'>[]>(() => [
   { value: 'auto', label: t('compare.sizeAuto') },
@@ -147,9 +229,7 @@ const sizeOptions = computed<SegmentOption<'auto' | '48' | '72' | '96'>[]>(() =>
   { value: '96', label: '96' },
 ]);
 const size = computed(() =>
-  sizeChoice.value === 'auto'
-    ? Math.min(96, Math.max(40, settings.value.sizePx * 2))
-    : Number(sizeChoice.value),
+  sizeChoice.value === 'auto' ? sheet.autoSize : Number(sizeChoice.value),
 );
 // Overlay: one SVG line box; both texts sit on the same baseline (one `y`).
 const overlayHeight = computed(() => Math.ceil(size.value * 1.5));
@@ -178,7 +258,8 @@ function onKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
-    compare.close();
+    if (savedOpen.value) closeSaved(true);
+    else compare.close();
     return;
   }
   if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -233,246 +314,386 @@ function onFocusIn(e: FocusEvent): void {
 </script>
 
 <template>
-  <div class="backdrop" @mousedown.self="compare.close">
-    <div
-      ref="dialog"
-      class="sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="fm-compare-sheet-title"
-      tabindex="-1"
-      @keydown="onKeyDown"
-    >
-      <header class="head">
-        <h2 id="fm-compare-sheet-title">{{ t('compare.title') }}</h2>
-        <span v-if="compare.current" class="current" data-testid="compare-current">
-          {{ compare.current.name }}
-        </span>
-        <span class="muted">{{
-          t('compare.pinnedCount', { count: compare.pins.length, max: MAX_PINS })
-        }}</span>
-        <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
-          <span id="fm-compare-mode-label" class="sr-only">{{ t('compare.mode') }}</span>
-          <label v-for="m in COMPARE_MODES" :key="m.value" class="mode">
-            <input
-              type="radio"
-              name="fm-compare-mode"
-              :value="m.value"
-              :checked="compare.mode === m.value"
-              @change="onMode"
-            />
-            {{ m.label }}
-          </label>
-        </div>
-        <UiSegmentedControl
-          v-model="sizeChoice"
-          :options="sizeOptions"
-          :label="t('compare.sizeLabel')"
-        />
-        <UiIconButton
-          class="close"
-          icon="close"
-          :label="t('compare.closeLabel')"
-          :title="t('compare.closeTitle')"
-          @click="compare.close"
-        />
-      </header>
-
-      <div class="named">
-        <form class="save" @submit.prevent="onSave">
-          <input
-            v-model="saveName"
-            class="field"
-            type="text"
-            :aria-label="t('compare.nameLabel')"
-            :placeholder="t('compare.namePlaceholder')"
-            maxlength="200"
+  <div class="compare-layer">
+    <FmFade appear reduced="fade">
+      <div
+        class="scrim"
+        :class="{ clear: sheet.full }"
+        data-testid="compare-scrim"
+        aria-hidden="true"
+        @mousedown="compare.close"
+      />
+    </FmFade>
+    <FmSlide from="bottom" distance="100%" reduced="fade" appear>
+      <div
+        ref="dialog"
+        class="sheet"
+        :class="{ full: sheet.full, dragging }"
+        :style="{ height: `${sheet.height * 100}%` }"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fm-compare-sheet-title"
+        tabindex="-1"
+        data-testid="compare-sheet"
+        @keydown="onKeyDown"
+      >
+        <header class="head">
+          <h2 id="fm-compare-sheet-title">{{ t('compare.title') }}</h2>
+          <span class="muted count" data-testid="compare-count">{{ countLabel }}</span>
+          <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
+            <span id="fm-compare-mode-label" class="sr-only">{{ t('compare.mode') }}</span>
+            <label v-for="m in COMPARE_MODES" :key="m.value" class="mode">
+              <input
+                type="radio"
+                name="fm-compare-mode"
+                :value="m.value"
+                :checked="compare.mode === m.value"
+                @change="onMode"
+              />
+              {{ m.label }}
+            </label>
+          </div>
+          <UiSegmentedControl
+            v-model="sizeChoice"
+            :options="sizeOptions"
+            :label="t('compare.sizeLabel')"
           />
-          <UiButton type="submit" :disabled="!canSave">{{ t('compare.save') }}</UiButton>
-        </form>
-        <div v-if="compare.saved.length" class="saved">
-          <span id="fm-compare-saved-label" class="muted">{{ t('compare.saved') }}</span>
-          <ul aria-labelledby="fm-compare-saved-label">
-            <li v-for="c in compare.saved" :key="c.id">
-              <UiButton
-                :aria-current="compare.current?.id === c.id ? 'true' : undefined"
-                :aria-label="t('compare.openLabel', { name: c.name })"
-                @click="onReopen(c.id)"
+          <form class="save" @submit.prevent="onSave">
+            <input
+              v-model="saveName"
+              class="field"
+              type="text"
+              :aria-label="t('compare.nameLabel')"
+              :placeholder="t('compare.namePlaceholder')"
+              maxlength="200"
+            />
+            <UiButton type="submit" :disabled="!canSave">{{ t('compare.save') }}</UiButton>
+          </form>
+          <span class="spacer" />
+          <UiIconButton
+            ref="savedButton"
+            icon="bookmark"
+            :label="t('compare.savedButton')"
+            :aria-expanded="savedOpen ? 'true' : 'false'"
+            aria-controls="fm-compare-saved"
+            @click="toggleSaved"
+          />
+          <UiIconButton
+            :icon="sheet.full ? 'minimize' : 'maximize'"
+            :label="sheet.full ? t('compare.restore') : t('compare.maximize')"
+            data-testid="compare-maximize"
+            @click="sheet.toggleFull"
+          />
+          <UiIconButton
+            class="close"
+            icon="close"
+            :label="t('compare.closeLabel')"
+            :title="t('compare.closeTitle')"
+            @click="compare.close"
+          />
+          <div
+            v-if="savedOpen"
+            id="fm-compare-saved"
+            ref="savedPanel"
+            class="saved"
+            data-testid="compare-saved"
+          >
+            <span id="fm-compare-saved-label" class="muted">{{ t('compare.saved') }}</span>
+            <ul v-if="compare.saved.length" aria-labelledby="fm-compare-saved-label">
+              <li v-for="c in compare.saved" :key="c.id">
+                <button
+                  type="button"
+                  class="saved-item"
+                  :aria-current="compare.current?.id === c.id ? 'true' : undefined"
+                  :aria-label="t('compare.openLabel', { name: c.name })"
+                  @click="onReopen(c.id)"
+                >
+                  {{ c.name }} <span class="muted">({{ c.faceCount }})</span>
+                </button>
+              </li>
+            </ul>
+            <p v-else class="muted">{{ t('compare.savedEmpty') }}</p>
+          </div>
+        </header>
+
+        <div class="body">
+          <p
+            v-if="compare.missing.length"
+            class="missing"
+            role="status"
+            data-testid="compare-missing"
+          >
+            {{ t('compare.missing', { names: compare.missing.map((m) => m.name).join(', ') }) }}
+          </p>
+
+          <p v-if="compare.pins.length < 2" class="muted" role="status">
+            {{ t('compare.pinTwo') }}
+          </p>
+
+          <div
+            v-if="compare.mode === 'overlay'"
+            class="overlay"
+            role="group"
+            :aria-label="t('compare.overlay')"
+            data-testid="compare-overlay"
+          >
+            <div v-if="compare.pins.length > 2" class="picks">
+              <label v-for="slot in SLOTS" :key="slot" class="pick">
+                <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
+                {{ slot === 0 ? t('compare.firstFont') : t('compare.secondFont') }}
+                <UiSelect
+                  :aria-label="slot === 0 ? t('compare.firstFont') : t('compare.secondFont')"
+                  :model-value="compare.overlayPair[slot]?.id"
+                  :options="pinOptions"
+                  @update:model-value="compare.setOverlay(slot, $event)"
+                />
+              </label>
+            </div>
+            <div class="stage">
+              <svg
+                class="drawing"
+                role="img"
+                :aria-label="overlayLabel"
+                width="100%"
+                :height="overlayHeight"
               >
-                {{ c.name }} <span class="muted">({{ c.faceCount }})</span>
-              </UiButton>
+                <line
+                  class="baseline"
+                  x1="0"
+                  x2="100%"
+                  :y1="overlayBaseline"
+                  :y2="overlayBaseline"
+                />
+                <text
+                  v-for="(f, slot) in overlayDrawn"
+                  :key="f.id"
+                  :class="['overlay-text', `color-${slot}`]"
+                  :data-face="f.id"
+                  x="8"
+                  :y="overlayBaseline"
+                  :font-size="size"
+                  :style="{
+                    fontFamily: fontOf(f),
+                    fill: `var(--fm-compare-${slot})`,
+                    fillOpacity: 0.5,
+                  }"
+                >
+                  {{ textOf(f) }}
+                </text>
+              </svg>
+            </div>
+            <ul class="legend" :aria-label="t('compare.legend')">
+              <li v-for="(f, slot) in overlayDrawn" :key="f.id">
+                <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
+                {{ fontNameSample(f) }}
+              </li>
+            </ul>
+          </div>
+
+          <ul
+            v-else
+            class="faces"
+            :class="compare.mode"
+            :aria-label="
+              compare.mode === 'stacked'
+                ? t('compare.modes.stacked')
+                : t('compare.modes.sideBySide')
+            "
+          >
+            <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
+              <div class="label">
+                <span class="name">{{ fontNameSample(f) }}</span>
+                <UiButton
+                  :data-remove="f.id"
+                  :aria-label="t('compare.removeLabel', { name: fontNameSample(f) })"
+                  @click="remove(f.id)"
+                >
+                  {{ t('common.remove') }}
+                </UiButton>
+              </div>
+              <p
+                class="sample"
+                dir="auto"
+                :style="{
+                  fontFamily: fontOf(f),
+                  fontSize: `${size}px`,
+                  lineHeight: settings.lineHeight,
+                  letterSpacing: `${settings.trackingEm}em`,
+                }"
+              >
+                {{ textOf(f) }}
+              </p>
             </li>
           </ul>
+
+          <PairingsPanel />
+        </div>
+
+        <!-- Last in the Tab order: the controls come first, as before the sheet resized. -->
+        <div
+          class="handle"
+          role="separator"
+          aria-orientation="horizontal"
+          :aria-label="t('compare.resizeLabel')"
+          :title="t('compare.resizeTitle')"
+          aria-valuemin="40"
+          aria-valuemax="100"
+          :aria-valuenow="heightPercent"
+          :aria-valuetext="`${heightPercent} %`"
+          tabindex="0"
+          data-testid="compare-handle"
+          @pointerdown="onHandleDown"
+          @pointermove="onHandleMove"
+          @pointerup="onHandleUp"
+          @pointercancel="onHandleUp"
+          @dblclick="sheet.toggleFull"
+          @keydown="onHandleKey"
+        >
+          <span class="grip" aria-hidden="true"></span>
         </div>
       </div>
-
-      <p v-if="compare.missing.length" class="missing" role="status" data-testid="compare-missing">
-        {{ t('compare.missing', { names: compare.missing.map((m) => m.name).join(', ') }) }}
-      </p>
-
-      <p v-if="compare.pins.length < 2" class="muted" role="status">
-        {{ t('compare.pinTwo') }}
-      </p>
-
-      <div
-        v-if="compare.mode === 'overlay'"
-        class="overlay"
-        role="group"
-        :aria-label="t('compare.overlay')"
-        data-testid="compare-overlay"
-      >
-        <div v-if="compare.pins.length > 2" class="picks">
-          <label v-for="slot in SLOTS" :key="slot" class="pick">
-            <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
-            {{ slot === 0 ? t('compare.firstFont') : t('compare.secondFont') }}
-            <UiSelect
-              :aria-label="slot === 0 ? t('compare.firstFont') : t('compare.secondFont')"
-              :model-value="compare.overlayPair[slot]?.id"
-              :options="pinOptions"
-              @update:model-value="compare.setOverlay(slot, $event)"
-            />
-          </label>
-        </div>
-        <div class="stage">
-          <svg
-            class="drawing"
-            role="img"
-            :aria-label="overlayLabel"
-            width="100%"
-            :height="overlayHeight"
-          >
-            <line class="baseline" x1="0" x2="100%" :y1="overlayBaseline" :y2="overlayBaseline" />
-            <text
-              v-for="(f, slot) in overlayDrawn"
-              :key="f.id"
-              :class="['overlay-text', `color-${slot}`]"
-              :data-face="f.id"
-              x="8"
-              :y="overlayBaseline"
-              :font-size="size"
-              :style="{
-                fontFamily: fontOf(f),
-                fill: `var(--fm-compare-${slot})`,
-                fillOpacity: 0.5,
-              }"
-            >
-              {{ textOf(f) }}
-            </text>
-          </svg>
-        </div>
-        <ul class="legend" :aria-label="t('compare.legend')">
-          <li v-for="(f, slot) in overlayDrawn" :key="f.id">
-            <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
-            {{ fontNameSample(f) }}
-          </li>
-        </ul>
-      </div>
-
-      <ul
-        v-else
-        class="faces"
-        :class="compare.mode"
-        :aria-label="
-          compare.mode === 'stacked' ? t('compare.modes.stacked') : t('compare.modes.sideBySide')
-        "
-      >
-        <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
-          <div class="label">
-            <span class="name">{{ fontNameSample(f) }}</span>
-            <UiButton
-              :data-remove="f.id"
-              :aria-label="t('compare.removeLabel', { name: fontNameSample(f) })"
-              @click="remove(f.id)"
-            >
-              {{ t('common.remove') }}
-            </UiButton>
-          </div>
-          <p
-            class="sample"
-            dir="auto"
-            :style="{
-              fontFamily: fontOf(f),
-              fontSize: `${size}px`,
-              lineHeight: settings.lineHeight,
-              letterSpacing: `${settings.trackingEm}em`,
-            }"
-          >
-            {{ textOf(f) }}
-          </p>
-        </li>
-      </ul>
-
-      <PairingsPanel />
-    </div>
+    </FmSlide>
   </div>
 </template>
 
 <style scoped>
-.backdrop {
+/* The layer over the window: the scrim on the wall above, the sheet at the bottom. */
+.compare-layer {
   position: fixed;
   inset: 0;
   z-index: var(--fm-z-popover);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: var(--fm-scrim);
+}
+.scrim {
+  position: absolute;
+  inset: 0;
+  background-color: var(--fm-scrim-sheet);
+}
+/* At full height the sheet is the whole window: no scrim left to see. */
+.scrim.clear {
+  background-color: transparent;
 }
 .sheet {
   /* Two colors that stay apart in both themes and for common color blindness. */
   --fm-compare-0: #1d6fe0;
   --fm-compare-1: #e0451d;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: var(--fm-space-3);
-  width: min(1200px, 96vw);
-  min-height: min(560px, 90vh);
-  max-height: 90vh;
-  padding: var(--fm-space-4);
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
+  border-top: 1px solid var(--fm-border);
+  border-radius: var(--fm-radius-lg) var(--fm-radius-lg) 0 0;
   background-color: var(--fm-bg);
   color: var(--fm-fg);
   box-shadow: var(--fm-shadow-2);
-  overflow: auto;
+}
+.sheet.full {
+  border-top: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .sheet:focus {
   outline: none;
 }
+.sheet.dragging {
+  user-select: none;
+}
+/* The handle: a grip centered on the top edge, a taller strip to grab. */
+.handle {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  height: 14px;
+  padding-top: 5px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--fm-control-border);
+}
+.handle:focus-visible {
+  outline: none;
+}
+.handle:focus-visible .grip {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 2px;
+}
+/* One row: nothing wraps; the name field gives way first. */
 .head {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--fm-space-3);
+  padding: var(--fm-space-4) var(--fm-space-4) var(--fm-space-3);
+  white-space: nowrap;
 }
-.current {
-  font-weight: 600;
+.count {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
 }
-.named {
+.spacer {
+  flex: 1;
+}
+.body {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex: 1;
+  flex-direction: column;
   gap: var(--fm-space-3);
+  min-height: 0;
+  padding: 0 var(--fm-space-4) var(--fm-space-4);
+  overflow: auto;
 }
 .save {
   display: flex;
-  gap: var(--fm-space-2);
-}
-.saved {
-  display: flex;
-  flex-wrap: wrap;
+  flex: 0 1 auto;
   align-items: center;
   gap: var(--fm-space-2);
+  min-width: 0;
+}
+.saved {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-end: var(--fm-space-4);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-space-2);
+  min-width: 220px;
+  max-height: 320px;
+  padding: var(--fm-space-3);
+  overflow: auto;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-surface-2);
+  box-shadow: var(--fm-shadow-1);
+  white-space: normal;
 }
 .saved ul {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--fm-space-2);
+  flex-direction: column;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.saved [aria-current='true'] {
+.saved-item {
+  width: 100%;
+  padding: var(--fm-space-1) var(--fm-space-2);
+  border: 0;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: var(--fm-fg);
+  text-align: start;
+}
+.saved [aria-current='true'] {
   font-weight: 600;
 }
 .missing {
@@ -489,7 +710,6 @@ h2 {
   flex: none;
   align-items: center;
   gap: 2px;
-  margin-inline: auto;
   padding: 2px;
   border: 1px solid var(--fm-border);
   border-radius: var(--fm-radius-md);
@@ -532,9 +752,13 @@ h2 {
   color: var(--fm-muted);
 }
 .field {
-  padding: 2px 0;
-  border: 0;
-  border-bottom: 1px solid var(--fm-border);
+  width: 200px;
+  min-width: 80px;
+  flex: 0 1 200px;
+  height: 28px;
+  padding: 0 var(--fm-space-2);
+  border: 1px solid var(--fm-control-border);
+  border-radius: var(--fm-radius-sm);
   background-color: transparent;
   color: var(--fm-fg);
   font: inherit;

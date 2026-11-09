@@ -51,14 +51,25 @@ test('the sheet saves the comparison under a name; the list and the palette reop
   await name.fill('Body pairing');
   await save.click();
   await expect(toast(page)).toHaveText(/Comparison “Body pairing” saved\./);
-  await expect(dialog.getByTestId('compare-current')).toHaveText('Body pairing');
+  await expect(name).toHaveValue('Body pairing');
+  // The saved comparisons are behind the bookmark button in the header.
+  const savedButton = dialog.getByRole('button', { name: 'Saved comparisons' });
+  await savedButton.click();
+  await expect(savedButton).toHaveAttribute('aria-expanded', 'true');
   const saved = dialog.getByRole('list', { name: 'Saved' });
   await expect(saved.getByRole('button', { name: 'Open comparison Body pairing' })).toBeVisible();
+  // Escape closes the list first and gives the focus back to its button.
+  await page.keyboard.press('Escape');
+  await expect(saved).toBeHidden();
+  await expect(savedButton).toBeFocused();
+  await expect(dialog).toBeVisible();
 
   // Change the pins and the mode, then reopen the saved one from the sheet's list.
   await dialog.getByRole('button', { name: /^Remove JetBrains Mono/ }).click();
   await dialog.getByRole('radio', { name: 'Side by side' }).check();
+  await savedButton.click();
   await saved.getByRole('button', { name: 'Open comparison Body pairing' }).click();
+  await expect(saved).toBeHidden();
   await expect(toast(page)).toHaveText(/Opened “Body pairing”\./);
   await expect(faceNames(page)).toHaveText([/^Inter /, /^JetBrains Mono /]);
   await expect(dialog.getByRole('radio', { name: 'Stacked' })).toBeChecked();
@@ -81,6 +92,7 @@ test('a saved comparison opens with the fonts left and names the missing one', a
   await expect(compareButton(page)).toBeEnabled();
   await compareButton(page).click();
   const dialog = sheet(page);
+  await dialog.getByRole('button', { name: 'Saved comparisons' }).click();
   await dialog.getByRole('button', { name: 'Open comparison Headline shortlist' }).click();
 
   await expect(faceNames(page)).toHaveText([/^Inter /, /^JetBrains Mono /]);
