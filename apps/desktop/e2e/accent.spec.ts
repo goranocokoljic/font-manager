@@ -37,8 +37,17 @@ for (const [colorScheme, accent, onAccent] of [
     });
 
     test('the active segment is an accent fill with on-accent text', async ({ page }) => {
-      const segment = page.getByRole('group', { name: 'View mode' }).locator('[aria-pressed=true]');
-      await expect(segment).toHaveCSS('background-color', accent);
+      const modes = page.getByRole('group', { name: 'View mode' });
+      const segment = modes.locator('[aria-pressed=true]');
+      // The view switch slides (E46.2): its fill is the thumb, which lies under the segment.
+      const thumb = modes.locator('.thumb');
+      await expect(thumb).toHaveCSS('background-color', accent);
+      await expect
+        .poll(async () => {
+          const [t, b] = await Promise.all([thumb.boundingBox(), segment.boundingBox()]);
+          return [Math.round(t!.x - b!.x), Math.round(t!.width - b!.width)];
+        })
+        .toEqual([0, 0]);
       await expect(segment).toHaveCSS('color', onAccent);
     });
 

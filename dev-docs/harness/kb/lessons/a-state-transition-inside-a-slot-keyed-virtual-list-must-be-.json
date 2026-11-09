@@ -1,0 +1,20 @@
+{
+  "id": "a-state-transition-inside-a-slot-keyed-virtual-list-must-be-",
+  "title": "A state transition inside a slot-keyed virtual list must be keyed by its row",
+  "category": "correctness",
+  "rule": "When you add a CSS transition (or animation) that runs on a state change of an element inside a virtualized list whose rows are keyed by slot (FontList, FontWaterfall: `:key=\"item.slot\"`, rows recycled on scroll and on new results), key that element by its row (`:key=\"item.row.key\"`) or otherwise start the transition only when the same row's state changes. A recycled slot otherwise patches the same element from the previous row's state to the new one, so a search or a scroll animates. Test it in e2e on the List and Waterfall views with a non-default state in the data (e.g. `?mockActive=1`), record the transitions during a search that moves that row to another slot, and check the test fails without the key.",
+  "rationale": "E46.4 (#481): the activation dot's new scale transition fired on recycled List and Waterfall rows during search and scroll, breaking 'nothing animates in search results'; the only no-motion test ran on the Grid (keyed by row) with no active faces.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    481
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/list/**",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-09T09:31:54.828Z",
+  "last_seen": "2026-11-09T09:31:54.828Z"
+}

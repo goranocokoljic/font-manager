@@ -7,7 +7,13 @@
 // A modal dialog: the focus starts on Close and stays in the sheet, plain keys do
 // not reach the list's shortcuts, and Space, Escape or Close return the focus to
 // where it was (the list row).
+//
+// Motion (E46.4, motion table "Quick Look"): the sheet fades up 8 px over `--fm-motion-move`
+// above the wall, blurred behind a fixed backdrop (the blur itself does not animate); the
+// arrows crossfade the specimen inside the sheet over `--fm-motion-fast`. Under reduced
+// motion the sheet only fades, there is no blur, and the arrows cut.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { crossfade, FmSlide } from '../motion';
 import type { FaceId, FaceSummary } from '../api/types';
 import { t } from '../i18n';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -41,6 +47,19 @@ const focusClose = () => (closeButton.value?.$el as HTMLElement | undefined)?.fo
 const family = ref<string | null>(null);
 let returnFocus: HTMLElement | null = null;
 let held: FaceId | null = null;
+
+// The arrows crossfade the specimen: a copy of it as it is now, taken before the new face
+// renders, fades out over the new one.
+const body = ref<HTMLElement | null>(null);
+watch(
+  () => props.face.id,
+  () => {
+    if (!body.value) return;
+    const run = crossfade(body.value, 'fast');
+    void nextTick(run);
+  },
+  { flush: 'pre' },
+);
 
 // The face changes while the sheet stays open (arrow keys): load the new one, then
 // let the old one go, so the specimen never falls back to a system font.
@@ -132,48 +151,54 @@ function onFocusIn(e: FocusEvent): void {
 
 <template>
   <div class="backdrop" @mousedown.self="quickLook.close">
-    <div
-      ref="dialog"
-      class="sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="fm-quick-look-title"
-      aria-describedby="fm-quick-look-hint"
-      tabindex="-1"
-      data-testid="quick-look"
-      @keydown="onKeyDown"
-    >
-      <header class="head">
-        <h2 id="fm-quick-look-title">{{ t('quickLook.title', { name }) }}</h2>
-        <UiIconButton
-          ref="closeButton"
-          icon="close"
-          :label="t('common.close')"
-          @click="quickLook.close"
-        />
-      </header>
-      <div class="body" :style="{ fontFamily: font }">
-        <p class="sample" dir="auto">
-          <SpecimenText :text="text" :missing="sampleShown.tofu" />
-        </p>
-        <MissingGlyphs v-if="sampleShown.tofu.length" class="missing" :missing="sampleShown.tofu" />
-        <p class="alphabet" dir="auto">
-          <SpecimenText :text="alphabet" :missing="alphabetShown.tofu" />
-        </p>
-        <ul class="ladder">
-          <li v-for="size in SIZES" :key="size" dir="auto">
-            <span class="size" aria-hidden="true">{{ size }}</span>
-            <span class="line" :style="{ fontSize: size + 'px' }"
-              ><SpecimenText :text="name" :missing="nameShown.tofu"
-            /></span>
-          </li>
-        </ul>
-        <p class="paragraph" dir="auto">
-          <SpecimenText :text="LOREM" :missing="loremShown.tofu" />
-        </p>
+    <FmSlide appear from="bottom" distance="8px" reduced="fade">
+      <div
+        ref="dialog"
+        class="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fm-quick-look-title"
+        aria-describedby="fm-quick-look-hint"
+        tabindex="-1"
+        data-testid="quick-look"
+        @keydown="onKeyDown"
+      >
+        <header class="head">
+          <h2 id="fm-quick-look-title">{{ t('quickLook.title', { name }) }}</h2>
+          <UiIconButton
+            ref="closeButton"
+            icon="close"
+            :label="t('common.close')"
+            @click="quickLook.close"
+          />
+        </header>
+        <div ref="body" class="body" :style="{ fontFamily: font }">
+          <p class="sample" dir="auto">
+            <SpecimenText :text="text" :missing="sampleShown.tofu" />
+          </p>
+          <MissingGlyphs
+            v-if="sampleShown.tofu.length"
+            class="missing"
+            :missing="sampleShown.tofu"
+          />
+          <p class="alphabet" dir="auto">
+            <SpecimenText :text="alphabet" :missing="alphabetShown.tofu" />
+          </p>
+          <ul class="ladder">
+            <li v-for="size in SIZES" :key="size" dir="auto">
+              <span class="size" aria-hidden="true">{{ size }}</span>
+              <span class="line" :style="{ fontSize: size + 'px' }"
+                ><SpecimenText :text="name" :missing="nameShown.tofu"
+              /></span>
+            </li>
+          </ul>
+          <p class="paragraph" dir="auto">
+            <SpecimenText :text="LOREM" :missing="loremShown.tofu" />
+          </p>
+        </div>
+        <p id="fm-quick-look-hint" class="hint">{{ t('quickLook.hint') }}</p>
       </div>
-      <p id="fm-quick-look-hint" class="hint">{{ t('quickLook.hint') }}</p>
-    </div>
+    </FmSlide>
   </div>
 </template>
 
@@ -182,9 +207,14 @@ function onFocusIn(e: FocusEvent): void {
   position: fixed;
   inset: 0;
   z-index: var(--fm-z-popover);
+  box-sizing: border-box;
+  padding: var(--fm-space-6);
   background: var(--fm-scrim);
+  /* The wall blurs behind the sheet; the blur is there at once, it does not animate. */
+  backdrop-filter: blur(12px);
 }
 .sheet {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -192,7 +222,9 @@ function onFocusIn(e: FocusEvent): void {
   width: 100%;
   height: 100%;
   padding: 16px 48px 12px;
+  border-radius: var(--fm-radius-lg);
   background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
   color: var(--fm-fg);
   overflow: auto;
 }
@@ -274,14 +306,10 @@ h2 {
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .sheet {
-    animation: rise var(--fm-motion-move) var(--fm-ease);
-  }
-}
-@keyframes rise {
-  from {
-    opacity: 0;
+/* Reduced motion: the sheet only fades (FmSlide reduced="fade"), over no blur. */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop {
+    backdrop-filter: none;
   }
 }
 </style>

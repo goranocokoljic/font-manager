@@ -422,7 +422,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
             :data-column="col.id"
           >
             <template v-if="col.id === 'activation'">
-              <ActivationDot :state="rowActivation(item.row)" />
+              <ActivationDot :state="rowActivation(item.row)" still />
               <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="col.id === 'name'">

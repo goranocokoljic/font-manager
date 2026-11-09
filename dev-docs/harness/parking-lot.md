@@ -422,3 +422,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E46.3 #480] apps/desktop/src/components/CommandPalette.vue:256 — CommandPalette and QuickLookSheet (:279) keep their own `@keyframes rise`.
 - [E46.3 #480] apps/desktop/src/components/ui/UiDrawer.vue:57 — a closing drawer stays focusable and pointer-reachable during its leave transition (no inert on before-leave).
 - [E46.3 #480] apps/desktop/src/components/FilterChips.vue — "Save as smart collection" at the top of the filters drawer looks under 4.5:1 in the light theme (exempt only if disabled).
+- [E46.4 #481] apps/desktop/src/views/FamilyView.vue:597 — the family page keeps its own state dot (success colour, 7 px, no partial fill) instead of ActivationDot; the two dots already differ.
+- [E46.4 #481] apps/desktop/src/components/TagsSidebar.vue:111 — the tag drop count still shows and hides with FmFade (a badge, not a ticking number like the collection count's FmCrossfade).
+- [E46.2 #479] apps/desktop/e2e/wall.spec.ts:273 — on the macOS runner the 1,000-family fps sweep is skipped (runner idle 20–30 fps), so the 55 fps budget is enforced on Windows and Linux only.
+- [E46.2 #479] apps/desktop/src/views/HomeView.vue:455 — a view-mode switch from the command palette while focus is in the list drops focus to body.

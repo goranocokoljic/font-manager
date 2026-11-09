@@ -24,9 +24,15 @@
 // per-block pickers (E24.2).
 //
 // Shuffle, a Try pick and Undo (E45.3) crossfade the blocks they change (`fades`).
+//
+// Opening (E46.4, motion table "Open the Studio"): the page lifts off the paper ground (scale
+// .98 → 1 over a fade, `fm-paper-in` of styles/motion.css) and the roles rail slides in from
+// its edge, both over `--fm-motion-page`. Under reduced motion both only fade. Only the
+// opening moves: a context or layout picked later shows at once.
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
+import { FmSlide } from '../motion';
 import { blockScope, layoutsOf, roleOf, useStudioStore } from '../stores/studio';
 import { LAYOUT_PRESETS, PRESET_LABELS } from '../stores/views';
 import BlockFontPicker from './BlockFontPicker.vue';
@@ -137,6 +143,10 @@ watch(
 const selectedRole = computed(() =>
   selectedBlock.value === null ? null : (roleOf(roles.value, selectedBlock.value)?.role ?? null),
 );
+/** The panel is opening: the page lifts in once, the rail slides in once. */
+const paperOpening = ref(true);
+const railOpening = ref(true);
+
 const railRef = ref<InstanceType<typeof StudioRolesRail> | null>(null);
 
 /** A block was clicked or focused: it is the selected one, and its card comes into view. */
@@ -195,16 +205,27 @@ onMounted(() => {
     </header>
     <p v-if="printError" class="error fm-no-print" role="alert">{{ printError.message }}</p>
     <div class="body">
-      <StudioRolesRail
-        v-if="hasRail && layouts.draft && scope"
-        ref="railRef"
-        :scope="scope"
-        :layout="layouts.draft"
-        :face="face"
-        :selected="selectedRole"
-        @browse="emit('browse')"
-      />
+      <FmSlide
+        appear
+        from="start"
+        distance="24px"
+        speed="page"
+        reduced="fade"
+        :css="railOpening"
+        @after-enter="railOpening = false"
+      >
+        <StudioRolesRail
+          v-if="hasRail && layouts.draft && scope"
+          ref="railRef"
+          :scope="scope"
+          :layout="layouts.draft"
+          :face="face"
+          :selected="selectedRole"
+          @browse="emit('browse')"
+        />
+      </FmSlide>
       <FontLayout
+        :class="{ 'fm-paper-in': paperOpening }"
         :layout="layouts.draft"
         :face="face"
         editable
@@ -219,6 +240,8 @@ onMounted(() => {
         :selected="hasRail ? selectedBlock : undefined"
         @edit-text="(index: number, text: string) => studio.setText(panel, index, text)"
         @select="select"
+        @animationend.self="paperOpening = false"
+        @animationcancel.self="paperOpening = false"
       >
         <template v-if="scope && !hasRail" #block-tools="{ index, label: blockLabel }">
           <BlockFontPicker

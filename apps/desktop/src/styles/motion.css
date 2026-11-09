@@ -42,3 +42,20 @@
     transform: none !important;
   }
 }
+
+/* The Studio's page as it opens (E46.4): it lifts off the paper ground, scale .98 → 1 over a
+   fade, at the page token. Under reduced motion it only fades, on the reduced fade. */
+.fm-paper-in {
+  animation: fm-paper-in var(--fm-motion-page) var(--fm-ease);
+}
+@keyframes fm-paper-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fm-paper-in {
+    animation: fm-fade-in var(--fm-motion-reduced-fade) var(--fm-ease) !important;
+  }
+}
