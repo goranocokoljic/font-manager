@@ -162,6 +162,49 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('shows the themes as cards in their own tokens and applies and saves a choice (E47.2)', async () => {
+    document.documentElement.removeAttribute('style');
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    const cards = wrapper.findAll('[data-testid="theme-card"]');
+    expect(cards.map((c) => c.get('.name').text())).toEqual([
+      'Paper',
+      'Graphite',
+      'Indigo',
+      'Moss',
+    ]);
+    const moss = cards[3]!;
+    // A live mini wall: three specimens, one selected, on the theme's own (light) surface.
+    expect(moss.findAll('[data-testid="theme-specimen"]')).toHaveLength(3);
+    expect(moss.findAll('.specimen.selected')).toHaveLength(1);
+    const style = (moss.element as HTMLElement).style;
+    expect(style.getPropertyValue('--fm-accent')).toBe('#4f7033');
+    expect(style.getPropertyValue('--fm-surface')).toBe('#f6f7f1');
+    expect(cards[0]!.classes()).toContain('checked');
+    expect(moss.classes()).not.toContain('checked');
+
+    await moss.get('input[type="radio"]').setValue(true);
+    await flushPromises();
+    expect(document.documentElement.style.getPropertyValue('--fm-accent')).toBe('#4f7033');
+    expect((await client.getSettings()).themeId).toBe('moss');
+    expect(wrapper.get('[data-theme-id="moss"]').classes()).toContain('checked');
+
+    // The cards follow the light or dark mode.
+    await radio(wrapper, 'Dark').setValue(true);
+    await flushPromises();
+    const dark = (wrapper.get('[data-theme-id="moss"]').element as HTMLElement).style;
+    expect(dark.getPropertyValue('--fm-accent')).toBe('#8fb573');
+    expect(document.documentElement.style.getPropertyValue('--fm-accent')).toBe('#8fb573');
+    wrapper.unmount();
+  });
+
+  it('applies the saved theme at start, from the settings (E47.2)', async () => {
+    document.documentElement.removeAttribute('style');
+    await client.updateSettings({ themeId: 'indigo' });
+    const { wrapper } = await mountAt('/');
+    expect(document.documentElement.style.getPropertyValue('--fm-accent')).toBe('#4f46c8');
+    wrapper.unmount();
+  });
+
   it('offers the languages and relabels the window the moment one is chosen', async () => {
     const spy = vi.spyOn(client, 'updateSettings');
     const { wrapper } = await mountAt('/settings?section=appearance');

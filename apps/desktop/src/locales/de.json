@@ -7,6 +7,7 @@
     "openSettings": "Einstellungen öffnen",
     "showConflicts": "Schriftkonflikte anzeigen",
     "helpAction": "Hilfe: {page}",
+    "themeAction": "Farbschema: {name}",
     "groups": {
       "app": "Programm",
       "help": "Hilfe"
@@ -1375,7 +1376,8 @@
       "startAtLoginFailed": "„Bei der Anmeldung starten“ konnte nicht geändert werden."
     },
     "appearance": {
-      "theme": "Design",
+      "colorTheme": "Farbschema",
+      "theme": "Hell oder dunkel",
       "themes": {
         "system": "Wie das System",
         "light": "Hell",

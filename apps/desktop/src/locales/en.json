@@ -7,6 +7,7 @@
     "openSettings": "Open settings",
     "showConflicts": "Show font conflicts",
     "helpAction": "Help: {page}",
+    "themeAction": "Theme: {name}",
     "groups": {
       "app": "App",
       "help": "Help"
@@ -1375,7 +1376,8 @@
       "startAtLoginFailed": "Start at login could not be changed."
     },
     "appearance": {
-      "theme": "Theme",
+      "colorTheme": "Theme",
+      "theme": "Light or dark",
       "themes": {
         "system": "Same as the system",
         "light": "Light",
