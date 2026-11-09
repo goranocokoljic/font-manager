@@ -39,8 +39,8 @@ use crate::export::{
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, BlockRole, ColumnRange, DuplicateLayoutRequest,
     ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutPage, LayoutPreset, LayoutRef,
-    LayoutRole, LayoutSurface, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest,
-    SaveLayoutRequest, SavedLayout, StudioContext, TextBlock,
+    LayoutRole, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    SavedLayout, StudioContext, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
@@ -5195,6 +5195,25 @@ fn mock_context_roles(context: StudioContext) -> Vec<LayoutRole> {
         .collect()
 }
 
+/// A family name as a part of an export's file name, as the core makes it:
+/// reserved and control characters become `_`, at most 60 characters, no dot
+/// or space at either end.
+fn mock_file_safe(name: &str) -> String {
+    let safe: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || "/\\:*?\"<>|".contains(c) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .take(60)
+        .collect();
+    safe.trim_matches(|c: char| c == '.' || c.is_whitespace())
+        .to_owned()
+}
+
 /// The contexts in switch order, with their file ids (`fm_core::layout::store::context_id`).
 const MOCK_CONTEXTS: [(StudioContext, &str); 5] = [
     (StudioContext::Magazine, "studio-magazine"),
@@ -5467,8 +5486,9 @@ impl LayoutService for MockApi {
         mock_save_layout(&mut st.layouts, &req.id, layout)
     }
 
-    /// The core's checks (scale, layout, faces), then the file it would write;
-    /// nothing is written.
+    /// The core's checks (scale, layout, faces), then the file it would write,
+    /// named as `fm_core::preview::page::export_stem` names it; nothing is
+    /// written.
     fn export_layout_png(&self, req: ExportLayoutPngRequest) -> ApiResult<String> {
         if !matches!(req.scale, 1 | 2) {
             return Err(ApiError::invalid("A layout exports at 1x or 2x."));
@@ -5486,14 +5506,40 @@ impl LayoutService for MockApi {
         for font in req.block_fonts.iter().flatten() {
             st.face(font.face)?;
         }
-        let surface = match req.surface {
-            LayoutSurface::Paper => "paper",
-            LayoutSurface::Ink => "ink",
+        let layout = &saved.layout;
+        let role_block = |role: BlockRole| {
+            layout
+                .roles
+                .iter()
+                .find(|r| r.role == role)
+                .and_then(|r| r.blocks.first())
+                .map(|&b| b as usize)
         };
-        Ok(format!(
-            "/mock/exports/{}-{surface}-{}x.png",
-            saved.id, req.scale
-        ))
+        let largest = || {
+            let mut best: Option<usize> = None;
+            for (i, b) in layout.blocks.iter().enumerate() {
+                if best.is_none_or(|j| b.size_pt > layout.blocks[j].size_pt) {
+                    best = Some(i);
+                }
+            }
+            best
+        };
+        let family_of = |block: Option<usize>| -> ApiResult<String> {
+            let font = block
+                .and_then(|b| req.block_fonts.get(b))
+                .and_then(Option::as_ref)
+                .unwrap_or(&req.font);
+            Ok(mock_file_safe(&st.face(font.face)?.detail.face.family_name))
+        };
+        let headline = family_of(role_block(BlockRole::Headline).or_else(largest))?;
+        let body = family_of(role_block(BlockRole::Body))?;
+        let context = layout
+            .context
+            .and_then(|c| MOCK_CONTEXTS.iter().find(|(x, _)| *x == c))
+            .map_or(saved.id.as_str(), |(_, id)| {
+                id.strip_prefix("studio-").unwrap_or(id)
+            });
+        Ok(format!("/mock/exports/{headline}-{body}-{context}.png"))
     }
 
     /// `fm_core::layout::layout_width`: 33 em at the body block's size (the

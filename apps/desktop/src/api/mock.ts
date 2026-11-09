@@ -55,6 +55,8 @@ import {
   type McpStatus,
   type Event,
   type FaceDetail,
+  type BlockRole,
+  type ExportLayoutPngRequest,
   type FaceId,
   type FaceSummary,
   type FeatureInfo,
@@ -2266,7 +2268,50 @@ function pick(d: CatalogDownload): Pick<CatalogUpdate, 'catalog' | 'family' | 'd
  * hand-edited file that is not valid JSON. A save that changes the file keeps what it replaces
  * as a version, the newest 20 kept.
  */
-function createMockLayouts(): Pick<
+/**
+ * The name of a layout export without `.png`, as `fm_core::preview::page::export_stem` makes it
+ * (E45.4): `<Headline>-<Body>-<context>`. The headline is the family of the Headline role's first
+ * block, else of the largest block; the body is the Body role's first block, else the base font.
+ * The context is the layout's ("web-hero"), else the file id. Null when a face is unknown.
+ */
+export function mockExportStem(
+  id: string,
+  layout: Layout,
+  req: ExportLayoutPngRequest,
+  familyOf: (face: FaceId) => string | null,
+): string | null {
+  const roleBlock = (role: BlockRole) => layout.roles?.find((r) => r.role === role)?.blocks[0];
+  const largest = () => {
+    let best: number | undefined;
+    layout.blocks.forEach((b, i) => {
+      if (best === undefined || (b.sizePt ?? 0) > (layout.blocks[best]!.sizePt ?? 0)) best = i;
+    });
+    return best;
+  };
+  const familyAt = (block: number | undefined) =>
+    familyOf(((block !== undefined && req.blockFonts?.[block]) || req.font).face);
+  const headline = familyAt(roleBlock('headline') ?? largest());
+  const body = familyAt(roleBlock('body'));
+  if (headline === null || body === null) return null;
+  const context = layout.context
+    ? (MOCK_STUDIO_CONTEXTS.find((c) => c.layout.context === layout.context)?.id ?? id).replace(
+        /^studio-/,
+        '',
+      )
+    : id;
+  const safe = (name: string) =>
+    [...name]
+      // eslint-disable-next-line no-control-regex
+      .map((c) => (/[\u0000-\u001f\u007f/\\:*?"<>|]/.test(c) ? '_' : c))
+      .slice(0, 60)
+      .join('')
+      .replace(/^[.\s]+|[.\s]+$/g, '');
+  return [headline, body, context].map(safe).filter(Boolean).join('-');
+}
+
+function createMockLayouts(
+  familyOf: (face: FaceId) => string | null,
+): Pick<
   FmClient,
   | 'listLayouts'
   | 'getLayout'
@@ -2409,10 +2454,19 @@ function createMockLayouts(): Pick<
         broken: 'broken' in v.content ? v.content.broken : null,
       })),
     // The core's checks on the scale and the layout, then the file it would write.
-    exportLayoutPng: async ({ layout, scale, surface }) => {
-      if (scale !== 1 && scale !== 2) throw err('invalidRequest', 'A layout exports at 1x or 2x.');
-      content(file(layout));
-      return `/mock/exports/${layout}-${surface}-${scale}x.png`;
+    exportLayoutPng: async (req) => {
+      if (req.scale !== 1 && req.scale !== 2)
+        throw err('invalidRequest', 'A layout exports at 1x or 2x.');
+      const saved = content(file(req.layout));
+      if ((req.blockFonts?.length ?? 0) > saved.blocks.length)
+        throw err('invalidRequest', 'A font was given for a block that does not exist.');
+      const stem = mockExportStem(req.layout, saved, req, familyOf);
+      if (stem === null) throw err('notFound', 'That face is no longer in the library.');
+      // The scales asked for are kept in `window.__fmMockPngScales` for the browser
+      // specs: the file name does not carry the scale (E45.4).
+      const w = globalThis as { __fmMockPngScales?: number[] };
+      (w.__fmMockPngScales ??= []).push(req.scale);
+      return `/mock/exports/${stem}.png`;
     },
     restoreLayout: async ({ id, number }) => {
       const v = file(id).versions.find((x) => x.number === number);
@@ -3016,7 +3070,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     clampLayout: async (req) => mockClampLayout(req),
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     layoutWidth: async (req) => mockLayoutWidth(req),
-    ...createMockLayouts(),
+    ...createMockLayouts((id) => find(id)?.face.familyName ?? null),
     ...createMockCatalogs(
       options.catalog,
       options.catalogFamilies,

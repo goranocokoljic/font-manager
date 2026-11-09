@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 
 use fm_api::common::{AxisValue, FeatureSetting};
 use fm_api::layout::{
-    BlockAlign, BlockOverflow, ExportLayoutPngRequest, Layout, LayoutFont, LayoutSurface,
-    SavedLayout, TextBlock,
+    BlockAlign, BlockOverflow, BlockRole, ExportLayoutPngRequest, Layout, LayoutFont,
+    LayoutSurface, SavedLayout, TextBlock,
 };
 use read_fonts::types::Tag;
 use swash::FontRef;
@@ -36,6 +36,7 @@ use super::{
     Canvas, GLYPH_SOURCES, Raster, Shaped, check_face, color, first_strong_rtl, malformed,
     sfnt_data, shape_runs, tag,
 };
+use crate::layout::store::context_slug;
 use crate::layout::{PX_PER_PT, layout_width};
 use crate::{FmError, FmResult};
 
@@ -646,10 +647,14 @@ pub fn request_fonts(
 /// Renders a saved layout from the files of its fonts (path and collection
 /// index, in the order of [`request_fonts`]) to a PNG file in `dir`. Reads the
 /// font files; never writes them.
+///
+/// `families` holds the family name of each of those fonts; they name the file
+/// ([`export_stem`]).
 pub fn export_layout(
     saved: &SavedLayout,
     req: &ExportLayoutPngRequest,
     files: &[(&Path, u32)],
+    families: &[&str],
     dir: &Path,
 ) -> FmResult<PathBuf> {
     let (fonts, block_fonts) = request_fonts(req, saved.layout.blocks.len())?;
@@ -679,15 +684,77 @@ pub fn export_layout(
         foreground,
         background,
     })?;
-    let surface = match req.surface {
-        LayoutSurface::Paper => "paper",
-        LayoutSurface::Ink => "ink",
-    };
     write_new(
         dir,
-        &format!("{}-{surface}-{}x", saved.id, req.scale),
+        &export_stem(saved, &block_fonts, families),
         &raster.to_compressed_png(),
     )
+}
+
+/// The longest a part of an export's file name gets, in characters.
+const STEM_PART_MAX: usize = 60;
+
+/// The file name of a layout export without `.png` (E45.4):
+/// `<Headline>-<Body>-<context>`. The headline is the family of the Headline
+/// role's first block, else of the largest block (the first of equals); the
+/// body is the family of the Body role's first block, else the base font's.
+/// The context is the layout's context ("web-hero"), else the file's id.
+/// `block_fonts` and `families` are as [`request_fonts`] and the caller give
+/// them: each block's font index, and each font's family name.
+pub fn export_stem(saved: &SavedLayout, block_fonts: &[usize], families: &[&str]) -> String {
+    let layout = &saved.layout;
+    let role_block = |role: BlockRole| {
+        layout
+            .roles
+            .iter()
+            .find(|r| r.role == role)
+            .and_then(|r| r.blocks.first())
+            .and_then(|&b| usize::try_from(b).ok())
+    };
+    let largest = || {
+        let mut best: Option<usize> = None;
+        for (i, b) in layout.blocks.iter().enumerate() {
+            if best.is_none_or(|j| b.size_pt > layout.blocks[j].size_pt) {
+                best = Some(i);
+            }
+        }
+        best
+    };
+    let family_of = |block: Option<usize>| {
+        let font = block.and_then(|b| block_fonts.get(b).copied()).unwrap_or(0);
+        families.get(font).copied().unwrap_or_default()
+    };
+    let headline = family_of(role_block(BlockRole::Headline).or_else(largest));
+    let body = family_of(role_block(BlockRole::Body));
+    let context: &str = match layout.context {
+        Some(c) => context_slug(c),
+        None => &saved.id,
+    };
+    [headline, body, context]
+        .map(file_safe)
+        .into_iter()
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// `name` as a part of a file name on every platform: no path separators,
+/// reserved or control characters (each becomes `_`), no dot or space at
+/// either end, at most [`STEM_PART_MAX`] characters.
+fn file_safe(name: &str) -> String {
+    let safe: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .take(STEM_PART_MAX)
+        .collect();
+    safe.trim_matches(|c: char| c == '.' || c.is_whitespace())
+        .to_owned()
 }
 
 /// Writes `bytes` to `<stem>.png` in `dir`, or to the first free `<stem>-<n>.png`:

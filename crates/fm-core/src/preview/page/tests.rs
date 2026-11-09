@@ -5,8 +5,8 @@ use fm_api::ErrorCode;
 use fm_api::common::{AxisValue, FeatureSetting};
 use fm_api::ids::FaceId;
 use fm_api::layout::{
-    BlockAlign, BlockOverflow, ExportLayoutPngRequest, Layout, LayoutFont, LayoutPreset,
-    LayoutSurface, SavedLayout, TextBlock,
+    BlockAlign, BlockOverflow, BlockRole, ExportLayoutPngRequest, Layout, LayoutFont, LayoutPreset,
+    LayoutSurface, SavedLayout, StudioContext, TextBlock,
 };
 
 use super::*;
@@ -660,8 +660,8 @@ fn an_export_is_a_new_png_that_never_replaces_an_earlier_one() {
     };
     let files = [(file.as_path(), 0)];
     let req = request(2, LayoutSurface::Ink);
-    let first = export_layout(&saved, &req, &files, &out).unwrap();
-    assert_eq!(first, out.join("book-ink-2x.png"));
+    let first = export_layout(&saved, &req, &files, &["DM Sans"], &out).unwrap();
+    assert_eq!(first, out.join("DM Sans-DM Sans-book.png"));
     let bytes = fs::read(&first).unwrap();
     let raw = (2 * A4_WIDTH_PX * 2 * A4_HEIGHT_PX * 4) as usize;
     assert!(bytes.len() < raw / 4, "compressed: {} bytes", bytes.len());
@@ -673,13 +673,20 @@ fn an_export_is_a_new_png_that_never_replaces_an_earlier_one() {
     assert_eq!(image.grey[0], 0x1c, "the ink surface");
 
     fs::write(&first, b"an earlier export").unwrap();
-    let second = export_layout(&saved, &req, &files, &out).unwrap();
-    assert_eq!(second, out.join("book-ink-2x-2.png"));
+    let second = export_layout(&saved, &req, &files, &["DM Sans"], &out).unwrap();
+    assert_eq!(second, out.join("DM Sans-DM Sans-book-2.png"));
     assert_eq!(fs::read(&first).unwrap(), b"an earlier export");
-    let third = export_layout(&saved, &req, &files, &out).unwrap();
-    assert_eq!(third, out.join("book-ink-2x-3.png"));
-    let paper = export_layout(&saved, &request(1, LayoutSurface::Paper), &files, &out).unwrap();
-    assert_eq!(paper, out.join("book-paper-1x.png"));
+    let third = export_layout(&saved, &req, &files, &["DM Sans"], &out).unwrap();
+    assert_eq!(third, out.join("DM Sans-DM Sans-book-3.png"));
+    let paper = export_layout(
+        &saved,
+        &request(1, LayoutSurface::Paper),
+        &files,
+        &["DM Sans"],
+        &out,
+    )
+    .unwrap();
+    assert_eq!(paper, out.join("DM Sans-DM Sans-book-4.png"));
 }
 
 #[test]
@@ -695,9 +702,108 @@ fn an_export_reports_a_font_file_it_cannot_read_and_writes_nothing() {
         &saved,
         &request(1, LayoutSurface::Paper),
         &[(gone.as_path(), 0)],
+        &["Gone"],
         &out,
     )
     .unwrap_err();
     assert_eq!(err.message(), "The font file could not be read.");
     assert!(!out.exists());
+}
+
+/// A context layout with Headline and Body roles, as the Studio exports it.
+fn magazine() -> SavedLayout {
+    let context = StudioContext::Magazine;
+    SavedLayout {
+        id: crate::layout::store::context_id(context),
+        layout: crate::layout::context::context_layout(context),
+    }
+}
+
+#[test]
+fn an_export_is_named_headline_body_context() {
+    let saved = magazine();
+    let first = |role: BlockRole| {
+        let r = saved.layout.roles.iter().find(|r| r.role == role).unwrap();
+        r.blocks[0] as usize
+    };
+    let (head, body) = (first(BlockRole::Headline), first(BlockRole::Body));
+    let mut at = vec![0; saved.layout.blocks.len()];
+    at[head] = 1;
+    at[body] = 2;
+    let families = ["Base Sans", "Playfair Display", "Inter"];
+    assert_eq!(
+        export_stem(&saved, &at, &families),
+        "Playfair Display-Inter-magazine"
+    );
+    // A role without a font of its own is set in the base font.
+    at[body] = 0;
+    assert_eq!(
+        export_stem(&saved, &at, &families),
+        "Playfair Display-Base Sans-magazine"
+    );
+}
+
+#[test]
+fn a_layout_without_roles_names_its_largest_block_and_its_id() {
+    let saved = SavedLayout {
+        id: "book".into(),
+        layout: preset(LayoutPreset::Book),
+    };
+    let blocks = &saved.layout.blocks;
+    assert!(saved.layout.roles.is_empty());
+    let largest = (0..blocks.len())
+        .reduce(|a, b| {
+            if blocks[b].size_pt > blocks[a].size_pt {
+                b
+            } else {
+                a
+            }
+        })
+        .unwrap();
+    let mut at = vec![0; blocks.len()];
+    at[largest] = 1;
+    assert_eq!(
+        export_stem(&saved, &at, &["Inter", "Lora"]),
+        "Lora-Inter-book"
+    );
+    // Another block in its own font does not name the headline.
+    let other = (largest + 1) % blocks.len();
+    at[largest] = 0;
+    at[other] = 1;
+    assert_eq!(
+        export_stem(&saved, &at, &["Inter", "Lora"]),
+        "Inter-Inter-book"
+    );
+}
+
+#[test]
+fn an_export_name_is_file_safe_on_every_platform() {
+    let saved = SavedLayout {
+        id: "book".into(),
+        layout: preset(LayoutPreset::Book),
+    };
+    let at = vec![0; saved.layout.blocks.len()];
+    let stem = export_stem(&saved, &at, &[" ../A:B*C?\\\"D<E>F|G\u{7}. "]);
+    assert_eq!(stem, "_A_B_C___D_E_F_G_-_A_B_C___D_E_F_G_-book");
+    assert!(!stem.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']));
+    let long = "W".repeat(200);
+    let stem = export_stem(&saved, &at, &[long.as_str()]);
+    assert_eq!(stem.chars().count(), 60 + 1 + 60 + 1 + 4);
+    // Names outside ASCII stay as they are.
+    assert_eq!(
+        export_stem(&saved, &at, &["Noto Sans 日本語"]),
+        "Noto Sans 日本語-Noto Sans 日本語-book"
+    );
+}
+
+#[test]
+fn an_export_of_a_context_writes_the_named_file() {
+    let dir = TempDir::new("layout-export-named");
+    let out = dir.path().join("exports");
+    let file = root().join("fonts").join(DM_SANS);
+    let saved = magazine();
+    let mut req = request(1, LayoutSurface::Paper);
+    req.layout = saved.id.clone();
+    let path = export_layout(&saved, &req, &[(file.as_path(), 0)], &["DM Sans"], &out).unwrap();
+    assert_eq!(path, out.join("DM Sans-DM Sans-magazine.png"));
 }

@@ -79,6 +79,52 @@ describe('text layouts store', () => {
     expect(store.draft?.blocks[0].text).toBe('Not saved');
   });
 
+  it('saves the draft as a new named file, which opens; the original keeps its content (E45.4)', async () => {
+    const { client, store } = fresh();
+    await store.open('studio-magazine');
+    const shipped = JSON.parse(JSON.stringify(store.saved!.layout));
+    store.setBlockText(0, 'Paired');
+    const saveLayout = vi.spyOn(client, 'saveLayout');
+    const copy = await store.saveAs('Lora + Inter');
+    expect(copy?.layout.name).toBe('Lora + Inter');
+    expect(saveLayout).toHaveBeenCalledWith(expect.objectContaining({ id: copy!.id }));
+    expect(store.saved?.id).toBe(copy!.id);
+    expect(store.draft?.blocks[0]?.text).toBe('Paired');
+    expect(store.dirty).toBe(false);
+    expect((await client.getLayout({ id: 'studio-magazine' })).layout).toEqual(shipped);
+    // The shipped file stays the first of its context in the list.
+    const magazines = store.entries.filter((e) => e.context === 'magazine').map((e) => e.id);
+    expect(magazines[0]).toBe('studio-magazine');
+    expect(magazines).toContain(copy!.id);
+
+    // History and Revert work on the new file.
+    await store.loadHistory();
+    expect(store.history.length).toBeGreaterThan(0);
+    store.setBlockText(0, 'Not kept');
+    await store.revert();
+    expect(store.draft?.blocks[0]?.text).toBe('Paired');
+
+    // A name another layout has gets the next free number.
+    await store.open('studio-magazine');
+    const again = await store.saveAs('lora + inter');
+    expect(again?.layout.name).toBe('lora + inter 2');
+  });
+
+  it('a save-as that fails leaves the open file and its draft as they were', async () => {
+    const { client, store } = fresh();
+    await store.open('book');
+    store.setBlockText(0, 'Unsaved');
+    vi.spyOn(client, 'saveLayout').mockRejectedValue({
+      code: 'io',
+      message: 'The layouts folder is read-only.',
+      detail: null,
+    });
+    expect(await store.saveAs('Inter + Inter')).toBeNull();
+    expect(store.saved?.id).toBe('book');
+    expect(store.draft?.blocks[0]?.text).toBe('Unsaved');
+    expect(store.error?.message).toBe('The layouts folder is read-only.');
+  });
+
   it('restores a version and resets a preset to its shipped original', async () => {
     const { store } = fresh();
     await store.open('columns');

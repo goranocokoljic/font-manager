@@ -10,6 +10,7 @@ import {
   blocksOf,
   headlineBlock,
   layoutsOf,
+  namedAfter,
   roleOf,
   useStudioStore,
 } from './studio';
@@ -307,7 +308,7 @@ describe('the Studio toolbar (E45.1)', () => {
     const scope = blockScope(FIRST_PANEL, 'studio-magazine');
     await studio.setBlockFace(scope, 1, mono.id);
     const path = await studio.exportPng(FIRST_PANEL, inter.id);
-    expect(path).toBe('/mock/exports/studio-magazine-paper-2x.png');
+    expect(path).toBe(`/mock/exports/${mono.familyName}-Inter-magazine.png`);
     const font = (face: number) => ({ face, variations: [], features: [] });
     expect(exportPng).toHaveBeenCalledWith({
       layout: 'studio-magazine',
@@ -419,5 +420,134 @@ describe('the roles rail (E45.2)', () => {
     expect(studio.locks).toEqual({ 'studio-magazine@headline': true });
     studio.toggleLock('studio-magazine', 'headline');
     expect(studio.isLocked('studio-magazine', 'headline')).toBe(false);
+  });
+});
+
+describe('compare, save and export (E45.4)', () => {
+  it('exports at 1x when asked; 2x stays the default', async () => {
+    const exportPng = vi.spyOn(client, 'exportLayoutPng');
+    const studio = useStudioStore();
+    await layoutsOf(FIRST_PANEL).open('studio-magazine');
+    await studio.exportPng(FIRST_PANEL, inter.id, 1);
+    expect(exportPng).toHaveBeenLastCalledWith(expect.objectContaining({ scale: 1 }));
+    await studio.exportPng(FIRST_PANEL, inter.id);
+    expect(exportPng).toHaveBeenLastCalledWith(expect.objectContaining({ scale: 2 }));
+  });
+
+  it('compared pairings share their text, not their roles', async () => {
+    const studio = useStudioStore();
+    const first = layoutsOf(FIRST_PANEL);
+    await first.open('studio-magazine');
+    studio.toggleCompare();
+    const panel = studio.panels[1]!;
+    const second = layoutsOf(panel);
+    const head = blocksOf(first.draft!, 'headline')[0]!;
+
+    studio.setText(panel, head, 'Shared headline');
+    expect(second.draft!.blocks[head]!.text).toBe('Shared headline');
+    expect(first.draft!.blocks[head]!.text).toBe('Shared headline');
+    studio.setText(FIRST_PANEL, head, 'From the first');
+    expect(second.draft!.blocks[head]!.text).toBe('From the first');
+
+    // A face or lock in one panel stays there.
+    await studio.setBlockFace(blockScope(panel, 'studio-magazine'), head, mono.id);
+    studio.toggleLock(blockScope(panel, 'studio-magazine'), 'headline');
+    expect(studio.faceOf(blockScope(FIRST_PANEL, 'studio-magazine'), head)).toBeNull();
+    expect(studio.isLocked(blockScope(FIRST_PANEL, 'studio-magazine'), 'headline')).toBe(false);
+
+    // A panel on another layout file keeps its own text.
+    await second.open('studio-web-hero');
+    const before = second.draft!.blocks[0]!.text;
+    studio.setText(FIRST_PANEL, 0, 'Only the magazine');
+    expect(first.draft!.blocks[0]!.text).toBe('Only the magazine');
+    expect(second.draft!.blocks[0]!.text).toBe(before);
+  });
+
+  it('each compared pairing keeps its own "Try for" list', async () => {
+    const studio = useStudioStore();
+    const first = layoutsOf(FIRST_PANEL);
+    await first.open('studio-magazine');
+    studio.toggleCompare();
+    const panel = studio.panels[1]!;
+    const roles = first.draft!.roles!;
+    const headline = roles.find((r) => r.role === 'headline')!;
+    const body = roles.find((r) => r.role === 'body')!;
+    const one = blockScope(FIRST_PANEL, 'studio-magazine');
+    const two = blockScope(panel, 'studio-magazine');
+    await Promise.all([
+      studio.loadTries(one, first.draft!, headline, inter),
+      studio.loadTries(two, layoutsOf(panel).draft!, body, inter),
+    ]);
+    expect(studio.triesOf(one)?.key).toBe(studio.roleKey(one, 'headline'));
+    expect(studio.triesOf(two)?.key).toBe(studio.roleKey(two, 'body'));
+    expect(studio.triesOf(one)?.loading).toBe(false);
+    studio.closePanel(panel);
+    expect(studio.triesOf(two)).toBeNull();
+    expect(studio.triesOf(one)).not.toBeNull();
+  });
+
+  it('names each pairing after its own Headline and Body faces', async () => {
+    const studio = useStudioStore();
+    await layoutsOf(FIRST_PANEL).open('studio-magazine');
+    studio.toggleCompare();
+    const panel = studio.panels[1]!;
+    const head = blocksOf(layoutsOf(panel).draft!, 'headline');
+    await studio.setBlocksFace(blockScope(panel, 'studio-magazine'), head, mono.id);
+    const names = (p: number) => {
+      const f = studio.pairingOf(p, inter);
+      return f && [f.headline.familyName, f.body.familyName];
+    };
+    expect(names(FIRST_PANEL)).toEqual(['Inter', 'Inter']);
+    expect(names(panel)).toEqual([mono.familyName, 'Inter']);
+    expect(studio.pairingOf(panel, null)).toBeNull();
+  });
+
+  it('closing the first pairing keeps the second in its place, with its roles', async () => {
+    const studio = useStudioStore();
+    const first = layoutsOf(FIRST_PANEL);
+    await first.open('studio-magazine');
+    studio.toggleCompare();
+    const panel = studio.panels[1]!;
+    const second = layoutsOf(panel);
+    await second.open('studio-web-hero');
+    const scope = blockScope(panel, 'studio-web-hero');
+    const head = blocksOf(second.draft!, 'headline');
+    await studio.setBlocksFace(scope, head, mono.id);
+    studio.toggleLock(scope, 'headline');
+    second.setBlockText(0, 'Kept text');
+
+    expect(studio.promote()).toBe('studio-web-hero');
+    expect(studio.panels).toEqual([FIRST_PANEL]);
+    expect(first.saved?.id).toBe('studio-web-hero');
+    expect(first.draft!.blocks[0]!.text).toBe('Kept text');
+    const own = blockScope(FIRST_PANEL, 'studio-web-hero');
+    expect(studio.faceOf(own, head[0]!)?.id).toBe(mono.id);
+    expect(studio.isLocked(own, 'headline')).toBe(true);
+    // Nothing of the closed panel is left behind.
+    expect(Object.keys(studio.blockFaces).some((k) => k.startsWith(`p${panel}/`))).toBe(false);
+    expect(Object.keys(studio.locks).some((k) => k.startsWith(`p${panel}/`))).toBe(false);
+    // Alone, the first panel has nothing to give way to.
+    expect(studio.promote()).toBeNull();
+  });
+
+  it("copies a layout scope's roles to another; the first keeps its own", async () => {
+    const studio = useStudioStore();
+    await studio.setBlockFace('studio-magazine', 0, mono.id);
+    studio.toggleLock('studio-magazine', 'headline');
+    await studio.setBlockFace('lora-inter', 3, inter.id);
+    studio.copyScope('studio-magazine', 'lora-inter');
+    expect(studio.faceOf('lora-inter', 0)?.id).toBe(mono.id);
+    expect(studio.faceOf('lora-inter', 3)).toBeNull();
+    expect(studio.isLocked('lora-inter', 'headline')).toBe(true);
+    expect(studio.faceOf('studio-magazine', 0)?.id).toBe(mono.id);
+    expect(studio.isLocked('studio-magazine', 'headline')).toBe(true);
+  });
+
+  it('a layout is named after a pairing by its name or that name with a number', () => {
+    expect(namedAfter('Lora + Inter', 'Lora + Inter')).toBe(true);
+    expect(namedAfter('lora + inter 2', 'Lora + Inter')).toBe(true);
+    expect(namedAfter('Lora + Inter copy', 'Lora + Inter')).toBe(false);
+    expect(namedAfter('Lora + Inter Display', 'Lora + Inter')).toBe(false);
+    expect(namedAfter('Magazine page', 'Lora + Inter')).toBe(false);
   });
 });

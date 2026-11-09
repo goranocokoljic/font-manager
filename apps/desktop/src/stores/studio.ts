@@ -71,6 +71,16 @@ export function blocksOf(layout: Pick<Layout, 'blocks' | 'roles'>, role: BlockRo
   return index === null ? [] : [index];
 }
 
+/**
+ * Whether a layout's name is the pairing name `pairing` (E45.4): the name itself, or the name
+ * with the number Save adds when another layout has it ("Lora + Inter 2"), whatever the case.
+ */
+export function namedAfter(name: string, pairing: string): boolean {
+  const n = name.toLowerCase();
+  const p = pairing.toLowerCase();
+  return n === p || (n.startsWith(`${p} `) && /^\d+$/.test(n.slice(p.length + 1)));
+}
+
 /** Candidates Shuffle (E45.3) asks for per role; it moves through them press by press. */
 export const SHUFFLE_POOL = 12;
 
@@ -233,6 +243,10 @@ export const useStudioStore = defineStore('studio', () => {
     );
     for (const k of [...shown.keys()]) if (k.startsWith(prefix)) shown.delete(k);
     if (tries.value?.key.startsWith(prefix)) tries.value = null;
+    triesBy.value = Object.fromEntries(
+      Object.entries(triesBy.value).filter(([k]) => !k.startsWith(prefix)),
+    );
+    for (const k of [...tryRequests.keys()]) if (k.startsWith(prefix)) tryRequests.delete(k);
     if (searchFor.value?.startsWith(prefix)) searchFor.value = null;
     if (printPanel.value === panel) printPanel.value = null;
     if (printError.value?.panel === panel) printError.value = null;
@@ -259,6 +273,98 @@ export const useStudioStore = defineStore('studio', () => {
   }
 
   /**
+   * Closes the first panel while another is open (E45.4): the second panel's layout, draft and
+   * roles (faces, locks, crossfades, undo) move into the first panel, which is the library's
+   * layout, and the second panel closes. Answers the layout id the first panel shows now; null
+   * when only the first panel is open.
+   */
+  function promote(): string | null {
+    const other = panels.value.find((p) => p !== FIRST_PANEL);
+    if (other === undefined) return null;
+    const source = layoutsOf(other);
+    const id = source.saved?.id ?? null;
+    layoutsOf(FIRST_PANEL).adopt(source);
+    if (id !== null) moveScope(blockScope(other, id), blockScope(FIRST_PANEL, id));
+    closePanel(other);
+    return id;
+  }
+
+  /**
+   * Gives layout scope `to` the roles of scope `from`: the block faces, locks, crossfades, undo
+   * steps and what Shuffle showed. What `to` had is dropped; `from` keeps its own.
+   */
+  function copyScope(from: string, to: string): void {
+    if (from === to) return;
+    const moved = <T>(record: Record<string, T>, sep: string) => {
+      const kept = Object.entries(record).filter(([k]) => !k.startsWith(`${to}${sep}`));
+      const copies = Object.entries(record)
+        .filter(([k]) => k.startsWith(`${from}${sep}`))
+        .map(([k, v]) => [`${to}${k.slice(from.length)}`, v] as const);
+      return Object.fromEntries([...kept, ...copies]);
+    };
+    blockFaces.value = moved(blockFaces.value, '#');
+    fades.value = moved(fades.value, '#');
+    locks.value = moved(locks.value, '@');
+    const stack = undoStacks.value[from];
+    const stacks = { ...undoStacks.value };
+    if (stack) stacks[to] = stack.map((step) => step.map((e) => ({ ...e, blocks: [...e.blocks] })));
+    else delete stacks[to];
+    undoStacks.value = stacks;
+    for (const k of [...shown.keys()]) if (k.startsWith(`${to}@`)) shown.delete(k);
+    for (const [k, v] of [...shown]) {
+      if (k.startsWith(`${from}@`)) shown.set(`${to}${k.slice(from.length)}`, new Set(v));
+    }
+  }
+
+  /** Moves the roles of scope `from` to scope `to` (`copyScope`), and drops them from `from`. */
+  function moveScope(from: string, to: string): void {
+    copyScope(from, to);
+    const own = (k: string) => k.startsWith(`${from}#`) || k.startsWith(`${from}@`);
+    const drop = <T>(record: Record<string, T>) =>
+      Object.fromEntries(Object.entries(record).filter(([k]) => !own(k)));
+    blockFaces.value = drop(blockFaces.value);
+    fades.value = drop(fades.value);
+    locks.value = drop(locks.value);
+    const stacks = { ...undoStacks.value };
+    delete stacks[from];
+    undoStacks.value = stacks;
+    for (const k of [...shown.keys()]) if (own(k)) shown.delete(k);
+  }
+
+  /**
+   * The text is shared between compared pairings (E45.4): a block's new text goes to every open
+   * panel that shows the same layout file as panel `panel`; the roles stay each panel's own.
+   */
+  function setText(panel: number, index: number, text: string): void {
+    const id = layoutsOf(panel).saved?.id;
+    for (const p of panels.value) {
+      const layouts = layoutsOf(p);
+      if (p === panel || (id !== undefined && layouts.saved?.id === id))
+        layouts.setBlockText(index, text);
+    }
+  }
+
+  /**
+   * The faces of panel `panel`'s pairing (E45.2): the Headline and Body roles' first blocks, each
+   * in its own face, else `panelFace`. A layout without roles names its largest block as the
+   * headline. Null without a panel face.
+   */
+  function pairingOf(
+    panel: number,
+    panelFace: FaceSummary | null,
+  ): { headline: FaceSummary; body: FaceSummary } | null {
+    if (!panelFace) return null;
+    const layouts = layoutsOf(panel);
+    const draft = layouts.draft;
+    const scope = layouts.saved ? blockScope(panel, layouts.saved.id) : null;
+    const faceOfRole = (role: 'headline' | 'body') => {
+      const first = draft ? blocksOf(draft, role)[0] : undefined;
+      return (first !== undefined ? faceOf(scope, first) : null) ?? panelFace;
+    };
+    return { headline: faceOfRole('headline'), body: faceOfRole('body') };
+  }
+
+  /**
    * "Compare 2 pairings" (E45.1): a second panel, a copy of the first, beside it; pressed
    * again, back to the first panel alone.
    */
@@ -272,11 +378,12 @@ export const useStudioStore = defineStore('studio', () => {
   const exported = ref<{ path: string } | { error: ApiError } | null>(null);
 
   /**
-   * "Export PNG" (E45.1): the core renders panel `panel`'s saved layout file (E45.5) in `face`,
-   * each block in its own face where it has one, at 2× on paper. Unsaved edits are not in the
-   * file, so the toolbar asks for a save first.
+   * "Export" as PNG (E45.1, E45.4): the core renders panel `panel`'s saved layout file (E45.5) in
+   * `face`, each block in its own face where it has one, at `scale` on paper, and names the file
+   * `<Headline>-<Body>-<context>.png`. Unsaved edits are not in the file, so the toolbar asks for
+   * a save first.
    */
-  async function exportPng(panel: number, face: FaceId): Promise<string | null> {
+  async function exportPng(panel: number, face: FaceId, scale: 1 | 2 = 2): Promise<string | null> {
     const layouts = layoutsOf(panel);
     const saved = layouts.saved;
     if (!saved || !panels.value.includes(panel)) return null;
@@ -289,7 +396,7 @@ export const useStudioStore = defineStore('studio', () => {
     try {
       const path = await useClient().exportLayoutPng({
         layout: saved.id,
-        scale: 2,
+        scale,
         surface: 'paper',
         font: font(face),
         blockFonts,
@@ -472,9 +579,24 @@ export const useStudioStore = defineStore('studio', () => {
     return { changed: changes.length };
   }
 
-  /** The rail's "Try for <role>" list; null before the first ask. */
+  /** The last "Try for <role>" list any rail asked for; null before the first ask. */
   const tries = ref<TryList | null>(null);
-  let tryRequest = 0;
+  /**
+   * Each layout scope's "Try for <role>" list (E45.4): compared pairings each have a rail, and
+   * one panel's list does not replace the other's.
+   */
+  const triesBy = ref<Record<string, TryList>>({});
+  const tryRequests = new Map<string, number>();
+
+  /** The "Try for <role>" list of layout scope `scope`; null before its first ask. */
+  function triesOf(scope: string | null | undefined): TryList | null {
+    return scope ? (triesBy.value[scope] ?? null) : null;
+  }
+
+  function putTries(scope: string, list: TryList): void {
+    triesBy.value = { ...triesBy.value, [scope]: list };
+    tries.value = list;
+  }
 
   /**
    * Asks for the `TRY_COUNT` faces of the library that pair best in `role` of `layout` with the
@@ -486,7 +608,8 @@ export const useStudioStore = defineStore('studio', () => {
     role: LayoutRole,
     panelFace: FaceSummary | null,
   ): Promise<void> {
-    const mine = ++tryRequest;
+    const mine = (tryRequests.get(scope) ?? 0) + 1;
+    tryRequests.set(scope, mine);
     const k = roleKey(scope, role.role);
     const faceOf = (r: LayoutRole) => roleFace(scope, r) ?? panelFace;
     const current = faceOf(role);
@@ -501,11 +624,12 @@ export const useStudioStore = defineStore('studio', () => {
       ...patch,
     });
     if (!current || !partner) {
-      tries.value = list({});
+      putTries(scope, list({}));
       return;
     }
-    const kept = tries.value?.key === k ? tries.value.suggestions : [];
-    tries.value = list({ suggestions: kept, loading: true });
+    const before = triesOf(scope);
+    const kept = before?.key === k ? before.suggestions : [];
+    putTries(scope, list({ suggestions: kept, loading: true }));
     try {
       const got = await useClient().suggestPairings({
         face: current.id,
@@ -513,9 +637,10 @@ export const useStudioStore = defineStore('studio', () => {
         role: pairingRoleOf(role.role),
         partnerOf: partner.id,
       });
-      if (mine === tryRequest) tries.value = list({ suggestions: got.slice(0, TRY_COUNT) });
+      if (mine === tryRequests.get(scope))
+        putTries(scope, list({ suggestions: got.slice(0, TRY_COUNT) }));
     } catch (e) {
-      if (mine === tryRequest) tries.value = list({ error: e as ApiError });
+      if (mine === tryRequests.get(scope)) putTries(scope, list({ error: e as ApiError }));
     }
   }
 
@@ -630,6 +755,10 @@ export const useStudioStore = defineStore('studio', () => {
     addPanel,
     closePanel,
     toggleCompare,
+    promote,
+    copyScope,
+    setText,
+    pairingOf,
     exported,
     exportPng,
     printPanel,
@@ -658,6 +787,7 @@ export const useStudioStore = defineStore('studio', () => {
     fadeOf,
     shuffle,
     tries,
+    triesOf,
     loadTries,
     applySuggestion,
     canUndo,

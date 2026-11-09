@@ -83,8 +83,17 @@ your team, read [Shared libraries](shared-libraries.md).
 - When you open the Studio from a pairing card, the pairing's headline font sets
   **Headline** and its body font sets **Body**. When you drop two fonts on the Studio, the
   first sets **Body** and the second sets **Headline**.
-- **Compare 2 pairings** puts a second copy beside the first. **Save** saves the layout
-  file. **Export PNG** saves the saved layout as a PNG in the export folder (save first).
+- **Compare 2 pairings** puts a second copy beside the first. The two pairings have the
+  same text: when you edit a block in one, the other changes too. Each pairing has its
+  own fonts and locks. The toolbar shows the names of the two pairings. Click **Close
+  panel** on one panel to keep only the other.
+- **Save** saves the pairing as a layout with the names of its fonts, for example
+  "Lora + Inter". The first time, the Studio makes a new layout with that name, so the
+  layout you started from does not change. After that, **Save** saves into that layout.
+  **History** and **Revert** work on it as on all layouts.
+- **Export** opens a menu. **PNG 1×** and **PNG 2×** save the saved layout as a PNG in
+  the export folder (save first). The file name has the headline font, the body font and
+  the context, for example `Lora-Inter-magazine.png`. **PDF…** opens the print dialog.
 - To print a layout, open it in **Pairing Studio** and choose **Print the Studio page** in
   the command palette. On the second panel of **Compare 2 pairings**, click **Print…**.
   The print dialog of your system opens. Only that panel prints: the text at the width

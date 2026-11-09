@@ -9,9 +9,13 @@
 // marks it the print target and the print stylesheet leaves out everything else, the
 // controls marked `fm-no-print` included. PDF is the dialog's save-as-PDF.
 //
-// The first panel has no bar of its own (E45.1): the Studio's one toolbar picks its context,
-// saves and exports it, and the command palette prints it. Its heading stays for screen
-// readers. The compared panel keeps its bar: layout, file actions, Print and Close.
+// The first panel has no file tools of its own (E45.1): the Studio's one toolbar picks its
+// context, saves and exports it, and the command palette prints it. Alone, its heading is for
+// screen readers only; while two pairings are compared it has a bar with its name and Close
+// (E45.4). The compared panel's bar also has its layout, file actions and Print (`tools`).
+//
+// Compared pairings share their text (E45.4): a block's edit goes through the studio store to
+// every panel that shows the same layout file. Each panel has its own roles rail.
 //
 // With `rail` and a layout that has roles (a context, E45.2), the roles rail sits left of the
 // page: a card per role with its font picker and lock, in place of a picker beside each block.
@@ -41,8 +45,10 @@ const props = defineProps<{
   face: FaceSummary | null;
   /** The first panel's layout, from the URL; not given for the other panels. */
   layoutId?: string;
-  /** Whether the panel has a "Close panel" button. */
+  /** Whether the panel has a bar with its name and a "Close panel" button. */
   closable: boolean;
+  /** Whether that bar also has the layout picker, the file actions and Print. */
+  tools?: boolean;
   /** Whether the panel shows the roles rail for a layout with roles (E45.2). */
   rail?: boolean;
 }>();
@@ -157,6 +163,7 @@ onMounted(() => {
 <template>
   <section
     class="panel"
+    :class="{ 'with-rail': hasRail }"
     :aria-labelledby="headingId"
     data-testid="studio-panel"
     :data-print-target="printing ? '' : undefined"
@@ -166,18 +173,21 @@ onMounted(() => {
     </h2>
     <header v-else class="bar fm-no-print">
       <h2 :id="headingId" ref="heading" class="name" tabindex="-1">{{ label }}</h2>
-      <LayoutActions :store="layouts" inline @opened="pick" />
-      <label class="picker">
-        {{ t('studio.layout') }}
-        <UiSelect :model-value="selected" :options="pickerOptions" @update:model-value="pick" />
-      </label>
+      <template v-if="tools">
+        <LayoutActions :store="layouts" inline @opened="pick" />
+        <label class="picker">
+          {{ t('studio.layout') }}
+          <UiSelect :model-value="selected" :options="pickerOptions" @update:model-value="pick" />
+        </label>
+        <UiIconButton
+          icon="print"
+          :label="t('studio.printPanelFor', { number: String(number) })"
+          :title="t('studio.printTitle')"
+          @click="studio.print(panel)"
+        />
+      </template>
       <UiIconButton
-        icon="print"
-        :label="t('studio.printPanelFor', { number: String(number) })"
-        :title="t('studio.printTitle')"
-        @click="studio.print(panel)"
-      />
-      <UiIconButton
+        :class="{ end: !tools }"
         icon="close"
         :label="t('studio.closePanelFor', { number: String(number) })"
         @click="emit('close')"
@@ -207,7 +217,7 @@ onMounted(() => {
         :fades="blockFades"
         :role-marks="roleMarks"
         :selected="hasRail ? selectedBlock : undefined"
-        @edit-text="layouts.setBlockText"
+        @edit-text="(index: number, text: string) => studio.setText(panel, index, text)"
         @select="select"
       >
         <template v-if="scope && !hasRail" #block-tools="{ index, label: blockLabel }">
@@ -231,11 +241,18 @@ onMounted(() => {
   min-width: 26rem;
   min-height: 0;
 }
-/* The rail beside the page; the page takes the rest. */
+/* With the 300 px roles rail, the page keeps its least width beside it: two compared pairings
+   make the row scroll sideways rather than one page running under the other panel. */
+.panel.with-rail {
+  min-width: calc(300px + 26rem);
+}
+/* The rail beside the page; the page takes the rest and never draws outside the panel. */
 .body {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 .panel + .panel {
   border-inline-start: 1px solid var(--fm-border);
@@ -257,6 +274,10 @@ onMounted(() => {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Without the file tools, Close sits at the end of the bar. */
+.end {
+  margin-inline-start: auto;
 }
 .picker {
   display: flex;

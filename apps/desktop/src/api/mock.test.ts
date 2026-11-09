@@ -202,7 +202,27 @@ describe('MockApi layouts (E12.1)', () => {
     const api = createMockClient();
     const font = { face: 1, variations: [], features: [] };
     const req: ExportLayoutPngRequest = { layout: 'book', scale: 2, surface: 'ink', font };
-    await expect(api.exportLayoutPng(req)).resolves.toBe('/mock/exports/book-ink-2x.png');
+    // `<Headline>-<Body>-<context>` (E45.4); a layout without a context names its file id.
+    await expect(api.exportLayoutPng(req)).resolves.toBe('/mock/exports/Inter-Inter-book.png');
+    const magazine = (await api.getLayout({ id: 'studio-magazine' })).layout;
+    const head = magazine.roles!.find((r) => r.role === 'headline')!.blocks[0]!;
+    const body = magazine.roles!.find((r) => r.role === 'body')!.blocks[0]!;
+    const own = (face: number) => ({ face, variations: [], features: [] });
+    const blockFonts = magazine.blocks.map(() => null as ReturnType<typeof own> | null);
+    blockFonts[head] = own(6);
+    const second = (await api.getFace(6)).face.familyName;
+    expect(second).not.toBe('Inter');
+    await expect(
+      api.exportLayoutPng({ ...req, layout: 'studio-magazine', blockFonts }),
+    ).resolves.toBe(`/mock/exports/${second}-Inter-magazine.png`);
+    blockFonts[body] = own(6);
+    blockFonts[head] = null;
+    await expect(
+      api.exportLayoutPng({ ...req, layout: 'studio-web-hero', blockFonts: [] }),
+    ).resolves.toBe('/mock/exports/Inter-Inter-web-hero.png');
+    await expect(
+      api.exportLayoutPng({ ...req, layout: 'studio-magazine', blockFonts }),
+    ).resolves.toBe(`/mock/exports/Inter-${second}-magazine.png`);
     await expect(api.exportLayoutPng({ ...req, scale: 3 })).rejects.toMatchObject({
       code: 'invalidRequest',
     });

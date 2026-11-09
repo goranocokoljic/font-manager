@@ -416,3 +416,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E46.1 #478] apps/desktop/src/views/FamilyView.vue:351 — the Next button disables itself on the last family while it has the focus, so the focus drops to body.
 - [E46.1 #478] apps/desktop/e2e/family.spec.ts:83 — the push test checks only the specimen group's 280 ms, not the `--fm-ease` curve, the root crossfade or the 24 px fallback offset.
 - [E46.1 #478] apps/desktop/src/views/useFamilyNavigation.ts:146 — `share()` in a back callback that is still running can override a newer open's shared row; it is not gated on `latest`.
+- [E45.4 #476] apps/desktop/src/components/FamilyCollectionMenu.vue:65 — the combobox-over-listbox key handling is copied in UiSelect, FamilyCollectionMenu and StudioExportMenu, and the copies already differ (only Export opens on ArrowDown and has Home/End).
