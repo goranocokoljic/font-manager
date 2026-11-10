@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { addRow, compareRows } from './compare-pins';
 import { selectOption } from './select';
 
 // Preview rows and Compare load face files from `/fmfont/<id>`; serve one fixture for all.
@@ -30,34 +31,28 @@ const toast = (page: Page) => page.getByTestId('toast');
 const sheet = (page: Page) => page.getByRole('dialog', { name: 'Compare' });
 const compareButton = (page: Page) => page.getByRole('button', { name: /^Compare \d\/4$/ });
 
-/** Pins the cursor row with C, then moves the cursor down. */
-async function pinAndNext(page: Page, expected: RegExp) {
-  await page.keyboard.press('c');
-  await expect(toast(page)).toContainText(expected);
-  await page.keyboard.press('ArrowDown');
-}
-
-test('C and the palette pin up to four fonts; a fifth is refused; a pin can be removed', async ({
+test('C starts a new comparison, the row icon adds up to four, a fifth is refused; a new C replaces the set', async ({
   page,
 }) => {
   const tree = await open(page);
   await expect(compareButton(page)).toBeDisabled();
 
-  await pinAndNext(page, /^Inter .* pinned to Compare \(1 of 4\)/);
-  await pinAndNext(page, /^JetBrains Mono .* \(2 of 4\)/);
-  await pinAndNext(page, /\(3 of 4\)/);
-  // The fourth through the command palette.
-  await page.keyboard.press('ControlOrMeta+k');
-  await page.keyboard.type('pin the selected');
-  await page.keyboard.press('Enter');
-  await expect(toast(page)).toContainText('Sample 1');
-  await expect(toast(page)).toContainText('(4 of 4)');
+  // C: a new comparison with the cursor row as its base, in the open sheet (E48.5).
+  await page.keyboard.press('c');
+  await expect(toast(page)).toContainText(/^New comparison with Inter .* as its base\./);
+  await expect(sheet(page)).toBeVisible();
+  await expect(sheet(page).getByTestId('compare-count')).toHaveText(/^1 of 4 · base Inter /);
+  await page.keyboard.press('Escape');
+  await expect(sheet(page)).toBeHidden();
+
+  // The row icon adds to the set and never clears it.
+  await addRow(page, tree, 1, /^JetBrains Mono .* pinned to Compare \(2 of 4\)/);
+  await addRow(page, tree, 2, /\(3 of 4\)/);
+  await addRow(page, tree, 3, /^Sample 1 .*\(4 of 4\)/);
   await expect(compareButton(page)).toHaveAccessibleName('Compare 4/4');
 
   // The fifth is refused with a message.
-  await tree.getByRole('treeitem').nth(4).click();
-  await page.keyboard.press('c');
-  await expect(toast(page)).toContainText('Compare holds 4 fonts. Remove one to pin Sample 2');
+  await addRow(page, tree, 4, 'Compare holds 4 fonts. Remove one to pin Sample 2');
   await expect(compareButton(page)).toHaveAccessibleName('Compare 4/4');
 
   // Remove one in the sheet; the fifth then fits.
@@ -72,18 +67,59 @@ test('C and the palette pin up to four fonts; a fifth is refused; a pin can be r
   await expect(sheet(page).getByRole('button', { name: /^Remove Legacy Grotesk/ })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(sheet(page)).toBeHidden();
-  await page.keyboard.press('c');
-  await expect(toast(page)).toContainText('Sample 2');
-  await expect(toast(page)).toContainText('(4 of 4)');
+  await addRow(page, tree, 4, /^Sample 2 .*\(4 of 4\)/);
+
+  // A new C (here from the palette) while a set exists replaces it: no stale pins.
+  await tree.getByRole('treeitem').nth(5).click();
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('compare the selected');
+  await page.keyboard.press('Enter');
+  await expect(toast(page)).toContainText(/^New comparison with Sample 3 /);
+  await expect(sheet(page).getByTestId('compare-count')).toHaveText(/^1 of 4 · base Sample 3 /);
+  await expect(pinned).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(compareButton(page)).toHaveAccessibleName('Compare 1/4');
+});
+
+test('Only this keeps one face as the base; the toast undoes it', async ({ page }) => {
+  const tree = await open(page);
+  await compareRows(page, tree, 3);
+  await compareButton(page).click();
+  const dialog = sheet(page);
+  const faces = dialog.getByRole('list', { name: 'Stacked' }).getByRole('listitem');
+  await expect(faces).toHaveCount(3);
+  // The base wears the tag; the header names it.
+  await expect(dialog.getByTestId('face-base')).toHaveCount(1);
+  await expect(faces.first().getByTestId('face-base')).toHaveText('base');
+  await faces.nth(2).hover();
+  await faces.nth(2).getByTestId('face-only').click();
+  await expect(dialog.getByTestId('compare-count')).toHaveText(/^1 of 4 · base Legacy Grotesk /);
+  await expect(toast(page)).toContainText(/^Only Legacy Grotesk .* is left in Compare\./);
+  // The suggestions follow the new base.
+  await expect(dialog.getByTestId('pairings-panel')).toContainText('Legacy Grotesk');
+  await toast(page).getByRole('button', { name: 'Undo' }).click();
+  await expect(dialog.getByTestId('compare-count')).toHaveText(/^3 of 4 · base Inter /);
+
+  // By keyboard alone: Tab to 'Only this', Enter, then Ctrl/Cmd+Z in the sheet undoes it.
+  const only = faces.nth(1).getByTestId('face-only');
+  for (let i = 0; i < 30; i++) {
+    if (await only.evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press('Tab');
+  }
+  await expect(only).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByTestId('compare-count')).toHaveText(/^1 of 4 · base JetBrains Mono /);
+  await expect(toast(page)).toContainText('Z undoes it.');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(dialog.getByTestId('compare-count')).toHaveText(/^3 of 4 · base Inter /);
+  await expect(dialog).toBeVisible();
 });
 
 test('the sheet shows the pins in the sample text at one size, in three modes', async ({
   page,
 }) => {
-  await open(page);
-  await pinAndNext(page, /\(1 of 4\)/);
-  await pinAndNext(page, /\(2 of 4\)/);
-  await pinAndNext(page, /\(3 of 4\)/);
+  const tree = await open(page);
+  await compareRows(page, tree, 3);
   await compareButton(page).click();
   const dialog = sheet(page);
   await expect(dialog).toBeVisible();
@@ -161,8 +197,7 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
   page,
 }) => {
   const tree = await open(page);
-  await pinAndNext(page, /\(1 of 4\)/);
-  await pinAndNext(page, /\(2 of 4\)/);
+  await compareRows(page, tree, 2);
   const selected = tree.locator('[aria-selected="true"]');
   const before = await selected.getAttribute('data-key');
   const url = page.url();
@@ -216,10 +251,7 @@ test('the sheet rises from the bottom, drags to full height and closes back to t
   page,
 }) => {
   const tree = await open(page);
-  await pinAndNext(page, /^Inter .*\(1 of 4\)/);
-  await pinAndNext(page, /\(2 of 4\)/);
-  await pinAndNext(page, /\(3 of 4\)/);
-  await pinAndNext(page, /\(4 of 4\)/);
+  await compareRows(page, tree, 4);
   // Opened from the command palette over the list: the focus comes back to the row.
   const row = tree.locator('[aria-selected="true"]');
   const key = await row.getAttribute('data-key');

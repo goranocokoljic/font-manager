@@ -208,7 +208,31 @@ describe('compare sheet', () => {
 
   it('asks for a second pin when only one is pinned', async () => {
     const { wrapper } = await mountWith(1, 'sideBySide');
-    expect(wrapper.get('[role="status"]').text()).toContain('Pin at least two fonts');
+    expect(wrapper.get('[role="status"]').text()).toContain('Add a font to compare with this one');
+  });
+
+  it('tags the base and names it in the header; Only this keeps one face (E48.5)', async () => {
+    const { wrapper, s } = await mountWith(3, 'stacked');
+    const tagged = () => wrapper.findAll('[data-testid="face-base"]');
+    expect(tagged()).toHaveLength(1);
+    expect(tagged()[0]!.element.closest('.face')?.getAttribute('data-face')).toBe('200');
+    expect(tagged()[0]!.classes()).toContain('tone-accent');
+    expect(wrapper.text()).toContain(`3 of 4 · base ${name(faces[0]!)}`);
+    const only = wrapper.get('.face[data-face="202"] [data-testid="face-only"]');
+    expect(only.attributes('aria-label')).toBe(`Keep only ${name(faces[2]!)} in Compare`);
+    await only.trigger('click');
+    expect(s.pins.map((p) => p.id)).toEqual([202]);
+    expect(s.base?.id).toBe(202);
+    expect(wrapper.text()).toContain(`1 of 4 · base ${name(faces[2]!)}`);
+    // One face left: nothing to keep it from.
+    expect(wrapper.findAll('[data-testid="face-only"]')).toHaveLength(0);
+    // The keyboard reaches the Undo: Ctrl/Cmd+Z in the sheet puts the set back.
+    await wrapper.get('[role="dialog"]').trigger('keydown', { key: 'z', ctrlKey: true });
+    expect(s.pins.map((p) => p.id)).toEqual([200, 201, 202]);
+    // The name field keeps the key for its own undo.
+    await wrapper.get('.face[data-face="201"] [data-testid="face-only"]').trigger('click');
+    await wrapper.get('input[type="text"]').trigger('keydown', { key: 'z', ctrlKey: true });
+    expect(s.pins.map((p) => p.id)).toEqual([201]);
   });
 
   it('is a bottom sheet whose height, scrim and Auto size follow the handle and maximize', async () => {

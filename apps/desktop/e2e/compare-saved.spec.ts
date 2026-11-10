@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { addRow, startWithC } from './compare-pins';
 
 // E13.2: named comparisons. Compare loads face files from `/fmfont/<id>`; serve one fixture.
 const fixture = readFileSync(
@@ -29,18 +30,12 @@ const sheet = (page: Page) => page.getByRole('dialog', { name: 'Compare' });
 const compareButton = (page: Page) => page.getByRole('button', { name: /^Compare \d\/4$/ });
 const faceNames = (page: Page) => sheet(page).locator('.face .name');
 
-async function pinAndNext(page: Page, expected: RegExp) {
-  await page.keyboard.press('c');
-  await expect(toast(page)).toContainText(expected);
-  await page.keyboard.press('ArrowDown');
-}
-
 test('the sheet saves the comparison under a name; the list and the palette reopen it', async ({
   page,
 }) => {
-  await open(page);
-  await pinAndNext(page, /^Inter .*\(1 of 4\)/);
-  await pinAndNext(page, /^JetBrains Mono .*\(2 of 4\)/);
+  const tree = await open(page);
+  await startWithC(page);
+  await addRow(page, tree, 1, /^JetBrains Mono .*\(2 of 4\)/);
   await compareButton(page).click();
   const dialog = sheet(page);
   await dialog.getByRole('radio', { name: 'Stacked' }).check();

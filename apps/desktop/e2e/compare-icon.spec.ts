@@ -60,7 +60,12 @@ test('a wall card shows the icon on hover, adds and removes, and keeps it while 
   await expect(icon).toHaveAttribute('data-in-set', 'false');
 
   // A click adds the family; the icon fills in the accent and stays after the pointer leaves.
+  // The first add starts a comparison with it as the base and opens the sheet (E48.5).
   await icon.click();
+  const sheet = page.getByRole('dialog', { name: 'Compare' });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
   await expect(icon).toHaveAttribute('data-in-set', 'true');
   await expect(icon).toHaveAttribute('aria-label', `Remove ${name} from Compare`);
   // The icon is hidden from assistive technology; the card's name says it is in Compare.

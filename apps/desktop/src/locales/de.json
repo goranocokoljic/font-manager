@@ -163,7 +163,7 @@
     "saved": "Gespeichert",
     "openLabel": "Vergleich {name} öffnen",
     "missing": "Jetzt nicht in der Bibliothek: {names}.",
-    "pinTwo": "Hefte mindestens zwei Schriften an, um sie zu vergleichen: Wähle eine Schrift in der Liste und drücke C.",
+    "pinTwo": "Füge eine Schrift zum Vergleich mit dieser hinzu: mit dem Vergleichssymbol auf einer Karte oder Zeile oder mit einem Vorschlag unten.",
     "overlay": "Überlagerung",
     "firstFont": "Erste Schrift",
     "secondFont": "Zweite Schrift",
@@ -171,9 +171,12 @@
     "legend": "Legende",
     "addLabel": "{name} zum Vergleich hinzufügen",
     "removeLabel": "{name} aus dem Vergleich entfernen",
+    "baseTag": "Basis",
+    "onlyThis": "Nur diese",
+    "onlyThisLabel": "Nur {name} im Vergleich behalten",
     "pairings": {
       "title": "Kombinationen für {name}",
-      "hint": "Schriften anderer Familien, die nach den Regeln zur ersten angehefteten Schrift passen.",
+      "hint": "Schriften anderer Familien, die nach den Regeln zur Basis passen.",
       "list": "Vorgeschlagene Kombinationen",
       "loading": "Kombinationen werden gesucht …",
       "none": "Keine Schrift der Bibliothek passt nach den Regeln zu {name}.",
@@ -198,7 +201,9 @@
         "other": "{count} übersprungen: Der Vergleich fasst {max} Schriften."
       },
       "allAlready": "Diese Schriften sind bereits im Vergleich.",
-      "removed": "{name} aus dem Vergleich entfernt."
+      "removed": "{name} aus dem Vergleich entfernt.",
+      "fresh": "Neuer Vergleich mit {name} als Basis.",
+      "onlyThis": "Nur {name} bleibt im Vergleich. {undo} macht es rückgängig."
     }
   },
   "quickLook": {
@@ -382,7 +387,7 @@
       "quickToggle": "Ausgewählte Schriften zur Schnellsammlung hinzufügen oder daraus entfernen",
       "quickOpen": "Schnellsammlung öffnen",
       "tag": "Ausgewählte Schriften taggen…",
-      "pin": "Ausgewählte Schrift zum Vergleich anheften",
+      "pin": "Ausgewählte Schrift vergleichen (ein neuer Vergleich)",
       "openCompare": "Vergleich öffnen",
       "activateSession": "Für diese Sitzung aktivieren oder deaktivieren",
       "activatePermanent": "Dauerhaft aktivieren oder deaktivieren",

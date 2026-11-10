@@ -28,10 +28,18 @@ import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { FmFade, FmSlide } from '../motion';
 import { SHEET_HEIGHT, heightAtPointer, useCompareSheetStore } from '../stores/compareSheet';
-import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
+import {
+  COMPARE_MODES,
+  COMPARE_UNDO,
+  MAX_PINS,
+  useCompareStore,
+  type CompareMode,
+} from '../stores/compare';
+import { matches } from '../keyboard/keymap';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import CompareToggle from './CompareToggle.vue';
 import PairingsPanel from './PairingsPanel.vue';
+import UiBadge from './ui/UiBadge.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -103,7 +111,7 @@ watch(savedOpen, (open) => {
 
 /** The base: the first pin, the face the others are compared to. */
 const countLabel = computed(() => {
-  const base = compare.pins[0];
+  const base = compare.base;
   const count = compare.pins.length;
   return base
     ? t('compare.setCountBase', { count, max: MAX_PINS, name: fontNameSample(base) })
@@ -255,6 +263,11 @@ const pinOptions = computed(() =>
   compare.pins.map((p) => ({ value: p.id, label: fontNameSample(p) })),
 );
 
+/** A field that types text (the comparison's name) keeps Ctrl/Cmd+Z for its own undo. */
+function typesText(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement && target.type === 'text';
+}
+
 /** Tab cycles inside the sheet; Escape closes it; plain keys stay out of the list's shortcuts. */
 function onKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
@@ -262,6 +275,13 @@ function onKeyDown(e: KeyboardEvent): void {
     e.stopPropagation();
     if (savedOpen.value) closeSaved(true);
     else compare.close();
+    return;
+  }
+  // Ctrl/Cmd+Z: the Undo of 'Only this', whose toast the focus trap keeps out of reach. A
+  // field that types text keeps the key for its own undo.
+  if (matches(e, COMPARE_UNDO) && !typesText(e.target) && compare.undoOnlyThis()) {
+    e.preventDefault();
+    e.stopPropagation();
     return;
   }
   if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
@@ -503,9 +523,26 @@ function onFocusIn(e: FocusEvent): void {
           >
             <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
               <div class="label">
-                <span class="name">{{ fontNameSample(f) }}</span>
-                <!-- On hover or focus: the filled compare icon removes the face (E48.4). -->
+                <span class="who">
+                  <span class="name">{{ fontNameSample(f) }}</span>
+                  <!-- The base (E48.5): '· base' in the accent, its word on-accent (DESIGN.md). -->
+                  <template v-if="f.id === compare.base?.id">
+                    <span aria-hidden="true">·</span>
+                    <UiBadge tone="accent" data-testid="face-base">{{
+                      t('compare.baseTag')
+                    }}</UiBadge>
+                  </template>
+                </span>
+                <!-- On hover or focus: 'Only this' keeps the face alone (E48.5); the filled
+                     compare icon removes it (E48.4). -->
                 <span class="face-actions">
+                  <UiButton
+                    v-if="compare.pins.length > 1"
+                    data-testid="face-only"
+                    :aria-label="t('compare.onlyThisLabel', { name: fontNameSample(f) })"
+                    @click="compare.onlyThis(f)"
+                    >{{ t('compare.onlyThis') }}</UiButton
+                  >
                   <CompareToggle
                     manual
                     :data-remove="f.id"
@@ -814,6 +851,12 @@ h2 {
   align-items: center;
   gap: var(--fm-space-2);
   color: var(--fm-muted);
+}
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  min-width: 0;
 }
 .name {
   overflow: hidden;
