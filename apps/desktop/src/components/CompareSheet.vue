@@ -9,8 +9,9 @@
 // a saved one is reopened from the list in the sheet (or the command palette) and
 // shows the fonts left, naming the ones the library no longer has.
 //
-// Pairings (E23.4): a panel below the faces suggests fonts that go with the first
-// pin, each with an "Add to compare" button.
+// Similar to the base (E48.3): a second list below the faces, on a sunken band, offers the
+// faces that look like the base in the same text at half the size; its compare icon brings
+// one up into the set (with a short row-to-face move, none under reduced motion).
 //
 // A bottom sheet (E48.1): it slides up over the wall, which stays visible above it under
 // a 28 % scrim. A handle on its top edge resizes it from 40 % to the whole window; a
@@ -26,7 +27,7 @@ import { locale, t } from '../i18n';
 import { sheetReturnTarget } from '../keyboard/returnFocus';
 import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
-import { FmFade, FmSlide } from '../motion';
+import { FmFade, FmSlide, useReducedMotion } from '../motion';
 import { SHEET_HEIGHT, heightAtPointer, useCompareSheetStore } from '../stores/compareSheet';
 import {
   COMPARE_MODES,
@@ -36,9 +37,10 @@ import {
   type CompareMode,
 } from '../stores/compare';
 import { matches } from '../keyboard/keymap';
+import { useCompareSimilarStore } from '../stores/compareSimilar';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import CompareToggle from './CompareToggle.vue';
-import PairingsPanel from './PairingsPanel.vue';
+import CompareSimilar from './CompareSimilar.vue';
 import UiBadge from './ui/UiBadge.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
@@ -50,6 +52,8 @@ const compare = useCompareStore();
 const sheet = useCompareSheetStore();
 const preview = usePreviewStore();
 const loader = useFaceLoader();
+const similar = useCompareSimilarStore();
+const reducedMotion = useReducedMotion();
 
 const dialog = ref<HTMLElement | null>(null);
 let returnFocus: HTMLElement | null = null;
@@ -164,11 +168,11 @@ async function onReopen(id: ComparisonId): Promise<void> {
   dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
 }
 
-// The pinned faces' fonts, registered with the webview while the sheet is open.
+// The pinned and the similar faces' fonts, registered with the webview while the sheet is open.
 const families = reactive(new Map<FaceId, string>());
 const held = new Set<FaceId>();
 watch(
-  () => compare.pins.map((p) => p.id),
+  () => [...new Set([...compare.pins, ...similar.results.map((r) => r.face)].map((p) => p.id))],
   (ids) => {
     for (const id of [...held]) {
       if (ids.includes(id)) continue;
@@ -241,6 +245,12 @@ const sizeOptions = computed<SegmentOption<'auto' | '48' | '72' | '96'>[]>(() =>
 const size = computed(() =>
   sizeChoice.value === 'auto' ? sheet.autoSize : Number(sizeChoice.value),
 );
+// The face a similar row just added (E48.3): it rises into the set once. Reduced motion: no move.
+const arrived = ref<FaceId | null>(null);
+function onSimilarAdded(face: FaceSummary): void {
+  arrived.value = reducedMotion.value ? null : face.id;
+}
+
 // Overlay: one SVG line box; both texts sit on the same baseline (one `y`).
 const overlayHeight = computed(() => Math.ceil(size.value * 1.5));
 const overlayBaseline = computed(() => Math.round(size.value * 1.1));
@@ -521,7 +531,14 @@ function onFocusIn(e: FocusEvent): void {
             :class="compare.mode"
             :aria-label="t(`compare.modes.${compare.mode}`)"
           >
-            <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
+            <li
+              v-for="f in compare.pins"
+              :key="f.id"
+              class="face"
+              :class="{ arrived: arrived === f.id }"
+              :data-face="f.id"
+              @animationend="arrived = null"
+            >
               <div class="label">
                 <span class="who">
                   <span class="name">{{ fontNameSample(f) }}</span>
@@ -567,7 +584,14 @@ function onFocusIn(e: FocusEvent): void {
             </li>
           </ul>
 
-          <PairingsPanel />
+          <CompareSimilar
+            :size="size"
+            :text-of="textOf"
+            :font-of="fontOf"
+            :line-height="settings.lineHeight"
+            :tracking-em="settings.trackingEm"
+            @added="onSimilarAdded"
+          />
         </div>
 
         <!-- Last in the Tab order: the controls come first, as before the sheet resized. -->
@@ -833,6 +857,21 @@ h2 {
 .face:hover .face-actions,
 .face:focus-within .face-actions {
   opacity: 1;
+}
+/* The row-to-face move: the face a similar row added rises into the set. */
+.face.arrived {
+  animation: fm-compare-arrive var(--fm-motion-move) var(--fm-ease);
+}
+@keyframes fm-compare-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face.arrived {
+    animation: none;
+  }
 }
 .face {
   display: flex;

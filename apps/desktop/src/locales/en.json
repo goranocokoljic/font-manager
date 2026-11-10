@@ -174,15 +174,15 @@
     "baseTag": "base",
     "onlyThis": "Only this",
     "onlyThisLabel": "Keep only {name} in Compare",
-    "pairings": {
-      "title": "Pairings for {name}",
-      "hint": "Fonts of other families that go with the base, by rule.",
-      "list": "Suggested pairings",
-      "loading": "Looking for pairings…",
-      "none": "No font in the library pairs with {name} by the rules.",
-      "error": "Font Manager could not suggest pairings. {message}",
-      "score": "{percent}% match",
-      "reasons": "Why: {reasons}"
+    "similar": {
+      "title": "Similar to {name}",
+      "hint": "Alternatives from your library, in the same text · the icon brings one up into the set",
+      "list": "Fonts similar to the base",
+      "otherReason": "Close in shape",
+      "full": "Compare holds {max} fonts. Remove one to add {name}.",
+      "loading": "Looking for similar fonts…",
+      "none": "No other font in the library looks like {name}.",
+      "error": "Font Manager could not find similar fonts. {message}"
     },
     "toasts": {
       "already": "{name} is already pinned to Compare.",

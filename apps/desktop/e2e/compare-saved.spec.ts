@@ -60,7 +60,10 @@ test('the sheet saves the comparison under a name; the list and the palette reop
   await expect(dialog).toBeVisible();
 
   // Change the pins and the mode, then reopen the saved one from the sheet's list.
-  await dialog.getByRole('button', { name: /^Remove JetBrains Mono/ }).click();
+  await dialog
+    .getByTestId('face-remove')
+    .and(dialog.getByRole('button', { name: /^Remove JetBrains Mono/ }))
+    .click();
   await dialog.getByRole('radio', { name: 'Grid' }).check();
   await savedButton.click();
   await saved.getByRole('button', { name: 'Open comparison Body pairing' }).click();
@@ -70,7 +73,10 @@ test('the sheet saves the comparison under a name; the list and the palette reop
   await expect(dialog.getByRole('radio', { name: 'Stacked' })).toBeChecked();
 
   // From the command palette, with the sheet closed and the pins changed.
-  await dialog.getByRole('button', { name: /^Remove Inter/ }).click();
+  await dialog
+    .getByTestId('face-remove')
+    .and(dialog.getByRole('button', { name: /^Remove Inter/ }))
+    .click();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await page.keyboard.press('ControlOrMeta+k');

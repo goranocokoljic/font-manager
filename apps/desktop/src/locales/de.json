@@ -174,15 +174,15 @@
     "baseTag": "Basis",
     "onlyThis": "Nur diese",
     "onlyThisLabel": "Nur {name} im Vergleich behalten",
-    "pairings": {
-      "title": "Kombinationen für {name}",
-      "hint": "Schriften anderer Familien, die nach den Regeln zur Basis passen.",
-      "list": "Vorgeschlagene Kombinationen",
-      "loading": "Kombinationen werden gesucht …",
-      "none": "Keine Schrift der Bibliothek passt nach den Regeln zu {name}.",
-      "error": "Font Manager konnte keine Kombinationen vorschlagen. {message}",
-      "score": "{percent} % passend",
-      "reasons": "Warum: {reasons}"
+    "similar": {
+      "title": "Ähnlich wie {name}",
+      "hint": "Alternativen aus deiner Bibliothek, im selben Text · das Symbol holt eine in den Vergleich",
+      "list": "Schriften ähnlich der Basis",
+      "otherReason": "Ähnlich in der Form",
+      "full": "Der Vergleich fasst {max} Schriften. Entferne eine, um {name} hinzuzufügen.",
+      "loading": "Ähnliche Schriften werden gesucht …",
+      "none": "Keine andere Schrift der Bibliothek sieht aus wie {name}.",
+      "error": "Font Manager konnte keine ähnlichen Schriften finden. {message}"
     },
     "toasts": {
       "already": "{name} ist bereits zum Vergleich angeheftet.",
