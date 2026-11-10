@@ -3,7 +3,7 @@
 // library while rows are selected. It names the selection ('3 families') and acts on all of
 // it through the calls the rest of the app already makes: Activate (the A key's bulk toggle),
 // Collection (the family page's menu, with the whole selection), Tag (the tagging panel),
-// Compare (pins the selection's faces, up to the sheet's four), Studio (the first face, and
+// Compare <n> (adds the selection to the compare set, up to its four; E48.4), Studio (the first face, and
 // the second as the headline), Files (E44.4: hold it and drag past the window edge to drop
 // the selection's font files into another app; disabled with the reason as its tooltip where
 // the system cannot) and × (clears the selection). The parent shows it in an
@@ -61,9 +61,14 @@ function tag(): void {
   void tagging.openFor(pick.value);
 }
 
+/**
+ * Adds the selection to the compare set (E48.4), up to its four; one toast says how many
+ * were added and skipped. It reads no more faces than the set could take (a face already
+ * pinned takes no room), so a long selection loads no families it cannot use.
+ */
 async function compareSelection(): Promise<void> {
-  const free = MAX_PINS - compare.pins.length;
-  for (const face of await list.selectedFaces(Math.max(1, free))) compare.pin(face);
+  const faces = await list.selectedFaces(MAX_PINS + compare.pins.length);
+  compare.pinMany(faces, Math.max(0, rows.value.length - faces.length));
   compare.openSheet();
 }
 
@@ -165,7 +170,7 @@ function onKey(e: KeyboardEvent): void {
       </button>
       <button type="button" class="action" data-testid="bar-compare" @click="compareSelection">
         <UiIcon name="compare" />
-        {{ t('selection.bar.compare') }}
+        {{ t('selection.bar.compare', { count: rows.length }) }}
       </button>
       <button
         type="button"

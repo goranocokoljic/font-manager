@@ -18,6 +18,7 @@ import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
+import CompareToggle from '../components/CompareToggle.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
@@ -367,6 +368,12 @@ onBeforeUnmount(() => {
           aria-keyshortcuts="T"
           :disabled="!page.detail"
           @click="tag"
+        />
+        <CompareToggle
+          v-if="page.face"
+          data-testid="family-compare"
+          scope="family"
+          :face="page.face"
         />
         <UiIconButton
           icon="similar"

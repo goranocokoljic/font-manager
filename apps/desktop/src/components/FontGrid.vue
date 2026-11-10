@@ -84,6 +84,7 @@ import { t } from '../i18n';
 import { weightRangeText } from '../list/columns';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
+import CompareToggle from './CompareToggle.vue';
 import MissingGlyphs from './MissingGlyphs.vue';
 import FmFlipGroup from '../motion/FmFlipGroup.vue';
 import { useReducedMotion } from '../motion/useReducedMotion';
@@ -697,15 +698,25 @@ function onToggle(row: ListRow): void {
           <span v-else-if="!item.face && library.failed.has(item.row.family.id)" class="note">
             {{ t('list.stylesUnavailable') }}
           </span>
-          <span
-            v-if="item.row.kind === 'family' && !item.row.single"
-            class="twisty fm-directional"
-            data-ghost="hide"
-            :class="{ open: item.row.expanded }"
-            aria-hidden="true"
-            @click.stop="onToggle(item.row)"
-            ><UiChevron :open="item.row.expanded"
-          /></span>
+          <span class="corner" data-ghost="hide">
+            <span
+              v-if="item.row.kind === 'family' && !item.row.single"
+              class="twisty fm-directional"
+              :class="{ open: item.row.expanded }"
+              aria-hidden="true"
+              @click.stop="onToggle(item.row)"
+              ><UiChevron :open="item.row.expanded"
+            /></span>
+            <CompareToggle
+              v-if="item.face"
+              class="card-compare"
+              data-testid="card-compare"
+              tabindex="-1"
+              :face="item.face"
+              :scope="item.row.kind === 'family' ? 'family' : 'face'"
+              @toggle="viewport?.focus({ preventScroll: true })"
+            />
+          </span>
           <div class="meta">
             <span class="lead">
               <ActivationDot :state="rowActivation(item.row)" />
@@ -890,11 +901,18 @@ function onToggle(row: ListRow): void {
 .viewport:focus .slot.cursor .count:has(+ .range) {
   opacity: 0;
 }
+/* The card's top-right corner: the chevron, then the compare icon (E48.4). */
+.corner {
+  position: absolute;
+  top: var(--fm-space-1);
+  inset-inline-end: var(--fm-space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+}
 /* The board's footer has no chevron: it comes up on the card that can use it. */
 .twisty {
-  position: absolute;
-  top: var(--fm-space-2);
-  inset-inline-end: var(--fm-space-2);
+  display: inline-flex;
   cursor: pointer;
   opacity: 0;
   transition: opacity var(--fm-motion-fast) var(--fm-ease);
@@ -902,6 +920,17 @@ function onToggle(row: ListRow): void {
 .slot:hover .twisty,
 .viewport:focus .slot.cursor .twisty,
 .twisty.open {
+  opacity: 1;
+}
+/* The compare icon: hidden at rest, shown on hover or focus, and always while it is in the set. */
+.card-compare {
+  opacity: 0;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.slot:hover .card-compare,
+.slot:focus-within .card-compare,
+.viewport:focus .slot.cursor .card-compare,
+.card-compare.in-set {
   opacity: 1;
 }
 /* Paragraph mode (E43.1): the meta line on top in 12 px, the text under it from the start. */

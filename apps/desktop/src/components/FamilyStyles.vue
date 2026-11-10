@@ -10,14 +10,13 @@ import { errorMessage, t } from '../i18n';
 import { rampAxes, rampStops, ringedStop, type RampStop } from '../preview/ramp';
 import { coordinateSettings, faceAxes, variationSettings } from '../preview/variations';
 import { NEAR_INSTANCE, useAxesStore } from '../stores/axes';
-import { useCompareStore } from '../stores/compare';
 import { useFeaturesStore } from '../stores/features';
 import { NAMED_STYLES, useFamilyPageStore } from '../stores/familyPage';
 import { useToastStore } from '../stores/toast';
+import CompareToggle from './CompareToggle.vue';
 import CopyCss from './CopyCss.vue';
 import FamilySample from './FamilySample.vue';
 import UiBadge from './ui/UiBadge.vue';
-import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import UiPopover from './ui/UiPopover.vue';
 import UiSegmentedControl from './ui/UiSegmentedControl.vue';
@@ -32,7 +31,6 @@ const emit = defineEmits<{ choose: [face: FaceId] }>();
 
 const page = useFamilyPageStore();
 const axesSet = useAxesStore();
-const compare = useCompareStore();
 const features = useFeaturesStore();
 const toast = useToastStore();
 
@@ -336,14 +334,12 @@ async function deleteMenuPin(): Promise<void> {
               :css="() => rowCss(row)"
               :tabindex="i === current ? 0 : -1"
             />
-            <UiButton
+            <CompareToggle
               v-if="row.face"
-              :aria-label="t('family.compareStyle', { name: row.title })"
+              data-testid="style-compare"
+              :face="row.face"
               :tabindex="i === current ? 0 : -1"
-              @click="compare.pin(row.face)"
-            >
-              {{ t('compare.title') }}
-            </UiButton>
+            />
           </span>
         </div>
         <div v-if="!row.stop" class="end" role="gridcell">

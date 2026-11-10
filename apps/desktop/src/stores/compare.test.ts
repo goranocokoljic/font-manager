@@ -38,6 +38,56 @@ describe('compare store', () => {
     expect(useToastStore().toast?.message).toContain('already pinned');
   });
 
+  it('the compare icon: a face is in the set when pinned, a family when any of its faces is (E48.4)', () => {
+    const s = useCompareStore();
+    const a1 = { ...faces[0]!, family: 7 };
+    const a2 = { ...faces[1]!, family: 7 };
+    const b = { ...faces[2]!, family: 8 };
+    s.pin(a1);
+    expect(s.inSet(a1)).toBe(true);
+    expect(s.inSet(a2)).toBe(false);
+    expect(s.inSet(a2, 'family')).toBe(true);
+    expect(s.inSet(b, 'family')).toBe(false);
+  });
+
+  it('toggle adds outside the set and removes inside it, a family with all its faces (E48.4)', () => {
+    const s = useCompareStore();
+    const toast = useToastStore();
+    const a1 = { ...faces[0]!, family: 7, familyName: 'Alpha' };
+    const a2 = { ...faces[1]!, family: 7, familyName: 'Alpha' };
+    const b = { ...faces[2]!, family: 8, familyName: 'Beta' };
+    expect(s.toggle(a1)).toBe('pinned');
+    expect(s.toggle(a2)).toBe('pinned');
+    expect(s.toggle(b, 'family')).toBe('pinned');
+    expect(s.toggle(a2)).toBe('removed');
+    expect(s.pins.map((p) => p.id)).toEqual([a1.id, b.id]);
+    expect(toast.toast?.message).toBe('Alpha Style 1 removed from Compare.');
+    s.pin(a2);
+    expect(s.toggle(a1, 'family')).toBe('removed');
+    expect(s.pins.map((p) => p.id)).toEqual([b.id]);
+    expect(toast.toast?.message).toBe('Alpha removed from Compare.');
+    setLocale('de');
+    s.toggle(b, 'family');
+    expect(toast.toast?.message).toBe('Beta aus dem Vergleich entfernt.');
+    setLocale('en');
+  });
+
+  it('pinMany adds up to four, skips the rest and says both in one toast (E48.4)', () => {
+    const s = useCompareStore();
+    const toast = useToastStore();
+    s.pin(faces[0]!);
+    const got = s.pinMany(faces, 3);
+    expect(got).toEqual({ added: 3, already: 1, skipped: 4 });
+    expect(s.pins.map((p) => p.id)).toEqual([100, 101, 102, 103]);
+    expect(toast.toast?.message).toBe(
+      '3 fonts added to Compare (4 of 4). 4 skipped: Compare holds 4 fonts.',
+    );
+    expect(s.pinMany([faces[4]!])).toEqual({ added: 0, already: 0, skipped: 1 });
+    expect(toast.toast?.message).toBe('1 skipped: Compare holds 4 fonts.');
+    expect(s.pinMany([faces[0]!])).toEqual({ added: 0, already: 1, skipped: 0 });
+    expect(toast.toast?.message).toBe('These fonts are already in Compare.');
+  });
+
   it('removes a pin, which frees a place; the last removal closes the sheet', () => {
     const s = useCompareStore();
     faces.slice(0, 4).forEach((f) => s.pin(f));
