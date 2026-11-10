@@ -286,7 +286,7 @@ const toggle = (mode: ActivationMode) =>
     ? activation.toggleRows(fontList.selectedRows, mode)
     : selection.toggleActivation(mode);
 
-// C pins the selected face to Compare, and S finds the faces similar to it: the
+// C starts a new comparison with the selected face as its base (E48.5), and S finds the faces similar to it: the
 // selected face once its detail has loaded, else the list cursor's (the row just moved
 // to, whose detail is still on its way).
 const pinTarget = computed(() => {
@@ -385,7 +385,7 @@ useActions([
       return t('palette.groups.compare');
     },
     enabled: () => pinTarget.value !== null && !compare.open,
-    run: () => (pinTarget.value ? compare.pin(pinTarget.value) : undefined),
+    run: () => (pinTarget.value ? compare.compareFresh(pinTarget.value) : undefined),
   },
   {
     id: 'compare.open',

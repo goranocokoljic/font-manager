@@ -37,8 +37,8 @@ test('the Pairings panel suggests fonts for the first pin; the compare icon pins
   page,
 }) => {
   await open(page);
+  // C opens a new comparison with the row as its base (E48.5).
   await page.keyboard.press('c');
-  await page.getByRole('button', { name: 'Compare 1/4' }).click();
 
   // A panel inside the sheet, not a dialog of its own.
   await expect(panel(page)).toBeVisible();
@@ -83,7 +83,6 @@ test('the panel says when nothing pairs with the first pin', async ({ page }) =>
   // Legacy Grotesk (third row) declares no x-height and shares no designer.
   await tree.getByRole('treeitem').nth(2).click();
   await page.keyboard.press('c');
-  await page.getByRole('button', { name: 'Compare 1/4' }).click();
   await expect(panel(page)).toHaveAccessibleName(/^Pairings for Legacy Grotesk /);
   await expect(panel(page).getByRole('status')).toHaveText(
     /^No font in the library pairs with Legacy Grotesk .* by the rules\.$/,

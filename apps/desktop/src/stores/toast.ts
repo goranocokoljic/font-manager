@@ -22,6 +22,8 @@ export const useToastStore = defineStore('toast', () => {
   const toast = shallowRef<Toast | null>(null);
   let nextId = 1;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** How long the toast on screen stays. */
+  let stay = TOAST_MS;
 
   function dismiss(): void {
     clearTimeout(timer);
@@ -33,12 +35,13 @@ export const useToastStore = defineStore('toast', () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
       if (toast.value?.id === id) dismiss();
-    }, TOAST_MS);
+    }, stay);
   }
 
-  /** Shows a toast; it goes away after `TOAST_MS` or when dismissed. */
-  function show(message: string, action?: ToastAction): void {
+  /** Shows a toast; it goes away after `ms` (default `TOAST_MS`) or when dismissed. */
+  function show(message: string, action?: ToastAction, ms: number = TOAST_MS): void {
     const id = nextId++;
+    stay = ms;
     toast.value = { id, message, action };
     arm(id);
   }
@@ -49,7 +52,7 @@ export const useToastStore = defineStore('toast', () => {
     timer = undefined;
   }
 
-  /** The pointer or the focus left the toast: it goes away after `TOAST_MS` again. */
+  /** The pointer or the focus left the toast: it goes away after its time again. */
   function release(): void {
     if (toast.value) arm(toast.value.id);
   }

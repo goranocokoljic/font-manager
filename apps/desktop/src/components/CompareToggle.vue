@@ -8,7 +8,9 @@
 // A 28 px target with the accent focus ring. `scope="family"` stands for the face's whole
 // family: a family's card or row is in the set while any of its faces is. By default a click
 // goes to the compare store's `toggle`; with `manual` it only emits `toggle`, for a parent
-// that must act around it (the sheet keeps the focus on the next face).
+// that must act around it (the sheet keeps the focus on the next face). With `fresh` a click
+// outside the set starts a new comparison with the face as its base (the family page's
+// Compare, E48.5) instead of adding to the set.
 import { computed } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
@@ -17,8 +19,14 @@ import { useCompareStore, type CompareScope } from '../stores/compare';
 import UiIcon from './ui/UiIcon.vue';
 
 const props = withDefaults(
-  defineProps<{ face: FaceSummary; scope?: CompareScope; manual?: boolean; shortcut?: string }>(),
-  { scope: 'face', manual: false, shortcut: undefined },
+  defineProps<{
+    face: FaceSummary;
+    scope?: CompareScope;
+    manual?: boolean;
+    fresh?: boolean;
+    shortcut?: string;
+  }>(),
+  { scope: 'face', manual: false, fresh: false, shortcut: undefined },
 );
 const emit = defineEmits<{ toggle: [inSet: boolean] }>();
 
@@ -31,7 +39,10 @@ const label = computed(() => {
 
 function onClick(): void {
   const was = inSet.value;
-  if (!props.manual) compare.toggle(props.face, props.scope);
+  if (props.manual) {
+    // The parent acts.
+  } else if (props.fresh && !was) compare.compareFresh(props.face);
+  else compare.toggle(props.face, props.scope);
   emit('toggle', was);
 }
 </script>

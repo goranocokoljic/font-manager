@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { compareRows } from './compare-pins';
 import { openDeveloper, showSection } from './family-page';
 import { selectOption } from './select';
 
@@ -469,10 +470,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('/?mockFaces=3#/');
       const tree = page.getByRole('tree', { name: 'Font list' });
       await tree.getByRole('treeitem').first().click();
-      for (let i = 0; i < 3; i++) {
-        await page.keyboard.press('c');
-        await page.keyboard.press('ArrowDown');
-      }
+      await compareRows(page, tree, 3);
       await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
       const sheet = page.getByRole('dialog', { name: 'Compare' });
       await expect(sheet).toBeVisible();
@@ -607,9 +605,12 @@ test('every action of the keyboard model works without a mouse', async ({ page }
   await page.keyboard.press('Shift+A');
   await expect(style).toHaveAccessibleName(/, not active$/);
 
-  // C pins the font to Compare; the toast does not hide the focus.
+  // C starts a new comparison with the font (E48.5); Escape brings the focus back.
   await page.keyboard.press('c');
-  await expect(page.getByTestId('toast')).toContainText('(1 of 4)');
+  await expect(page.getByTestId('toast')).toContainText('New comparison with');
+  await expect(page.getByRole('dialog', { name: 'Compare' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Compare' })).toBeHidden();
   await expect(tree).toBeFocused();
   expect(await focusSeen(page)).toBe(true);
 
@@ -640,9 +641,7 @@ test('the focus stays in a sheet and returns to where it was when the sheet clos
   await tree.getByRole('treeitem').first().click();
   await expect(tree).toBeFocused();
 
-  await page.keyboard.press('c');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('c');
+  await compareRows(page, tree, 2);
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('open compare');
   await page.keyboard.press('Enter');

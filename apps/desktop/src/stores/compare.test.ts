@@ -1,10 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import type { FaceSummary } from '../api/types';
 import { createMockClient, mockComparisons, mockFaces } from '../api/mock';
 import { setLocale } from '../i18n';
-import { COMPARE_MODES, MAX_PINS, useCompareStore } from './compare';
+import { COMPARE_MODES, MAX_PINS, ONLY_THIS_UNDO_MS, useCompareStore } from './compare';
 import { useToastStore } from './toast';
 
 /** Five distinct faces: the mock's summaries with their own ids and styles. */
@@ -256,5 +256,130 @@ describe('compare store', () => {
     await s.reopen(id);
     expect(s.mode).toBe('sideBySide');
     expect(COMPARE_MODES.find((m) => m.value === s.mode)?.label).toBe('Grid');
+  });
+
+  describe('the base: fresh, add and only this (E48.5)', () => {
+    const ids = (s: ReturnType<typeof useCompareStore>) => s.pins.map((p) => p.id);
+
+    it('the base is the first pin, or none', () => {
+      const s = useCompareStore();
+      expect(s.base).toBeNull();
+      s.pin(faces[1]!);
+      s.pin(faces[0]!);
+      expect(s.base?.id).toBe(101);
+      s.unpin(101);
+      expect(s.base?.id).toBe(100);
+    });
+
+    it('compareFresh clears the set, makes the face the base and opens the sheet', () => {
+      const s = useCompareStore();
+      faces.slice(0, 3).forEach((f) => s.pin(f));
+      s.compareFresh(faces[4]!);
+      expect(ids(s)).toEqual([104]);
+      expect(s.base?.id).toBe(104);
+      expect(s.open).toBe(true);
+      expect(useToastStore().toast?.message).toBe(
+        `New comparison with ${faces[4]!.familyName} Style 4 as its base.`,
+      );
+    });
+
+    it('a new C while a set exists replaces it, also when the set holds the face (stale pins)', () => {
+      const s = useCompareStore();
+      faces.slice(0, 3).forEach((f) => s.pin(f));
+      s.setOverlay(0, 102);
+      s.compareFresh(faces[2]!);
+      expect(ids(s)).toEqual([102]);
+      expect(s.overlayPair.map((f) => f?.id ?? null)).toEqual([102, null]);
+      s.compareFresh(faces[2]!);
+      expect(ids(s)).toEqual([102]);
+    });
+
+    it('compareFresh is a new comparison, not the saved one the set came from', async () => {
+      setClient(createMockClient({ comparisons: mockComparisons }));
+      const s = useCompareStore();
+      await s.loadSaved();
+      await s.reopen(s.saved[0]!.id);
+      expect(s.current).not.toBeNull();
+      s.compareFresh(faces[0]!);
+      expect(s.current).toBeNull();
+      expect(s.text).toBeNull();
+      expect(s.missing).toEqual([]);
+    });
+
+    it('pin adds to the set and never clears it; a face already in the set stays once', () => {
+      const s = useCompareStore();
+      s.compareFresh(faces[0]!);
+      expect(s.pin(faces[1]!)).toBe('pinned');
+      expect(s.pin(faces[0]!)).toBe('already');
+      expect(s.pin(faces[2]!)).toBe('pinned');
+      expect(ids(s)).toEqual([100, 101, 102]);
+      expect(s.base?.id).toBe(100);
+    });
+
+    it('pin with an empty set is compareFresh: the face is the base and the sheet opens', () => {
+      const s = useCompareStore();
+      expect(s.open).toBe(false);
+      expect(s.pin(faces[3]!)).toBe('pinned');
+      expect(ids(s)).toEqual([103]);
+      expect(s.base?.id).toBe(103);
+      expect(s.open).toBe(true);
+    });
+
+    it('only this keeps the face alone as the base; Undo in the toast restores the set', () => {
+      vi.useFakeTimers();
+      try {
+        const s = useCompareStore();
+        const toast = useToastStore();
+        faces.slice(0, 3).forEach((f) => s.pin(f));
+        s.setOverlay(1, 100);
+        s.onlyThis(faces[2]!);
+        expect(ids(s)).toEqual([102]);
+        expect(s.base?.id).toBe(102);
+        expect(toast.toast?.message).toBe(
+          `Only ${faces[2]!.familyName} Style 2 is left in Compare.`,
+        );
+        expect(toast.toast?.action?.label).toBe('Undo');
+        toast.act();
+        expect(ids(s)).toEqual([100, 101, 102]);
+        expect(s.base?.id).toBe(100);
+        expect(s.overlayPair.map((f) => f?.id ?? null)).toEqual([101, 100]);
+        // The Undo is offered for 5 s, then the toast goes.
+        s.onlyThis(faces[1]!);
+        vi.advanceTimersByTime(ONLY_THIS_UNDO_MS - 1);
+        expect(toast.toast?.action).toBeDefined();
+        vi.advanceTimersByTime(1);
+        expect(toast.toast).toBeNull();
+        expect(ids(s)).toEqual([101]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('only this on the base keeps it the base and drops the others', () => {
+      const s = useCompareStore();
+      faces.slice(0, 2).forEach((f) => s.pin(f));
+      s.onlyThis(faces[0]!);
+      expect(ids(s)).toEqual([100]);
+      expect(s.base?.id).toBe(100);
+    });
+
+    it('pins live in memory only: nothing is stored and a restart starts empty', () => {
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      try {
+        const s = useCompareStore();
+        s.compareFresh(faces[0]!);
+        s.pin(faces[1]!);
+        s.onlyThis(faces[1]!);
+        expect(setItem).not.toHaveBeenCalled();
+        // A restart: a new app, a new store.
+        setActivePinia(createPinia());
+        const after = useCompareStore();
+        expect(after.pins).toEqual([]);
+        expect(after.base).toBeNull();
+        expect(after.open).toBe(false);
+      } finally {
+        setItem.mockRestore();
+      }
+    });
   });
 });

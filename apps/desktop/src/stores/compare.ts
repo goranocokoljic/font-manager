@@ -18,6 +18,9 @@ import { useToastStore } from './toast';
 /** Most faces Compare holds at once. */
 export const MAX_PINS = 4;
 
+/** How long the toast of 'Only this' offers its Undo, in ms (E48.5). */
+export const ONLY_THIS_UNDO_MS = 5_000;
+
 export type CompareMode = ApiCompareMode;
 
 /** The layout a new comparison opens in. */
@@ -66,9 +69,17 @@ export interface CurrentComparison {
 }
 
 /**
- * Compare: up to four faces pinned from the list (C or the command palette), shown
- * together in a sheet over the list. The pins live for the session only (in memory,
- * not in storage), so closing and reopening the sheet keeps them.
+ * Compare: up to four faces shown together in a sheet over the list. The pins live for
+ * the session only (in memory, never in storage), so closing and reopening the sheet
+ * keeps them and a restart starts with none; a saved comparison is the way to keep one.
+ *
+ * The base (E48.5) is the first pin: the face the others are compared to and the one the
+ * suggestions are for. Three ways in:
+ * - `compareFresh` (C on the selected row, the family page's Compare, the command
+ *   palette's Compare) starts a new comparison with the face as its base;
+ * - `pin` (a card's or a suggestion's compare icon, the selection bar) adds to the set
+ *   and never clears it; with nothing pinned it is `compareFresh`;
+ * - `onlyThis` keeps one face as the base, with an Undo in the toast.
  *
  * Named comparisons (E13.2): the API keeps them in the index; `save` stores the pins,
  * mode and sample text under a name, `reopen` pins a saved one's faces again and keeps
@@ -92,6 +103,9 @@ export const useCompareStore = defineStore('compare', () => {
   /** The faces of the reopened comparison the library no longer shows. */
   const missing = ref<MissingFace[]>([]);
 
+  /** The base: the first pin, the face the others are compared to (E48.5). */
+  const base = computed<FaceSummary | null>(() => pins.value[0] ?? null);
+
   const isPinned = (face: FaceId) => pins.value.some((p) => p.id === face);
   /** A face of `family` is pinned. */
   const holdsFamily = (family: FamilyId) => pins.value.some((p) => p.family === family);
@@ -101,8 +115,27 @@ export const useCompareStore = defineStore('compare', () => {
     return scope === 'family' ? holdsFamily(face.family) : isPinned(face.id);
   }
 
-  /** Pins `face`; a fifth face is refused. Each outcome is told in a toast. */
+  /**
+   * Starts a new comparison (E48.5): clears the set, makes `face` its base and opens the
+   * sheet. The new set is not the saved comparison the old one came from.
+   */
+  function compareFresh(face: FaceSummary): void {
+    pins.value = [face];
+    overlayChoice.value = [null, null];
+    forget();
+    open.value = true;
+    useToastStore().show(t('compare.toasts.fresh', { name: fontNameSample(face) }));
+  }
+
+  /**
+   * Adds `face` to the set and never clears it; a fifth face is refused. With nothing
+   * pinned it is `compareFresh`. Each outcome is told in a toast.
+   */
   function pin(face: FaceSummary): PinResult {
+    if (!pins.value.length) {
+      compareFresh(face);
+      return 'pinned';
+    }
     const toast = useToastStore();
     const name = fontNameSample(face);
     if (isPinned(face.id)) {
@@ -161,6 +194,27 @@ export const useCompareStore = defineStore('compare', () => {
     for (const p of gone) unpin(p.id);
     useToastStore().show(t('compare.toasts.removed', { name }));
     return 'removed';
+  }
+
+  /**
+   * 'Only this' (E48.5): keeps `face` alone as the base; the suggestions follow the new
+   * base. The toast offers Undo for `ONLY_THIS_UNDO_MS`, which puts the set back as it was.
+   */
+  function onlyThis(face: FaceSummary): void {
+    const before = { pins: pins.value, overlay: overlayChoice.value };
+    pins.value = [face];
+    overlayChoice.value = [null, null];
+    useToastStore().show(
+      t('compare.toasts.onlyThis', { name: fontNameSample(face) }),
+      {
+        label: t('common.undo'),
+        run: () => {
+          pins.value = before.pins;
+          overlayChoice.value = before.overlay;
+        },
+      },
+      ONLY_THIS_UNDO_MS,
+    );
   }
 
   /** Removes a pin; the sheet closes when none is left, and the next comparison is new. */
@@ -296,6 +350,7 @@ export const useCompareStore = defineStore('compare', () => {
 
   return {
     pins,
+    base,
     open,
     mode,
     overlayPair,
@@ -307,7 +362,9 @@ export const useCompareStore = defineStore('compare', () => {
     isPinned,
     holdsFamily,
     inSet,
+    compareFresh,
     pin,
+    onlyThis,
     pinMany,
     toggle,
     unpin,

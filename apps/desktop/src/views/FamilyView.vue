@@ -18,6 +18,7 @@ import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
+import CompareSheet from '../components/CompareSheet.vue';
 import CompareToggle from '../components/CompareToggle.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
@@ -38,6 +39,7 @@ import { useAxesStore } from '../stores/axes';
 import type { CollectionId, PairingSuggestion } from '../api/types';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useCollectionsStore } from '../stores/collections';
+import { useCompareStore } from '../stores/compare';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { FAMILY_SECTIONS, parseFamilyId, useFamilyPageStore } from '../stores/familyPage';
 import type { PairingCard } from '../stores/familyPairings';
@@ -56,6 +58,7 @@ const route = useRoute();
 const router = useRouter();
 const page = useFamilyPageStore();
 const commands = useCommandsStore();
+const compare = useCompareStore();
 const preview = usePreviewStore();
 const search = useSearchStore();
 const selection = useSelectionStore();
@@ -373,6 +376,7 @@ onBeforeUnmount(() => {
           v-if="page.face"
           data-testid="family-compare"
           scope="family"
+          fresh
           :face="page.face"
         />
         <UiIconButton
@@ -516,6 +520,8 @@ onBeforeUnmount(() => {
       </template>
     </main>
     <TaggingPanel />
+    <!-- The family page's Compare opens the sheet here too (E48.5). -->
+    <CompareSheet v-if="compare.open" />
   </div>
 </template>
 

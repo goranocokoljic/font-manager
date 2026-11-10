@@ -122,10 +122,11 @@ test.describe('named styles', () => {
       .toBe('font-variation-settings: "wght" 640;');
   });
 
-  test('the header compare icon adds the family, fills while any style is in the set, removes it (E48.4)', async ({
+  test('the header compare icon starts a comparison with the family, fills while any style is in the set, removes it (E48.4, E48.5)', async ({
     page,
   }) => {
     await open(page, CRIMSON);
+    const sheet = page.getByRole('dialog', { name: 'Compare' });
     const icon = page.getByTestId('family-compare');
     await expect(icon).toHaveAttribute('aria-label', 'Add Crimson Pro to Compare');
     await expect(icon).toHaveAttribute('data-in-set', 'false');
@@ -134,6 +135,9 @@ test.describe('named styles', () => {
     const bold = row(page, 'Bold, 700');
     await bold.hover();
     await bold.getByRole('button', { name: /^Add Crimson Pro Bold to Compare$/ }).click();
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
     await expect(icon).toHaveAttribute('data-in-set', 'true');
     await expect(icon).toHaveAttribute('aria-label', 'Remove Crimson Pro from Compare');
     await expect(icon.locator('rect[fill="currentColor"]')).toHaveCount(2);
@@ -145,19 +149,30 @@ test.describe('named styles', () => {
     await expect(
       bold.getByRole('button', { name: /^Add Crimson Pro Bold to Compare$/ }),
     ).toHaveAttribute('data-in-set', 'false');
-    // And it adds the family again.
+    // Outside the set it is the page's Compare: a new comparison with the face as its base.
     await icon.click();
+    await expect(page.getByTestId('toast')).toContainText(/^New comparison with Crimson Pro /);
+    await expect(sheet.getByTestId('compare-count')).toHaveText(/^1 of 4 · base Crimson Pro /);
+    await page.keyboard.press('Escape');
     await expect(icon).toHaveAttribute('data-in-set', 'true');
   });
 
-  test('Compare pins that face', async ({ page }) => {
+  test('Compare pins that face; the first one starts a comparison with it as the base', async ({
+    page,
+  }) => {
     await open(page, CRIMSON);
     const bold = row(page, 'Bold, 700');
     await bold.hover();
     await bold.getByRole('button', { name: /^Add Crimson Pro Bold to Compare$/ }).click();
-    await expect(page.getByTestId('toast')).toContainText('Crimson Pro');
-    await expect(page.getByTestId('toast')).toContainText('Bold');
-    await expect(page.getByTestId('toast')).toContainText('pinned to Compare');
+    await expect(page.getByTestId('toast')).toContainText(
+      'New comparison with Crimson Pro Bold as its base.',
+    );
+    const sheet = page.getByRole('dialog', { name: 'Compare' });
+    await expect(sheet.getByTestId('compare-count')).toHaveText(/^1 of 4 · base Crimson Pro Bold/);
+    // Escape closes the sheet and leaves the family page where it was.
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(page).toHaveURL(/#\/family\//);
   });
 
   test('the ring tells an upright style from an italic of the same weight', async ({ page }) => {
