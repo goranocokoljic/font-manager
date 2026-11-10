@@ -325,3 +325,62 @@ describe('the hide-missing switch (E43.3)', () => {
     expect(usePreviewStore().settingsFor('other').hideMissing).toBe(false);
   });
 });
+
+describe('the Letters preset (E49.7)', () => {
+  it('sets its layout and the glyphs; the glyphs and the Word text live apart', () => {
+    const store = freshStore();
+    store.update('all', { customText: 'Hamburg' });
+    store.applyPreset('all', 'letters');
+    store.update('all', { letters: 'ROag' });
+    expect(store.settingsFor('all')).toMatchObject({
+      preset: 'letters',
+      sample: 'letters',
+      letters: 'ROag',
+      customText: 'Hamburg',
+    });
+    store.applyPreset('all', 'word');
+    expect(store.settingsFor('all')).toMatchObject({ sample: 'custom', customText: 'Hamburg' });
+    store.applyPreset('all', 'letters');
+    expect(store.settingsFor('all').letters).toBe('ROag');
+  });
+
+  it('keeps the glyphs and the preset per view through a reload, cleaned', async () => {
+    const store = freshStore();
+    store.applyPreset('all', 'letters');
+    store.update('all', { letters: 'R O a g R' });
+    await nextTick();
+    const again = freshStore();
+    expect(again.settingsFor('all')).toMatchObject({ preset: 'letters', letters: 'ROag' });
+    expect(again.settingsFor('collection-3')).toMatchObject({ preset: 'word', letters: '' });
+    expect(normalizePreview({ letters: 42 }).letters).toBe('');
+    // A view saved before E49.7 has no letters.
+    expect(normalizePreview({ preset: 'word' }).letters).toBe('');
+  });
+
+  it('the Language picker shows its pangram; Letters gets its glyphs back after', async () => {
+    setClient(createMockClient());
+    const store = freshStore();
+    await store.loadPangrams();
+    store.applyPreset('all', 'letters');
+    store.update('all', { letters: 'ROag' });
+    store.chooseLanguage('all', 'sr-Cyrl');
+    expect(store.settingsFor('all')).toMatchObject({ preset: 'pangram', language: 'sr-Cyrl' });
+    store.applyPreset('all', 'letters');
+    expect(store.settingsFor('all')).toMatchObject({
+      preset: 'letters',
+      letters: 'ROag',
+      language: 'sr-Cyrl',
+    });
+  });
+
+  it('is a preview setting only: the search, its filters and order are left alone', async () => {
+    const client = createMockClient();
+    const search = vi.spyOn(client, 'search');
+    setClient(client);
+    const store = freshStore();
+    store.applyPreset('all', 'letters');
+    store.update('all', { letters: 'ROag' });
+    await nextTick();
+    expect(search).not.toHaveBeenCalled();
+  });
+});

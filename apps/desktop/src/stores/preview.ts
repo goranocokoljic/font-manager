@@ -6,6 +6,7 @@ import { PARAGRAPH_LINE_HEIGHT, PARAGRAPH_PX, type WallPreset } from '../list/gr
 import {
   FALLBACK_LANGUAGE,
   isLanguageCode,
+  letterGlyphs,
   pickLanguage,
   SAMPLE_KINDS,
   type SampleKind,
@@ -26,6 +27,7 @@ export const WALL_PRESET_IDS: readonly WallPreset[] = [
   'alphabet',
   'numerals',
   'paragraph',
+  'letters',
 ];
 /** The sample each chip puts on the wall. Word is the user's own text. */
 const PRESET_SAMPLE: Record<WallPreset, SampleKind> = {
@@ -34,6 +36,7 @@ const PRESET_SAMPLE: Record<WallPreset, SampleKind> = {
   alphabet: 'alphabet',
   numerals: 'numerals',
   paragraph: 'paragraph',
+  letters: 'letters',
 };
 
 /** The view the "All fonts" list uses. Later views (collections, sets) pass their own id. */
@@ -59,6 +62,11 @@ export interface PreviewSettings {
   preset: WallPreset;
   sample: SampleKind;
   customText: string;
+  /**
+   * The glyphs of the Letters preset (E49.7), as typed: kept apart from `customText`, so
+   * Word keeps your word and Letters your letters, each remembered with the view.
+   */
+  letters: string;
   /** Language preset code of the pangram (`sr-Cyrl`). */
   language: string;
   sizePx: number;
@@ -92,6 +100,7 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   preset: 'word',
   sample: 'pangram',
   customText: '',
+  letters: '',
   language: FALLBACK_LANGUAGE,
   sizePx: 28,
   lineHeight: 1.2,
@@ -149,6 +158,7 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     ),
     customText:
       typeof r.customText === 'string' ? r.customText.slice(0, CUSTOM_TEXT_MAX) : d.customText,
+    letters: typeof r.letters === 'string' ? letterGlyphs(r.letters).join('') : d.letters,
     language: isLanguageCode(r.language) ? r.language : d.language,
     sizePx: clampSetting(r.sizePx, SIZE, d.sizePx),
     lineHeight: clampSetting(r.lineHeight, LINE_HEIGHT, d.lineHeight),

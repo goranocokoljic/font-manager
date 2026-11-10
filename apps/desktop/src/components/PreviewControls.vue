@@ -15,7 +15,7 @@ import { useSearchStore } from '../stores/search';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
-import { SAMPLE_KINDS, sampleTextFor } from '../preview/sampleText';
+import { LETTERS_HINT, SAMPLE_KINDS, sampleTextFor } from '../preview/sampleText';
 import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
@@ -99,19 +99,54 @@ useActions([
   },
 ]);
 
-/** The field's text: what the rows show, except that it stays empty for the font names. */
-const fieldText = computed(() =>
-  s.value.sample === 'fontName' ? '' : sampleTextFor(s.value, '', store.pangramText),
-);
+/** The Letters preset (E49.7): the field takes glyphs, and the cards show only those. */
+const letters = computed(() => s.value.sample === 'letters');
 
-/** Typing makes the sample custom text and keeps the preset's layout. */
+/**
+ * The field's text: what the rows show, except that it stays empty for the font names. In
+ * Letters it is the glyphs as typed; the wall spaces them out.
+ */
+const fieldText = computed(() => {
+  if (letters.value) return s.value.letters;
+  return s.value.sample === 'fontName' ? '' : sampleTextFor(s.value, '', store.pangramText);
+});
+
+/**
+ * Typing makes the sample custom text and keeps the preset's layout. In Letters it sets the
+ * glyphs: the store keeps each once, without spaces, so the field shows what the wall does.
+ */
 function typeSample(e: Event): void {
-  set({ sample: 'custom', customText: (e.target as HTMLInputElement).value });
+  const input = e.target as HTMLInputElement;
+  if (!letters.value) {
+    set({ sample: 'custom', customText: input.value });
+    return;
+  }
+  set({ letters: input.value });
+  // A repeated letter or a space changes nothing in the store, so Vue leaves the field as is.
+  if (input.value !== s.value.letters) input.value = s.value.letters;
 }
 
-/** A stock text goes at the first key; the user's own text stays to be edited. */
+/** A tap-to-add letter of the empty Letters field: it joins the glyphs, the field keeps the focus. */
+function addLetter(glyph: string): void {
+  set({ letters: s.value.letters + glyph });
+  field.value?.focus();
+}
+
+/** The Letters hint around its tap-to-add letters: the words before them and after. */
+const lettersHint = computed(() => {
+  const mark = String.fromCharCode(0);
+  const [before = '', after = ''] = t('preview.hints.letters', { letters: mark }).split(mark);
+  return { before, after };
+});
+
+/** A stock text goes at the first key; the user's own text (or letters) stays to be edited. */
 function selectStock(): void {
-  if (s.value.sample !== 'custom') field.value?.select();
+  if (s.value.sample !== 'custom' && !letters.value) field.value?.select();
+}
+
+/** A press on the field's frame (its padding, not the hint's buttons) goes to the input. */
+function focusField(e: MouseEvent): void {
+  if (e.target === e.currentTarget) field.value?.focus();
 }
 
 function leaveField(): void {
@@ -151,6 +186,8 @@ const hint = computed(() => {
       return t('preview.hints.numerals');
     case 'paragraph':
       return t('preview.hints.paragraph', { size: s.value.bodySizePx });
+    case 'letters':
+      return '';
     default:
       return props.fontCount === undefined
         ? ''
@@ -244,23 +281,43 @@ function colorFrom(e: Event): string {
 <template>
   <div class="controls" role="group" :aria-label="t('preview.settings')">
     <div class="main">
-      <label class="hero">
-        <span class="sr-only">{{ t('preview.customText') }}</span>
+      <div class="hero" @click="focusField">
+        <label :for="`${uid}-field`" class="sr-only">{{ t('preview.customText') }}</label>
         <input
+          :id="`${uid}-field`"
           ref="field"
           type="text"
           dir="auto"
           autocomplete="off"
           spellcheck="false"
+          :class="{ letters }"
           :aria-keyshortcuts="ariaShortcut(fieldChord)"
           :value="fieldText"
-          :placeholder="t('preview.heroPlaceholder')"
+          :placeholder="letters ? '' : t('preview.heroPlaceholder')"
           @focus="selectStock"
           @input="typeSample"
           @keydown.esc.prevent="leaveField"
         />
-        <span v-if="hint" class="hint" data-testid="preview-hint">{{ hint }}</span>
-      </label>
+        <span
+          v-if="letters && !s.letters"
+          class="hint letters-hint"
+          data-testid="preview-hint"
+          @click="focusField"
+        >
+          {{ lettersHint.before
+          }}<button
+            v-for="g in LETTERS_HINT"
+            :key="g"
+            type="button"
+            class="add-letter"
+            :aria-label="t('preview.addLetter', { letter: g })"
+            @click="addLetter(g)"
+          >
+            {{ g }}</button
+          >{{ lettersHint.after }}
+        </span>
+        <span v-else-if="hint" class="hint" data-testid="preview-hint">{{ hint }}</span>
+      </div>
       <div class="chips" role="group" :aria-label="t('preview.preset')">
         <button
           v-for="p in chips"
@@ -491,6 +548,30 @@ function colorFrom(e: Event): string {
 }
 .hero input:focus {
   outline: none;
+}
+/* Letters (E49.7): the glyphs stand apart, as on the cards (board 8-letters-wall.png). */
+.hero input.letters {
+  letter-spacing: 0.5em;
+}
+.letters-hint {
+  display: inline-flex;
+  align-items: center;
+  white-space: pre;
+}
+.add-letter {
+  min-width: 24px;
+  height: 24px;
+  margin: 0 1px;
+  padding: 0 4px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: var(--fm-radius-sm, 6px);
+  background-color: transparent;
+  color: var(--fm-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.add-letter:hover {
+  background-color: var(--fm-surface);
 }
 .hint {
   flex: 0 1 auto;

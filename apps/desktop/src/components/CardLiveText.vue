@@ -82,6 +82,13 @@ watch(
   () => [props.text, props.sizePx, props.fitWidth, props.trackingEm, state.value] as const,
   () => {
     refits = 0;
+    // A deferred card draws no text, a loading one draws it in the fallback: nothing worth
+    // measuring until the face is in (or failed). Each read forces a layout, and a fast
+    // scroll mounts a line of cards every few frames (E49.7 scroll budget).
+    if (state.value === 'deferred' || state.value === 'loading') {
+      fit.value = 1;
+      return;
+    }
     const width = lineWidth();
     if (!props.fitWidth || !width) {
       fit.value = 1;

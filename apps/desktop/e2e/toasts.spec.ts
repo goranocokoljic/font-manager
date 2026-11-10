@@ -67,11 +67,32 @@ test('toasts stack top right under the toolbar, click-through but for Undo', asy
   await expect(stack(page)).toHaveCount(3);
   await expect(stack(page).last()).toContainText('Activated 8 fonts');
 
-  // Top right, under the toolbar, newest on top.
+  // Top right, under the toolbar, newest on top. Read once the stack is at rest: the newest
+  // toast slides in 8 px from below, and the stack takes its place under the bar in the next
+  // frame. On the macOS CI VM (15–30 fps) the boxes were read before that frame: 64 < 65.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document
+            .getAnimations()
+            .filter((a) =>
+              (a.effect as KeyframeEffect | null)?.target?.closest?.('.region[role="status"]'),
+            ).length,
+      ),
+    )
+    .toBe(0);
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
   const viewport = page.viewportSize()!;
   const header = await box(page.locator('[data-top-bar]'));
   const boxes = await Promise.all([0, 1, 2].map((i) => box(stack(page).nth(i))));
-  expect(boxes[0]!.y).toBeGreaterThanOrEqual(header.y + header.height);
+  const regionTop = await page
+    .locator('.region[role="status"]')
+    .evaluate((r) => (r as HTMLElement).style.top);
+  expect(
+    boxes[0]!.y,
+    `stack top ${regionTop}, bar ${JSON.stringify(header)}`,
+  ).toBeGreaterThanOrEqual(header.y + header.height);
   expect(boxes[0]!.y).toBeLessThan(header.y + header.height + 24);
   expect(boxes[0]!.y).toBeLessThan(boxes[1]!.y);
   expect(boxes[1]!.y).toBeLessThan(boxes[2]!.y);

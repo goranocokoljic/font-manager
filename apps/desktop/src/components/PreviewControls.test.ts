@@ -41,7 +41,7 @@ const selectLabelled = (w: ReturnType<typeof mountControls>['wrapper'], name: st
 const field = (w: ReturnType<typeof mountControls>['wrapper']) => w.get('input[type="text"]');
 
 describe('PreviewControls', () => {
-  it('shows a field, the five chips, a language picker and one options button', async () => {
+  it('shows a field, the six chips, a language picker and one options button', async () => {
     const { wrapper } = controls();
     await flushPromises();
     expect(field(wrapper).attributes('placeholder')).toBe('Type to preview');
@@ -51,6 +51,7 @@ describe('PreviewControls', () => {
       'Alphabet',
       'Numerals',
       'Paragraph',
+      'Letters',
     ]);
     expect(wrapper.find('.divider').exists()).toBe(true);
     expect(selectLabelled(wrapper, 'Language').isVisible()).toBe(true);
@@ -460,5 +461,85 @@ describe('PreviewControls with a detected language (E43.3)', () => {
     search.detected = [{ code: 'sr-Cyrl', confidence: 0.9 }];
     await flushPromises();
     expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('renders in 212 fonts');
+  });
+});
+
+describe('PreviewControls in the Letters preset (E49.7)', () => {
+  const chip = (w: ReturnType<typeof mountControls>['wrapper'], name: string) =>
+    w.findAll('.chip').find((c) => c.text() === name)!;
+
+  it('with no glyphs the field hints R O a g e, each a button that adds its letter', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    await chip(wrapper, 'Letters').trigger('click');
+    expect(chip(wrapper, 'Letters').attributes('aria-pressed')).toBe('true');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('');
+    const hint = wrapper.get('[data-testid="preview-hint"]');
+    const adds = hint.findAll('button');
+    // The words around the five letters, each letter its own button.
+    expect(hint.text().replace(/\s+/g, ' ')).toBe(
+      'Type the letters that matter — ROage tell faces apart',
+    );
+    expect(adds.map((b) => b.text())).toEqual(['R', 'O', 'a', 'g', 'e']);
+    expect(adds.map((b) => b.attributes('aria-label'))).toEqual([
+      'Add R',
+      'Add O',
+      'Add a',
+      'Add g',
+      'Add e',
+    ]);
+    await adds[0]!.trigger('click');
+    expect(store.settingsFor('all').letters).toBe('R');
+    expect(document.activeElement).toBe(field(wrapper).element);
+    // A glyph is typed: the hint has done its work.
+    expect(wrapper.find('[data-testid="preview-hint"]').exists()).toBe(false);
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('R');
+  });
+
+  it('typing sets the glyphs, not the Word text; a repeat or a space is dropped', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    await field(wrapper).setValue('hello');
+    await chip(wrapper, 'Letters').trigger('click');
+    await field(wrapper).setValue('RO ag');
+    expect(store.settingsFor('all')).toMatchObject({
+      preset: 'letters',
+      sample: 'letters',
+      letters: 'ROag',
+      customText: 'hello',
+    });
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('ROag');
+    await field(wrapper).setValue('ROagR');
+    expect(store.settingsFor('all').letters).toBe('ROag');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('ROag');
+    // Word gets its own text back; Letters its glyphs.
+    await chip(wrapper, 'Word').trigger('click');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('hello');
+    await chip(wrapper, 'Letters').trigger('click');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('ROag');
+  });
+
+  it('focus does not select the glyphs: they are your own, to edit', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    store.applyPreset('all', 'letters');
+    store.update('all', { letters: 'ROag' });
+    await flushPromises();
+    const input = field(wrapper).element as HTMLInputElement;
+    input.setSelectionRange(4, 4);
+    await field(wrapper).trigger('focus');
+    expect(input.selectionStart).toBe(4);
+    expect(input.selectionEnd).toBe(4);
+  });
+
+  it('remembers the glyphs and the preset per view', async () => {
+    const { wrapper, store } = controls('all');
+    await flushPromises();
+    await chip(wrapper, 'Letters').trigger('click');
+    await field(wrapper).setValue('Жж');
+    expect(store.settingsFor('collection:1')).toMatchObject({ preset: 'word', letters: '' });
+    setActivePinia(createPinia());
+    const again = usePreviewStore();
+    expect(again.settingsFor('all')).toMatchObject({ preset: 'letters', letters: 'Жж' });
   });
 });

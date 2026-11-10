@@ -45,6 +45,7 @@ import { dragKeys } from '../list/drag';
 import { boxBetween, cardsInBox, isClick, type Box } from '../list/marquee';
 import {
   gridRange,
+  keepRange,
   lineCount,
   rowsCardHeight,
   rowsColumns,
@@ -66,7 +67,7 @@ import {
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow, type RowKey } from '../list/rows';
-import { poolSize, scrollToShow } from '../list/virtual';
+import { poolSize, scrollToShow, type RowRange } from '../list/virtual';
 import { useCompareStore } from '../stores/compare';
 import { useFontListStore } from '../stores/fontList';
 import { useFontDragStore } from '../stores/fontDrag';
@@ -201,14 +202,19 @@ const cardHeight = computed(() =>
 );
 const linePx = computed(() => cardHeight.value + WALL.gap);
 const count = computed(() => list.rows.length);
-const range = computed(() =>
-  gridRange(
-    scrollTop.value,
-    height.value,
-    linePx.value,
-    props.overscan,
-    count.value,
-    columns.value,
+// The same range object while the rows on screen stay the same: a scroll frame inside one
+// line then rebuilds no card, and the FlipGroup measures no child (E49.7 scroll budget).
+const range = computed<RowRange>((previous) =>
+  keepRange(
+    previous,
+    gridRange(
+      scrollTop.value,
+      height.value,
+      linePx.value,
+      props.overscan,
+      count.value,
+      columns.value,
+    ),
   ),
 );
 const pool = computed(() => poolSize(height.value, linePx.value, props.overscan) * columns.value);
@@ -395,9 +401,11 @@ const visible = computed(() => {
   const thumbs = new Map<string, HeldThumbnail>();
   const items = rendered.value.map((row, i) => {
     const p = previewOf(row);
-    const text = wrapped.value
-      ? p.text.trim()
-      : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
+    // Letters (E49.7) are never cut: every glyph you typed shows, shrunk to fit if need be.
+    const text =
+      wrapped.value || preset.value === 'letters'
+        ? p.text.trim()
+        : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     const usesThumb = !!face && !palette && !liveText.value && !p.tofu.length;
@@ -648,8 +656,7 @@ function onToggle(row: ListRow): void {
   >
     <FmFlipGroup
       tag="div"
-      :move-class="gliding ? undefined : 'fm-flip-still'"
-      :css="false"
+      :glide="gliding && !reducedMotion"
       class="spacer"
       role="none"
       :style="{ height: `${WALL.gap + lineCount(count, columns) * linePx}px` }"

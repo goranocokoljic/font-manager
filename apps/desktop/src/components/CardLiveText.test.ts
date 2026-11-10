@@ -115,6 +115,21 @@ describe('CardLiveText deferred while the grid moves fast (E35.8)', () => {
     expect(loader.inUse).toBe(0);
     card.unmount();
   });
+
+  it('measures no layout while deferred: a fast scroll mounts many such cards (E49.7)', async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    const card = mount(CardLiveText, {
+      props: { face: 7, text: 'R O a g', sizePx: 48, fitWidth: 200, defer: true },
+    });
+    await flushPromises();
+    expect(rect).not.toHaveBeenCalled();
+    // Once the face may load, the text is measured as before.
+    await card.setProps({ defer: false });
+    await flushPromises();
+    expect(rect).toHaveBeenCalled();
+    rect.mockRestore();
+    card.unmount();
+  });
 });
 
 describe('CardLiveText tofu (E43.4)', () => {

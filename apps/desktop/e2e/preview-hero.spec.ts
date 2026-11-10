@@ -56,6 +56,7 @@ test.describe('the preview row', () => {
       'Alphabet',
       'Numerals',
       'Paragraph',
+      'Letters',
     ]);
     await expect(row(page).getByLabel('Language')).toBeVisible();
     for (const name of ['Size in pixels', 'Line height', 'Surface', 'Auto size', 'Sample']) {

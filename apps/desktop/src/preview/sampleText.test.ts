@@ -4,6 +4,9 @@ import { mockFaces } from '../api/mock';
 import {
   ALPHABET,
   beyondBasicLatin,
+  letterGlyphs,
+  lettersSample,
+  LETTERS_MAX,
   LOREM,
   NUMERALS,
   PARAGRAPH,
@@ -38,7 +41,16 @@ describe('sample texts', () => {
 
   it('offers every sample kind of the criterion', () => {
     expect(SAMPLE_KINDS.map((k) => k.value).sort()).toEqual(
-      ['alphabet', 'custom', 'fontName', 'lorem', 'numerals', 'paragraph', 'pangram'].sort(),
+      [
+        'alphabet',
+        'custom',
+        'fontName',
+        'letters',
+        'lorem',
+        'numerals',
+        'paragraph',
+        'pangram',
+      ].sort(),
     );
   });
 
@@ -113,5 +125,35 @@ describe('beyondBasicLatin (E43.1)', () => {
     expect(beyondBasicLatin('hoće')).toBe(true);
     expect(beyondBasicLatin('日本')).toBe(true);
     expect(beyondBasicLatin('')).toBe(false);
+  });
+});
+
+describe('the Letters glyphs (E49.7)', () => {
+  it('keeps each glyph once, in the order typed, without spaces', () => {
+    expect(letterGlyphs('RO ag')).toEqual(['R', 'O', 'a', 'g']);
+    expect(letterGlyphs('ROagR a')).toEqual(['R', 'O', 'a', 'g']);
+    expect(letterGlyphs('  ')).toEqual([]);
+  });
+
+  it('takes any Unicode: a letter with its marks stays one glyph, an astral one too', () => {
+    expect(letterGlyphs('Жж')).toEqual(['Ж', 'ж']);
+    // a + combining dot below + combining circumflex: one user-perceived letter.
+    const dotted = 'a\u0323\u0302';
+    expect(letterGlyphs(`${dotted}g`)).toEqual([dotted, 'g']);
+    expect(letterGlyphs('𝔄b')).toEqual(['𝔄', 'b']);
+  });
+
+  it(`keeps at most ${LETTERS_MAX}`, () => {
+    expect(letterGlyphs('ABCDEFGHIJKLMNOP')).toHaveLength(LETTERS_MAX);
+  });
+
+  it('spaces the glyphs evenly; no glyphs falls back to the name', () => {
+    expect(lettersSample('ROag')).toBe('R O a g');
+    expect(sampleTextFor({ ...base, sample: 'letters', letters: 'ROag' }, 'Inter', () => '')).toBe(
+      'R O a g',
+    );
+    expect(sampleTextFor({ ...base, sample: 'letters', letters: '' }, 'Inter', () => '')).toBe(
+      'Inter',
+    );
   });
 });

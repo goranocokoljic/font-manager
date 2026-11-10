@@ -1,7 +1,8 @@
 // What each rendered row previews, shared by the list, grid and waterfall views:
 // a style row its face, a family row its first shown face; the text is the API's
 // answer for the view's sample (the sample, its missing characters as tofu (E43.4), or a
-// fallback the face covers when it draws none of the sample, `preview/tofu.ts`). A
+// fallback the face covers when it draws none of the sample, `preview/tofu.ts`; never for
+// the Letters glyphs, E49.7). A
 // virtual style's row previews its face at the style's coordinates. With auto size on
 // (E16.2), each row also carries its face's size factor; the factors of the rows on
 // screen are asked for in one call. With the metrics overlay on (E16.1), each row also
@@ -70,7 +71,9 @@ export function useRowPreviews(
   function previewOf(row: ListRow): RowPreview {
     const face = faceOf(row);
     const sample = face ? sampleText(preview(), face, previews.pangramText) : '';
-    const shown = specimenOf(sample, face ? samples.get(face.id, sample) : undefined);
+    // Letters (E49.7) shows the glyphs you typed and nothing else: tofu, never a fallback.
+    const keep = preview().sample === 'letters';
+    const shown = specimenOf(sample, face ? samples.get(face.id, sample) : undefined, keep);
     const basis = autoSize ? preview().autoSize : 'off';
     const lines = face && metrics && preview().metrics ? faceMetrics.get(face.id) : undefined;
     return {

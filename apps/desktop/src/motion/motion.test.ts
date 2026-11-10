@@ -304,6 +304,34 @@ describe('FmFlipGroup', () => {
     expect(wrapper.find('#b').classes()).toContain('fm-flip-enter-active');
     wrapper.unmount();
   });
+
+  it('with glide set, measures its children only on a gliding update (E49.7)', async () => {
+    const items = ref(['a', 'b']);
+    const glide = ref(false);
+    const wrapper = mount(
+      defineComponent({
+        setup: () => () =>
+          h(FmFlipGroup, { tag: 'ul', glide: glide.value }, () =>
+            items.value.map((key) => h('li', { key, id: key })),
+          ),
+      }),
+      { attachTo: document.body },
+    );
+    expect(wrapper.element.tagName).toBe('UL');
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+    // A scroll brings new children in: nothing is measured, nothing glides.
+    items.value = ['b', 'c'];
+    await nextTick();
+    expect(rect).not.toHaveBeenCalled();
+    expect(wrapper.find('#c').classes()).not.toContain('fm-flip-enter-active');
+    // The slider moves them: the old and new boxes are read.
+    glide.value = true;
+    items.value = ['c', 'b'];
+    await nextTick();
+    expect(rect).toHaveBeenCalled();
+    rect.mockRestore();
+    wrapper.unmount();
+  });
 });
 
 // Criterion 3: the style blocks are what the helpers generate on the page.

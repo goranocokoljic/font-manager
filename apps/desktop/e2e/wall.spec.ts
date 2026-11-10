@@ -312,7 +312,11 @@ test.describe('the wall', () => {
   }) => {
     const wall = await openWall(page);
     // Hold the crossfade open: the old list stays on the page, inert, while the keys run.
-    await page.evaluate(() => document.documentElement.style.setProperty('--fm-motion-move', '5s'));
+    // A minute, not 5 s: on the macOS CI VM the steps below took longer than 5 s, the old
+    // list was gone and the counts read 0 (flaky on E49.4, failed twice on E49.7).
+    await page.evaluate(() =>
+      document.documentElement.style.setProperty('--fm-motion-move', '60s'),
+    );
     await page
       .getByRole('group', { name: 'View mode' })
       .getByRole('button', { name: 'List' })

@@ -5,6 +5,7 @@ import {
   cardText,
   gridColumns,
   gridRange,
+  keepRange,
   lineCount,
   specimenBox,
   specimenRenderPx,
@@ -48,6 +49,16 @@ describe('grid layout', () => {
     expect(gridRange(100 * 148, 600, 148, 2, 10_000, 4)).toEqual({ start: 98 * 4, end: 108 * 4 });
     // The last line is short: the range stops at the last card.
     expect(gridRange(1e9, 600, 148, 2, 10, 4)).toEqual({ start: 0, end: 10 });
+  });
+
+  it('keeps the range object while a scroll stays inside one line (E49.7 scroll budget)', () => {
+    const first = keepRange(undefined, gridRange(0, 600, 148, 2, 10_000, 4));
+    // 40 px down: the same cards, so the same object, and no card is rebuilt.
+    expect(keepRange(first, gridRange(40, 600, 148, 2, 10_000, 4))).toBe(first);
+    // A new line in the window: a new range.
+    const next = keepRange(first, gridRange(148 * 3, 600, 148, 2, 10_000, 4));
+    expect(next).not.toBe(first);
+    expect(next).toEqual({ start: 4, end: 44 });
   });
 
   it('cuts a long preview text at a character, never inside a surrogate pair', () => {
@@ -204,6 +215,16 @@ describe('the wall presets (E41.2)', () => {
     // Alphabet at slider 120: five lines need 302.4 px, and the box rounds to 302.
     expect(wrappedLines(specimenBox(500, 120, 'alphabet').height, 50.4, 1.2)).toBe(5);
     expect(wrappedLines(301, 50.4, 1.2)).toBe(4);
+  });
+
+  it('Letters (E49.7): the slider at 1.2×, four squarer cards a line, one line of glyphs', () => {
+    expect(wallSpecimenPx(50, 'letters')).toBeCloseTo(60, 6);
+    expect(wallSpecimenPx(300, 'letters')).toBeCloseTo(144, 6);
+    expect(wallColumns(WIDE, 60, 'letters')).toBe(4);
+    expect(wallColumns(WIDE, 120, 'letters')).toBeLessThan(4);
+    expect(wallCardHeight(60, 'letters')).toBe(204);
+    expect(WALL_PRESETS.letters.wrapped).toBe(false);
+    expect(wallLayout('letters', 'letters', 'a long own text '.repeat(10))).toBe('letters');
   });
 
   it('the specimen box and the line follow the preset', () => {
