@@ -18,7 +18,8 @@ export const SCHEMA = 1;
  * smart collection and list_collections with 20 of them, each under 50 ms;
  * similar: E23.2, 20 similar faces in under 50 ms; pairings: E23.4,
  * suggest_pairings under 50 ms; layout_png: E45.5, an A4 page at 2x under 1 s;
- * glyph_geometry: E49.3, the geometry of the 15 trait glyphs of one face under 2 ms).
+ * glyph_geometry: E49.3, the geometry of the 15 trait glyphs of one face under 2 ms;
+ * trait_pass: E49.4, the glyph trait pass over a 10k library under 60 s, scaled like first_scan).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
@@ -38,12 +39,27 @@ export const BUDGETS = {
   pairings: { unit: 'ms', target: 50 },
   layout_png: { unit: 'ms', target: 1000 },
   glyph_geometry: { unit: 'ms', target: 2 },
+  trait_pass: { unit: 'ms', target: 60000 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];
 
 /** The library size of the first-scan budget: "10k-font first scan < 10 s". */
 export const SCAN_FILES = 10000;
+
+/** The library size of the trait-pass budget: "the 10k reference library completes the pass in under 60 s". */
+export const TRAIT_PASS_FACES = 10000;
+
+/**
+ * The trait-pass metric: the measured time scaled to TRAIT_PASS_FACES faces,
+ * as first_scan is scaled to its files.
+ */
+export function traitPass(ms, faces) {
+  if (!faces) return metric('trait_pass', null, 'no face needed its traits measured');
+  const m = metric('trait_pass', (ms * TRAIT_PASS_FACES) / faces,
+    `${faces} faces in ${fmt(Math.round(ms) / 1000)} s, scaled to ${TRAIT_PASS_FACES.toLocaleString('en-US')} faces`);
+  return { ...m, faces, measured_ms: Math.round(ms * 10) / 10 };
+}
 
 /**
  * The first-scan metric: the measured time scaled to SCAN_FILES files, so a

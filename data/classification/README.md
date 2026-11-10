@@ -23,11 +23,19 @@ Each trait has:
   `when` and catches the rest.
 - `name`, and for every value a `label` — friendly text in `en` and `de` (more languages
   may follow) — and a one-line `description`.
+- `enabled` (optional, default `true`) — whether the picker and the search offer the
+  trait. A trait whose detector misses the accuracy bar is `false`: still detected and
+  stored, so turning it on later needs no new pass.
 - for every value an `example`: an SVG path drawn as a stroke, without fill, in a 56 × 56
   box (absolute commands only). The picker shows these, so it never depends on the fonts
   the library holds.
 
 The scalar thresholds are a first cut; the detectors are calibrated against the hand
 labels in `fixtures/glyph-traits-labels.json`, which label every trait for at least 50
-families of the fixture corpus, each value at least five times. Run
-`cargo nextest run -p fm-core glyph_traits` after a change.
+families of the fixture corpus, each value at least five times. The detectors live in
+`crates/fm-core/src/glyphs/traits.rs` (E49.4). A trait ships enabled only when its
+detector is right on at least 90 % of the labelled fonts it answers with confidence ≥ 0.7
+and answers at least half of them that confidently; the test
+`detector_accuracy_meets_the_bar_or_the_trait_is_disabled` prints the confusion per trait
+and fails when `enabled` and the bar disagree. Run
+`cargo nextest run -p fm-core glyph_traits glyphs::traits` after a change.

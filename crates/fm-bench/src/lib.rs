@@ -1053,6 +1053,35 @@ pub fn glyph_geometry(home: &Path, rounds: usize) -> BenchResult<GlyphGeometryTi
     })
 }
 
+/// The background trait pass (E49.4) over the index a first scan left.
+#[derive(Debug, Serialize)]
+pub struct TraitPassTimed {
+    /// Faces that needed their traits measured.
+    pub faces: u32,
+    /// Faces measured and written.
+    pub measured: u32,
+    /// Milliseconds for the whole pass.
+    pub ms: f64,
+}
+
+/// Runs the trait pass over the index in `home` to the end, as the app runs
+/// it after a scan, and times it.
+pub fn trait_pass(home: &Path) -> BenchResult<TraitPassTimed> {
+    let paths = home_paths(home);
+    let index = Mutex::new(startup::open_index(&paths)?.index);
+    let begin = Instant::now();
+    let report = fm_core::trait_pass::run(
+        &index,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _| {},
+    )?;
+    Ok(TraitPassTimed {
+        faces: report.total,
+        measured: report.measured,
+        ms: ms(begin.elapsed()),
+    })
+}
+
 /// The `p`th percentile (nearest rank) of sorted `samples`; 0 when empty.
 pub fn percentile(samples: &[f64], p: usize) -> f64 {
     if samples.is_empty() {

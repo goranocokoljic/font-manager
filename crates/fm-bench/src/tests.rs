@@ -421,3 +421,22 @@ fn the_geometry_record_reads_every_trait_glyph_and_skips_a_broken_file() {
     assert_eq!(record_geometry(&data), Some(15));
     assert_eq!(record_geometry(b"not a font"), None);
 }
+
+#[test]
+fn the_trait_pass_measures_every_face_of_the_scanned_index_once() {
+    let home = TempDir::new("trait-pass");
+    let scanned = first_scan(&fixtures(), home.path()).expect("scan");
+    let res = trait_pass(home.path()).expect("trait pass");
+    assert!(
+        res.faces > 0 && res.faces as usize <= scanned.faces,
+        "{res:?}"
+    );
+    assert!(res.measured > 0 && res.measured <= res.faces, "{res:?}");
+    assert!(res.ms > 0.0, "{res:?}");
+    let again = trait_pass(home.path()).expect("second pass");
+    assert_eq!(
+        (again.faces, again.measured),
+        (0, 0),
+        "nothing left: {again:?}"
+    );
+}

@@ -583,7 +583,13 @@ impl GlyphOutline {
     ) -> Option<Vec<Option<Self>>> {
         let sfnt = sfnt(data).ok()?;
         let font = font_ref(&sfnt, collection_index)?;
-        let face = Face::new(&font)?;
+        Self::load_many(&font, chars)
+    }
+
+    /// The outlines of `chars` in `font`, its tables parsed once: what
+    /// [`load_all`](Self::load_all) answers for a face already opened.
+    pub(crate) fn load_many(font: &FontRef<'_>, chars: &[char]) -> Option<Vec<Option<Self>>> {
+        let face = Face::new(font)?;
         Some(chars.iter().map(|&ch| Self::load_from(&face, ch)).collect())
     }
 
@@ -919,7 +925,7 @@ fn valid_tolerance(tolerance: f64) -> Option<f64> {
 /// Face `index` of the TrueType or OpenType data `sfnt`, without the checks
 /// the glyph map needs: an outline needs only `head`, `maxp`, `cmap` and the
 /// outline tables, each read when it is used.
-fn font_ref(sfnt: &[u8], index: u32) -> Option<FontRef<'_>> {
+pub(crate) fn font_ref(sfnt: &[u8], index: u32) -> Option<FontRef<'_>> {
     match FileRef::new(sfnt).ok()? {
         FileRef::Font(font) => (index == 0).then_some(font),
         FileRef::Collection(c) => c.get(index).ok(),

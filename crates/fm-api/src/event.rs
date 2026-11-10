@@ -45,6 +45,30 @@ pub enum Event {
         /// Problems found.
         problems: u32,
     },
+    /// The background glyph trait pass (E49.4) made progress. It runs after
+    /// a scan, under its own job: `done` of the `total` faces that needed
+    /// their traits measured when it started.
+    #[serde(rename_all = "camelCase")]
+    TraitPassProgress {
+        /// The pass.
+        job: JobId,
+        /// Faces measured so far.
+        done: u32,
+        /// Faces to measure.
+        total: u32,
+    },
+    /// The trait pass ended: every face measured, or `cancelled` (a new scan
+    /// started, which runs the pass again when it ends, or the app closed;
+    /// the next pass resumes where this one stopped).
+    #[serde(rename_all = "camelCase")]
+    TraitPassFinished {
+        /// The pass.
+        job: JobId,
+        /// Faces whose traits were measured and stored.
+        measured: u32,
+        /// Whether the pass stopped before it was done.
+        cancelled: bool,
+    },
     /// A job failed or was cancelled.
     #[serde(rename_all = "camelCase")]
     JobFailed {
@@ -165,6 +189,32 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn trait_pass_events_are_camel_case() {
+        let e = Event::TraitPassProgress {
+            job: JobId(6),
+            done: 64,
+            total: 100,
+        };
+        let json = serde_json::to_string(&e).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"traitPassProgress","job":6,"done":64,"total":100}"#
+        );
+        assert_eq!(serde_json::from_str::<Event>(&json).unwrap(), e);
+        let end = Event::TraitPassFinished {
+            job: JobId(6),
+            measured: 64,
+            cancelled: true,
+        };
+        let json = serde_json::to_string(&end).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"traitPassFinished","job":6,"measured":64,"cancelled":true}"#
+        );
+        assert_eq!(serde_json::from_str::<Event>(&json).unwrap(), end);
     }
 
     #[test]

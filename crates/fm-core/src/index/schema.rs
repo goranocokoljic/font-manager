@@ -636,6 +636,41 @@ const V22: &str = r"
 ALTER TABLE collection ADD COLUMN color TEXT;
 ";
 
+/// Glyph traits (E49.4, `index/glyph_traits.rs`).
+///
+/// - `glyph_traits`: one row per face and trait a detector answered: the
+///   value id, for a scalar trait its first measure in `scalar` and every
+///   measure as a JSON object in `scalars`, the confidence in `0..=1`, the
+///   detector's version, and `instance`: `default` for a variable face
+///   (measured at its default instance), `static` otherwise. A face that
+///   lacks the trait's glyph has no row. Search reads it by (trait, value).
+/// - `glyph_trait_stamp`: one row per face and trait the background pass
+///   measured, row or not, with the detector version and the file hash it
+///   measured. A trait whose stamp is missing, of another version or of
+///   another hash is measured again, and only that trait.
+const V23: &str = r"
+CREATE TABLE glyph_traits (
+    face_id           INTEGER NOT NULL REFERENCES face (id) ON DELETE CASCADE,
+    trait             TEXT    NOT NULL,
+    value             TEXT    NOT NULL,
+    scalar            REAL,
+    scalars           TEXT,
+    confidence        REAL    NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    detector_version  INTEGER NOT NULL,
+    instance          TEXT    NOT NULL CHECK (instance IN ('static', 'default')),
+    PRIMARY KEY (face_id, trait)
+) WITHOUT ROWID;
+CREATE INDEX glyph_traits_trait_value ON glyph_traits (trait, value);
+
+CREATE TABLE glyph_trait_stamp (
+    face_id           INTEGER NOT NULL REFERENCES face (id) ON DELETE CASCADE,
+    trait             TEXT    NOT NULL,
+    detector_version  INTEGER NOT NULL,
+    file_hash         BLOB    NOT NULL,
+    PRIMARY KEY (face_id, trait)
+) WITHOUT ROWID;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -643,7 +678,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
-    V22,
+    V22, V23,
 ];
 
 /// The schema version this build writes.
@@ -671,6 +706,8 @@ pub(crate) const TABLES: &[&str] = &[
     "face_tag",
     "family_meta",
     "font_file",
+    "glyph_trait_stamp",
+    "glyph_traits",
     "index_meta",
     "last_session",
     "project_set",

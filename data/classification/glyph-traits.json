@@ -7,6 +7,7 @@
       "glyph": "R",
       "codepoint": "U+0052",
       "kind": "enum",
+      "enabled": false,
       "name": {
         "en": "R leg",
         "de": "Bein des R"
@@ -52,7 +53,7 @@
         "en": "O shape",
         "de": "Form des O"
       },
-      "description": "How round the capital O is: its width against its height, and how far its outline departs from an ellipse.",
+      "description": "How round the capital O is: its width against its height, and how far its corners bulge past an ellipse.",
       "measures": [
         {
           "id": "roundness",
@@ -61,9 +62,9 @@
           "max": 4
         },
         {
-          "id": "deviation",
-          "description": "Mean distance of the outer contour from the ellipse that fits its bounding box, divided by the height.",
-          "min": 0,
+          "id": "corners",
+          "description": "How far the outer contour bulges past the ellipse that fits its bounding box near the four diagonals, divided by the height; negative when it falls inside.",
+          "min": -1,
           "max": 1
         }
       ],
@@ -74,11 +75,11 @@
             "en": "Squared",
             "de": "Eckig"
           },
-          "description": "Straight sides or corners: the outline departs from an ellipse by 0.04 of the height or more.",
+          "description": "Straight sides or corners: near the diagonals the outline bulges past an ellipse by 0.028 of the height or more.",
           "when": [
             {
-              "measure": "deviation",
-              "min": 0.04
+              "measure": "corners",
+              "min": 0.028
             }
           ],
           "example": "M20 10H36Q44 10 44 18V38Q44 46 36 46H20Q12 46 12 38V18Q12 10 20 10Z"
@@ -227,6 +228,7 @@
       "glyph": "Q",
       "codepoint": "U+0051",
       "kind": "enum",
+      "enabled": false,
       "name": {
         "en": "Q tail",
         "de": "Schwanz des Q"
@@ -268,6 +270,7 @@
       "glyph": "t",
       "codepoint": "U+0074",
       "kind": "enum",
+      "enabled": false,
       "name": {
         "en": "t top",
         "de": "Oberes Ende des t"
@@ -437,6 +440,7 @@
       "glyph": "M",
       "codepoint": "U+004D",
       "kind": "enum",
+      "enabled": false,
       "name": {
         "en": "M sides",
         "de": "Seiten des M"

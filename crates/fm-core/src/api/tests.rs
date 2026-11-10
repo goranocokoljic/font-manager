@@ -126,6 +126,12 @@ impl Lib {
         }
     }
 
+    /// The same library with the glyph trait pass on (E49.4).
+    fn with_trait_pass(mut self) -> Self {
+        self.api = self.api.with_trait_pass();
+        self
+    }
+
     /// A library whose folder is added and scanned.
     fn scanned(label: &str) -> (Self, Source, Vec<Event>) {
         Self::scanned_with(label, &[])
@@ -258,6 +264,81 @@ fn a_scan_reports_progress_then_the_library_change() {
     let sources = lib.api.list_sources().expect("sources");
     assert_eq!(sources.len(), 1);
     assert_eq!(sources[0].face_count as usize, added.len());
+}
+
+/// Criterion 4 (E49.4): with the trait pass on, a scan is followed by a
+/// pass under its own job that reports progress and its end through the
+/// event stream and stores the traits; without it, a scan starts no pass.
+#[test]
+fn the_trait_pass_runs_after_a_scan_and_reports_through_events() {
+    let lib = Lib::new("api-trait-pass").with_trait_pass();
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    let rx = lib.api.subscribe();
+    let events = lib.scan(Some(source.id), true);
+    let Some(Event::LibraryChanged { added, .. }) = events.last() else {
+        panic!("{events:?}");
+    };
+    let added = added.clone();
+    let mut seen = Vec::new();
+    let deadline = Instant::now() + WAIT;
+    let (job, measured) = loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let event = rx.recv_timeout(left).expect("trait pass events");
+        if let Event::TraitPassFinished {
+            job,
+            measured,
+            cancelled: false,
+        } = event
+            && measured > 0
+        {
+            break (job, measured);
+        }
+        seen.push(event);
+    };
+    let progress: Vec<(u32, u32)> = seen
+        .iter()
+        .filter_map(|e| match e {
+            Event::TraitPassProgress {
+                job: j,
+                done,
+                total,
+            } if *j == job => Some((*done, *total)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(progress.first().map(|p| p.0), Some(0), "{seen:?}");
+    let (done, total) = *progress.last().expect("progress");
+    assert_eq!(done, total);
+    assert!(measured as usize <= added.len() && measured > 0);
+    let stored: usize = added
+        .iter()
+        .map(|&face| {
+            lib.api
+                .lock()
+                .face_glyph_traits(face)
+                .expect("traits")
+                .len()
+        })
+        .sum();
+    assert!(stored > 0, "the pass stored traits");
+
+    // Without the pass, a scan measures nothing.
+    let (plain, _, _) = Lib::scanned("api-no-trait-pass");
+    let versions: Vec<(&str, u32)> = crate::glyphs::traits::versions().collect();
+    assert!(
+        plain
+            .api
+            .lock()
+            .trait_pass_remaining(&versions)
+            .expect("remaining")
+            > 0
+    );
 }
 
 #[test]

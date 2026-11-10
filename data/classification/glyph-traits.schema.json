@@ -68,6 +68,10 @@
         },
         "name": { "$ref": "#/$defs/labels" },
         "description": { "$ref": "#/$defs/oneLine" },
+        "enabled": {
+          "description": "Whether the picker and the search offer the trait (default true). A trait whose detector misses the accuracy bar on the labelled corpus (E49.4) is false: it is still detected and stored, so enabling it later needs no new pass.",
+          "type": "boolean"
+        },
         "measures": {
           "description": "Scalar traits only: the numbers the detector measures.",
           "type": "array",

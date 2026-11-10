@@ -11,6 +11,7 @@
 //! fm-bench pairings --home DIR [--rounds N]       # suggest_pairings for 20 faces
 //! fm-bench layout-png --home DIR [--rounds N]     # an A4 page at 2x, in 5 faces
 //! fm-bench glyph-geometry --home DIR [--rounds N] # outlines, counters of the 15 trait glyphs, per face
+//! fm-bench trait-pass --home DIR               # the glyph trait pass over the scanned index
 //! fm-bench activate --home DIR                 # 100 faces of the scanned index, one request
 //! fm-bench fonts-needed --home DIR             # 100 fonts by name, matched and activated in one request
 //! fm-bench preview-cache --home DIR [--rounds N]
@@ -25,11 +26,11 @@ use std::process::ExitCode;
 
 use fm_bench::{
     BenchResult, activate, first_scan, fonts_needed, glyph_geometry, incremental, layout_png,
-    pairings, preview_cache, search, similar, smart_collections, start,
+    pairings, preview_cache, search, similar, smart_collections, start, trait_pass,
 };
 use serde::Serialize;
 
-const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|smart|similar|pairings|layout-png|glyph-geometry|preview-cache|activate|fonts-needed> --home DIR [--library DIR] [--rounds N]";
+const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|smart|similar|pairings|layout-png|glyph-geometry|trait-pass|preview-cache|activate|fonts-needed> --home DIR [--library DIR] [--rounds N]";
 
 #[derive(Debug, Default)]
 struct Args {
@@ -92,6 +93,7 @@ fn run(args: Args) -> BenchResult<()> {
         "pairings" => print(&pairings(&home, args.rounds.unwrap_or(5))?),
         "layout-png" => print(&layout_png(&home, args.rounds.unwrap_or(5))?),
         "glyph-geometry" => print(&glyph_geometry(&home, args.rounds.unwrap_or(5))?),
+        "trait-pass" => print(&trait_pass(&home)?),
         "preview-cache" => print(&preview_cache(&home, args.rounds.unwrap_or(20))?),
         "activate" => print(&activate(&home)?),
         "fonts-needed" => print(&fonts_needed(&home)?),

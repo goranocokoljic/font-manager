@@ -1084,6 +1084,30 @@ changed?: number;
 removed: number; 
 /**  Problems found. */
 problems: number } | 
+/**
+ *  The background glyph trait pass (E49.4) made progress. It runs after
+ *  a scan, under its own job: `done` of the `total` faces that needed
+ *  their traits measured when it started.
+ */
+{ type: "traitPassProgress"; 
+/**  The pass. */
+job: JobId; 
+/**  Faces measured so far. */
+done: number; 
+/**  Faces to measure. */
+total: number } | 
+/**
+ *  The trait pass ended: every face measured, or `cancelled` (a new scan
+ *  started, which runs the pass again when it ends, or the app closed;
+ *  the next pass resumes where this one stopped).
+ */
+{ type: "traitPassFinished"; 
+/**  The pass. */
+job: JobId; 
+/**  Faces whose traits were measured and stored. */
+measured: number; 
+/**  Whether the pass stopped before it was done. */
+cancelled: boolean } | 
 /**  A job failed or was cancelled. */
 { type: "jobFailed"; 
 /**  The job. */
