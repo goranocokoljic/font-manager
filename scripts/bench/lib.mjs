@@ -19,7 +19,8 @@ export const SCHEMA = 1;
  * similar: E23.2, 20 similar faces in under 50 ms; pairings: E23.4,
  * suggest_pairings under 50 ms; layout_png: E45.5, an A4 page at 2x under 1 s;
  * glyph_geometry: E49.3, the geometry of the 15 trait glyphs of one face under 2 ms;
- * trait_pass: E49.4, the glyph trait pass over a 10k library under 60 s, scaled like first_scan).
+ * trait_pass: E49.4, the glyph trait pass over a 10k library under 60 s, scaled like first_scan;
+ * trait_search: E49.5, a search by glyph traits with filters and an order under 50 ms).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
@@ -40,6 +41,7 @@ export const BUDGETS = {
   layout_png: { unit: 'ms', target: 1000 },
   glyph_geometry: { unit: 'ms', target: 2 },
   trait_pass: { unit: 'ms', target: 60000 },
+  trait_search: { unit: 'ms', target: 50 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];

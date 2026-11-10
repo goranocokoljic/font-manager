@@ -23,7 +23,7 @@ use fm_api::organization::{ImportSetResponse, ProjectSet, SetExport};
 use fm_api::preview::PreviewRequest;
 use fm_api::search::{
     CoverageReport, CoverageRequest, FamilyHit, Filters, SearchRequest, SimilarFace,
-    SimilarRequest, Supports,
+    SimilarRequest, Supports, TraitFilter,
 };
 use fm_api::{Api, ApiError, CollectionId, ErrorCode, Event, FaceId, FamilyId};
 use serde::Serialize;
@@ -204,6 +204,8 @@ pub struct SearchFlags {
     pub features: Vec<String>,
     /// `--variable`: variable fonts only.
     pub variable: bool,
+    /// `--trait`: glyph traits, every one required (E49.5).
+    pub traits: Vec<TraitFilter>,
 }
 
 impl SearchFlags {
@@ -229,6 +231,7 @@ pub fn search(api: &dyn Api, query: &str, flags: &SearchFlags) -> Result<Vec<Fam
             query: query.into(),
             filters: flags.filters(),
             rule: None,
+            glyph_traits: (!flags.traits.is_empty()).then(|| flags.traits.clone()),
             page: Page {
                 offset: hits.len() as u32,
                 limit: PAGE,

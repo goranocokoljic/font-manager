@@ -72,7 +72,7 @@ Searching and reading are always allowed when the switch is on:
 
 | Tool | What it does |
 |------|--------------|
-| `search_fonts`, `get_font` | Find families and read the details of a face |
+| `search_fonts`, `get_font` | Find families and read the details of a face. `search_fonts` can also ask for letter shapes, for example a straight leg on the R (`R.leg=straight`) and a round O (`O.roundness>=0.95`). The tool description lists every letter shape. |
 | `list_collections`, `list_sets` | List your collections and project sets |
 | `check_coverage`, `find_similar`, `get_pairings`, `get_license` | Language coverage, similar fonts, pairings, the license of a family |
 | `render_preview`, `compare_preview` | Render a text in one face, or in several faces side by side, as an image |

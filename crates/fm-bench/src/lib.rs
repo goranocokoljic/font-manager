@@ -18,14 +18,16 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, FontsNeededRequest,
     NeededFont, OutcomeStatus, Target,
 };
-use fm_api::common::Page;
+use fm_api::common::{Classification, Page};
 use fm_api::ids::FaceId;
 use fm_api::layout::{ExportLayoutPngRequest, LayoutFont, LayoutService, LayoutSurface};
-use fm_api::library::{LibraryService, ListFamiliesRequest, SourceKind};
+use fm_api::library::{
+    FamilyOrder, FamilySortKey, LibraryService, ListFamiliesRequest, SourceKind,
+};
 use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
 use fm_api::search::{
-    Filters, PairingRequest, PairingRole, SearchRequest, SimilarRequest, Supports,
+    Filters, PairingRequest, PairingRole, SearchRequest, SimilarRequest, Supports, TraitFilter,
 };
 use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
 use fm_core::glyphs::geometry::{GlyphOutline, TRAIT_GLYPHS, sfnt_data};
@@ -1079,6 +1081,111 @@ pub fn trait_pass(home: &Path) -> BenchResult<TraitPassTimed> {
         faces: report.total,
         measured: report.measured,
         ms: ms(begin.elapsed()),
+    })
+}
+
+/// Glyph-trait search latency (E49.5) over [`trait_searches`].
+#[derive(Debug, Serialize)]
+pub struct TraitSearched {
+    /// Timed searches.
+    pub samples: usize,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+    /// Faces with a glyph-trait detection: 0 before the trait pass ran.
+    pub measured: u32,
+    /// Family groups each search found, in [`trait_searches`] order.
+    pub found: Vec<u32>,
+}
+
+/// The trait searches timed: one value, one range, both with a query, a
+/// value with a filter and an order, two values with a class.
+pub fn trait_searches() -> Vec<SearchRequest> {
+    let value = |t: &str, v: &str| TraitFilter::Value {
+        trait_id: t.into(),
+        value: v.into(),
+    };
+    let round = || TraitFilter::Range {
+        trait_id: "O.roundness".into(),
+        measure: None,
+        min: Some(0.95),
+        max: None,
+    };
+    let with = |traits: Vec<TraitFilter>| SearchRequest {
+        glyph_traits: Some(traits),
+        ..SearchRequest::default()
+    };
+    vec![
+        with(vec![value("g.storeys", "double")]),
+        with(vec![round()]),
+        SearchRequest {
+            query: "sans".into(),
+            ..with(vec![value("R.leg", "straight"), round()])
+        },
+        SearchRequest {
+            filters: Filters {
+                variable: Some(false),
+                ..Filters::default()
+            },
+            order: Some(FamilyOrder {
+                by: FamilySortKey::Name,
+                descending: false,
+            }),
+            ..with(vec![value("G.spur", "none")])
+        },
+        SearchRequest {
+            filters: Filters {
+                classification: vec![Classification::Serif],
+                ..Filters::default()
+            },
+            ..with(vec![
+                value("a.storeys", "double"),
+                value("one.flag", "flag"),
+            ])
+        },
+    ]
+}
+
+/// Times every search of [`trait_searches`] `rounds` times on the index in
+/// `home`, after one untimed run each, as [`search`] does. Run it after
+/// [`trait_pass`], so the traits are there to find.
+pub fn trait_search(home: &Path, rounds: usize) -> BenchResult<TraitSearched> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let measured = api
+        .list_glyph_traits()?
+        .iter()
+        .map(|t| t.measured)
+        .max()
+        .unwrap_or_default();
+    let searches = trait_searches();
+    let mut samples = Vec::with_capacity(searches.len() * rounds);
+    let mut found = Vec::with_capacity(searches.len());
+    for req in searches {
+        found.push(api.search(req.clone())?.total);
+        for _ in 0..rounds {
+            let begin = Instant::now();
+            api.search(req.clone())?;
+            samples.push(ms(begin.elapsed()));
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(TraitSearched {
+        samples: samples.len(),
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
+        measured,
+        found,
     })
 }
 

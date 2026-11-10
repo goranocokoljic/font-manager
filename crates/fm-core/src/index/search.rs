@@ -21,6 +21,10 @@
 //! A `collection` filter naming a smart collection (E14.2) applies its rule
 //! ([`smart`]), compiled once per search.
 //!
+//! Glyph-trait filters (E49.5, [`traits`]) are read from the index once per
+//! search: a face without the traits asked for is no result and, like a face
+//! outside a draft rule, counts under no filter value.
+//!
 //! The searchable rows are read once and kept in memory until the database
 //! changes ([`SearchCache`]): this connection's writes move
 //! `total_changes`, another process's commits move `PRAGMA data_version`.
@@ -153,6 +157,7 @@ impl Index {
         let need = smart::need(&req.filters)?;
         let cutoff = smart::cutoff(&self.conn, req.filters.added_within_days)?;
         let activated_cutoff = smart::cutoff(&self.conn, req.filters.activated_within_days)?;
+        let traits = traits::matching(&self.conn, req.glyph_traits.as_deref().unwrap_or_default())?;
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
@@ -183,6 +188,13 @@ impl Index {
                 .filter_map(|(row, score)| {
                     // A face outside the draft rule counts under no value.
                     if draft.as_ref().is_some_and(|d| !d.holds(row, &[])) {
+                        return None;
+                    }
+                    // So does a face without the glyph traits asked for (E49.5).
+                    if traits
+                        .as_ref()
+                        .is_some_and(|faces| !faces.contains(&row.id))
+                    {
                         return None;
                     }
                     let mut failed = failed(&req.filters, &row.text, &row.facts)
@@ -743,6 +755,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
 mod pairing;
 mod similar;
 pub(super) mod smart;
+mod traits;
 
 #[cfg(test)]
 mod tests;

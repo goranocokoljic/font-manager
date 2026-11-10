@@ -71,6 +71,7 @@ import type {
   JobId,
   KeepCopyRequest,
   LanguageHint,
+  GlyphTraitInfo,
   LanguagePreset,
   DetectLanguagesRequest,
   DuplicateLayoutRequest,
@@ -190,6 +191,8 @@ export interface FmClient {
   findSimilar(req: SimilarRequest): Promise<SimilarFace[]>;
   /** Faces of other families that pair with one face by rule, best first, with reasons (E23.4). */
   suggestPairings(req: PairingRequest): Promise<PairingSuggestion[]>;
+  /** The glyph trait catalog, each value with its face and family counts in the library (E49.5). */
+  listGlyphTraits(): Promise<GlyphTraitInfo[]>;
   /** Every collection, parents before children, siblings in the user's order. */
   listCollections(): Promise<Collection[]>;
   /** Creates a collection; with `rules`, a smart one. */
@@ -439,6 +442,7 @@ export const tauriClient: FmClient = {
   detectLanguages: (req) => invoke<LanguageHint[]>('detect_languages', { req }),
   findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
   suggestPairings: (req) => invoke<PairingSuggestion[]>('suggest_pairings', { req }),
+  listGlyphTraits: () => invoke<GlyphTraitInfo[]>('list_glyph_traits'),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
   renameCollection: (req) => invoke<Collection>('rename_collection', { req }),

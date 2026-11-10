@@ -75,6 +75,7 @@ service!(SearchService {
     find_similar(req: SimilarRequest) -> Vec<SimilarFace>;
     find_by_image(req: ImageMatchRequest) -> Vec<SimilarFace>;
     suggest_pairings(req: PairingRequest) -> Vec<PairingSuggestion>;
+    list_glyph_traits() -> Vec<GlyphTraitInfo>;
 });
 
 service!(PreviewService {

@@ -177,6 +177,12 @@ pub fn types() -> specta::Types {
         library::DragFiles,
         // search
         search::SearchRequest,
+        search::TraitFilter,
+        search::GlyphTraitKind,
+        search::GlyphTraitMeasure,
+        search::GlyphTraitThreshold,
+        search::GlyphTraitValue,
+        search::GlyphTraitInfo,
         search::SearchResponse,
         search::CoverageRequest,
         search::CoverageReport,
