@@ -117,6 +117,10 @@ pub struct GlyphTrait {
     pub name: Labels,
     /// What the trait is, in one line.
     pub description: String,
+    /// Whether the picker and the search offer the trait. A trait whose
+    /// detector misses the accuracy bar (E49.4) is shipped disabled: still
+    /// detected and stored, not offered.
+    pub enabled: bool,
     /// Scalar traits: the numbers measured. Empty for an enum trait.
     pub measures: Vec<Measure>,
     /// The values, in picker order (for a scalar trait, in threshold order).
@@ -165,6 +169,8 @@ struct RawTrait {
     kind: TraitKind,
     name: Labels,
     description: String,
+    #[serde(default)]
+    enabled: Option<bool>,
     #[serde(default)]
     measures: Option<Vec<Measure>>,
     values: Vec<RawValue>,
@@ -270,6 +276,7 @@ fn check_trait(raw: RawTrait) -> Result<GlyphTrait, String> {
         kind: raw.kind,
         name: raw.name,
         description: raw.description,
+        enabled: raw.enabled.unwrap_or(true),
         measures,
         values,
     })

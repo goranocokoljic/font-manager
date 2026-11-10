@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, target,
+  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, target, TRAIT_PASS_FACES, traitPass,
   nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe, touchesNative,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
@@ -49,7 +49,9 @@ describe('metric', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
       'activation_100', 'cold_start', 'first_scan', 'fonts_needed_100', 'glyph_geometry', 'idle_memory',
       'incremental_update', 'layout_png', 'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
+      'trait_pass',
     ]);
+    assert.equal(BUDGETS.trait_pass.target, 60000);
     assert.equal(BUDGETS.preview_cache_hit.target, 2);
     assert.equal(BUDGETS.glyph_geometry.target, 2);
     assert.equal(BUDGETS.first_scan.target, 10000);
@@ -105,6 +107,31 @@ describe('100-face activation', () => {
   test('keeps the per-OS budget', () => {
     assert.equal(activation100({ ms: 800, faces: 100, done: 100, conflicts: 0 }, 'macos').pass, true);
     assert.equal(activation100({ ms: 800, faces: 100, done: 100, conflicts: 0 }, 'linux').pass, false);
+  });
+});
+
+describe('trait pass per 10,000 faces (E49.4)', () => {
+  test('the measured time is scaled to the budgeted library size', () => {
+    assert.equal(TRAIT_PASS_FACES, 10000);
+    const m = traitPass(30000, 20000);
+    assert.equal(m.value, 15000);
+    assert.equal(m.pass, true);
+    assert.equal(m.faces, 20000);
+    assert.equal(m.measured_ms, 30000);
+    assert.equal(m.note, '20000 faces in 30 s, scaled to 10,000 faces');
+  });
+
+  test('over 60 s per 10,000 faces fails', () => {
+    const m = traitPass(13000, 2000);
+    assert.equal(m.value, 65000);
+    assert.equal(m.pass, false);
+  });
+
+  test('no face to measure is not measured, never a pass', () => {
+    const m = traitPass(5, 0);
+    assert.equal(m.value, null);
+    assert.equal(m.pass, null);
+    assert.match(m.note, /no face/);
   });
 });
 

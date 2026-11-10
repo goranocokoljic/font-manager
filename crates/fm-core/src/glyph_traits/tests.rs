@@ -103,8 +103,8 @@ fn the_first_cut_lists_the_thirteen_latin_traits_with_their_values() {
 #[test]
 fn o_roundness_maps_its_measures_to_chips_at_the_thresholds() {
     let o = find("O.roundness").expect("valid").expect("listed");
-    let chip = |roundness: f64, deviation: f64| {
-        o.chip(&[("roundness", roundness), ("deviation", deviation)])
+    let chip = |roundness: f64, corners: f64| {
+        o.chip(&[("roundness", roundness), ("corners", corners)])
             .map(|v| v.id.as_str())
     };
     // O.roundness ≥ 0.95 → round.
@@ -114,9 +114,11 @@ fn o_roundness_maps_its_measures_to_chips_at_the_thresholds() {
     assert_eq!(chip(0.75, 0.0), Some("oval"));
     assert_eq!(chip(0.7499, 0.0), Some("narrow"));
     // A boxy outline is squared whatever its proportions.
-    assert_eq!(chip(1.0, 0.04), Some("squared"));
+    assert_eq!(chip(1.0, 0.028), Some("squared"));
     assert_eq!(chip(0.5, 0.2), Some("squared"));
-    assert_eq!(chip(1.0, 0.0399), Some("round"));
+    assert_eq!(chip(1.0, 0.0279), Some("round"));
+    // An outline inside the ellipse at the diagonals is no square.
+    assert_eq!(chip(0.9, -0.05), Some("oval"));
     // A threshold on a measure that is not given does not hold; the
     // catch-all still answers.
     assert_eq!(
@@ -295,6 +297,7 @@ fn the_schema_and_the_loader_agree() {
         [
             "codepoint",
             "description",
+            "enabled",
             "glyph",
             "id",
             "kind",
@@ -532,4 +535,15 @@ fn every_labelled_file_is_a_licensed_fixture_of_its_family_with_the_glyphs() {
             );
         }
     }
+}
+
+#[test]
+fn a_trait_is_enabled_unless_the_catalog_says_otherwise() {
+    let mut file = valid();
+    file["traits"][0]["enabled"] = json!(false);
+    let traits = parse(&file.to_string()).expect("valid");
+    assert!(!traits[0].enabled);
+    assert!(traits[1].enabled, "absent is enabled");
+    file["traits"][0]["enabled"] = json!("no");
+    assert!(parse(&file.to_string()).is_err());
 }

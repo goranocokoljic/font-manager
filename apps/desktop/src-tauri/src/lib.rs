@@ -1634,7 +1634,9 @@ pub fn serve(
                     core
                 }
             };
-            let core = Arc::new(core);
+            // The glyph trait pass (E49.4) resumes in the background and runs
+            // again after every scan.
+            let core = Arc::new(core.with_trait_pass());
             if let Err(e) = core.start() {
                 tracing::warn!(error = %e, "activation start-up failed");
             }

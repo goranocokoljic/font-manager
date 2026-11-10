@@ -37,7 +37,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  COMMENT_MARKER, SCHEMA, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, nightlyRunsArgs, osName,
+  COMMENT_MARKER, SCHEMA, activation100, blocking, failures, firstScan, fontsNeeded100, traitPass, gate, median, merge, metric, nightlyRunsArgs, osName,
   parseCli, parseRss, reason, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 
@@ -140,6 +140,8 @@ async function run(opts) {
     const activation = bench(bin, ['activate', '--home', home]);
     console.log(`activation: ${activation.done}/${activation.faces} faces activated, ${activation.conflicts} clashes`);
     const needed = bench(bin, ['fonts-needed', '--home', home]);
+    const traits = bench(bin, ['trait-pass', '--home', home]);
+    console.log(`trait pass: ${traits.measured}/${traits.faces} faces measured`);
     console.log(`fonts needed: ${needed.matched}/${needed.fonts} fonts matched, ${needed.done} activated, ${needed.conflicts} clashes`);
     const idle = await idleMemory(os, bin, home, opts.settleMs);
     const report = {
@@ -163,12 +165,13 @@ async function run(opts) {
           : metric('glyph_geometry', null, 'no face with a trait glyph'),
         activation_100: activation100(activation),
         fonts_needed_100: fontsNeeded100(needed),
+        trait_pass: traitPass(traits.ms, traits.faces),
         idle_memory: metric('idle_memory', idle),
         preview_cache_hit: previewCache.samples
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed },
+      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');

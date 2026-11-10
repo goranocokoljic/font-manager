@@ -166,7 +166,11 @@ pub struct CoreApi {
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
-    next_job: AtomicU32,
+    next_job: Arc<AtomicU32>,
+    /// The background glyph trait pass (E49.4); `None` until
+    /// [`CoreApi::with_trait_pass`] turns it on (the app does, the CLI and
+    /// most tests do not).
+    trait_pass: Option<TraitPass>,
     /// What the shell found when it made the tray item; `None` before (and
     /// without a shell). Feeds the platform notes of [`AppInfo`].
     tray: Mutex<Option<TraySupport>>,
@@ -247,10 +251,27 @@ impl CoreApi {
             fetch_budget: fetch_missing::FETCH_BUDGET,
             events,
             files: Arc::new(Mutex::new(None)),
-            next_job: AtomicU32::new(1),
+            next_job: Arc::new(AtomicU32::new(1)),
+            trait_pass: None,
             tray: Mutex::new(None),
             file_drag: Mutex::new(None),
         }
+    }
+
+    /// Turns the background glyph trait pass on (E49.4) and starts it: it
+    /// resumes measuring the faces a former session left unmeasured, and
+    /// runs again after every scan. A scan cancels a running pass first.
+    #[must_use]
+    pub fn with_trait_pass(mut self) -> Self {
+        let pass = TraitPass {
+            runner: Arc::new(crate::trait_pass::Runner::default()),
+            index: Arc::clone(&self.index),
+            events: Arc::clone(&self.events),
+            next_job: Arc::clone(&self.next_job),
+        };
+        pass.start();
+        self.trait_pass = Some(pass);
+        self
     }
 
     /// Records whether the shell could make a tray item, for the platform
@@ -472,6 +493,10 @@ impl CoreApi {
             files: Arc::clone(&self.files),
             events: Arc::clone(&self.events),
         };
+        let after = self.trait_pass.clone();
+        if let Some(pass) = &after {
+            pass.runner.cancel();
+        }
         std::thread::Builder::new()
             .name("fm-scan".into())
             .spawn(move || {
@@ -479,6 +504,9 @@ impl CoreApi {
                 for (i, (job, source)) in jobs.into_iter().zip(sources).enumerate() {
                     // A failure is a `JobFailed` event and logged.
                     let _ = scan.run(job, &source, i == last);
+                }
+                if let Some(pass) = after {
+                    pass.start();
                 }
             })
             .map_err(|e| {
@@ -559,13 +587,48 @@ impl CoreApi {
             files: Arc::clone(&self.files),
             events: Arc::clone(&self.events),
         };
-        scan.run(job, source, true)?;
+        if let Some(pass) = &self.trait_pass {
+            pass.runner.cancel();
+        }
+        let result = scan.run(job, source, true);
+        if let Some(pass) = &self.trait_pass {
+            pass.start();
+        }
+        result?;
         Ok(job)
     }
 
     /// Forgets the files read so far; the next scan loads them again.
     fn forget_files(&self) {
         *lock(&self.files) = None;
+    }
+}
+
+/// What starting the trait pass needs, shared with the scan thread.
+#[derive(Clone)]
+struct TraitPass {
+    runner: Arc<crate::trait_pass::Runner>,
+    index: Arc<Mutex<Index>>,
+    events: Arc<Broadcast>,
+    next_job: Arc<AtomicU32>,
+}
+
+impl TraitPass {
+    /// Starts a pass as a new job, after the running one has stopped.
+    fn start(&self) {
+        let job = JobId(self.next_job.fetch_add(1, Ordering::Relaxed));
+        let events = Arc::clone(&self.events);
+        self.runner
+            .start(Arc::clone(&self.index), job, move |e| events.send(&e));
+    }
+}
+
+impl Drop for CoreApi {
+    /// Stops the trait pass: it resumes at the next start.
+    fn drop(&mut self) {
+        if let Some(pass) = &self.trait_pass {
+            pass.runner.stop();
+        }
     }
 }
 

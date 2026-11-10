@@ -1280,11 +1280,12 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
     drop(index);
     {
         // The schema as it was before fingerprints (V18), and so before the
-        // sidecar conflict versions (V19), full names (V20) and document
-        // tags (V21) too.
+        // sidecar conflict versions (V19), full names (V20), document
+        // tags (V21), collection colours (V22) and glyph traits (V23) too.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(
-            "ALTER TABLE collection DROP COLUMN color;
+            "DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
+             ALTER TABLE collection DROP COLUMN color;
              DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;
              DROP TABLE sidecar_absorb;
@@ -1363,7 +1364,8 @@ fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
         // `face.parsed`); a tag and a rating on one of them.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(&format!(
-            "ALTER TABLE collection DROP COLUMN color;
+            "DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
+             ALTER TABLE collection DROP COLUMN color;
              DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;
              UPDATE face SET parsed = json_remove(parsed, '$.fullName')
