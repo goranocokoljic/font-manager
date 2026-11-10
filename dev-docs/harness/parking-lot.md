@@ -444,3 +444,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.8 #561] apps/desktop/src/stores/toast.ts — `show` pushes out the oldest toast even while the focus is inside it; the focus then drops to body.
 - [E48.8 #561] apps/desktop/src/components/CommandPalette.vue — about ten panels (DocumentFontsPanel, SimilarPanel, ShortcutSheet, SmartRuleEditor, TaggingPanel, UpdateDialog, GlyphCompare, CommandPalette) keep their own `returnFocus` instead of `keyboard/returnFocus.ts`.
 - [E48.8 #561] apps/desktop/src/components/CompareSheet.vue — at 1,000 px the sheet head's count truncates the base font's name ("base Inte…").
+- [E49.7 #549] apps/desktop/src/components/WallCountLine.vue:51 — `coverText` reads only `sample === 'custom'`, so the E43.3 count and "Hide missing" switch ignore the Letters glyphs.
+- [E49.7 #549] apps/desktop/src/stores/preview.ts:286 — `chooseLanguage` forces preset 'pangram', so picking a language from Letters leaves Letters (glyphs come back with the chip).
+- [E49.7 #549] apps/desktop/src/list/previews.ts:44 — `useRowPreviews` has no unit test file.
+- [E49.7 #549] apps/desktop/src/components/PreviewControls.vue:576 — the preset `.hint` is not linked to the input via aria-describedby.
+- [E49.7 #549] apps/desktop/src/components/CompareSheet.vue:74 — a missing pangram (name fallback) saves the base face's name as every face's text.
