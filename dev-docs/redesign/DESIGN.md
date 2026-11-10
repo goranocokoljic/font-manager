@@ -97,6 +97,18 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
 - **Dialog scrim:** `--fm-scrim`, never a literal. (Added in review 5.)
 - **Specimen area:** neutral background, no border; preview colour follows the theme unless
   the user overrides it; previews honour the `font-feature-settings` chosen in Features.
+- **Letters (match by letters, board 8, E49):** the letters in the preview field are the
+  controls: a letter that has traits carries a hairline underline, a letter with a value
+  chosen carries an accent underline, and the field's right edge says what to do ("click an
+  underlined letter for its shape"; "R and O narrowed · click a letter to change"). A click
+  on a letter opens an ordinary popover under it with the values drawn as glyphs at specimen
+  size, the library's count under each ("Straight leg · 312 families") and Any; one choice
+  per letter, and choosing again replaces it. A chosen value is an ordinary chip in the
+  filter row ("R leg · straight ×"), removed like any other chip, and the count line names
+  it ("41 families · Sans serif · R leg straight · O round"). The cards never carry trait
+  UI: they show the Letters sample (ROag) in each family's own face and nothing else. A
+  family that lacks one of the letters shows the tofu marker in the accent colour in that
+  slot (E43.4), never a fallback glyph, and no trait on that letter matches it.
 - **Components** (`src/components/ui/`): `UiPopover`, `UiSelect`, `UiDrawer`, `UiIcon` (+ `icons.ts`),
   `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
   and `UiChevron` exist (review 10); `UiSegmentedControl` takes icon or text segments and a `wrap`

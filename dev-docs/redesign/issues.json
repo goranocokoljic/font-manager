@@ -17,6 +17,10 @@
     {
       "title": "Redesign — paper first",
       "description": "The concept canvas (six boards) built for real: type wall, family page, your-own-text flow, selection and drag, Pairing Studio, motion. Gate: every board matched by eye at 1440×900 in both themes; e2e, a11y and the 60 fps wall budget green."
+    },
+    {
+      "title": "Match by letters",
+      "description": "Find fonts by the shape of their distinctive letters: named traits computed from the outlines (R leg straight or curved, O round, g single- or double-storey …) as filter chips, a Letters wall preset that shows only the glyphs you care about, and later per-glyph similarity ('an R like this one'). Gate: trait detectors ≥ 90 % against the labelled corpus, search stays under 50 ms, the first scan stays under 10 s."
     }
   ],
   "labels": [
@@ -104,6 +108,11 @@
       "name": "redesign",
       "color": "C56EB2",
       "description": "Paper-first redesign (concept canvas)"
+    },
+    {
+      "name": "letters",
+      "color": "0052CC",
+      "description": "Match-by-letters epic (E49)"
     }
   ],
   "epics": [
@@ -941,6 +950,176 @@
           "depends": [],
           "criteria": [
             "dev-docs/design/redesign/ gains 7-compare-partial.png (height = Partial, mode = Stacked, toast = on), 7-compare-full-grid.png (Full, Grid, toast off) and 7-compare-overlay.png (Full, Overlay, toast off), exported from board 7 of the concept canvas at 2× with the Export-state tweaks set as the README says; the README table and export date are updated"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E49",
+      "title": "Match by letters — find fonts by their distinctive glyphs",
+      "phase": 3,
+      "track": "core",
+      "milestone": "Match by letters",
+      "depends": [
+        "E41"
+      ],
+      "labels": [
+        "letters"
+      ],
+      "summary": "A designer looks for 'a sans with a straight-legged R and a round O', not for a classification. Three parts, built in this order. (1) Named traits: fm-core reads the outlines of the distinctive letters (R G Q a g e t y M W & 1 7 I l) at the default instance and derives describable properties — R leg straight/curved, O roundness, g and a single/double-storey, G spur, Q tail, t terminal, 1 flag, 7 crossbar, I/l form, M splay, e bar — each with a confidence; rules and labels live in data/classification, results in a glyph_traits table filled by a background pass after the scan; the trigger is the Letters preset itself: the letters you typed are the controls — a letter with traits carries a hairline underline, clicking it opens a picker with the values drawn as glyphs, one value per letter; the choice shows as an ordinary chip. No Letters group in the filter popover, nothing on the cards. Traits are also a CLI flag, a search-box syntax and an MCP argument. (2) Letters: a wall preset that shows only the glyphs you type, large, so the eye does the last step. (3) Later: per-glyph similarity — pick a reference glyph and sort the library by how close each font's version is; the design of (3) is written here so (1) and (2) leave room for it, but it is built after they ship. Board 8 is on the concept canvas; E49.1 exports its three states as dev-docs/design/redesign/8-letters-*.png before the UI stories start.",
+      "stories": [
+        {
+          "id": "E49.1",
+          "title": "Board 8: export the Letters target images and the DESIGN.md section",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "dev-docs/design/redesign/ gains 8-letters-wall.png (state = Letters only), 8-letters-picker.png (state = Picker open) and 8-letters-filtered.png (state = Filtered), exported from board 8 at 2× with the Export-state tweak set as the README says; the README table and export date are updated",
+            "DESIGN.md gets a short 'Letters' section: the letters in the preview field are the controls (hairline underline = has traits, accent underline = a value chosen), the picker shows values as drawn glyphs with library counts and one choice per letter, chips are ordinary chips, the cards never carry trait UI, and what a family missing a glyph shows (tofu, E43.4)"
+          ]
+        },
+        {
+          "id": "E49.2",
+          "title": "Glyph trait catalog and labelled corpus",
+          "size": "M",
+          "track": "data",
+          "depends": [],
+          "criteria": [
+            "data/classification/glyph-traits.json lists every trait the detectors compute: id ('R.leg'), the glyph (code point), the kind (enum or scalar), the values with friendly labels in en and de ('straight', 'curved', 'both'), a one-line description, and for scalars the thresholds that map to chips ('O.roundness ≥ 0.95 → round'); a JSON schema sits next to it and the data test validates it",
+            "The first cut: R.leg {straight, curved, both}; O.roundness scalar (width/height and ellipse deviation); g.storeys {single, double}; a.storeys {single, double}; G.spur {spur, none}; Q.tail {inside, crossing, swash}; t.terminal {flat, angled}; one.flag {flag, none}; seven.bar {bar, none}; I.form {plain, serifed, barred}; l.form {plain, tailed}; M.sides {vertical, splayed}; e.bar {horizontal, angled}",
+            "Every enum value carries a small example glyph as an SVG path (stroke-based, 56-unit box) drawn to show that value — these are what the picker displays, so the UI never depends on which fonts the library holds",
+            "fixtures/glyph-traits-labels.json hand-labels every trait for at least 50 families of the 200-font fixture corpus (OFL/Apache/UFL only), chosen to cover each value at least five times; a test asserts the coverage so detectors are measured against something real",
+            "Traits are defined for Latin only in this cut; the file's shape allows a script field so Cyrillic (Д, Л, б) and Greek can follow without a schema change"
+          ]
+        },
+        {
+          "id": "E49.3",
+          "title": "Outline geometry in fm-core: contours, counters, fits",
+          "size": "M",
+          "track": "core",
+          "depends": [
+            "E49.2"
+          ],
+          "criteria": [
+            "`fm-core::glyphs::geometry` loads one glyph's outline at the default instance through skrifa and offers: contour list with winding and bounding boxes, enclosed-counter count, flattening to polylines at a given tolerance, a line fit (max deviation from the chord) for a segment, an ellipse fit (axis ratio and mean radial deviation) for a closed contour, and stem/terminal angle at a point",
+            "Composite glyphs, overlapping contours and open contours are handled; a glyph that cannot be parsed returns `None`, never a panic (CLAUDE.md: `Health::Broken`, no `unwrap()` outside tests)",
+            "Unit tests on fixture fonts assert known facts (Inter 'O' two contours one counter; a double-storey 'g' two counters; 'l' one contour no counter) and that an empty or malformed glyph is `None`",
+            "A benchmark records geometry for the 15 trait glyphs of one face in under 2 ms on the reference machine"
+          ]
+        },
+        {
+          "id": "E49.4",
+          "title": "Trait detectors and the background trait pass",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E49.3"
+          ],
+          "criteria": [
+            "`fm-core::glyphs::traits` has one detector per trait in E49.2, each returning the value (or scalar) and a confidence 0–1 from the geometry; a detector that cannot decide returns low confidence rather than a guess, and a face lacking the glyph returns nothing for that trait",
+            "Accuracy against fixtures/glyph-traits-labels.json is at least 90 % per trait at confidence ≥ 0.7, reported by a test that prints the confusion per trait; a trait below the bar is shipped disabled in the catalog, not dropped from the code",
+            "Results are stored in a `glyph_traits` table (face, trait, value, scalar, confidence, detector version) with an index on (trait, value); a detector version bump recomputes only that trait",
+            "The trait pass runs in the background after the scan (like fingerprints), is cancellable, resumes after restart, emits progress through the `Event` enum, and never touches the first-scan budget: the 10k reference library completes the pass in under 60 s with the UI responsive",
+            "Variable fonts are measured at the default instance and the row says so; a later story may add instances"
+          ]
+        },
+        {
+          "id": "E49.5",
+          "title": "Search by traits through fm-api, CLI and MCP",
+          "size": "M",
+          "track": "core",
+          "depends": [
+            "E49.4"
+          ],
+          "criteria": [
+            "`fm-api` adds, additively, `SearchRequest.glyphTraits: Option<Vec<TraitFilter>>` (`#[serde(default)]`; a `TraitFilter` is trait id + wanted value, or a scalar range) and a `listGlyphTraits` request returning the catalog with per-value counts for the current library; no existing field changes (rule 6)",
+            "Search combines trait filters with every other filter and sort and stays under 50 ms on the reference library (the bench job checks it); fonts without the glyph are excluded from a trait filter, never counted as 'none'",
+            "`fm search --trait R.leg=straight --trait O.roundness>=0.95` works, and `fm traits` prints the catalog with counts",
+            "The MCP `search_fonts` tool accepts the same `glyphTraits` argument with the catalog in its description so an assistant can ask for 'a sans with a straight-legged R and a round O' in one call",
+            "`pnpm gen:types` regenerates types.ts with only additions"
+          ]
+        },
+        {
+          "id": "E49.6",
+          "title": "The letters are the controls: shape pickers in the Letters preset",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E49.1",
+            "E49.5",
+            "E49.7"
+          ],
+          "criteria": [
+            "In the Letters preset the preview field renders the typed letters as individual letter buttons (20 px, Inter 500); a letter with traits in the catalog carries a 1.5 px hairline underline at 22 % ink, a letter without traits none; hover darkens the underline and shows the tooltip 'shape'; nothing else is added to the toolbar and nothing to the cards — matches dev-docs/design/redesign/8-letters-picker.png",
+            "Clicking an underlined letter opens a popover anchored under it: one radio per value showing the catalog's example glyph, the value label and the count of families in the current result ('312 families'), plus 'Any'; one value per letter (radio); Escape and outside-click close it; focus returns to the letter",
+            "A chosen value turns the letter's underline accent-coloured and adds an ordinary chip to the chip row ('R · leg · straight', glyph in semibold), removable there or by choosing 'Any'; chips persist when the preset is switched back to Word or any other, and the filter button's badge counts them",
+            "The filter popover gets no Letters group; the count line names active traits ('41 families · Sans serif · R leg straight · O round') — matches 8-letters-filtered.png",
+            "`R:straight O:round` typed in the search box parses to the same chips (and back), and the command palette gains 'Match by letters…' which switches to the Letters preset; e2e covers click letter → choose → chip → switch preset → chip remains → remove"
+          ]
+        },
+        {
+          "id": "E49.7",
+          "title": "Letters: a wall preset that shows only the glyphs you type",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E49.1",
+            "E41.2"
+          ],
+          "criteria": [
+            "The preset row (E41.2) gains Letters: the preview field takes glyphs ('ROga', any Unicode), and every card shows exactly those glyphs, large, centred, spaced evenly, in the family's default face; the size slider applies at 1.2×; cards of families missing a glyph show tofu for it (E43.4), never a fallback",
+            "With no glyphs typed the field hints 'Type the letters that matter — R O a g e tell faces apart' with those five as tap-to-add; the glyphs and preset are remembered per view",
+            "The Letters preset works with every filter including traits (E49.6) and with the language picker; sorting by name, date and the usual keys is unchanged",
+            "Matches dev-docs/design/redesign/8-letters-wall.png; the wall's 60 fps scroll budget holds with 1,000 families in Letters at 4 glyphs"
+          ]
+        },
+        {
+          "id": "E49.10",
+          "title": "Trait tags on the Family page with 'find fonts with this'",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E42.5",
+            "E49.6"
+          ],
+          "criteria": [
+            "The Characters section (E42.5) shows the family's detected traits as quiet tags under the glyph grid — 'R leg · straight', 'g · double-storey', 'O · round' — only those at confidence ≥ 0.7, in catalog order, each with its example glyph",
+            "Each tag has 'find fonts with this' (hover/focus); choosing it goes back to the wall in the Letters preset with that letter typed and that value chosen as a chip, keeping the wall's other filters",
+            "A family with no detected traits shows nothing (no empty heading); the tags are plain text for screen readers; Playwright covers tag → wall → chip present"
+          ]
+        },
+        {
+          "id": "E49.8",
+          "title": "Later: per-glyph similarity in fm-core",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E49.4",
+            "E49.7"
+          ],
+          "criteria": [
+            "Built after E49.1–E49.7 ship. `fm-core::glyphs::similarity` rasterises one glyph at 64 px (default instance, normalised to the em and centred), computes a shape descriptor (e.g. Zernike moments or a shape-context histogram — the ADR decides and records why), and stores it per (face, glyph) for the trait glyphs plus any glyph requested on demand, cached",
+            "`fm-api` adds, additively, `findSimilarGlyph { face, codePoint, limit }` returning faces ranked by glyph distance with the distance exposed; the whole-font `findSimilar` is untouched",
+            "A test asserts that for the labelled corpus the nearest neighbours of a straight-leg R are straight-leg Rs in at least 85 % of cases, so the descriptor agrees with the traits where both apply",
+            "A 10k-library query answers under 150 ms from cached descriptors; descriptors for the trait glyphs are computed in the background trait pass (E49.4) under the same budget"
+          ]
+        },
+        {
+          "id": "E49.9",
+          "title": "Later: 'an R like this one' — sort the wall by a reference glyph",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E49.8",
+            "E42.5"
+          ],
+          "criteria": [
+            "Built after E49.8. In the Letters preset each glyph on a card, and in the Family page's Characters section (E42.5) each glyph detail, offers 'Fonts with an R like this'; choosing it sorts the wall by glyph distance to that reference and shows a sort chip 'R like Inter' that is removable",
+            "The wall's count line reads 'sorted by R like Inter'; the reference glyph is shown in the chip; the sort combines with any filter including traits",
+            "The MCP `search_fonts` tool accepts `likeGlyph { face, codePoint }` so an assistant can ask for 'a sans whose a looks like Futura's but with a double-storey g' (trait + likeness in one call)",
+            "Playwright covers choose reference → sorted → remove chip restores the previous sort; a target image is added to board 8 when this story is picked up"
           ]
         }
       ]
