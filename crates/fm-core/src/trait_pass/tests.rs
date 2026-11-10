@@ -402,10 +402,20 @@ fn an_index_from_before_glyph_traits_measures_them_after_the_upgrade() {
     let index = Index::open(&dir.path().join("data").join(INDEX_FILE))
         .unwrap()
         .index;
-    assert_eq!(index.schema_version().unwrap(), crate::index::SCHEMA_VERSION);
+    assert_eq!(
+        index.schema_version().unwrap(),
+        crate::index::SCHEMA_VERSION
+    );
     assert_eq!(face_of(&index, "static.ttf"), face, "the face keeps its id");
     assert_eq!(index.trait_pass_remaining(&current()).unwrap(), 1);
     let index = Mutex::new(index);
     assert_eq!(run_all(&index).measured, 1);
-    assert!(!index.lock().unwrap().face_glyph_traits(face).unwrap().is_empty());
+    assert!(
+        !index
+            .lock()
+            .unwrap()
+            .face_glyph_traits(face)
+            .unwrap()
+            .is_empty()
+    );
 }
