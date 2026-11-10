@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 import { useClient } from '../api/client';
-import type { ApiError, FaceSummary, SimilarFace } from '../api/types';
+import type { ApiError, FaceId, FaceSummary, SimilarFace } from '../api/types';
 
 /** Faces the Compare sheet's 'Similar to <base>' section shows at most (E48.3). */
 export const COMPARE_SIMILAR_LIMIT = 8;
@@ -68,5 +68,13 @@ export const useCompareSimilarStore = defineStore('compareSimilar', () => {
     }
   }
 
-  return { base, results, error, loading, load };
+  /** Faces that left the library (E48.8): their rows go; the rest keep their order. */
+  function drop(removed: readonly FaceId[]): void {
+    const gone = new Set(removed);
+    if (results.value.some((r) => gone.has(r.face.id))) {
+      results.value = results.value.filter((r) => !gone.has(r.face.id));
+    }
+  }
+
+  return { base, results, error, loading, load, drop };
 });

@@ -11,6 +11,8 @@ import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
 import CatalogBrowser from './CatalogBrowser.vue';
 import OnlineCatalogsSidebar from './OnlineCatalogsSidebar.vue';
+import ToastMessage from './ToastMessage.vue';
+import { useToastStore } from '../stores/toast';
 
 let wrappers: VueWrapper[] = [];
 /** The font files the face loader was asked for, by CSS family name. */
@@ -38,7 +40,9 @@ afterEach(() => {
   setFaceLoader(undefined);
 });
 
-function mountIt(component: typeof CatalogBrowser | typeof OnlineCatalogsSidebar) {
+function mountIt(
+  component: typeof CatalogBrowser | typeof OnlineCatalogsSidebar | typeof ToastMessage,
+) {
   const w = mount(component, { attachTo: document.body });
   wrappers.push(w);
   return w;
@@ -85,6 +89,21 @@ describe('CatalogBrowser', () => {
     await flushPromises();
     return { w, store };
   }
+
+  it('its toolbar is the top bar a toast sits under, also when it wraps to two rows (E48.8)', async () => {
+    const { w } = await opened();
+    const bar = w.get<HTMLElement>('header.toolbar').element;
+    expect(bar.hasAttribute('data-top-bar')).toBe(true);
+    // The bar wrapped to a second row: 96 px tall.
+    bar.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 96, height: 96, left: 0, right: 800, width: 800 }) as DOMRect;
+    const toasts = mountIt(ToastMessage);
+    useToastStore().show('Installed.');
+    await flushPromises();
+    await new Promise((done) => requestAnimationFrame(() => done(undefined)));
+    await flushPromises();
+    expect(toasts.get<HTMLElement>('.region').element.style.top).toBe('104px');
+  });
 
   it('an off catalog shows a "Turn on" button and no list', async () => {
     const { w } = await opened();

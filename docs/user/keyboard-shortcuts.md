@@ -119,7 +119,8 @@ with the other fonts and tells you which font is missing.
 first pinned font. The rules are: a serif or slab with a sans (and the other way
 round), a display or script font only with a sans or a serif, an x-height within
 5%, the same designer, or the same superfamily ("Noto Sans" and "Noto Serif").
-Each suggestion shows how well it matches and why. **Add to compare** pins it.
+Each suggestion shows how well it matches and why. Its compare icon adds it to
+Compare; when it is already in Compare, the icon removes it.
 
 | Key | What it does |
 |-----|--------------|
