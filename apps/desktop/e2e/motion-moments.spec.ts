@@ -67,8 +67,11 @@ async function centre(el: Locator) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-/** Drags the wall's first card onto Editorial and drops it there. */
-async function dragToEditorial(page: Page, wall: Locator): Promise<void> {
+/**
+ * Drags the wall's first card onto Editorial and drops it there. With `lift`, the drop waits
+ * until the recorder has seen the ghost lift (reduced motion has no lift to wait for).
+ */
+async function dragToEditorial(page: Page, wall: Locator, lift = true): Promise<void> {
   const card = wall.getByRole('option').first();
   await card.click();
   const editorial = page
@@ -85,6 +88,20 @@ async function dragToEditorial(page: Page, wall: Locator): Promise<void> {
   // runner the drop can come first, the ghost goes before it lifts, and there is no lift to
   // record (the lift is what the drag test measures).
   await expect(page.locator('[data-testid="drag-ghost-lift"].lifted')).toBeVisible();
+  // The class is not the move: the engine reports a transition on the next frame, and a busy
+  // runner can go through the whole drop without one, so the ghost goes before the lift is
+  // seen. Drop when the recorder has it (it never comes when the ghost does not lift).
+  if (lift)
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          ((window as unknown as { fmMoved?: Moved[] }).fmMoved ?? [])
+            .filter((m) => m.testid === 'drag-ghost-lift')
+            .map((m) => m.property)
+            .sort(),
+        ),
+      )
+      .toEqual(expect.arrayContaining(['box-shadow', 'transform']));
   const b = await centre(editorial);
   await page.mouse.move(b.x, b.y, { steps: 6 });
   await page.mouse.move(b.x + 1, b.y, { steps: 2 });
@@ -402,7 +419,7 @@ test.describe('reduced motion (E46.4, MOTION.md)', () => {
   test('the drag ghost follows without the tilt and the drop is a cut', async ({ page }) => {
     const wall = await openWall(page);
     await record(page);
-    await dragToEditorial(page, wall);
+    await dragToEditorial(page, wall, false);
     const seen = await recorded(page);
     expect(seen.filter((m) => m.testid.startsWith('drag-ghost'))).toEqual([]);
     expect(seen.filter((m) => m.classes.includes('side-count'))).toEqual([]);

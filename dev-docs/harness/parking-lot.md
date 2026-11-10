@@ -432,3 +432,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.2 #525] apps/desktop/src/api/mock.ts:3693 — a save without a mode falls back to `sideBySide` (now Grid) while the UI opens new comparisons Stacked; harmless today, the UI always sends a mode.
 - [E48.2 #525] crates/fm-api/src/comparison.rs:20 — `CompareMode` defaults to `SideBySide` (Grid), so CLI/MCP saves without a mode or unparseable rows (fm-core index/comparisons.rs:37) open as Grid, not the UI's Stacked default.
 - [E48.2 #525] apps/desktop/src/components/CompareSheet.vue:755 — at 1,000×700 the comparison name field truncates its placeholder ("Name this co…").
+- [fix-main 38af3e9 #540] apps/desktop/e2e/motion-probe.ts — `movedFromStyle` reads the computed style when a late `transitionrun` comes; by then `crossfade()` may have removed `fm-crossfade`, so the move records 0 ms and the drag test's count check fails (seen under a 7x CPU throttle, not yet on CI).
