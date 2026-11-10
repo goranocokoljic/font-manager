@@ -82,6 +82,12 @@ watch(
   () => [props.text, props.sizePx, props.fitWidth, props.trackingEm, state.value] as const,
   () => {
     refits = 0;
+    // A deferred card draws no text: nothing to measure. Each read forces a layout, and a
+    // fast scroll mounts a line of deferred cards every few frames (E49.7 scroll budget).
+    if (state.value === 'deferred') {
+      fit.value = 1;
+      return;
+    }
     const width = lineWidth();
     if (!props.fitWidth || !width) {
       fit.value = 1;

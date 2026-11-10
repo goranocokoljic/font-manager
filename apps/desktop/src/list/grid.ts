@@ -31,6 +31,13 @@ export function gridRange(
   return { start: lines.start * columns, end: Math.min(count, lines.end * columns) };
 }
 
+/**
+ * `next`, or `previous` when it holds the same cards: a view that keeps the range in a
+ * `computed` then rebuilds no card on a scroll frame that stays inside one line.
+ */
+export const keepRange = (previous: RowRange | undefined, next: RowRange): RowRange =>
+  previous && previous.start === next.start && previous.end === next.end ? previous : next;
+
 /** Longest thumbnail text, in characters. */
 export const CARD_TEXT_MAX = 24;
 

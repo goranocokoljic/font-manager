@@ -70,8 +70,17 @@ export function letterGlyphs(text: string): string[] {
   return [...seen];
 }
 
-/** The Letters specimen: the glyphs spaced evenly, one space between two ('R O a g'). */
-export const lettersSample = (letters: string) => letterGlyphs(letters).join(' ');
+let lastLetters: { letters: string; sample: string } | undefined;
+
+/**
+ * The Letters specimen: the glyphs spaced evenly, one space between two ('R O a g').
+ * Every card asks for it on every frame of a scroll; the last answer is kept.
+ */
+export function lettersSample(letters: string): string {
+  if (lastLetters?.letters !== letters)
+    lastLetters = { letters, sample: letterGlyphs(letters).join(' ') };
+  return lastLetters.sample;
+}
 
 /** Whether `value` has the shape of a language preset code. */
 export function isLanguageCode(value: unknown): value is string {
