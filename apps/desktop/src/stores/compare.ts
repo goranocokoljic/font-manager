@@ -6,6 +6,7 @@ import type {
   ComparisonEntry,
   ComparisonId,
   FaceId,
+  FamilyId,
   FaceSummary,
   MissingFace,
 } from '../api/types';
@@ -45,6 +46,19 @@ export const COMPARE_MODES: { value: CompareMode; icon: IconName; label: string 
 /** What `pin` did. */
 export type PinResult = 'pinned' | 'already' | 'full';
 
+/** What `pinMany` did: faces added, already in the set, and left out because it was full. */
+export interface PinManyResult {
+  added: number;
+  already: number;
+  skipped: number;
+}
+
+/**
+ * What a compare icon stands for (E48.4): one face (a style row, a face in the sheet, a
+ * suggestion) or its whole family (a family's card or row: in the set when any of its faces is).
+ */
+export type CompareScope = 'face' | 'family';
+
 /** The comparison the sheet shows when it was reopened or saved under a name. */
 export interface CurrentComparison {
   id: ComparisonId;
@@ -79,6 +93,13 @@ export const useCompareStore = defineStore('compare', () => {
   const missing = ref<MissingFace[]>([]);
 
   const isPinned = (face: FaceId) => pins.value.some((p) => p.id === face);
+  /** A face of `family` is pinned. */
+  const holdsFamily = (family: FamilyId) => pins.value.some((p) => p.family === family);
+
+  /** The compare icon's state (E48.4): filled when `face`, or for a family its family, is in the set. */
+  function inSet(face: FaceSummary, scope: CompareScope = 'face'): boolean {
+    return scope === 'family' ? holdsFamily(face.family) : isPinned(face.id);
+  }
 
   /** Pins `face`; a fifth face is refused. Each outcome is told in a toast. */
   function pin(face: FaceSummary): PinResult {
@@ -95,6 +116,51 @@ export const useCompareStore = defineStore('compare', () => {
     pins.value = [...pins.value, face];
     toast.show(t('compare.toasts.pinned', { name, count: pins.value.length, max: MAX_PINS }));
     return 'pinned';
+  }
+
+  /**
+   * Pins `faces` in order, up to the set's four, and says in one toast how many were
+   * added and how many were left out (the selection bar's Compare, E48.4). `beyond` counts
+   * more faces the caller did not read because the set could not take them: they are
+   * skipped too.
+   */
+  function pinMany(faces: readonly FaceSummary[], beyond = 0): PinManyResult {
+    const out: PinManyResult = { added: 0, already: 0, skipped: Math.max(0, beyond) };
+    const next = [...pins.value];
+    for (const face of faces) {
+      if (next.some((p) => p.id === face.id)) out.already += 1;
+      else if (next.length >= MAX_PINS) out.skipped += 1;
+      else {
+        next.push(face);
+        out.added += 1;
+      }
+    }
+    pins.value = next;
+    const parts: string[] = [];
+    if (out.added) {
+      parts.push(
+        t('compare.toasts.addedMany', { count: out.added, total: next.length, max: MAX_PINS }),
+      );
+    }
+    if (out.skipped) parts.push(t('compare.toasts.skipped', { count: out.skipped, max: MAX_PINS }));
+    if (!parts.length && out.already) parts.push(t('compare.toasts.allAlready'));
+    if (parts.length) useToastStore().show(parts.join(' '));
+    return out;
+  }
+
+  /**
+   * The compare icon's click (E48.4): in the set, it removes the face (for a family, every
+   * pinned face of it); else it pins the face. Either way a toast says what happened.
+   */
+  function toggle(face: FaceSummary, scope: CompareScope = 'face'): PinResult | 'removed' {
+    if (!inSet(face, scope)) return pin(face);
+    const name = scope === 'family' ? face.familyName : fontNameSample(face);
+    const gone = pins.value.filter((p) =>
+      scope === 'family' ? p.family === face.family : p.id === face.id,
+    );
+    for (const p of gone) unpin(p.id);
+    useToastStore().show(t('compare.toasts.removed', { name }));
+    return 'removed';
   }
 
   /** Removes a pin; the sheet closes when none is left, and the next comparison is new. */
@@ -239,7 +305,11 @@ export const useCompareStore = defineStore('compare', () => {
     missing,
     canOpen,
     isPinned,
+    holdsFamily,
+    inSet,
     pin,
+    pinMany,
+    toggle,
     unpin,
     setOverlay,
     setMode,

@@ -101,7 +101,7 @@ describe('compare sheet', () => {
     );
   });
 
-  it('shows every pin in the current sample text at one size, with a Remove button', async () => {
+  it('shows every pin in the current sample text at one size, with a remove icon', async () => {
     const { wrapper, s } = await mountWith(3, 'stacked');
     usePreviewStore().update(ALL_FONTS_VIEW, { sample: 'alphabet', sizePx: 40 });
     await flushPromises();
@@ -123,6 +123,31 @@ describe('compare sheet', () => {
     expect(loader.inUse).toBe(2);
     wrapper.unmount();
     expect(loader.inUse).toBe(0);
+  });
+
+  it('each face has the filled compare icon as Remove, no text button; the focus goes to the next face’s icon (E48.4)', async () => {
+    const { wrapper, s } = await mountWith(3, 'stacked');
+    const icons = () => wrapper.findAll('[data-testid="face-remove"]');
+    expect(icons()).toHaveLength(3);
+    for (const b of icons()) {
+      expect(b.attributes('data-in-set')).toBe('true');
+      expect(b.classes()).toContain('in-set');
+      expect(b.text()).toBe('');
+      expect(b.findAll('rect[fill="currentColor"]')).toHaveLength(2);
+    }
+    expect(wrapper.findAll('.face button').filter((b) => b.text() === 'Remove')).toHaveLength(0);
+    expect(icons().map((b) => b.attributes('aria-label'))).toEqual(
+      faces.slice(0, 3).map((f) => `Remove ${name(f)} from Compare`),
+    );
+    await icons()[1]!.trigger('click');
+    await flushPromises();
+    expect(s.pins.map((p) => p.id)).toEqual([200, 202]);
+    expect(document.activeElement).toBe(icons()[1]!.element);
+    expect(document.activeElement?.getAttribute('data-remove')).toBe('202');
+    // The last face's removal goes to the face before it.
+    await icons()[1]!.trigger('click');
+    await flushPromises();
+    expect(document.activeElement?.getAttribute('data-remove')).toBe('200');
   });
 
   it('has a labelled radio group for the mode and closes on Escape', async () => {

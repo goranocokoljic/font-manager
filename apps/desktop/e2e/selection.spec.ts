@@ -164,7 +164,7 @@ test.describe('the selection bar', () => {
     await expect(bar(page).getByRole('button')).toHaveText([
       'Activate',
       'Tag',
-      'Compare',
+      'Compare 3',
       'Studio',
       'Files',
       '',

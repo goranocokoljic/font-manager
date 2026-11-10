@@ -169,6 +169,7 @@
     "secondFont": "Second font",
     "overlayLabel": "Overlay of {names}, {size} px",
     "legend": "Legend",
+    "addLabel": "Add {name} to Compare",
     "removeLabel": "Remove {name} from Compare",
     "pairings": {
       "title": "Pairings for {name}",
@@ -178,11 +179,7 @@
       "none": "No font in the library pairs with {name} by the rules.",
       "error": "Font Manager could not suggest pairings. {message}",
       "score": "{percent}% match",
-      "reasons": "Why: {reasons}",
-      "add": "Add to compare",
-      "addLabel": "Add to compare: {name}",
-      "pinned": "Pinned",
-      "pinnedLabel": "Pinned: {name}"
+      "reasons": "Why: {reasons}"
     },
     "toasts": {
       "already": "{name} is already pinned to Compare.",
@@ -191,7 +188,17 @@
       "saved": "Comparison “{name}” saved.",
       "noneLeft": "None of the fonts of “{name}” are in the library now: {names}.",
       "openedMissing": "Opened “{name}”. Not in the library now: {names}.",
-      "opened": "Opened “{name}”."
+      "opened": "Opened “{name}”.",
+      "addedMany": {
+        "one": "{count} font added to Compare ({total} of {max}).",
+        "other": "{count} fonts added to Compare ({total} of {max})."
+      },
+      "skipped": {
+        "one": "{count} skipped: Compare holds {max} fonts.",
+        "other": "{count} skipped: Compare holds {max} fonts."
+      },
+      "allAlready": "These fonts are already in Compare.",
+      "removed": "{name} removed from Compare."
     }
   },
   "quickLook": {
@@ -996,7 +1003,7 @@
       "deactivate": "Deactivate",
       "collection": "Collection",
       "tag": "Tag",
-      "compare": "Compare",
+      "compare": "Compare {count}",
       "studio": "Studio",
       "files": "Files",
       "filesHint": "Hold and drag past the window edge to drop the font files into another app",
@@ -1092,12 +1099,12 @@
       "activeSession": "active for this session"
     },
     "activateLabel": "Switch {name} on or off for this session",
-    "compareLabel": "Add {name} to Compare",
     "findSimilar": "Similar",
     "findSimilarLabel": "Find the fonts similar to {name}"
   },
   "grid": {
-    "label": "Font grid"
+    "label": "Font grid",
+    "inCompare": ", in Compare"
   },
   "waterfall": {
     "label": "Font waterfall",
@@ -1545,7 +1552,6 @@
     "yours": "yours",
     "styleActive": "Active: {name}",
     "styleCss": "{name} style",
-    "compareStyle": "Compare {name}",
     "pinMenu": "More for {name}",
     "deletePin": "Delete {name}",
     "pinDeleted": "Deleted “{name}”.",

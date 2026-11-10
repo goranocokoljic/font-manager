@@ -33,7 +33,7 @@ const suggestions = (page: Page) =>
 const pinned = (page: Page) =>
   sheet(page).getByRole('list', { name: 'Stacked' }).getByRole('listitem');
 
-test('the Pairings panel suggests fonts for the first pin; Add to compare pins one by keyboard', async ({
+test('the Pairings panel suggests fonts for the first pin; the compare icon pins one by keyboard', async ({
   page,
 }) => {
   await open(page);
@@ -54,8 +54,8 @@ test('the Pairings panel suggests fonts for the first pin; Add to compare pins o
     await expect(item).toContainText('Why: same designer, similar x-height');
   }
 
-  // Tab reaches the labelled button; Enter pins the suggestion.
-  const add = panel(page).getByRole('button', { name: 'Add to compare: Sample 1 Regular' });
+  // Tab reaches the labelled compare icon (E48.4); Enter pins the suggestion.
+  const add = panel(page).getByRole('button', { name: 'Add Sample 1 Regular to Compare' });
   await expect(add).toHaveAccessibleDescription('Why: same designer, similar x-height');
   for (let i = 0; i < 20; i++) {
     if (await add.evaluate((el) => el === document.activeElement)) break;
@@ -69,13 +69,13 @@ test('the Pairings panel suggests fonts for the first pin; Add to compare pins o
   await expect(pinned(page)).toHaveCount(2);
   await expect(pinned(page).nth(1)).toContainText('Sample 1 Regular');
 
-  // The button stays where the focus is, now marked as pinned.
-  const done = panel(page).getByRole('button', { name: 'Pinned: Sample 1 Regular' });
+  // The icon stays where the focus is, now filled: in the set, a second Enter removes it.
+  const done = panel(page).getByRole('button', { name: 'Remove Sample 1 Regular from Compare' });
   await expect(done).toBeFocused();
-  await expect(done).toHaveAttribute('aria-disabled', 'true');
-  await expect(done).toHaveText('Pinned');
+  await expect(done).toHaveAttribute('data-in-set', 'true');
   await page.keyboard.press('Enter');
-  await expect(pinned(page)).toHaveCount(2);
+  await expect(pinned(page)).toHaveCount(1);
+  await expect(add).toBeFocused();
 });
 
 test('the panel says when nothing pairs with the first pin', async ({ page }) => {

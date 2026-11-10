@@ -122,11 +122,39 @@ test.describe('named styles', () => {
       .toBe('font-variation-settings: "wght" 640;');
   });
 
+  test('the header compare icon adds the family, fills while any style is in the set, removes it (E48.4)', async ({
+    page,
+  }) => {
+    await open(page, CRIMSON);
+    const icon = page.getByTestId('family-compare');
+    await expect(icon).toHaveAttribute('aria-label', 'Add Crimson Pro to Compare');
+    await expect(icon).toHaveAttribute('data-in-set', 'false');
+    await expect(icon.locator('rect[fill="currentColor"]')).toHaveCount(0);
+    // A style that is not the page's face puts the family in the set: the header fills.
+    const bold = row(page, 'Bold, 700');
+    await bold.hover();
+    await bold.getByRole('button', { name: /^Add Crimson Pro Bold to Compare$/ }).click();
+    await expect(icon).toHaveAttribute('data-in-set', 'true');
+    await expect(icon).toHaveAttribute('aria-label', 'Remove Crimson Pro from Compare');
+    await expect(icon.locator('rect[fill="currentColor"]')).toHaveCount(2);
+    // A click removes every style of the family; both icons go back to the outline.
+    await icon.click();
+    await expect(page.getByTestId('toast')).toContainText('Crimson Pro removed from Compare.');
+    await expect(icon).toHaveAttribute('data-in-set', 'false');
+    await bold.hover();
+    await expect(
+      bold.getByRole('button', { name: /^Add Crimson Pro Bold to Compare$/ }),
+    ).toHaveAttribute('data-in-set', 'false');
+    // And it adds the family again.
+    await icon.click();
+    await expect(icon).toHaveAttribute('data-in-set', 'true');
+  });
+
   test('Compare pins that face', async ({ page }) => {
     await open(page, CRIMSON);
     const bold = row(page, 'Bold, 700');
     await bold.hover();
-    await bold.getByRole('button', { name: 'Compare Bold' }).click();
+    await bold.getByRole('button', { name: /^Add Crimson Pro Bold to Compare$/ }).click();
     await expect(page.getByTestId('toast')).toContainText('Crimson Pro');
     await expect(page.getByTestId('toast')).toContainText('Bold');
     await expect(page.getByTestId('toast')).toContainText('pinned to Compare');
@@ -365,7 +393,7 @@ test.describe('the keyboard', () => {
     await expect(rows.nth(1)).toHaveAttribute('tabindex', '0');
     await expect(rows.first()).toHaveAttribute('tabindex', '-1');
     // The controls of the row with the tab stop are in the tab order; those of another are not.
-    for (const name of [/^Copy CSS/, /^Compare/]) {
+    for (const name of [/^Copy CSS/, /^Add .* to Compare$/]) {
       await expect(rows.nth(1).getByRole('button', { name })).toHaveAttribute('tabindex', '0');
       await expect(rows.first().getByRole('button', { name })).toHaveAttribute('tabindex', '-1');
     }

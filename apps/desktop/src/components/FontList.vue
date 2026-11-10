@@ -30,7 +30,6 @@ import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useActivationStore } from '../stores/activation';
-import { useCompareStore } from '../stores/compare';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useFontListStore } from '../stores/fontList';
 import { useFontDragStore } from '../stores/fontDrag';
@@ -42,6 +41,7 @@ import { useSimilarStore } from '../stores/similar';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
+import CompareToggle from './CompareToggle.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
@@ -87,7 +87,6 @@ const similarChord = chordOf(ACTIONS.similar)!;
 const activateChord = chordOf(ACTIONS.activateSession)!;
 const compareChord = chordOf(ACTIONS.compare)!;
 const activation = useActivationStore();
-const compare = useCompareStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
 
@@ -234,6 +233,12 @@ function onRowClick(row: ListRow, e: MouseEvent): void {
   viewport.value?.focus({ preventScroll: true });
 }
 
+/** The row's compare icon was clicked: the row becomes the cursor, the list keeps the keys. */
+function onCompareToggled(row: ListRow): void {
+  list.click(row.key);
+  viewport.value?.focus({ preventScroll: true });
+}
+
 const similarLabel = (face: FaceSummary) =>
   t('list.findSimilarLabel', { name: `${face.familyName} ${face.style}` });
 
@@ -243,12 +248,6 @@ const rowName = (face: FaceSummary) => `${face.familyName} ${face.style}`;
 function toggleActive(row: ListRow): void {
   list.click(row.key);
   void activation.toggleRows([row], 'session');
-}
-
-/** The row's "Compare" action: pins the row's face to Compare. */
-function pinToCompare(row: ListRow, face: FaceSummary): void {
-  list.click(row.key);
-  compare.pin(face);
 }
 
 /** The row's "Similar" action: selects the row and finds the faces like its face. */
@@ -383,14 +382,14 @@ function onToggle(row: ListRow): void {
             :title="`${t('list.activateLabel', { name: rowName(item.face) })} (${formatChord(activateChord)})`"
             @click.stop="toggleActive(item.row)"
           />
-          <UiIconButton
-            icon="compare"
+          <CompareToggle
             tabindex="-1"
             data-testid="row-compare"
-            :label="t('list.compareLabel', { name: rowName(item.face) })"
+            :face="item.face"
+            :scope="item.row.kind === 'family' ? 'family' : 'face'"
             :aria-keyshortcuts="ariaShortcut(compareChord)"
-            :title="`${t('list.compareLabel', { name: rowName(item.face) })} (${formatChord(compareChord)})`"
-            @click.stop="pinToCompare(item.row, item.face)"
+            :shortcut="formatChord(compareChord)"
+            @toggle="onCompareToggled(item.row)"
           />
           <UiIconButton
             icon="similar"
