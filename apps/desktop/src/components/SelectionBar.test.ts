@@ -60,7 +60,7 @@ describe('SelectionBar', () => {
       'Activate',
       'Collection',
       'Tag',
-      'Compare',
+      'Compare 2',
       'Studio',
       'Files',
       'Clear the selection',
@@ -115,17 +115,42 @@ describe('SelectionBar', () => {
     expect(open).toHaveBeenCalledWith({ faces: [], families: [A, B] });
   });
 
-  it('Compare pins the faces of the selection, up to the sheet’s four, and opens it', async () => {
+  it('Compare <n> adds the selection to the set, up to four, and the toast says how many were skipped (E48.4)', async () => {
     const { w, list } = await setup();
     const compare = useCompareStore();
+    const toast = useToastStore();
     list.selectAll();
-    expect(list.selectedCount).toBeGreaterThan(MAX_PINS);
-    await w.get('[data-testid="bar-compare"]').trigger('click');
+    const selected = list.selectedCount;
+    expect(selected).toBeGreaterThan(MAX_PINS);
+    await flushPromises();
+    const button = w.get('[data-testid="bar-compare"]');
+    expect(button.text()).toBe(`Compare ${selected}`);
+    expect(button.find('svg rect').exists()).toBe(true);
+    await button.trigger('click');
     await flushPromises();
     expect(compare.pins).toHaveLength(MAX_PINS);
     const firstFamily = list.rows[0]!.family.id;
     expect(compare.pins[0]!.family).toBe(firstFamily);
     expect(compare.open).toBe(true);
+    expect(toast.toast?.message).toBe(
+      `4 fonts added to Compare (4 of 4). ${selected - MAX_PINS} skipped: Compare holds 4 fonts.`,
+    );
+  });
+
+  it('Compare adds to the set it finds and never clears it; a pinned face takes no new room', async () => {
+    const { w, list } = await setup();
+    const compare = useCompareStore();
+    const toast = useToastStore();
+    list.click(familyKey(A));
+    await flushPromises();
+    const faceA = (await list.selectedFaces())[0]!;
+    compare.pin(faceA);
+    list.click(familyKey(B), 'toggle');
+    await flushPromises();
+    await w.get('[data-testid="bar-compare"]').trigger('click');
+    await flushPromises();
+    expect(compare.pins.map((p) => p.family)).toEqual([A, B]);
+    expect(toast.toast?.message).toBe('1 font added to Compare (2 of 4).');
   });
 
   it('Studio opens the first face, the second as the headline', async () => {

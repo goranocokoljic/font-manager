@@ -1,17 +1,19 @@
 <script setup lang="ts">
 // Pairings (E23.4): a panel inside the Compare sheet, not a dialog of its own. It
 // lists the fonts fm-core's rules pair with the first pinned font, best first, each
-// with its match as a percent and the reasons; "Add to compare" pins one.
+// with its match as a percent and the reasons; its compare icon (E48.4) adds it to the
+// set, or, filled while it is in the set, removes it.
 //
-// Keys: Tab reaches every "Add to compare" button (the sheet's own focus trap). A
-// pinned suggestion keeps its button, marked unavailable, so the focus is not lost.
+// Keys: Tab reaches every compare icon (the sheet's own focus trap). The icon stays in
+// place in both states, so the focus is not lost.
 import { computed, watch } from 'vue';
-import type { FaceSummary, PairingSuggestion } from '../api/types';
+import type { PairingSuggestion } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { fontNameSample } from '../preview/sampleText';
 import { useCompareStore } from '../stores/compare';
 import { usePairingsStore } from '../stores/pairings';
 import { scorePercent } from '../stores/similar';
+import CompareToggle from './CompareToggle.vue';
 
 const compare = useCompareStore();
 const pairings = usePairingsStore();
@@ -38,25 +40,13 @@ function scoreText(s: PairingSuggestion): string {
 }
 
 const items = computed(() =>
-  pairings.results.map((s, i) => {
-    const name = fontNameSample(s.face);
-    const pinned = compare.isPinned(s.face.id);
-    return {
-      s,
-      id: `fm-pairing-${i}`,
-      name,
-      pinned,
-      score: scoreText(s),
-      label: pinned
-        ? t('compare.pairings.pinnedLabel', { name })
-        : t('compare.pairings.addLabel', { name }),
-    };
-  }),
+  pairings.results.map((s, i) => ({
+    s,
+    id: `fm-pairing-${i}`,
+    name: fontNameSample(s.face),
+    score: scoreText(s),
+  })),
 );
-
-function add(face: FaceSummary, pinned: boolean): void {
-  if (!pinned) pairings.add(face);
-}
 </script>
 
 <template>
@@ -94,16 +84,11 @@ function add(face: FaceSummary, pinned: boolean): void {
             t('compare.pairings.reasons', { reasons: item.s.reasons.join(', ') })
           }}</span>
         </div>
-        <button
-          type="button"
-          class="button"
-          :aria-label="item.label"
+        <CompareToggle
+          data-testid="pairing-compare"
+          :face="item.s.face"
           :aria-describedby="`${item.id}-why`"
-          :aria-disabled="item.pinned ? 'true' : undefined"
-          @click="add(item.s.face, item.pinned)"
-        >
-          {{ item.pinned ? t('compare.pairings.pinned') : t('compare.pairings.add') }}
-        </button>
+        />
       </li>
     </ul>
   </section>
@@ -173,21 +158,5 @@ function add(face: FaceSummary, pinned: boolean): void {
   flex-basis: 100%;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
-}
-.button {
-  flex: none;
-  padding: 2px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: var(--fm-fg);
-  font: inherit;
-}
-.button:focus-visible {
-  outline: 2px solid var(--fm-accent);
-  outline-offset: 1px;
-}
-.button[aria-disabled='true'] {
-  opacity: 0.6;
 }
 </style>

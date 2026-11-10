@@ -438,3 +438,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E49.3 #545] crates/fm-core/src/classify.rs:568 — `is_open_ring` decides a hole by contour winding sign; it disagrees with the new fill-based `glyphs::geometry` counters on overlapping variable outlines (e.g. Crimson Pro[wght]).
 - [E49.3 #545] crates/fm-core/src/preview.rs:328 — `pub(crate) fn sfnt_data` duplicates `glyphs::sfnt` with a different error type; fm-core now also has a public `glyphs::geometry::sfnt_data`.
+- [E48.4 #527] apps/desktop/src/views/HomeView.vue:388 — the C key still calls `compare.pin`, so a keyboard user can add a font to Compare from the list or wall but not remove it there (the icons now toggle).
+- [E48.4 #527] docs/user/keyboard-shortcuts.md:122 — still says "Add to compare pins it" for suggestions; the Pairings panel now has the compare icon, which also removes.
+- [E48.4 #527] apps/desktop/src/stores/pairings.ts:42 — `pairings.add` has no production caller left (PairingsPanel uses CompareToggle); only pairings.test.ts uses it.
+- [E48.4 #527] apps/desktop/src/components/FontGrid.vue:822 — the accent on `--fm-surface` face cards is about 3.0:1 in both themes; it passes with no margin for the filled compare icon and the focus ring.
+- [E48.4 #527] apps/desktop/src/components/FontGrid.vue:127 — a user-chosen preview background (`--fm-card-bg`) can drop the accent icon and the chevron under 3:1.

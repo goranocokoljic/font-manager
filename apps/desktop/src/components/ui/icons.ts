@@ -10,8 +10,12 @@ export const ICONS = {
     '<rect x="2.5" y="2.5" width="11" height="4.5" rx="1"/><rect x="2.5" y="9" width="11" height="4.5" rx="1"/>',
   overlay:
     '<rect x="2.5" y="2.5" width="7.5" height="7.5" rx="1"/><rect x="6" y="6" width="7.5" height="7.5" rx="1"/>',
+  // Compare (E48.4): two side-by-side rounded rectangles. The outline adds to the set; the
+  // filled one (painted in the accent by CompareToggle) means "in the set" and removes.
   compare:
     '<rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/>',
+  compareFilled:
+    '<rect x="2" y="3" width="5" height="10" rx="1" fill="currentColor"/><rect x="9" y="3" width="5" height="10" rx="1" fill="currentColor"/>',
   sidebar: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6 3v10"/>',
   inspector: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M10 3v10"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',

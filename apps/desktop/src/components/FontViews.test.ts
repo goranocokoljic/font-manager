@@ -21,6 +21,8 @@ import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
 import { FRAME_MS, SETTLE_MS } from '../list/settle';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { useSearchStore } from '../stores/search';
+import { useCompareStore } from '../stores/compare';
+import { setLocale } from '../i18n';
 import { clearFaceAxes } from '../preview/variations';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -504,6 +506,103 @@ describe('FontGrid', () => {
       if (isVariable[i]) expect(detail).toBe('Variable');
       else expect(detail).toMatch(/^\d+ styles?/);
     });
+  });
+});
+
+describe('the compare icon on cards and rows (E48.4)', () => {
+  afterEach(() => setLocale('en'));
+
+  const toggleOf = (w: VueWrapper, key: string) =>
+    w.get(
+      `[data-for="${key}"] [data-testid="card-compare"], [data-key="${key}"] [data-testid="row-compare"]`,
+    );
+
+  it('a wall card toggles its family in and out of the set; the label says which (en, de)', async () => {
+    // The icon sits beside the card, never inside the option (an option holds no button).
+    await load({ extraFaces: 17, stylesPerFamily: 3 });
+    const grid = await mountView(FontGrid);
+    const list = useFontListStore();
+    const compare = useCompareStore();
+    const row = list.rows[0]!;
+    await useLibraryStore().facesOf(row.family.id);
+    await flushPromises();
+    const name = row.family.name;
+    expect(grid.findAll('[role="option"] button')).toHaveLength(0);
+    // Hidden from assistive technology (a listbox holds only options); the card says it.
+    expect(grid.get(`[data-for="${row.key}"]`).attributes('aria-hidden')).toBe('true');
+    const card = () => grid.get(`[role="option"][data-key="${row.key}"]`);
+    expect(card().attributes('aria-label')).not.toContain('Compare');
+    let icon = toggleOf(grid, row.key);
+    // Outline, not in the set: it adds.
+    expect(icon.attributes('data-in-set')).toBe('false');
+    expect(icon.classes()).not.toContain('in-set');
+    expect(icon.findAll('rect[fill="currentColor"]')).toHaveLength(0);
+    expect(icon.attributes('aria-label')).toBe(`Add ${name} to Compare`);
+    expect(icon.attributes('tabindex')).toBe('-1');
+    await icon.trigger('click');
+    await flushPromises();
+    expect(compare.pins.map((p) => p.family)).toEqual([row.family.id]);
+    // The click did not select the card.
+    expect(list.isSelected(row.key)).toBe(false);
+    icon = toggleOf(grid, row.key);
+    // Filled in the accent while the family is in the set (always shown: the in-set class).
+    expect(icon.attributes('data-in-set')).toBe('true');
+    expect(icon.classes()).toContain('in-set');
+    expect(icon.findAll('rect[fill="currentColor"]')).toHaveLength(2);
+    expect(icon.attributes('aria-label')).toBe(`Remove ${name} from Compare`);
+    expect(card().attributes('aria-label')).toMatch(/, in Compare$/);
+    setLocale('de');
+    await flushPromises();
+    expect(card().attributes('aria-label')).toMatch(/, im Vergleich$/);
+    expect(toggleOf(grid, row.key).attributes('aria-label')).toBe(
+      `${name} aus dem Vergleich entfernen`,
+    );
+    await toggleOf(grid, row.key).trigger('click');
+    await flushPromises();
+    expect(compare.pins).toEqual([]);
+    expect(toggleOf(grid, row.key).attributes('aria-label')).toBe(
+      `${name} zum Vergleich hinzufügen`,
+    );
+  });
+
+  it('a family card shows filled while any of its styles is in the set', async () => {
+    await load({ extraFaces: 17, stylesPerFamily: 3 });
+    const grid = await mountView(FontGrid);
+    const list = useFontListStore();
+    const library = useLibraryStore();
+    const row = list.rows.find((r) => r.family.styleCount > 1);
+    const other = list.rows.find((r) => r !== row);
+    const faces = await library.facesOf(row!.family.id);
+    await library.facesOf(other!.family.id);
+    expect(faces.length).toBeGreaterThan(1);
+    // Not the face the card shows: a later style of the family.
+    useCompareStore().pin(faces.at(-1)!);
+    await flushPromises();
+    expect(toggleOf(grid, row!.key).attributes('data-in-set')).toBe('true');
+    expect(toggleOf(grid, other!.key).attributes('data-in-set')).toBe('false');
+  });
+
+  it('table and list rows have the same icon in both states', async () => {
+    await load({ extraFaces: 17, stylesPerFamily: 3 });
+    const list = useFontListStore();
+    const row = list.rows[0]!;
+    await useLibraryStore().facesOf(row.family.id);
+    for (const view of [FontTable, FontList]) {
+      const w = await mountView(view);
+      await flushPromises();
+      expect(toggleOf(w, row.key).attributes('data-in-set')).toBe('false');
+      await toggleOf(w, row.key).trigger('click');
+      await flushPromises();
+      expect(toggleOf(w, row.key).attributes('data-in-set')).toBe('true');
+      expect(toggleOf(w, row.key).attributes('aria-label')).toBe(
+        `Remove ${row.family.name} from Compare`,
+      );
+      expect(toggleOf(w, row.key).findAll('rect[fill="currentColor"]')).toHaveLength(2);
+      await toggleOf(w, row.key).trigger('click');
+      await flushPromises();
+      expect(useCompareStore().pins).toEqual([]);
+      w.unmount();
+    }
   });
 });
 

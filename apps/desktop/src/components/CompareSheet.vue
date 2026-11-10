@@ -30,6 +30,7 @@ import { FmFade, FmSlide } from '../motion';
 import { SHEET_HEIGHT, heightAtPointer, useCompareSheetStore } from '../stores/compareSheet';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import CompareToggle from './CompareToggle.vue';
 import PairingsPanel from './PairingsPanel.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
@@ -206,7 +207,7 @@ onBeforeUnmount(() => {
   if (returnFocus?.isConnected) returnFocus.focus();
 });
 
-/** Removes a pin and keeps the focus in the sheet: on the next Remove button, else the mode. */
+/** Removes a pin and keeps the focus in the sheet: on the next face's icon, else the mode. */
 async function remove(face: FaceId): Promise<void> {
   const buttons = [...(dialog.value?.querySelectorAll<HTMLElement>('[data-remove]') ?? [])];
   const at = buttons.findIndex((b) => b.dataset.remove === String(face));
@@ -503,13 +504,16 @@ function onFocusIn(e: FocusEvent): void {
             <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
               <div class="label">
                 <span class="name">{{ fontNameSample(f) }}</span>
-                <UiButton
-                  :data-remove="f.id"
-                  :aria-label="t('compare.removeLabel', { name: fontNameSample(f) })"
-                  @click="remove(f.id)"
-                >
-                  {{ t('common.remove') }}
-                </UiButton>
+                <!-- On hover or focus: the filled compare icon removes the face (E48.4). -->
+                <span class="face-actions">
+                  <CompareToggle
+                    manual
+                    :data-remove="f.id"
+                    data-testid="face-remove"
+                    :face="f"
+                    @toggle="remove(f.id)"
+                  />
+                </span>
               </div>
               <p
                 class="sample"
@@ -780,6 +784,18 @@ h2 {
 /* Grid (stored as `sideBySide`): two faces per row; 2 faces fill one row, 3–4 a 2×2. */
 .faces.sideBySide {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* A face's actions come up on hover or focus (E48.4). */
+.face-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  opacity: 0;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.face:hover .face-actions,
+.face:focus-within .face-actions {
+  opacity: 1;
 }
 .face {
   display: flex;

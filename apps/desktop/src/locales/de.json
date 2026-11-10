@@ -169,6 +169,7 @@
     "secondFont": "Zweite Schrift",
     "overlayLabel": "Überlagerung von {names}, {size} px",
     "legend": "Legende",
+    "addLabel": "{name} zum Vergleich hinzufügen",
     "removeLabel": "{name} aus dem Vergleich entfernen",
     "pairings": {
       "title": "Kombinationen für {name}",
@@ -178,11 +179,7 @@
       "none": "Keine Schrift der Bibliothek passt nach den Regeln zu {name}.",
       "error": "Font Manager konnte keine Kombinationen vorschlagen. {message}",
       "score": "{percent} % passend",
-      "reasons": "Warum: {reasons}",
-      "add": "Zum Vergleich hinzufügen",
-      "addLabel": "Zum Vergleich hinzufügen: {name}",
-      "pinned": "Angeheftet",
-      "pinnedLabel": "Angeheftet: {name}"
+      "reasons": "Warum: {reasons}"
     },
     "toasts": {
       "already": "{name} ist bereits zum Vergleich angeheftet.",
@@ -191,7 +188,17 @@
       "saved": "Vergleich „{name}“ gespeichert.",
       "noneLeft": "Keine der Schriften von „{name}“ ist jetzt in der Bibliothek: {names}.",
       "openedMissing": "„{name}“ geöffnet. Jetzt nicht in der Bibliothek: {names}.",
-      "opened": "„{name}“ geöffnet."
+      "opened": "„{name}“ geöffnet.",
+      "addedMany": {
+        "one": "{count} Schrift zum Vergleich hinzugefügt ({total} von {max}).",
+        "other": "{count} Schriften zum Vergleich hinzugefügt ({total} von {max})."
+      },
+      "skipped": {
+        "one": "{count} übersprungen: Der Vergleich fasst {max} Schriften.",
+        "other": "{count} übersprungen: Der Vergleich fasst {max} Schriften."
+      },
+      "allAlready": "Diese Schriften sind bereits im Vergleich.",
+      "removed": "{name} aus dem Vergleich entfernt."
     }
   },
   "quickLook": {
@@ -996,7 +1003,7 @@
       "deactivate": "Deaktivieren",
       "collection": "Sammlung",
       "tag": "Tag",
-      "compare": "Vergleichen",
+      "compare": "{count} vergleichen",
       "studio": "Studio",
       "files": "Dateien",
       "filesHint": "Halten und über den Fensterrand ziehen, um die Schriftdateien in einer anderen App abzulegen",
@@ -1092,12 +1099,12 @@
       "activeSession": "aktiv für diese Sitzung"
     },
     "activateLabel": "{name} für diese Sitzung ein- oder ausschalten",
-    "compareLabel": "{name} zum Vergleich hinzufügen",
     "findSimilar": "Ähnliche",
     "findSimilarLabel": "Die Schriften finden, die {name} ähneln"
   },
   "grid": {
-    "label": "Schriftraster"
+    "label": "Schriftraster",
+    "inCompare": ", im Vergleich"
   },
   "waterfall": {
     "label": "Schriftwasserfall",
@@ -1545,7 +1552,6 @@
     "yours": "deins",
     "styleActive": "Aktiv: {name}",
     "styleCss": "Schnitt {name}",
-    "compareStyle": "{name} vergleichen",
     "pinMenu": "Mehr zu {name}",
     "deletePin": "{name} löschen",
     "pinDeleted": "„{name}“ gelöscht.",

@@ -40,6 +40,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
+import CompareToggle from './CompareToggle.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -119,6 +120,10 @@ const range = computed(() =>
 const pool = computed(() => poolSize(bodyHeight.value, rowPx.value, props.overscan));
 
 const rowId = (row: ListRow) => `fm-trow-${row.key.replace(':', '-')}`;
+
+/** The face a row's compare icon pins: a style row's face, or a family's first face. */
+const rowFace = (row: ListRow) =>
+  row.kind === 'face' ? row.face : list.previewFace(row.family.id);
 
 const visible = computed(() =>
   list.rows.slice(range.value.start, range.value.end).map((row, i) => {
@@ -436,6 +441,15 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
               <bdi class="text" data-family-name :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
               }}</bdi>
+              <CompareToggle
+                v-if="rowFace(item.row)"
+                class="row-compare"
+                data-testid="row-compare"
+                tabindex="-1"
+                :face="rowFace(item.row)!"
+                :scope="item.row.kind === 'family' ? 'family' : 'face'"
+                @toggle="viewport?.focus({ preventScroll: true })"
+              />
             </template>
             <template v-else-if="isWeightLine(col.id)">
               <span class="line" aria-hidden="true">
@@ -586,6 +600,21 @@ span.sort {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The compare icon (E48.4) ends the name cell: hidden at rest, shown on hover or at the
+   cursor, and always while it is in the set. It shows at once, like the list's row actions:
+   nothing animates while the cursor moves by keyboard (E46.4). A compact row is 24 px: the
+   icon fits it. */
+.row-compare {
+  max-block-size: 100%;
+  margin-inline-start: auto;
+  visibility: hidden;
+  transition: none;
+}
+.tr:hover .row-compare,
+.viewport:focus .tr.cursor .row-compare,
+.row-compare.in-set {
+  visibility: visible;
 }
 .tr.face .col-name {
   padding-inline-start: 32px;

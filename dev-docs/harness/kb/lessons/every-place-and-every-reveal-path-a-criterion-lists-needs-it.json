@@ -1,0 +1,20 @@
+{
+  "id": "every-place-and-every-reveal-path-a-criterion-lists-needs-it",
+  "title": "Every place and every reveal path a criterion lists needs its own test",
+  "category": "testing",
+  "rule": "When an acceptance criterion lists several places a control appears (wall, list, table, family page header, a sheet) or several ways it is revealed (hover, focus, the keyboard cursor via aria-activedescendant), give each listed place and each reveal path its own assertion. A test for the per-row control does not cover the header one, and a hover-only Playwright check does not cover the keyboard reveal: park the mouse, move the cursor with keys and assert the computed style. Check that removing the CSS rule or the element makes the test fail.",
+  "rationale": "E48.4 (#527): the family page header compare icon and the wall icon's keyboard-cursor reveal shipped with no test; only the style-row icon and the hover path were checked.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    527
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-11-10T03:00:46.236Z",
+  "last_seen": "2026-11-10T03:00:46.236Z"
+}

@@ -37,7 +37,7 @@
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
-import type { FaceId } from '../api/types';
+import type { FaceId, FaceSummary } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
 import { SETTLE_MS, useScrollSettle } from '../list/settle';
 import { rowActivation } from '../list/activation';
@@ -67,6 +67,7 @@ import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow, type RowKey } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
+import { useCompareStore } from '../stores/compare';
 import { useFontListStore } from '../stores/fontList';
 import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
@@ -84,6 +85,7 @@ import { t } from '../i18n';
 import { weightRangeText } from '../list/columns';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
+import CompareToggle from './CompareToggle.vue';
 import MissingGlyphs from './MissingGlyphs.vue';
 import FmFlipGroup from '../motion/FmFlipGroup.vue';
 import { useReducedMotion } from '../motion/useReducedMotion';
@@ -115,6 +117,7 @@ const library = useLibraryStore();
 const thumbnails = useThumbnailsStore();
 const palettes = usePalettesStore();
 const previewStore = usePreviewStore();
+const compare = useCompareStore();
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -569,7 +572,7 @@ function drawMarquee(): void {
 function onGroundDown(e: PointerEvent): void {
   const el = viewport.value;
   if (!el || e.button !== 0) return;
-  if (e.target instanceof Element && e.target.closest('.slot')) return;
+  if (e.target instanceof Element && e.target.closest('.slot, .card-compare')) return;
   const x = e.clientX - el.getBoundingClientRect().left - el.clientLeft;
   if (x < 0 || x > el.clientWidth) return;
   boxAdds = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -609,6 +612,12 @@ const marqueeStyle = computed(() => {
   };
 });
 
+/** A card's accessible name: its row's, and ", in Compare" while it is in the set (E48.4). */
+function cardLabel(row: ListRow, face: FaceSummary | undefined): string {
+  const scope = row.kind === 'family' ? 'family' : 'face';
+  return rowLabel(row) + (face && compare.inSet(face, scope) ? t('grid.inCompare') : '');
+}
+
 function onToggle(row: ListRow): void {
   if (row.kind === 'family') list.toggleExpanded(row.family.id);
   viewport.value?.focus({ preventScroll: true });
@@ -645,97 +654,120 @@ function onToggle(row: ListRow): void {
       role="none"
       :style="{ height: `${WALL.gap + lineCount(count, columns) * linePx}px` }"
     >
-      <div
-        v-for="item in visible"
-        :id="item.id"
-        :key="item.row.key"
-        class="slot"
-        :class="{
-          face: item.row.kind === 'face',
-          selected: list.isSelected(item.row.key),
-          origin: fontDrag.isOrigin(item.row.key),
-          cursor: item.id === activeId,
-        }"
-        role="option"
-        :data-key="item.row.key"
-        :aria-setsize="count"
-        :aria-posinset="item.index + 1"
-        :aria-selected="list.isSelected(item.row.key)"
-        :aria-label="rowLabel(item.row)"
-        :style="cardStyle(item.index)"
-        draggable="true"
-        @click="onCardClick(item.row, $event)"
-        @pointerdown="fontSwitch.prime(item.row)"
-        @dragstart="onCardDrag(item.row, $event)"
-      >
-        <div class="card">
-          <CardLiveText
-            v-if="item.face && item.live"
-            :face="item.face.id"
-            :text="item.text"
-            :missing="item.tofu"
-            :palette="item.palette"
-            :size-px="specimenPx"
-            :fit-width="wrapped ? undefined : box.width"
-            :wrap-lines="wrapped ? wrapLines : undefined"
-            :line-height="wrapped ? wrapLineHeight : undefined"
-            :tracking-em="preview.trackingEm"
-            :outline="preview.outline"
-            :color="preview.textColor"
-            :defer="!motion.settled.value"
-            aria-hidden="true"
-          />
-          <div
-            v-else
-            class="thumb"
-            data-testid="thumbnail"
-            :data-state="thumbState(item)"
-            :style="thumbStyle(item.thumb)"
-            aria-hidden="true"
-          />
-          <span v-if="item.failed" class="note">{{ t('list.previewUnavailable') }}</span>
-          <span v-else-if="!item.face && library.failed.has(item.row.family.id)" class="note">
-            {{ t('list.stylesUnavailable') }}
-          </span>
-          <span
-            v-if="item.row.kind === 'family' && !item.row.single"
-            class="twisty fm-directional"
-            data-ghost="hide"
-            :class="{ open: item.row.expanded }"
-            aria-hidden="true"
-            @click.stop="onToggle(item.row)"
-            ><UiChevron :open="item.row.expanded"
-          /></span>
-          <div class="meta">
-            <span class="lead">
-              <ActivationDot :state="rowActivation(item.row)" />
-              <bdi class="name" data-family-name>{{ item.name }}</bdi>
+      <template v-for="item in visible" :key="item.row.key">
+        <div
+          :id="item.id"
+          class="slot"
+          :class="{
+            face: item.row.kind === 'face',
+            selected: list.isSelected(item.row.key),
+            origin: fontDrag.isOrigin(item.row.key),
+            cursor: item.id === activeId,
+          }"
+          role="option"
+          :data-key="item.row.key"
+          :aria-setsize="count"
+          :aria-posinset="item.index + 1"
+          :aria-selected="list.isSelected(item.row.key)"
+          :aria-label="cardLabel(item.row, item.face)"
+          :style="cardStyle(item.index)"
+          draggable="true"
+          @click="onCardClick(item.row, $event)"
+          @pointerdown="fontSwitch.prime(item.row)"
+          @dragstart="onCardDrag(item.row, $event)"
+        >
+          <div class="card">
+            <CardLiveText
+              v-if="item.face && item.live"
+              :face="item.face.id"
+              :text="item.text"
+              :missing="item.tofu"
+              :palette="item.palette"
+              :size-px="specimenPx"
+              :fit-width="wrapped ? undefined : box.width"
+              :wrap-lines="wrapped ? wrapLines : undefined"
+              :line-height="wrapped ? wrapLineHeight : undefined"
+              :tracking-em="preview.trackingEm"
+              :outline="preview.outline"
+              :color="preview.textColor"
+              :defer="!motion.settled.value"
+              aria-hidden="true"
+            />
+            <div
+              v-else
+              class="thumb"
+              data-testid="thumbnail"
+              :data-state="thumbState(item)"
+              :style="thumbStyle(item.thumb)"
+              aria-hidden="true"
+            />
+            <span v-if="item.failed" class="note">{{ t('list.previewUnavailable') }}</span>
+            <span v-else-if="!item.face && library.failed.has(item.row.family.id)" class="note">
+              {{ t('list.stylesUnavailable') }}
             </span>
             <span
-              v-if="item.face?.isVariable"
-              class="detail"
-              data-testid="card-variable"
+              v-if="item.row.kind === 'family' && !item.row.single"
+              class="twisty fm-directional"
               data-ghost="hide"
-            >
-              <span class="count">{{ t('list.variable') }}</span>
-            </span>
-            <span v-else-if="item.row.kind === 'family'" class="detail" data-ghost="hide">
-              <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+              :class="{ open: item.row.expanded, beside: !!item.face }"
+              aria-hidden="true"
+              @click.stop="onToggle(item.row)"
+              ><UiChevron :open="item.row.expanded"
+            /></span>
+            <div class="meta">
+              <span class="lead">
+                <ActivationDot :state="rowActivation(item.row)" />
+                <bdi class="name" data-family-name>{{ item.name }}</bdi>
+              </span>
               <span
-                v-if="item.row.family.weightRange"
-                class="range"
-                data-testid="weight-range"
-                aria-hidden="true"
-                >{{ weightRangeText(item.row.family.weightRange) }}</span
+                v-if="item.face?.isVariable"
+                class="detail"
+                data-testid="card-variable"
+                data-ghost="hide"
               >
-            </span>
-            <MissingGlyphs v-if="item.tofu.length" :missing="item.tofu" />
-            <UiBadge v-if="item.fallback" data-testid="fallback-hint">{{
-              t('list.fallback')
-            }}</UiBadge>
+                <span class="count">{{ t('list.variable') }}</span>
+              </span>
+              <span v-else-if="item.row.kind === 'family'" class="detail" data-ghost="hide">
+                <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+                <span
+                  v-if="item.row.family.weightRange"
+                  class="range"
+                  data-testid="weight-range"
+                  aria-hidden="true"
+                  >{{ weightRangeText(item.row.family.weightRange) }}</span
+                >
+              </span>
+              <MissingGlyphs v-if="item.tofu.length" :missing="item.tofu" />
+              <UiBadge v-if="item.fallback" data-testid="fallback-hint">{{
+                t('list.fallback')
+              }}</UiBadge>
+            </div>
           </div>
         </div>
-      </div>
+        <!-- The compare icon (E48.4) at the card's top-right. Beside the card, not in it: an
+             option holds no button and a listbox holds only options, so the icon is hidden from
+             assistive technology like the chevron. The keyboard compares with C; the card's name
+             says ", in Compare". The same box as the card, so it glides with it; only the icon
+             takes the pointer. -->
+        <div
+          v-if="item.face"
+          :key="`compare:${item.row.key}`"
+          class="corner"
+          :class="{ cursor: item.id === activeId }"
+          aria-hidden="true"
+          :data-for="item.row.key"
+          :style="cardStyle(item.index)"
+        >
+          <CompareToggle
+            class="card-compare"
+            data-testid="card-compare"
+            tabindex="-1"
+            :face="item.face"
+            :scope="item.row.kind === 'family' ? 'family' : 'face'"
+            @toggle="viewport?.focus({ preventScroll: true })"
+          />
+        </div>
+      </template>
     </FmFlipGroup>
     <div
       v-if="marquee"
@@ -899,10 +931,42 @@ function onToggle(row: ListRow): void {
   opacity: 0;
   transition: opacity var(--fm-motion-fast) var(--fm-ease);
 }
+/* With the compare icon in the corner, the chevron sits just before it. */
+.twisty.beside {
+  inset-inline-end: calc(var(--fm-space-1) + 28px + var(--fm-space-1));
+}
 .slot:hover .twisty,
 .viewport:focus .slot.cursor .twisty,
 .twisty.open {
   opacity: 1;
+}
+/* The compare icon's box: the card's box over it, the icon in its top-right corner. The box
+   lets the pointer through to the card; the icon takes it. */
+.corner {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.card-compare {
+  position: absolute;
+  top: var(--fm-space-1);
+  inset-inline-end: var(--fm-space-1);
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+/* Hidden at rest; shown on the card's hover or focus, at the cursor, and always in the set. */
+.slot:hover + .corner .card-compare,
+.slot:focus-within + .corner .card-compare,
+.viewport:focus .corner.cursor .card-compare,
+.card-compare:hover,
+.card-compare:focus-visible,
+.card-compare.in-set {
+  opacity: 1;
+}
+/* The card keeps its hover shadow while the pointer is on its icon. */
+.slot:has(+ .corner .card-compare:hover) .card {
+  box-shadow: var(--fm-shadow-1);
 }
 /* Paragraph mode (E43.1): the meta line on top in 12 px, the text under it from the start. */
 .rows .card {
