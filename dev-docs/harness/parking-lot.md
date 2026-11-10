@@ -449,3 +449,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.7 #549] apps/desktop/src/list/previews.ts:44 — `useRowPreviews` has no unit test file.
 - [E49.7 #549] apps/desktop/src/components/PreviewControls.vue:576 — the preset `.hint` is not linked to the input via aria-describedby.
 - [E49.7 #549] apps/desktop/src/components/CompareSheet.vue:74 — a missing pangram (name fallback) saves the base face's name as every face's text.
+
+## 2026-11-11
+
+- [E49.8 #551] crates/fm-core/src/index/glyph_traits.rs:84 — the trait pass's `NEEDS` lists faces of gone files on every pass, so they are re-read (and fail) each time.
