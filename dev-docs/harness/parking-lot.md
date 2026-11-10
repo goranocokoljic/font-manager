@@ -426,30 +426,18 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E46.4 #481] apps/desktop/src/components/TagsSidebar.vue:111 — the tag drop count still shows and hides with FmFade (a badge, not a ticking number like the collection count's FmCrossfade).
 - [E46.2 #479] apps/desktop/e2e/wall.spec.ts:273 — on the macOS runner the 1,000-family fps sweep is skipped (runner idle 20–30 fps), so the 55 fps budget is enforced on Windows and Linux only.
 - [E46.2 #479] apps/desktop/src/views/HomeView.vue:455 — a view-mode switch from the command palette while focus is in the list drops focus to body.
-- [E48.1 #524] .harness/notes/issue-524.md:19 — the criterion names `7-compare-full-grid.png`, but the design file is `7-compare-grid-full.png` and neither is in the repo yet (E48.7 exports them).
 - [E47.2 #483] apps/desktop/src/components/PreviewControls.vue:228 — `isDarkSurface()` has its own copy of the Light/Dark-else-OS rule (not reactive to OS changes); `resolveScheme` in src/themes/tokens.ts now does the same.
 - [E47.2 #483] apps/desktop/src/api/mock.ts:441 — `themeTokens` and `src/themes/tokens.ts` `TOKEN_PROPERTIES` both list the six theme token names; a new token needs both.
 - [E48.2 #525] apps/desktop/src/api/mock.ts:3693 — a save without a mode falls back to `sideBySide` (now Grid) while the UI opens new comparisons Stacked; harmless today, the UI always sends a mode.
 - [E48.2 #525] crates/fm-api/src/comparison.rs:20 — `CompareMode` defaults to `SideBySide` (Grid), so CLI/MCP saves without a mode or unparseable rows (fm-core index/comparisons.rs:37) open as Grid, not the UI's Stacked default.
-- [E48.2 #525] apps/desktop/src/components/CompareSheet.vue:755 — at 1,000×700 the comparison name field truncates its placeholder ("Name this co…").
 - [fix-main 38af3e9 #540] apps/desktop/e2e/motion-probe.ts — `movedFromStyle` reads the computed style when a late `transitionrun` comes; by then `crossfade()` may have removed `fm-crossfade`, so the move records 0 ms and the drag test's count check fails (seen under a 7x CPU throttle, not yet on CI).
 
 ## 2026-11-10
 
 - [E49.3 #545] crates/fm-core/src/classify.rs:568 — `is_open_ring` decides a hole by contour winding sign; it disagrees with the new fill-based `glyphs::geometry` counters on overlapping variable outlines (e.g. Crimson Pro[wght]).
 - [E49.3 #545] crates/fm-core/src/preview.rs:328 — `pub(crate) fn sfnt_data` duplicates `glyphs::sfnt` with a different error type; fm-core now also has a public `glyphs::geometry::sfnt_data`.
-- [E48.4 #527] apps/desktop/src/views/HomeView.vue:388 — the C key still calls `compare.pin`, so a keyboard user can add a font to Compare from the list or wall but not remove it there (the icons now toggle).
-- [E48.4 #527] docs/user/keyboard-shortcuts.md:122 — still says "Add to compare pins it" for suggestions; the Pairings panel now has the compare icon, which also removes.
-- [E48.4 #527] apps/desktop/src/stores/pairings.ts:42 — `pairings.add` has no production caller left (PairingsPanel uses CompareToggle); only pairings.test.ts uses it.
 - [E48.4 #527] apps/desktop/src/components/FontGrid.vue:822 — the accent on `--fm-surface` face cards is about 3.0:1 in both themes; it passes with no margin for the filled compare icon and the focus ring.
 - [E48.4 #527] apps/desktop/src/components/FontGrid.vue:127 — a user-chosen preview background (`--fm-card-bg`) can drop the accent icon and the chevron under 3:1.
 - [E49.4 #546] crates/fm-core/src/glyphs/geometry.rs:38 — `TRAIT_GLYPHS` lacks `'O'`, so the glyph-geometry bench never times the glyph O.roundness reads.
 - [E49.4 #546] scripts/bench/lib.mjs — `traitPass` is a line-for-line copy of `firstScan` with other constants; they behave the same today.
-- [E48.5 #528] apps/desktop/src/components/CompareSheet.vue:64 — `textToSave` still reads `compare.pins[0]` instead of the new `compare.base` (same value today).
-- [E48.5 #528] apps/desktop/src/views/HomeView.vue:672 — the Compare button's title (`home.compareTitle`) still says C pins the selected font; C now starts a new comparison.
-- [E48.3 #526] dev-docs/harness/parking-lot.md:443 — the E48.4 entry about `apps/desktop/src/stores/pairings.ts:42` is obsolete: E48.3 deleted that store.
-- [E48.3 #526] apps/desktop/src/stores/compare.ts:114 — no library-change event prunes pins (or the Compare sheet's similar rows) when a face leaves the library.
 - [E49.5 #547] crates/fm-mcp/src/lib.rs:110 — `get_tool` returns `tools::list()`, whose `search_fonts` description lacks the glyph trait catalog; only `list_tools` carries it.
-- [E48.6 #529] apps/desktop/src/components/CatalogBrowser.vue:168 — its wrapping toolbar has no `data-top-bar`, so a toast falls back to 56 px and can sit on the bar's second row.
-- [E48.6 #529] apps/desktop/src/components/ToastMessage.vue — pointer and focus hold/release are not paired: a pointerleave re-arms the timer while the focus is still in the toast.
-- [E48.6 #529] apps/desktop/src/components/ToastMessage.vue — clicking Undo moves focus to body (act → dismiss → inert); nothing returns it.

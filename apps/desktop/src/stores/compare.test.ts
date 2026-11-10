@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
-import type { FaceSummary } from '../api/types';
+import type { Event, FaceSummary, SimilarFace } from '../api/types';
 import { createMockClient, mockComparisons, mockFaces } from '../api/mock';
 import { setLocale } from '../i18n';
 import { formatChord } from '../keyboard/keymap';
@@ -12,6 +12,7 @@ import {
   ONLY_THIS_UNDO_MS,
   useCompareStore,
 } from './compare';
+import { useCompareSimilarStore } from './compareSimilar';
 import { useToastStore } from './toast';
 
 /** Five distinct faces: the mock's summaries with their own ids and styles. */
@@ -418,5 +419,72 @@ describe('compare store', () => {
         setItem.mockRestore();
       }
     });
+  });
+});
+
+describe('compare store: faces that leave the library (E48.8)', () => {
+  /** A mock client whose events the test sends. */
+  function events() {
+    const handlers: ((e: Event) => void)[] = [];
+    setClient({
+      ...createMockClient(),
+      onEvent: async (h) => {
+        handlers.push(h);
+        return () => undefined;
+      },
+    });
+    return (removed: number[]) =>
+      handlers.forEach((h) =>
+        h({ type: 'libraryChanged', source: null, added: [], removed, updated: [] }),
+      );
+  }
+  const similarRow = (face: FaceSummary): SimilarFace =>
+    ({ face, score: 0.5, reasons: ['Same designer'] }) as unknown as SimilarFace;
+
+  it('removes a face from the set and from the similar rows', async () => {
+    const removeFaces = events();
+    const s = useCompareStore();
+    const similar = useCompareSimilarStore();
+    for (const f of faces.slice(0, 3)) s.pin(f);
+    similar.results = [similarRow(faces[3]!), similarRow(faces[4]!)];
+    await Promise.resolve();
+    removeFaces([101, 104]);
+    expect(s.pins.map((p) => p.id)).toEqual([100, 102]);
+    expect(s.base?.id).toBe(100);
+    expect(similar.results.map((r) => r.face.id)).toEqual([103]);
+    expect(s.open).toBe(true);
+  });
+
+  it('makes the next face the base when the base leaves', async () => {
+    const removeFaces = events();
+    const s = useCompareStore();
+    for (const f of faces.slice(0, 3)) s.pin(f);
+    await Promise.resolve();
+    removeFaces([100]);
+    expect(s.base?.id).toBe(101);
+    expect(s.pins.map((p) => p.id)).toEqual([101, 102]);
+  });
+
+  it('closes the sheet when the last face leaves, and ignores faces not in the set', async () => {
+    const removeFaces = events();
+    const s = useCompareStore();
+    s.pin(faces[0]!);
+    await Promise.resolve();
+    removeFaces([999]);
+    expect(s.pins).toHaveLength(1);
+    removeFaces([100]);
+    expect(s.pins).toEqual([]);
+    expect(s.open).toBe(false);
+  });
+
+  it("the Undo of 'Only this' does not bring back a face the library lost", async () => {
+    const removeFaces = events();
+    const s = useCompareStore();
+    for (const f of faces.slice(0, 3)) s.pin(f);
+    await Promise.resolve();
+    s.onlyThis(faces[0]!);
+    removeFaces([102]);
+    useToastStore().act();
+    expect(s.pins.map((p) => p.id)).toEqual([100, 101]);
   });
 });

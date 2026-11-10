@@ -6,7 +6,9 @@
 // middle. The live region is always in the page, so a screen reader reads each new message;
 // a toast stays while the pointer is on its button or the focus is in it, and Escape there
 // takes it away. `data-testid="toast"` is the newest; the ones under it are `toast-stacked`.
-import { onBeforeUnmount, ref, watch } from 'vue';
+// E48.8: the timer starts again only when the pointer and the focus have both left; after
+// Undo or Escape the focus goes back to where it was before the toast took it.
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useToastStore } from '../stores/toast';
 import { FmSlide } from '../motion';
 import { retireToast } from './retireToast';
@@ -53,6 +55,82 @@ watch(
   },
 );
 onBeforeUnmount(() => observer?.disconnect());
+
+// Hold and release, paired (E48.8): a toast is held while the pointer is on its button or
+// the focus is in it, and starts its time again only when both have left.
+type Holder = 'pointer' | 'focus';
+const holders = new Map<number, Set<Holder>>();
+function enter(id: number, by: Holder): void {
+  const on = holders.get(id) ?? new Set<Holder>();
+  on.add(by);
+  holders.set(id, on);
+  toasts.hold(id);
+}
+function leave(id: number, by: Holder): void {
+  const on = holders.get(id);
+  if (!on?.delete(by) || on.size) return;
+  holders.delete(id);
+  toasts.release(id);
+}
+function onFocusOut(id: number, e: FocusEvent): void {
+  const into = e.relatedTarget;
+  if (into instanceof Node && (e.currentTarget as Element).contains(into)) return;
+  leave(id, 'focus');
+}
+
+// Where the focus goes back to (E48.8): the element that had it before the toast took it,
+// by the keyboard (focusin) or by the pointer (pointerdown, before the button takes it).
+const returnTo = new Map<number, HTMLElement>();
+function remember(id: number, from: EventTarget | null, toast: Element): void {
+  if (returnTo.has(id)) return;
+  if (from instanceof HTMLElement && from !== document.body && !toast.contains(from)) {
+    returnTo.set(id, from);
+  }
+}
+function onFocusIn(id: number, e: FocusEvent): void {
+  remember(id, e.relatedTarget, e.currentTarget as Element);
+  enter(id, 'focus');
+}
+function onPointerDown(id: number, e: PointerEvent): void {
+  remember(id, document.activeElement, (e.currentTarget as Element).closest('.toast')!);
+}
+
+/** Puts the focus back where it was, or on the main view when that is gone; never on body. */
+function giveBack(id: number, toast: Element): void {
+  const from = returnTo.get(id);
+  returnTo.delete(id);
+  if (!toast.contains(document.activeElement) && document.activeElement !== document.body) return;
+  void nextTick(() => {
+    if (from?.isConnected && !from.closest('[inert]')) from.focus();
+    if (from && document.activeElement === from) return;
+    const main =
+      document.querySelector<HTMLElement>('main[tabindex]') ?? document.querySelector('main');
+    if (!main) return;
+    if (!main.hasAttribute('tabindex')) main.tabIndex = -1;
+    main.focus();
+  });
+}
+function onAct(id: number, e: MouseEvent): void {
+  const toast = (e.currentTarget as Element).closest('.toast')!;
+  toasts.act(id);
+  giveBack(id, toast);
+}
+function onEscape(id: number, e: KeyboardEvent): void {
+  const toast = e.currentTarget as Element;
+  toasts.dismiss(id);
+  giveBack(id, toast);
+}
+
+// A toast gone: what it held and where it would give the focus back go with it.
+watch(
+  () => toasts.toasts,
+  (list) => {
+    const live = new Set(list.map((t) => t.id));
+    for (const id of holders.keys()) if (!live.has(id)) holders.delete(id);
+    for (const id of returnTo.keys()) if (!live.has(id)) returnTo.delete(id);
+  },
+  { flush: 'post' },
+);
 </script>
 
 <template>
@@ -72,18 +150,19 @@ onBeforeUnmount(() => observer?.disconnect());
         :key="item.id"
         class="toast"
         :data-testid="index === 0 ? 'toast' : 'toast-stacked'"
-        @focusin="toasts.hold(item.id)"
-        @focusout="toasts.release(item.id)"
-        @keydown.esc.stop="toasts.dismiss(item.id)"
+        @focusin="onFocusIn(item.id, $event)"
+        @focusout="onFocusOut(item.id, $event)"
+        @keydown.esc.stop="onEscape(item.id, $event)"
       >
         <span class="message">{{ item.message }}</span>
         <button
           v-if="item.action"
           type="button"
           class="action"
-          @pointerenter="toasts.hold(item.id)"
-          @pointerleave="toasts.release(item.id)"
-          @click="toasts.act(item.id)"
+          @pointerenter="enter(item.id, 'pointer')"
+          @pointerleave="leave(item.id, 'pointer')"
+          @pointerdown="onPointerDown(item.id, $event)"
+          @click="onAct(item.id, $event)"
         >
           {{ item.action.label }}
         </button>

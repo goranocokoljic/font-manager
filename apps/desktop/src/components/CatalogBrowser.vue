@@ -165,7 +165,7 @@ const surfaceClass = computed(() =>
 
 <template>
   <section v-if="catalog" class="browser" :aria-labelledby="`catalog-title-${catalog.id}`">
-    <header class="toolbar">
+    <header class="toolbar" data-top-bar>
       <h1 :id="`catalog-title-${catalog.id}`" class="title">
         <bdi>{{ catalog.name }}</bdi>
       </h1>

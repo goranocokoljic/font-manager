@@ -183,3 +183,78 @@ describe('ToastMessage (E48.6)', () => {
     expect(region.attributes('aria-live')).toBe('polite');
   });
 });
+
+describe('ToastMessage: hold and focus (E48.8)', () => {
+  it('holds while the pointer or the focus is on it, and starts again only when both left', async () => {
+    const { w, toasts } = setup();
+    toasts.show('Changed.', { label: 'Undo', run: () => undefined });
+    await nextTick();
+    const button = w.find<HTMLButtonElement>('.action');
+    await button.trigger('pointerenter');
+    button.element.focus();
+    await nextTick();
+    // The pointer leaves; the focus is still in the toast: it stays.
+    await button.trigger('pointerleave');
+    vi.advanceTimersByTime(TOAST_MS * 2);
+    expect(toasts.toast?.message).toBe('Changed.');
+    // The pointer comes back and the focus leaves: it still stays.
+    await button.trigger('pointerenter');
+    button.element.blur();
+    await nextTick();
+    vi.advanceTimersByTime(TOAST_MS * 2);
+    expect(toasts.toast?.message).toBe('Changed.');
+    // Both gone: its time runs again.
+    await button.trigger('pointerleave');
+    vi.advanceTimersByTime(TOAST_MS - 1);
+    expect(toasts.toast?.message).toBe('Changed.');
+    vi.advanceTimersByTime(1);
+    expect(toasts.toasts).toEqual([]);
+  });
+
+  it('after Undo gives the focus back to the element that had it before', async () => {
+    const before = document.createElement('button');
+    before.textContent = 'Activate';
+    document.body.append(before);
+    try {
+      const { w, toasts } = setup();
+      const run = vi.fn();
+      toasts.show('Activated 2 fonts.', { label: 'Undo', run });
+      await nextTick();
+      before.focus();
+      const button = w.find<HTMLButtonElement>('.action');
+      // The pointer presses Undo: the button takes the focus, then the click runs it.
+      await button.trigger('pointerdown');
+      button.element.focus();
+      await button.trigger('click');
+      await nextTick();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(before);
+    } finally {
+      before.remove();
+    }
+  });
+
+  it('gives the focus to the main view when that element is gone, never to body', async () => {
+    const main = document.createElement('main');
+    main.tabIndex = 0;
+    const before = document.createElement('button');
+    document.body.append(main, before);
+    try {
+      const { w, toasts } = setup();
+      toasts.show('Removed.', { label: 'Undo', run: () => before.remove() });
+      await nextTick();
+      before.focus();
+      const button = w.find<HTMLButtonElement>('.action');
+      // The keyboard: Tab from the element into the toast.
+      button.element.focus();
+      await nextTick();
+      await button.trigger('click');
+      await nextTick();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement).toBe(main);
+    } finally {
+      main.remove();
+      before.remove();
+    }
+  });
+});

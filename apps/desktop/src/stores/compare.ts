@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
-import { useClient } from '../api/client';
+import { computed, ref, watch } from 'vue';
+import { useClient, type Unsubscribe } from '../api/client';
 import type {
+  Event,
   CompareMode as ApiCompareMode,
   ComparisonEntry,
   ComparisonId,
@@ -14,6 +15,7 @@ import type { IconName } from '../components/ui/icons';
 import { errorMessage, t } from '../i18n';
 import { formatChord, type Chord } from '../keyboard/keymap';
 import { fontNameSample } from '../preview/sampleText';
+import { useCompareSimilarStore } from './compareSimilar';
 import { useToastStore } from './toast';
 
 /** Most faces Compare holds at once. */
@@ -88,6 +90,9 @@ export interface CurrentComparison {
  * Named comparisons (E13.2): the API keeps them in the index; `save` stores the pins,
  * mode and sample text under a name, `reopen` pins a saved one's faces again and keeps
  * its sample text (`text`) and the faces the library no longer has (`missing`).
+ *
+ * A face that leaves the library (E48.8) leaves the set and the sheet's similar rows with
+ * it; when it was the base, the next face becomes the base.
  */
 export const useCompareStore = defineStore('compare', () => {
   const pins = ref<FaceSummary[]>([]);
@@ -109,6 +114,8 @@ export const useCompareStore = defineStore('compare', () => {
 
   /** The toast whose Undo puts back the set 'Only this' changed; null when none is showing. */
   let onlyThisToast: number | null = null;
+  /** Faces the library lost: the Undo of 'Only this' never puts them back. */
+  const departed = new Set<FaceId>();
 
   /** The base: the first pin, the face the others are compared to (E48.5). */
   const base = computed<FaceSummary | null>(() => pins.value[0] ?? null);
@@ -220,8 +227,10 @@ export const useCompareStore = defineStore('compare', () => {
       {
         label: t('common.undo'),
         run: () => {
-          pins.value = before.pins;
-          overlayChoice.value = before.overlay;
+          pins.value = before.pins.filter((p) => !departed.has(p.id));
+          overlayChoice.value = before.overlay.map((id) =>
+            id !== null && departed.has(id) ? null : id,
+          ) as [FaceId | null, FaceId | null];
         },
       },
       ONLY_THIS_UNDO_MS,
@@ -255,6 +264,36 @@ export const useCompareStore = defineStore('compare', () => {
       forget();
     }
   }
+
+  /**
+   * Faces left the library (E48.8): they leave the set, quietly, and the sheet's similar
+   * rows. The base gone, the next face is the base; none left, the sheet closes as `unpin`.
+   */
+  function prune(removed: readonly FaceId[]): void {
+    if (!removed.length) return;
+    const gone = new Set(removed);
+    for (const id of removed) departed.add(id);
+    useCompareSimilarStore().drop(removed);
+    for (const p of pins.value.filter((f) => gone.has(f.id))) unpin(p.id);
+  }
+
+  function onEvent(event: Event): void {
+    if (event.type === 'libraryChanged') prune(event.removed);
+  }
+
+  /** Listens to library changes from the first pin on; once for the session. */
+  let unsubscribe: Promise<Unsubscribe> | undefined;
+  watch(
+    () => pins.value.length > 0,
+    (any) => {
+      if (!any || unsubscribe) return;
+      unsubscribe = useClient().onEvent(onEvent);
+      unsubscribe.catch(() => {
+        unsubscribe = undefined;
+      });
+    },
+    { flush: 'sync' },
+  );
 
   /** Drops what the pins knew of a saved comparison. */
   function forget(): void {
@@ -394,6 +433,7 @@ export const useCompareStore = defineStore('compare', () => {
     pinMany,
     toggle,
     unpin,
+    prune,
     setOverlay,
     setMode,
     openSheet,
