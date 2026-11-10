@@ -7,6 +7,7 @@ import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
 import { chipGroups, chosenLanguages, languageName } from './chips';
+import { traitChips, traitLineLabel } from './traits';
 
 export function useActiveFilters() {
   const search = useSearchStore();
@@ -22,14 +23,17 @@ export function useActiveFilters() {
   const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
   const languages = computed(() => chosenLanguages(search.filters));
   const chips = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
+  /** The glyph traits chosen on the Letters preset's letters or typed in the box (E49.6). */
+  const traits = computed(() => traitChips(search.traits, search.traitCatalog));
   /** The count line's switch hides the families missing glyphs of your text (E43.3). */
   const rendersText = computed(() => search.hiding);
   /** Every chosen filter's name, in the order the chips show them. */
   const labels = computed(() => [
     ...chips.value.map((c) => c.label),
     ...languages.value.map((code) => languageName(search.languages, code)),
+    ...traits.value.map(traitLineLabel),
     ...(rendersText.value ? [t('chips.rendersText')] : []),
   ]);
 
-  return { groups, languages, rendersText, chips, labels };
+  return { groups, languages, traits, rendersText, chips, labels };
 }

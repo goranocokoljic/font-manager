@@ -178,3 +178,40 @@ describe('the renders-your-text chip (E43.3)', () => {
     expect(w.find('button.opener .count').exists()).toBe(false);
   });
 });
+
+describe('glyph-trait chips (E49.6)', () => {
+  it('shows a chosen shape as "R · leg · straight", counted in the badge, removable', async () => {
+    const w = await mountChips({ classification: ['sans'] });
+    const search = useSearchStore();
+    search.chooseTraitValue('R.leg', 'straight');
+    await flushPromises();
+    const chip = w.get('[data-testid="trait-chip"]');
+    expect(`${chip.get('.glyph').text()} ${chip.get('span').text()}`).toBe('R · leg · straight');
+    expect(chip.get('.glyph').element.tagName).toBe('B');
+    expect(chip.attributes('aria-label')).toBe('Remove filter R leg straight');
+    // The search-box form, so the chip says how to type it.
+    expect(chip.attributes('title')).toBe('R:straight');
+    expect(w.get('button.opener .count').text()).toBe('2');
+    await chip.trigger('click');
+    await flushPromises();
+    expect(search.traits).toEqual([]);
+    expect(w.find('[data-testid="trait-chip"]').exists()).toBe(false);
+    expect(w.get('button.opener .count').text()).toBe('1');
+  });
+
+  it('adds no Letters group to the filter drawer; Clear takes the shapes off too', async () => {
+    const w = await mountChips();
+    const search = useSearchStore();
+    search.chooseTraitValue('O.roundness', 'round');
+    await flushPromises();
+    const groups = w.findAll('.facet h3').map((h) => h.text());
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups.some((g) => /letter|shape/i.test(g))).toBe(false);
+    await w
+      .findAll('button.link')
+      .find((b) => b.text() === 'Clear filters')!
+      .trigger('click');
+    await flushPromises();
+    expect(search.traits).toEqual([]);
+  });
+});

@@ -2017,5 +2017,16 @@
     "count": "{before} → {after}",
     "countLabel": "{before}, nach dem Ablegen {after}",
     "smartRefused": "Eine intelligente Sammlung füllt sich selbst nach ihren Regeln; Schriften lassen sich dort nicht ablegen."
+  },
+  "letters": {
+    "row": "Buchstaben",
+    "shape": "Form",
+    "letterShape": "{letter}, Form wählen",
+    "letterChosen": "{letter}, Form {value}",
+    "pickerLabel": "Form: {name}",
+    "any": "Beliebig",
+    "matchByLetters": "Nach Buchstaben suchen…",
+    "hintPick": "Unterstrichenen Buchstaben anklicken, um seine Form zu wählen",
+    "hintNarrowed": "{letters} eingegrenzt · Buchstaben anklicken zum Ändern"
   }
 }

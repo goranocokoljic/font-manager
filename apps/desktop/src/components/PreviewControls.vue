@@ -4,14 +4,16 @@
 // sample, size, auto size, line height, tracking, the metrics lines and outline toggles,
 // alignment, colors and the preview surface. Every change goes to the preview store for
 // `view`, which every row of that list reads.
-import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
-import { t } from '../i18n';
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { locale, t } from '../i18n';
 import { FmSlide } from '../motion';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { wallLayout, type WallPreset } from '../list/grid';
 import { languageName } from '../search/chips';
+import { chosenValue, traitForGlyph } from '../search/traits';
 import { useActions } from '../stores/commands';
 import { useSearchStore } from '../stores/search';
+import LetterPicker from './LetterPicker.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -82,6 +84,17 @@ const fieldChord = chordOf(ACTIONS.previewField)!;
 
 useActions([
   {
+    id: ACTIONS.matchLetters,
+    get title() {
+      return t('letters.matchByLetters');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    // Palette only (no key): the palette is the modal open when it runs.
+    run: matchByLetters,
+  },
+  {
     id: ACTIONS.previewField,
     // Getters: the palette shows the title in the language chosen now.
     get title() {
@@ -101,6 +114,88 @@ useActions([
 
 /** The Letters preset (E49.7): the field takes glyphs, and the cards show only those. */
 const letters = computed(() => s.value.sample === 'letters');
+
+/** "Match by letters…" (E49.6): the Letters preset, and the field to type the letters in. */
+async function matchByLetters(): Promise<void> {
+  if (!letters.value) store.applyPreset(props.view, 'letters');
+  await nextTick();
+  field.value?.focus();
+}
+
+// The letters are the controls (E49.6, board 8-letters-picker.png): while the field is not
+// being edited, each typed glyph is a button; one whose glyph has a trait the picker offers
+// carries a hairline and opens the picker of that trait's values.
+watch(
+  letters,
+  (on) => {
+    if (on) void search.loadTraitCatalog();
+  },
+  { immediate: true },
+);
+/** The field has the focus: its plain text is shown to edit, not the letter buttons. */
+const editing = ref(false);
+const glyphs = computed(() => [...s.value.letters]);
+const showLetterButtons = computed(
+  () => letters.value && glyphs.value.length > 0 && !editing.value,
+);
+const traitOf = (glyph: string) => traitForGlyph(search.traitCatalog, glyph);
+const chosenOf = (glyph: string) => {
+  const trait = traitOf(glyph);
+  return trait ? chosenValue(search.traits, trait.id) : null;
+};
+/** The chosen value's label, lower case, for a letter's accessible name. */
+const chosenLabel = (glyph: string) => {
+  const value = chosenOf(glyph);
+  return traitOf(glyph)
+    ?.values.find((v) => v.id === value)
+    ?.label.toLowerCase();
+};
+function letterName(glyph: string): string {
+  if (!traitOf(glyph)) return glyph;
+  const value = chosenLabel(glyph);
+  return value
+    ? t('letters.letterChosen', { letter: glyph, value })
+    : t('letters.letterShape', { letter: glyph });
+}
+
+const pickerGlyph = ref<string | null>(null);
+const pickerAnchor = ref<HTMLElement | null>(null);
+const pickerTrait = computed(() => (pickerGlyph.value ? traitOf(pickerGlyph.value) : undefined));
+
+/** A letter with a trait opens its picker; one without lets you edit the letters. */
+function pressLetter(glyph: string, e: MouseEvent): void {
+  if (!traitOf(glyph)) {
+    field.value?.focus();
+    return;
+  }
+  if (pickerGlyph.value === glyph) {
+    closePicker();
+    return;
+  }
+  pickerAnchor.value = e.currentTarget as HTMLElement;
+  pickerGlyph.value = glyph;
+}
+
+/** Closes the picker; the focus goes back to its letter. */
+function closePicker(): void {
+  const letter = pickerAnchor.value;
+  pickerGlyph.value = null;
+  void nextTick(() => letter?.focus());
+}
+
+function chooseShape(value: string | null): void {
+  const trait = pickerTrait.value;
+  if (trait) search.chooseTraitValue(trait.id, value);
+}
+
+/** The glyphs whose shape is chosen, as a list ("R and O"). */
+const narrowed = computed(() => glyphs.value.filter((g) => chosenOf(g) !== null));
+const letterHint = computed(() => {
+  if (!glyphs.value.some((g) => traitOf(g))) return '';
+  if (!narrowed.value.length) return t('letters.hintPick');
+  const list = new Intl.ListFormat(locale(), { type: 'conjunction' }).format(narrowed.value);
+  return t('letters.hintNarrowed', { letters: list });
+});
 
 /**
  * The field's text: what the rows show, except that it stays empty for the font names. In
@@ -187,7 +282,7 @@ const hint = computed(() => {
     case 'paragraph':
       return t('preview.hints.paragraph', { size: s.value.bodySizePx });
     case 'letters':
-      return '';
+      return letterHint.value;
     default:
       return props.fontCount === undefined
         ? ''
@@ -281,7 +376,29 @@ function colorFrom(e: Event): string {
 <template>
   <div class="controls" role="group" :aria-label="t('preview.settings')">
     <div class="main">
-      <div class="hero" @click="focusField">
+      <div class="hero" :class="{ 'with-letters': showLetterButtons }" @click="focusField">
+        <span
+          v-if="showLetterButtons"
+          class="letter-row"
+          role="group"
+          :aria-label="t('letters.row')"
+          data-testid="letter-row"
+        >
+          <button
+            v-for="g in glyphs"
+            :key="g"
+            type="button"
+            class="letter"
+            :class="{ shape: !!traitOf(g), chosen: chosenOf(g) !== null }"
+            :title="traitOf(g) ? t('letters.shape') : undefined"
+            :aria-label="letterName(g)"
+            :aria-haspopup="traitOf(g) ? 'dialog' : undefined"
+            :aria-expanded="traitOf(g) ? pickerGlyph === g : undefined"
+            @click="pressLetter(g, $event)"
+          >
+            {{ g }}
+          </button>
+        </span>
         <label :for="`${uid}-field`" class="sr-only">{{ t('preview.customText') }}</label>
         <input
           :id="`${uid}-field`"
@@ -290,11 +407,15 @@ function colorFrom(e: Event): string {
           dir="auto"
           autocomplete="off"
           spellcheck="false"
-          :class="{ letters }"
+          :class="{ letters, behind: showLetterButtons }"
           :aria-keyshortcuts="ariaShortcut(fieldChord)"
           :value="fieldText"
           :placeholder="letters ? '' : t('preview.heroPlaceholder')"
-          @focus="selectStock"
+          @focus="
+            editing = true;
+            selectStock();
+          "
+          @blur="editing = false"
           @input="typeSample"
           @keydown.esc.prevent="leaveField"
         />
@@ -317,6 +438,15 @@ function colorFrom(e: Event): string {
           >{{ lettersHint.after }}
         </span>
         <span v-else-if="hint" class="hint" data-testid="preview-hint">{{ hint }}</span>
+        <LetterPicker
+          v-if="pickerTrait"
+          :open="pickerGlyph !== null"
+          :anchor="pickerAnchor"
+          :trait="pickerTrait"
+          :chosen="chosenValue(search.traits, pickerTrait.id)"
+          @choose="chooseShape"
+          @close="closePicker"
+        />
       </div>
       <div class="chips" role="group" :aria-label="t('preview.preset')">
         <button
@@ -531,6 +661,66 @@ function colorFrom(e: Event): string {
   .hero {
     flex-basis: 100%;
   }
+}
+.hero.with-letters {
+  position: relative;
+}
+/* The note sits at the field's end, after the letters (board 8-letters-picker.png). */
+.hero.with-letters .hint {
+  margin-inline-start: auto;
+}
+/* The letters as buttons (E49.6): 20 px Inter 500, each its own control. */
+.letter-row {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.letter {
+  position: relative;
+  min-width: 28px;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  color: inherit;
+  font-family: var(--fm-font-ui);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: text;
+}
+/* The hairline is drawn, not a border: a 1.5 px border snaps to 1 px. */
+.letter.shape::after {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1.5px;
+  background-color: color-mix(in srgb, var(--fm-fg) 22%, transparent);
+  content: '';
+}
+.letter.shape {
+  cursor: pointer;
+}
+.letter.shape:hover::after {
+  background-color: color-mix(in srgb, var(--fm-fg) 60%, transparent);
+}
+.letter.chosen::after {
+  background-color: var(--fm-accent);
+}
+.letter:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+/* Behind the letter buttons the field still takes a press beside them, and typing. */
+.hero input.behind {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
 }
 .hero:focus-within {
   outline: 2px solid var(--fm-accent);

@@ -10,11 +10,14 @@ import type {
   FamilyOrder,
   FilterCounts,
   Filters,
+  GlyphTraitInfo,
   LanguageHint,
   LanguagePreset,
   RuleGroup,
+  TraitFilter,
 } from '../api/types';
 import { hasFilters } from '../search/chips';
+import { chooseTrait, parseTraitWords, withoutTrait } from '../search/traits';
 import { useLibraryStore } from './library';
 
 /** Typing waits this long for the next key before it searches (spec: 80 ms). */
@@ -36,6 +39,15 @@ export const useSearchStore = defineStore('search', () => {
   /** The text the current results are for (after the debounce). */
   const query = ref('');
   const filters = shallowRef<Filters>({});
+  /**
+   * The glyph traits every result must have (E49.6), chosen on the Letters preset's letters
+   * or typed as `R:straight`; one value per trait. Not a `Filters` field: a smart collection
+   * does not take them.
+   */
+  const traits = shallowRef<TraitFilter[]>([]);
+  /** The glyph trait catalog from the API, read once (`loadTraitCatalog`). */
+  const traitCatalog = shallowRef<GlyphTraitInfo[]>([]);
+  let catalogLoad: Promise<void> | null = null;
   const hits = shallowRef<FamilyHit[] | null>(null);
   const counts = shallowRef<FilterCounts>({});
   const total = ref(0);
@@ -70,8 +82,16 @@ export const useSearchStore = defineStore('search', () => {
   const hiding = computed(() => hideMissing.value && coverText.value !== '');
 
   const active = computed(
-    () => query.value.trim() !== '' || hasFilters(filters.value) || hiding.value,
+    () =>
+      query.value.trim() !== '' ||
+      hasFilters(filters.value) ||
+      traits.value.length > 0 ||
+      hiding.value,
   );
+
+  /** The trait filters of a request: left out when there are none. */
+  const traitPart = (list: readonly TraitFilter[]) =>
+    list.length ? { glyphTraits: [...list] } : {};
 
   /** The rule that keeps only the families rendering `text` completely. */
   const rendersText = (text: string): RuleGroup => ({
@@ -110,7 +130,8 @@ export const useSearchStore = defineStore('search', () => {
     const q = query.value.trim();
     const f = filters.value;
     const rule = hiding.value ? rendersText(coverText.value) : null;
-    const searching = q !== '' || hasFilters(f) || rule !== null;
+    const chosenTraits = traits.value;
+    const searching = q !== '' || hasFilters(f) || chosenTraits.length > 0 || rule !== null;
     const order = orderOf(q, f, searching);
     const client = useClient();
     try {
@@ -122,6 +143,7 @@ export const useSearchStore = defineStore('search', () => {
         const page = await client.search({
           query: q,
           filters: f,
+          ...traitPart(chosenTraits),
           ...(rule ? { rule } : {}),
           ...(order ? { order } : {}),
           page: { offset, limit: searching ? PAGE : 1 },
@@ -169,6 +191,7 @@ export const useSearchStore = defineStore('search', () => {
         .search({
           query: q,
           filters: filters.value,
+          ...traitPart(traits.value),
           ...(rule ? { rule } : {}),
           page: { offset: 0, limit: 1 },
         })
@@ -221,14 +244,83 @@ export const useSearchStore = defineStore('search', () => {
     if (hiding.value !== before) void run(false);
   }
 
-  /** The box changed: searches once typing pauses for `SEARCH_DEBOUNCE_MS`. */
+  /**
+   * The box changed: searches once typing pauses for `SEARCH_DEBOUNCE_MS`. Words like
+   * `R:straight` that name a glyph trait and a value of it (E49.6) leave the box and become
+   * trait filters, shown as chips.
+   */
   function setText(next: string): void {
     text.value = next;
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      query.value = text.value;
-      void run();
-    }, SEARCH_DEBOUNCE_MS);
+    timer = setTimeout(() => void commitText(), SEARCH_DEBOUNCE_MS);
+  }
+
+  async function commitText(): Promise<void> {
+    if (text.value.includes(':')) {
+      await loadTraitCatalog();
+      const parsed = parseTraitWords(text.value, traitCatalog.value);
+      if (parsed.traits.length) {
+        text.value = parsed.text;
+        let next = traits.value;
+        for (const f of parsed.traits) next = [...withoutTrait(next, f.traitId), f];
+        traits.value = next;
+      }
+    }
+    query.value = text.value;
+    void run();
+  }
+
+  /** Reads the glyph trait catalog once; an error leaves it empty (no letter is a control). */
+  function loadTraitCatalog(): Promise<void> {
+    catalogLoad ??= useClient()
+      .listGlyphTraits()
+      .then((list) => {
+        traitCatalog.value = list;
+      })
+      .catch(() => {
+        catalogLoad = null;
+      });
+    return catalogLoad;
+  }
+
+  /** Chooses `value` for a trait in place of its old one; `null` ("Any") takes it off. */
+  function chooseTraitValue(traitId: string, value: string | null): void {
+    traits.value = chooseTrait(traits.value, traitId, value);
+    void run();
+  }
+
+  /** Replaces every trait filter and searches. */
+  function setTraits(next: TraitFilter[]): void {
+    traits.value = next;
+    void run();
+  }
+
+  /**
+   * How many families each value of a trait gives in the current result: the same search
+   * with that value chosen for the trait in place of the one chosen now (the API counts;
+   * one search per value, as the cover count does). A value whose count fails is left out.
+   */
+  async function countTraitValues(info: GlyphTraitInfo): Promise<Map<string, number>> {
+    const q = query.value.trim();
+    const f = filters.value;
+    const rule = hiding.value ? rendersText(coverText.value) : null;
+    const others = withoutTrait(traits.value, info.id);
+    const client = useClient();
+    const totals = await Promise.all(
+      info.values.map((v) =>
+        client
+          .search({
+            query: q,
+            filters: f,
+            glyphTraits: [...others, { kind: 'value', traitId: info.id, value: v.id }],
+            ...(rule ? { rule } : {}),
+            page: { offset: 0, limit: 1 },
+          })
+          .then((page) => [v.id, page.total] as const)
+          .catch(() => null),
+      ),
+    );
+    return new Map(totals.filter((x) => x !== null));
   }
 
   /** Replaces the chosen filters and searches at once (a chip click is not typing). */
@@ -237,10 +329,11 @@ export const useSearchStore = defineStore('search', () => {
     void run();
   }
 
-  /** Clears the text and every filter. */
+  /** Clears the text and every filter, the glyph traits too. */
   function clear(): void {
     text.value = '';
     query.value = '';
+    traits.value = [];
     setFilters({});
   }
 
@@ -269,6 +362,8 @@ export const useSearchStore = defineStore('search', () => {
     text,
     query,
     filters,
+    traits,
+    traitCatalog,
     hits,
     counts,
     total,
@@ -285,6 +380,10 @@ export const useSearchStore = defineStore('search', () => {
     run,
     setText,
     setFilters,
+    setTraits,
+    chooseTraitValue,
+    countTraitValues,
+    loadTraitCatalog,
     setCoverText,
     setHideMissing,
     clear,
