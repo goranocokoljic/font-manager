@@ -302,6 +302,12 @@ test.describe('@screens', () => {
               await compareRows(page, page.getByRole('tree', { name: 'Font list' }), pinRows);
               await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
               await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
+              const sheet = page.getByRole('dialog', { name: 'Compare' });
+              await expect(sheet).toBeVisible();
+              // The sheet slides up (E48.1): wait until it rests on the bottom edge.
+              await expect
+                .poll(() => sheet.evaluate((d) => Math.round(d.getBoundingClientRect().bottom)))
+                .toBe(page.viewportSize()!.height);
               if (pinMode) await page.getByRole('radio', { name: pinMode }).check();
             }
             if (quickRows) {
