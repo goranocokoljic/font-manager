@@ -433,3 +433,11 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.2 #525] crates/fm-api/src/comparison.rs:20 — `CompareMode` defaults to `SideBySide` (Grid), so CLI/MCP saves without a mode or unparseable rows (fm-core index/comparisons.rs:37) open as Grid, not the UI's Stacked default.
 - [E48.2 #525] apps/desktop/src/components/CompareSheet.vue:755 — at 1,000×700 the comparison name field truncates its placeholder ("Name this co…").
 - [fix-main 38af3e9 #540] apps/desktop/e2e/motion-probe.ts — `movedFromStyle` reads the computed style when a late `transitionrun` comes; by then `crossfade()` may have removed `fm-crossfade`, so the move records 0 ms and the drag test's count check fails (seen under a 7x CPU throttle, not yet on CI).
+
+## 2026-11-10
+
+- [E48.4 #527] apps/desktop/src/views/HomeView.vue:388 — the C key still calls `compare.pin`, so a keyboard user can add a font to Compare from the list or wall but not remove it there (the icons now toggle).
+- [E48.4 #527] docs/user/keyboard-shortcuts.md:122 — still says "Add to compare pins it" for suggestions; the Pairings panel now has the compare icon, which also removes.
+- [E48.4 #527] apps/desktop/src/stores/pairings.ts:42 — `pairings.add` has no production caller left (PairingsPanel uses CompareToggle); only pairings.test.ts uses it.
+- [E48.4 #527] apps/desktop/src/components/FontGrid.vue:822 — the accent on `--fm-surface` face cards is about 3.0:1 in both themes; it passes with no margin for the filled compare icon and the focus ring.
+- [E48.4 #527] apps/desktop/src/components/FontGrid.vue:127 — a user-chosen preview background (`--fm-card-bg`) can drop the accent icon and the chevron under 3:1.
