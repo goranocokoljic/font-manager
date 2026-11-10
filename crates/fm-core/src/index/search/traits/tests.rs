@@ -470,3 +470,42 @@ fn a_value_count_is_what_its_filter_finds() {
         }
     }
 }
+
+/// The detections are kept between searches and read again after the
+/// database changes: a detection made sure later is found, and measures
+/// that are not a JSON object of numbers read as not measured.
+#[test]
+fn a_changed_detection_is_found_by_the_next_search() {
+    let dir = TempDir::new("trait-search-cache");
+    let index = library(&dir);
+    let (a, b, c) = (
+        face(&index, "a.ttf"),
+        face(&index, "b.ttf"),
+        face(&index, "c.ttf"),
+    );
+    let straight = || vec![value("R.leg", "straight")];
+    let round = || vec![range("O.roundness", None, Some(0.95), None)];
+    assert_eq!(search(&index, straight()).expect("search"), vec![a]);
+    assert_eq!(
+        sorted(search(&index, round()).expect("search")),
+        sorted(vec![a, c])
+    );
+
+    index.trait_debug_sql(&format!(
+        "UPDATE glyph_traits SET confidence = 0.9 WHERE face_id = {} AND trait = 'R.leg';
+         UPDATE glyph_traits SET scalars = 'not json' WHERE face_id = {} AND trait = 'O.roundness';",
+        b.0, c.0
+    ));
+    assert_eq!(
+        sorted(search(&index, straight()).expect("search")),
+        sorted(vec![a, b])
+    );
+    assert_eq!(search(&index, round()).expect("search"), vec![a]);
+    let leg = index
+        .list_glyph_traits()
+        .expect("list")
+        .into_iter()
+        .find(|t| t.id == "R.leg")
+        .expect("R.leg");
+    assert_eq!((leg.measured, leg.unsure), (3, 0));
+}

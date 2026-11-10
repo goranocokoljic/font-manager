@@ -1099,6 +1099,9 @@ pub struct TraitSearched {
     pub measured: u32,
     /// Family groups each search found, in [`trait_searches`] order.
     pub found: Vec<u32>,
+    /// The 95th percentile of each search, in [`trait_searches`] order, in
+    /// milliseconds: which search is the slow one.
+    pub p95_by_search_ms: Vec<f64>,
 }
 
 /// The trait searches timed: one value, one range, both with a query, a
@@ -1170,13 +1173,18 @@ pub fn trait_search(home: &Path, rounds: usize) -> BenchResult<TraitSearched> {
     let searches = trait_searches();
     let mut samples = Vec::with_capacity(searches.len() * rounds);
     let mut found = Vec::with_capacity(searches.len());
+    let mut p95_by_search_ms = Vec::with_capacity(searches.len());
     for req in searches {
         found.push(api.search(req.clone())?.total);
+        let mut own = Vec::with_capacity(rounds);
         for _ in 0..rounds {
             let begin = Instant::now();
             api.search(req.clone())?;
-            samples.push(ms(begin.elapsed()));
+            own.push(ms(begin.elapsed()));
         }
+        own.sort_by(f64::total_cmp);
+        p95_by_search_ms.push(percentile(&own, 95));
+        samples.extend(own);
     }
     samples.sort_by(f64::total_cmp);
     Ok(TraitSearched {
@@ -1186,6 +1194,7 @@ pub fn trait_search(home: &Path, rounds: usize) -> BenchResult<TraitSearched> {
         max_ms: samples.last().copied().unwrap_or_default(),
         measured,
         found,
+        p95_by_search_ms,
     })
 }
 

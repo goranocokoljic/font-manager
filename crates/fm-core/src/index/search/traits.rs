@@ -9,8 +9,12 @@
 //! passes no filter on that trait and counts under no value: it is never
 //! a "none".
 //!
-//! One indexed query per filter on `(trait, value)`, intersected; the rows
-//! are few next to the faces, so a search keeps inside its 50 ms.
+//! The rows are read once per database change, with the search rows
+//! ([`Detections`], kept in the search cache), each value as its place in
+//! the catalog and each measure as a number: a filter is then one pass over
+//! one trait's detections in memory, inside the 50 ms search budget. A
+//! query per filter, with the measures parsed from JSON on every search,
+//! was not.
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,29 +22,153 @@ use fm_api::search::{
     GlyphTraitInfo, GlyphTraitKind, GlyphTraitMeasure, GlyphTraitThreshold, GlyphTraitValue,
     TraitFilter,
 };
-use rusqlite::{Connection, params};
+use rusqlite::Connection;
 
 use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
 use crate::glyph_traits::{self, GlyphTrait, TraitKind};
 use crate::glyphs::traits::CONFIDENT;
 
-/// The faces that pass every filter of `filters`; `None` when there is
-/// none, so every face passes. An unknown trait, value or measure, a range
-/// on an enum trait, or a range without a bound is `InvalidRequest`.
-pub(super) fn matching(
-    conn: &Connection,
-    filters: &[TraitFilter],
-) -> FmResult<Option<HashSet<u32>>> {
+/// Every stored detection, by trait id, in catalog terms.
+#[derive(Debug, Default)]
+pub(super) struct Detections {
+    by_trait: HashMap<String, Vec<Detected>>,
+}
+
+/// One face's detection of one trait.
+#[derive(Debug)]
+struct Detected {
+    face: u32,
+    /// The value's place in the catalog trait's values; `None` for a value
+    /// the catalog does not list (a detector newer than the catalog).
+    value: Option<u8>,
+    confidence: f64,
+    /// The measures in the catalog trait's order; NaN where not measured.
+    measures: Box<[f64]>,
+}
+
+impl Detections {
+    /// Reads every `glyph_traits` row once. A row of a trait the catalog
+    /// does not list is left out; measures that are not a JSON object of
+    /// numbers read as not measured.
+    fn read(conn: &Connection) -> FmResult<Self> {
+        let catalog = glyph_traits::load()?;
+        let mut stmt = conn
+            .prepare_cached("SELECT face_id, trait, value, confidence, scalars FROM glyph_traits")
+            .map_err(|e| db_error(&e))?;
+        let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
+        let mut by_trait: HashMap<String, Vec<Detected>> = HashMap::new();
+        while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
+            let e = |e: rusqlite::Error| db_error(&e);
+            let trait_id: String = row.get(1).map_err(e)?;
+            let Some(t) = catalog.iter().find(|t| t.id == trait_id) else {
+                continue;
+            };
+            let value: String = row.get(2).map_err(e)?;
+            let scalars: Option<String> = row.get(4).map_err(e)?;
+            let parsed: Option<serde_json::Map<String, serde_json::Value>> =
+                scalars.and_then(|json| serde_json::from_str(&json).ok());
+            let measures = t
+                .measures
+                .iter()
+                .map(|m| {
+                    parsed
+                        .as_ref()
+                        .and_then(|map| map.get(&m.id))
+                        .and_then(serde_json::Value::as_f64)
+                        .unwrap_or(f64::NAN)
+                })
+                .collect();
+            by_trait.entry(trait_id).or_default().push(Detected {
+                face: row.get(0).map_err(e)?,
+                value: t
+                    .values
+                    .iter()
+                    .position(|v| v.id == value)
+                    .and_then(|at| u8::try_from(at).ok()),
+                confidence: row.get(3).map_err(e)?,
+                measures,
+            });
+        }
+        Ok(Self { by_trait })
+    }
+
+    fn of(&self, trait_id: &str) -> &[Detected] {
+        self.by_trait.get(trait_id).map_or(&[], Vec::as_slice)
+    }
+}
+
+/// What one filter asks, checked against the catalog.
+enum Wanted<'a> {
+    Value(&'a str, u8),
+    Range(&'a str, usize, Option<f64>, Option<f64>),
+}
+
+/// Checks `filters` against the catalog, before anything is read: an
+/// unknown trait, value or measure, a range on an enum trait, or a range
+/// without a bound is `InvalidRequest`.
+fn check(filters: &[TraitFilter]) -> FmResult<Vec<Wanted<'_>>> {
+    filters.iter().map(wanted).collect()
+}
+
+impl Index {
+    /// The faces that pass every filter of `filters`; `None` when there is
+    /// no filter, so every face passes. Checks the filters first, so a bad
+    /// one is `InvalidRequest` before anything is read; reads the
+    /// detections once per database change. Call it after
+    /// `refresh_search_cache`, which forgets them on a change.
+    pub(super) fn trait_faces(&self, filters: &[TraitFilter]) -> FmResult<Option<HashSet<u32>>> {
+        let wanted = check(filters)?;
+        if wanted.is_empty() {
+            return Ok(None);
+        }
+        self.read_detections()?;
+        let cache = self.search_cache.borrow();
+        let detections = cache
+            .detections
+            .as_ref()
+            .ok_or_else(|| FmError::internal("glyph-trait detections were not read"))?;
+        Ok(Some(passing(detections, &wanted)))
+    }
+
+    /// Reads the detections into the search cache unless they are there.
+    fn read_detections(&self) -> FmResult<()> {
+        if self.search_cache.borrow().detections.is_none() {
+            let detections = Detections::read(&self.conn)?;
+            self.search_cache.borrow_mut().detections = Some(detections);
+        }
+        Ok(())
+    }
+}
+
+/// The faces of `detections` that pass every one of `wanted`.
+fn passing(detections: &Detections, wanted: &[Wanted<'_>]) -> HashSet<u32> {
     let mut passing: Option<HashSet<u32>> = None;
-    for filter in filters {
-        let faces = faces_of(conn, filter)?;
+    for w in wanted {
+        let faces: HashSet<u32> = match *w {
+            Wanted::Value(trait_id, at) => detections
+                .of(trait_id)
+                .iter()
+                .filter(|d| d.value == Some(at) && d.confidence >= CONFIDENT)
+                .map(|d| d.face)
+                .collect(),
+            Wanted::Range(trait_id, measure, min, max) => detections
+                .of(trait_id)
+                .iter()
+                .filter(|d| {
+                    d.measures.get(measure).is_some_and(|&v| {
+                        !v.is_nan() && min.is_none_or(|lo| v >= lo) && max.is_none_or(|hi| v <= hi)
+                    })
+                })
+                .map(|d| d.face)
+                .collect(),
+        };
         passing = Some(match passing {
             None => faces,
             Some(before) => before.intersection(&faces).copied().collect(),
         });
     }
-    Ok(passing)
+    passing.unwrap_or_default()
 }
 
 /// The catalog trait `id`, or `InvalidRequest`.
@@ -56,24 +184,24 @@ fn catalog_trait(id: &str) -> FmResult<&'static GlyphTrait> {
     })
 }
 
-/// The faces one filter lets through.
-fn faces_of(conn: &Connection, filter: &TraitFilter) -> FmResult<HashSet<u32>> {
+/// What one filter asks, or why it cannot be asked.
+fn wanted(filter: &TraitFilter) -> FmResult<Wanted<'_>> {
     match filter {
         TraitFilter::Value { trait_id, value } => {
             let t = catalog_trait(trait_id)?;
-            if t.value(value).is_none() {
-                let values: Vec<&str> = t.values.iter().map(|v| v.id.as_str()).collect();
-                return Err(FmError::invalid(format!(
-                    "{trait_id} has no value {value}. Its values are {}.",
-                    values.join(", ")
-                )));
-            }
-            collect(
-                conn,
-                "SELECT face_id FROM glyph_traits
-                 WHERE trait = ?1 AND value = ?2 AND confidence >= ?3",
-                params![trait_id, value, CONFIDENT],
-            )
+            let at = t
+                .values
+                .iter()
+                .position(|v| v.id == *value)
+                .and_then(|at| u8::try_from(at).ok())
+                .ok_or_else(|| {
+                    let values: Vec<&str> = t.values.iter().map(|v| v.id.as_str()).collect();
+                    FmError::invalid(format!(
+                        "{trait_id} has no value {value}. Its values are {}.",
+                        values.join(", ")
+                    ))
+                })?;
+            Ok(Wanted::Value(trait_id, at))
         }
         TraitFilter::Range {
             trait_id,
@@ -87,18 +215,18 @@ fn faces_of(conn: &Connection, filter: &TraitFilter) -> FmResult<HashSet<u32>> {
                     "{trait_id} measures no number; ask for one of its values."
                 )));
             }
-            let measure = match measure {
-                Some(id) => t.measures.iter().find(|m| m.id == *id).ok_or_else(|| {
+            let at = match measure {
+                Some(id) => t.measures.iter().position(|m| m.id == *id).ok_or_else(|| {
                     let ids: Vec<&str> = t.measures.iter().map(|m| m.id.as_str()).collect();
                     FmError::invalid(format!(
                         "{trait_id} has no measure {id}. Its measures are {}.",
                         ids.join(", ")
                     ))
                 })?,
-                None => t
-                    .measures
-                    .first()
-                    .ok_or_else(|| FmError::invalid(format!("{trait_id} has no measure.")))?,
+                None if t.measures.is_empty() => {
+                    return Err(FmError::invalid(format!("{trait_id} has no measure.")));
+                }
+                None => 0,
             };
             if min.is_none() && max.is_none() {
                 return Err(FmError::invalid(format!(
@@ -117,27 +245,9 @@ fn faces_of(conn: &Connection, filter: &TraitFilter) -> FmResult<HashSet<u32>> {
                     "The range on {trait_id} is empty: {lo} is above {hi}."
                 )));
             }
-            // The measure id is the catalog's (ASCII letters), never the
-            // caller's text, so the path is safe to build.
-            let path = format!("$.\"{}\"", measure.id);
-            collect(
-                conn,
-                "SELECT face_id FROM (
-                     SELECT face_id, CAST(json_extract(scalars, ?2) AS REAL) AS v
-                     FROM glyph_traits WHERE trait = ?1 AND json_valid(scalars))
-                 WHERE v IS NOT NULL AND (?3 IS NULL OR v >= ?3) AND (?4 IS NULL OR v <= ?4)",
-                params![trait_id, path, min, max],
-            )
+            Ok(Wanted::Range(trait_id, at, *min, *max))
         }
     }
-}
-
-fn collect(conn: &Connection, sql: &str, params: impl rusqlite::Params) -> FmResult<HashSet<u32>> {
-    let mut stmt = conn.prepare_cached(sql).map_err(|e| db_error(&e))?;
-    stmt.query_map(params, |r| r.get::<_, u32>(0))
-        .map_err(|e| db_error(&e))?
-        .collect::<Result<HashSet<_>, _>>()
-        .map_err(|e| db_error(&e))
 }
 
 /// What one trait counts in the library.
@@ -156,42 +266,37 @@ impl Index {
     pub fn list_glyph_traits(&self) -> FmResult<Vec<GlyphTraitInfo>> {
         let catalog = glyph_traits::load()?;
         self.refresh_search_cache()?;
+        self.read_detections()?;
         let cache = self.search_cache.borrow();
         let families: HashMap<u32, &str> = cache
             .rows
             .iter()
             .map(|row| (row.id, row.family_key.as_str()))
             .collect();
+        let detections = cache
+            .detections
+            .as_ref()
+            .ok_or_else(|| FmError::internal("glyph-trait detections were not read"))?;
         let mut counts: HashMap<String, TraitCount<'_>> = HashMap::new();
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT face_id, trait, value, confidence FROM glyph_traits")
-            .map_err(|e| db_error(&e))?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok((
-                    r.get::<_, u32>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, f64>(3)?,
-                ))
-            })
-            .map_err(|e| db_error(&e))?;
-        for row in rows {
-            let (face, trait_id, value, confidence) = row.map_err(|e| db_error(&e))?;
-            // Faces of gone files and paused sources are not searchable.
-            let Some(family) = families.get(&face) else {
-                continue;
-            };
-            let count = counts.entry(trait_id).or_default();
-            count.measured += 1;
-            if confidence < CONFIDENT {
-                count.unsure += 1;
-                continue;
+        for t in catalog {
+            for d in detections.of(&t.id) {
+                // Faces of gone files and paused sources are not searchable.
+                let Some(family) = families.get(&d.face) else {
+                    continue;
+                };
+                let count = counts.entry(t.id.clone()).or_default();
+                count.measured += 1;
+                if d.confidence < CONFIDENT {
+                    count.unsure += 1;
+                    continue;
+                }
+                let Some(value) = d.value.and_then(|at| t.values.get(usize::from(at))) else {
+                    continue;
+                };
+                let (faces, keys) = count.values.entry(value.id.clone()).or_default();
+                *faces += 1;
+                keys.insert(family);
             }
-            let (faces, keys) = count.values.entry(value).or_default();
-            *faces += 1;
-            keys.insert(family);
         }
         Ok(catalog.iter().map(|t| info(t, counts.get(&t.id))).collect())
     }
