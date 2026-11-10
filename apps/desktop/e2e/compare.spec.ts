@@ -59,12 +59,10 @@ test('C starts a new comparison, the row icon adds up to four, a fifth is refuse
   await compareButton(page).click();
   const pinned = sheet(page).getByRole('list', { name: 'Stacked' }).getByRole('listitem');
   await expect(pinned).toHaveCount(4);
-  await sheet(page)
-    .getByRole('button', { name: /^Remove JetBrains Mono .* from Compare$/ })
-    .click();
+  await pinned.getByRole('button', { name: /^Remove JetBrains Mono .* from Compare$/ }).click();
   await expect(pinned).toHaveCount(3);
   // The focus stays in the sheet, on the next Remove button.
-  await expect(sheet(page).getByRole('button', { name: /^Remove Legacy Grotesk/ })).toBeFocused();
+  await expect(pinned.getByRole('button', { name: /^Remove Legacy Grotesk/ })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(sheet(page)).toBeHidden();
   await addRow(page, tree, 4, /^Sample 2 .*\(4 of 4\)/);
@@ -96,7 +94,7 @@ test('Only this keeps one face as the base; the toast undoes it', async ({ page 
   await expect(dialog.getByTestId('compare-count')).toHaveText(/^1 of 4 · base Legacy Grotesk /);
   await expect(toast(page)).toContainText(/^Only Legacy Grotesk .* is left in Compare\./);
   // The suggestions follow the new base.
-  await expect(dialog.getByTestId('pairings-panel')).toContainText('Legacy Grotesk');
+  await expect(dialog.getByTestId('compare-similar')).toContainText('Similar to Legacy Grotesk');
   await toast(page).getByRole('button', { name: 'Undo' }).click();
   await expect(dialog.getByTestId('compare-count')).toHaveText(/^3 of 4 · base Inter /);
 
@@ -186,7 +184,10 @@ test('the sheet shows the pins in the sample text at one size, in three modes', 
 
   // Back to Grid with two faces: one row.
   await modes.getByRole('radio', { name: 'Grid' }).check();
-  await dialog.getByRole('button', { name: /^Remove Legacy Grotesk/ }).click();
+  await dialog
+    .getByTestId('face-remove')
+    .and(dialog.getByRole('button', { name: /^Remove Legacy Grotesk/ }))
+    .click();
   await expect(dialog.getByRole('list', { name: 'Grid' }).getByRole('listitem')).toHaveCount(2);
   const pair = await boxesOf();
   expect(pair[0]!.top).toBe(pair[1]!.top);
