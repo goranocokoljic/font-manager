@@ -53,6 +53,15 @@ async function unnamedControls(page: Page): Promise<string[]> {
   const missing: string[] = [];
   for (const control of await controls.all()) {
     if (!(await control.isVisible())) continue;
+    // A mouse-only control hidden from assistive technology and out of the Tab order (a wall
+    // card's chevron or compare icon, E48.4) is not in the accessibility tree: it has no name
+    // to give. A focusable one inside aria-hidden is still caught by axe (aria-hidden-focus).
+    if (
+      await control.evaluate(
+        (el) => el.closest('[aria-hidden="true"]') !== null && el.getAttribute('tabindex') === '-1',
+      )
+    )
+      continue;
     try {
       await expect(control).toHaveAccessibleName(/\S/, { timeout: 50 });
     } catch {

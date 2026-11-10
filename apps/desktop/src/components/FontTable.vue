@@ -602,17 +602,19 @@ span.sort {
   white-space: nowrap;
 }
 /* The compare icon (E48.4) ends the name cell: hidden at rest, shown on hover or at the
-   cursor, and always while it is in the set. A compact row is 24 px: the icon fits it. */
+   cursor, and always while it is in the set. It shows at once, like the list's row actions:
+   nothing animates while the cursor moves by keyboard (E46.4). A compact row is 24 px: the
+   icon fits it. */
 .row-compare {
   max-block-size: 100%;
   margin-inline-start: auto;
-  opacity: 0;
+  visibility: hidden;
+  transition: none;
 }
 .tr:hover .row-compare,
-.tr:focus-within .row-compare,
 .viewport:focus .tr.cursor .row-compare,
 .row-compare.in-set {
-  opacity: 1;
+  visibility: visible;
 }
 .tr.face .col-name {
   padding-inline-start: 32px;

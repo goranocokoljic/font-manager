@@ -1103,7 +1103,8 @@
     "findSimilarLabel": "Find the fonts similar to {name}"
   },
   "grid": {
-    "label": "Font grid"
+    "label": "Font grid",
+    "inCompare": ", in Compare"
   },
   "waterfall": {
     "label": "Font waterfall",

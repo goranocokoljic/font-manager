@@ -1103,7 +1103,8 @@
     "findSimilarLabel": "Die Schriften finden, die {name} ähneln"
   },
   "grid": {
-    "label": "Schriftraster"
+    "label": "Schriftraster",
+    "inCompare": ", im Vergleich"
   },
   "waterfall": {
     "label": "Schriftwasserfall",

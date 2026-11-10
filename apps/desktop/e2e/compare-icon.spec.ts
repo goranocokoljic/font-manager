@@ -31,6 +31,10 @@ async function openWall(page: Page): Promise<Locator> {
   return wall;
 }
 
+/** A wall card's compare icon: in the box right after the card, never inside it. */
+const iconOf = (card: Locator) =>
+  card.locator('xpath=following-sibling::*[1]').getByTestId('card-compare');
+
 const opacity = (el: Locator) => el.evaluate((e) => Number(getComputedStyle(e).opacity));
 
 test('a wall card shows the icon on hover, adds and removes, and keeps it while in the set', async ({
@@ -38,7 +42,9 @@ test('a wall card shows the icon on hover, adds and removes, and keeps it while 
 }) => {
   const wall = await openWall(page);
   const card = wall.getByRole('option').first();
-  const icon = card.getByTestId('card-compare');
+  const icon = iconOf(card);
+  // The icon sits beside the card: an option holds no button.
+  await expect(card.getByRole('button')).toHaveCount(0);
   const name = (await card.locator('[data-family-name]').textContent())!.trim();
 
   // Hidden at rest.
@@ -50,13 +56,15 @@ test('a wall card shows the icon on hover, adds and removes, and keeps it while 
   const box = (await icon.boundingBox())!;
   expect(Math.round(box.width)).toBe(28);
   expect(Math.round(box.height)).toBe(28);
-  await expect(icon).toHaveAccessibleName(`Add ${name} to Compare`);
+  await expect(icon).toHaveAttribute('aria-label', `Add ${name} to Compare`);
   await expect(icon).toHaveAttribute('data-in-set', 'false');
 
   // A click adds the family; the icon fills in the accent and stays after the pointer leaves.
   await icon.click();
   await expect(icon).toHaveAttribute('data-in-set', 'true');
-  await expect(icon).toHaveAccessibleName(`Remove ${name} from Compare`);
+  await expect(icon).toHaveAttribute('aria-label', `Remove ${name} from Compare`);
+  // The icon is hidden from assistive technology; the card's name says it is in Compare.
+  await expect(card).toHaveAttribute('aria-label', /, in Compare$/);
   const [fills, accent] = await icon.evaluate((e) => {
     const probe = document.createElement('span');
     probe.style.color = 'var(--fm-accent)';
@@ -143,9 +151,9 @@ test.describe('@screens', () => {
       await page.setViewportSize({ width, height });
       const cards = wall.getByRole('option');
       await cards.nth(0).hover();
-      await cards.nth(0).getByTestId('card-compare').click();
+      await iconOf(cards.nth(0)).click();
       await cards.nth(2).hover();
-      await cards.nth(2).getByTestId('card-compare').click();
+      await iconOf(cards.nth(2)).click();
       await cards.nth(1).hover();
       await page.screenshot({ path: `${dir}/compare-icon-wall-${width}x${height}.png` });
       await cards.nth(3).click();

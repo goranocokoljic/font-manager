@@ -514,10 +514,11 @@ describe('the compare icon on cards and rows (E48.4)', () => {
 
   const toggleOf = (w: VueWrapper, key: string) =>
     w.get(
-      `[data-key="${key}"] [data-testid="card-compare"], [data-key="${key}"] [data-testid="row-compare"]`,
+      `[data-for="${key}"] [data-testid="card-compare"], [data-key="${key}"] [data-testid="row-compare"]`,
     );
 
   it('a wall card toggles its family in and out of the set; the label says which (en, de)', async () => {
+    // The icon sits beside the card, never inside the option (an option holds no button).
     await load({ extraFaces: 17, stylesPerFamily: 3 });
     const grid = await mountView(FontGrid);
     const list = useFontListStore();
@@ -526,6 +527,11 @@ describe('the compare icon on cards and rows (E48.4)', () => {
     await useLibraryStore().facesOf(row.family.id);
     await flushPromises();
     const name = row.family.name;
+    expect(grid.findAll('[role="option"] button')).toHaveLength(0);
+    // Hidden from assistive technology (a listbox holds only options); the card says it.
+    expect(grid.get(`[data-for="${row.key}"]`).attributes('aria-hidden')).toBe('true');
+    const card = () => grid.get(`[role="option"][data-key="${row.key}"]`);
+    expect(card().attributes('aria-label')).not.toContain('Compare');
     let icon = toggleOf(grid, row.key);
     // Outline, not in the set: it adds.
     expect(icon.attributes('data-in-set')).toBe('false');
@@ -544,8 +550,10 @@ describe('the compare icon on cards and rows (E48.4)', () => {
     expect(icon.classes()).toContain('in-set');
     expect(icon.findAll('rect[fill="currentColor"]')).toHaveLength(2);
     expect(icon.attributes('aria-label')).toBe(`Remove ${name} from Compare`);
+    expect(card().attributes('aria-label')).toMatch(/, in Compare$/);
     setLocale('de');
     await flushPromises();
+    expect(card().attributes('aria-label')).toMatch(/, im Vergleich$/);
     expect(toggleOf(grid, row.key).attributes('aria-label')).toBe(
       `${name} aus dem Vergleich entfernen`,
     );
