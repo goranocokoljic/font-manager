@@ -57,15 +57,18 @@ test('a wall card shows the icon on hover, adds and removes, and keeps it while 
   await icon.click();
   await expect(icon).toHaveAttribute('data-in-set', 'true');
   await expect(icon).toHaveAccessibleName(`Remove ${name} from Compare`);
-  const [color, accent] = await icon.evaluate((e) => {
+  const [fills, accent] = await icon.evaluate((e) => {
     const probe = document.createElement('span');
     probe.style.color = 'var(--fm-accent)';
     document.body.append(probe);
-    const out = [getComputedStyle(e).color, getComputedStyle(probe).color];
+    const out = [
+      [...e.querySelectorAll('rect')].map((r) => getComputedStyle(r).fill),
+      getComputedStyle(probe).color,
+    ] as const;
     probe.remove();
     return out;
   });
-  expect(color).toBe(accent);
+  expect(fills).toEqual([accent, accent]);
   await page.mouse.move(2, 2);
   await expect.poll(() => opacity(icon)).toBe(1);
   // The card was not selected by the icon.

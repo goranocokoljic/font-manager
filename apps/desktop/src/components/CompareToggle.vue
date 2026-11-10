@@ -68,9 +68,11 @@ function onClick(): void {
 .compare-toggle:not(:disabled):hover {
   color: var(--fm-fg);
 }
-.compare-toggle.in-set,
-.compare-toggle.in-set:not(:disabled):hover {
-  color: var(--fm-accent);
+/* In the set: the shapes fill in the accent. A fill and a stroke, never a text color: the
+   accent is not a text color (styles/contrast.test.ts). */
+.compare-toggle.in-set :deep(rect) {
+  fill: var(--fm-accent);
+  stroke: var(--fm-accent);
 }
 .compare-toggle:focus-visible {
   outline: 2px solid var(--fm-accent);
