@@ -185,8 +185,32 @@ test('the wall scrolls at 60 fps with 1,000 families in Letters at 4 glyphs', as
   // 55, so a slow sweep is the wall's and not the runner's; the CI macOS VM renders busy
   // frames at half rate, so there a counted sweep is held to 28.
   const budget = process.env.CI && process.platform === 'darwin' ? 28 : 55;
+  // Back at the top and at rest: nothing animates, every card in the window has its thumbnail.
+  const rest = async () => {
+    await wall.evaluate((el) => (el.scrollTop = 0));
+    await expect
+      .poll(
+        () =>
+          wall.evaluate(
+            (el) =>
+              el.getAnimations({ subtree: true }).length +
+              el.querySelectorAll('[data-testid="thumbnail"]:not([data-state="ready"])').length,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(0);
+  };
+  // The sweep that counts goes over a stretch whose faces are in: one pass first, not counted.
+  // On a first pass every new card's font file comes through the route handler above (a round
+  // trip to the test process for each face, which the app's asset protocol does not have), and
+  // with a second worker on the runner those frames ran late: the Windows runner gave 30.0 fps
+  // in the full suite, twice, and 59.9 alone. Measured there on 2026-11-10 with this test's
+  // sweep: 80 of 240 frames late on the first pass, 0 of 240 on the second (276 cards mounted
+  // in each). As the slider test in wall.spec.ts, this one counts frames, not font loads.
+  await measure(40, 240);
   let last = { before: 0, fps: 0, after: 0 };
   for (let round = 0; round < 3; round++) {
+    await rest();
     const before = await measure(0, 60);
     const fps = await measure(40, 240);
     const after = await measure(0, 60);
