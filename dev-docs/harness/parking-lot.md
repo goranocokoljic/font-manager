@@ -441,3 +441,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.4 #527] apps/desktop/src/stores/pairings.ts:42 — `pairings.add` has no production caller left (PairingsPanel uses CompareToggle); only pairings.test.ts uses it.
 - [E48.4 #527] apps/desktop/src/components/FontGrid.vue:822 — the accent on `--fm-surface` face cards is about 3.0:1 in both themes; it passes with no margin for the filled compare icon and the focus ring.
 - [E48.4 #527] apps/desktop/src/components/FontGrid.vue:127 — a user-chosen preview background (`--fm-card-bg`) can drop the accent icon and the chevron under 3:1.
+- [E48.5 #528] apps/desktop/src/components/CompareSheet.vue:64 — `textToSave` still reads `compare.pins[0]` instead of the new `compare.base` (same value today).
+- [E48.5 #528] apps/desktop/src/views/HomeView.vue:672 — the Compare button's title (`home.compareTitle`) still says C pins the selected font; C now starts a new comparison.
