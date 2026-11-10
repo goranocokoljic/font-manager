@@ -419,3 +419,24 @@ fn an_index_from_before_glyph_traits_measures_them_after_the_upgrade() {
             .is_empty()
     );
 }
+
+/// A pass with nothing to measure (an empty or up-to-date library) reports
+/// nothing: no progress and no finish event, so a scan's events are not
+/// interleaved with a pass that did no work.
+#[test]
+fn a_pass_with_nothing_to_measure_is_silent() {
+    let dir = TempDir::new("trait-pass-silent");
+    let fonts = dir.path().join("fonts");
+    fs::create_dir_all(&fonts).unwrap();
+    let index = std::sync::Arc::new(Mutex::new(scanned(&dir, &fonts)));
+    let mut calls = 0;
+    let report = run(&index, &AtomicBool::new(false), &mut |_, _| calls += 1).unwrap();
+    assert_eq!((report.total, report.measured, calls), (0, 0, 0));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let runner = Runner::default();
+    runner.start(std::sync::Arc::clone(&index), JobId(9), move |e| {
+        let _ = tx.send(e);
+    });
+    runner.stop();
+    assert!(rx.try_iter().next().is_none(), "no events");
+}

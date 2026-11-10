@@ -49,7 +49,8 @@ fn workers() -> usize {
 }
 
 /// Runs the pass over `index` until every face is measured or `cancel` is
-/// set. `progress` gets `(done, total)` at the start and after each batch.
+/// set. `progress` gets `(done, total)` at the start and after each batch;
+/// never when no face needs measuring.
 pub fn run(
     index: &Mutex<Index>,
     cancel: &AtomicBool,
@@ -74,6 +75,10 @@ pub(crate) fn run_at(
         total,
         cancelled: false,
     };
+    if total == 0 {
+        // Nothing to measure: no progress to report.
+        return Ok(report);
+    }
     progress(0, total);
     let mut done = 0;
     let mut after = 0;
@@ -194,6 +199,9 @@ impl Runner {
                     emit(Event::TraitPassProgress { job, done, total });
                 };
                 match run(&index, &flag, &mut progress) {
+                    // A pass with nothing to measure (the library is up to
+                    // date, or empty) ends silently.
+                    Ok(report) if report.total == 0 => {}
                     Ok(report) => {
                         tracing::info!(%job, measured = report.measured, cancelled = report.cancelled, "trait pass ended");
                         emit(Event::TraitPassFinished {
