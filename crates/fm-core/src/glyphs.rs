@@ -31,6 +31,8 @@ use crate::error::{FmError, FmResult};
 use crate::glyph_features::{GlyphFeatures, glyph_features};
 use crate::parser::decompress_web;
 
+pub mod geometry;
+
 /// The most characters one page holds.
 pub const MAX_PAGE: u32 = 500;
 

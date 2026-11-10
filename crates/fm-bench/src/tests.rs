@@ -396,3 +396,28 @@ fn fonts_needed_needs_a_scanned_index_with_enough_faces() {
         fonts_needed_with(home.path(), Arc::new(MockActivator::new())).expect_err("too few faces");
     assert!(err.to_string().contains("1 fonts that name"), "{err}");
 }
+
+#[test]
+fn glyph_geometry_is_timed_for_the_first_faces_with_trait_glyphs() {
+    let home = TempDir::new("glyph-geometry");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = glyph_geometry(home.path(), 2).expect("glyph geometry");
+    // The corpus has more than GEOMETRY_FACES Latin faces.
+    assert_eq!(res.faces, GEOMETRY_FACES, "{res:?}");
+    assert_eq!(res.samples, res.faces * 2, "{res:?}");
+    assert!(
+        res.glyphs_per_face > 10.0 && res.glyphs_per_face <= 15.0,
+        "{res:?}"
+    );
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+}
+
+#[test]
+fn the_geometry_record_reads_every_trait_glyph_and_skips_a_broken_file() {
+    let data = fs::read(fixtures().join("google-repo/epilogue/Epilogue[wght].ttf")).expect("font");
+    assert_eq!(record_geometry(&data), Some(15));
+    assert_eq!(record_geometry(b"not a font"), None);
+}
