@@ -90,6 +90,34 @@ test('a wall card shows the icon on hover, adds and removes, and keeps it while 
   await expect.poll(() => opacity(icon)).toBe(0);
 });
 
+test('a wall card shows the icon at the keyboard cursor, not elsewhere (focus path)', async ({
+  page,
+}) => {
+  const wall = await openWall(page);
+  const cards = wall.getByRole('option');
+  await page.mouse.move(2, 2);
+  // Focus the wall without a pointer on it: the first card becomes the cursor.
+  await wall.focus();
+  await page.keyboard.press('Home');
+  await expect(wall).toHaveAttribute(
+    'aria-activedescendant',
+    (await cards.nth(0).getAttribute('id'))!,
+  );
+  await expect.poll(() => opacity(iconOf(cards.nth(0)))).toBe(1);
+  await expect.poll(() => opacity(iconOf(cards.nth(1)))).toBe(0);
+  // The cursor moves right: the icon follows it.
+  await page.keyboard.press('ArrowRight');
+  await expect(wall).toHaveAttribute(
+    'aria-activedescendant',
+    (await cards.nth(1).getAttribute('id'))!,
+  );
+  await expect.poll(() => opacity(iconOf(cards.nth(1)))).toBe(1);
+  await expect.poll(() => opacity(iconOf(cards.nth(0)))).toBe(0);
+  // Focus leaves the wall: no cursor icon shows.
+  await page.getByRole('searchbox').first().focus();
+  await expect.poll(() => opacity(iconOf(cards.nth(1)))).toBe(0);
+});
+
 test('the selection bar reads Compare <n>; the sheet faces have the filled icon with a focus ring', async ({
   page,
 }) => {
