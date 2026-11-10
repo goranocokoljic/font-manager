@@ -17,7 +17,8 @@ export const SCHEMA = 1;
  * "a cache hit returns in under 2 ms"; smart_collections: E14.2, a search by a
  * smart collection and list_collections with 20 of them, each under 50 ms;
  * similar: E23.2, 20 similar faces in under 50 ms; pairings: E23.4,
- * suggest_pairings under 50 ms; layout_png: E45.5, an A4 page at 2x under 1 s).
+ * suggest_pairings under 50 ms; layout_png: E45.5, an A4 page at 2x under 1 s;
+ * glyph_geometry: E49.3, the geometry of the 15 trait glyphs of one face under 2 ms).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
@@ -36,6 +37,7 @@ export const BUDGETS = {
   similar: { unit: 'ms', target: 50 },
   pairings: { unit: 'ms', target: 50 },
   layout_png: { unit: 'ms', target: 1000 },
+  glyph_geometry: { unit: 'ms', target: 2 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];

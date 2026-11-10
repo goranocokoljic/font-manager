@@ -28,6 +28,7 @@ use fm_api::search::{
     Filters, PairingRequest, PairingRole, SearchRequest, SimilarRequest, Supports,
 };
 use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
+use fm_core::glyphs::geometry::{GlyphOutline, TRAIT_GLYPHS, sfnt_data};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
 use fm_core::preview::render_preview_file;
@@ -955,6 +956,96 @@ pub fn preview_cache(home: &Path, rounds: usize) -> BenchResult<CacheHits> {
         bytes: cache.total_bytes(),
         failed,
         duplicates,
+        samples: samples.len(),
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
+    })
+}
+
+/// The files whose first face [`glyph_geometry`] reads.
+pub const GEOMETRY_FACES: usize = 50;
+
+/// Glyph geometry (E49.3): the outlines of the 15 trait glyphs of one face
+/// with their contours, windings, boxes and counters, from the file's bytes.
+#[derive(Debug, Serialize)]
+pub struct GlyphGeometryTimed {
+    /// Faces timed: the first face of a file with at least one trait glyph.
+    pub faces: usize,
+    /// Files skipped: unreadable, or no trait glyph drawn.
+    pub skipped: usize,
+    /// Trait glyphs read per face, on average.
+    pub glyphs_per_face: f64,
+    /// Timed faces, `faces * rounds`.
+    pub samples: usize,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds: the budgeted number.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// The geometry the trait detectors read for one face: every trait glyph's
+/// outline, each contour's winding and box, and its counters. The number of
+/// glyphs drawn; `None` when the face cannot be read.
+fn record_geometry(data: &[u8]) -> Option<usize> {
+    let outlines = GlyphOutline::load_all(data, 0, &TRAIT_GLYPHS)?;
+    let mut drawn = 0;
+    for o in outlines.iter().flatten() {
+        drawn += 1;
+        for c in o.contours() {
+            std::hint::black_box((c.winding(), c.bbox()));
+        }
+        std::hint::black_box(o.counters());
+    }
+    Some(drawn)
+}
+
+/// Times [`record_geometry`] for the first face of up to [`GEOMETRY_FACES`]
+/// files of the index in `home`, each `rounds` times. The file is read and a
+/// web font decompressed once, untimed: the budget covers the geometry, not
+/// the disk or the file format.
+pub fn glyph_geometry(home: &Path, rounds: usize) -> BenchResult<GlyphGeometryTimed> {
+    let paths = home_paths(home);
+    let files = startup::open_index(&paths)?.index.load_files()?;
+    let mut samples = Vec::with_capacity(GEOMETRY_FACES * rounds);
+    let (mut faces, mut skipped, mut glyphs) = (0, 0, 0);
+    for file in files.files().filter(|f| !f.gone) {
+        if faces == GEOMETRY_FACES {
+            break;
+        }
+        let Some(data) = std::fs::read(&file.path)
+            .ok()
+            .and_then(|raw| sfnt_data(&raw).map(std::borrow::Cow::into_owned))
+        else {
+            skipped += 1;
+            continue;
+        };
+        // Untimed: it finds a face without trait glyphs.
+        match record_geometry(&data) {
+            Some(n) if n > 0 => glyphs += n,
+            _ => {
+                skipped += 1;
+                continue;
+            }
+        }
+        faces += 1;
+        for _ in 0..rounds {
+            let begin = Instant::now();
+            std::hint::black_box(record_geometry(&data));
+            samples.push(ms(begin.elapsed()));
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(GlyphGeometryTimed {
+        faces,
+        skipped,
+        glyphs_per_face: if faces == 0 {
+            0.0
+        } else {
+            glyphs as f64 / faces as f64
+        },
         samples: samples.len(),
         p50_ms: percentile(&samples, 50),
         p95_ms: percentile(&samples, 95),
