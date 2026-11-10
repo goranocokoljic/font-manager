@@ -376,6 +376,7 @@ fn glyph_trait_search_runs_through_the_api_on_measured_fonts() {
         })
     };
     let mut checked = 0;
+    let mut strictly_narrowed = 0;
     for t in &catalog {
         for v in t.values.iter().filter(|v| v.faces > 0) {
             let filter = TraitFilter::Value {
@@ -396,12 +397,35 @@ fn glyph_trait_search_runs_through_the_api_on_measured_fonts() {
                 variable: Some(false),
                 ..Filters::default()
             };
+            // Exactly the static faces of the trait result: the filter
+            // still applies to faces the trait lets through.
             let narrowed = search(vec![filter], statics).expect("search");
-            assert!(narrowed.total <= found.total);
+            let narrowed: Vec<FaceId> = narrowed
+                .families
+                .iter()
+                .flat_map(|f| f.faces.clone())
+                .collect();
+            let mut statics_found: Vec<FaceId> = found
+                .families
+                .iter()
+                .flat_map(|f| f.faces.clone())
+                .filter(|face| !lib.api.get_face(*face).expect("face").face.is_variable)
+                .collect();
+            let mut narrowed_sorted = narrowed.clone();
+            narrowed_sorted.sort_by_key(|f| f.0);
+            statics_found.sort_by_key(|f| f.0);
+            assert_eq!(narrowed_sorted, statics_found, "{}={}", t.id, v.id);
+            if statics_found.len() < faces {
+                strictly_narrowed += 1;
+            }
             checked += 1;
         }
     }
     assert!(checked > 0, "some value was found");
+    assert!(
+        strictly_narrowed > 0,
+        "some trait result held a variable face the filter removed"
+    );
     let o = catalog.iter().find(|t| t.id == "O.roundness").expect("O");
     let wide = search(
         vec![TraitFilter::Range {

@@ -315,6 +315,40 @@ fn trait_filters_combine_with_filters_order_and_counts() {
         sorted(search_with(&index, round(), statics.clone(), None).expect("search")),
         sorted(vec![a, c])
     );
+    // The filter removes a face the trait lets through: G.spur=none finds the
+    // variable b and the static d; static only, just d.
+    let (b, d) = (face(&index, "b.ttf"), face(&index, "d.ttf"));
+    let none = || vec![value("G.spur", "none")];
+    assert_eq!(
+        sorted(search_with(&index, none(), Filters::default(), None).expect("search")),
+        sorted(vec![b, d])
+    );
+    assert_eq!(
+        search_with(&index, none(), statics.clone(), None).expect("search"),
+        vec![d]
+    );
+    let variable = Filters {
+        variable: Some(true),
+        ..Filters::default()
+    };
+    assert_eq!(
+        search_with(&index, none(), variable, None).expect("search"),
+        vec![b]
+    );
+    // And a text query: "karla" keeps c of the round faces.
+    let karla = index
+        .search(&SearchRequest {
+            query: "karla".into(),
+            glyph_traits: Some(round()),
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    let found: Vec<FaceId> = karla
+        .families
+        .iter()
+        .flat_map(|f| f.faces.clone())
+        .collect();
+    assert_eq!(found, vec![c]);
     let by_name = |descending| FamilyOrder {
         by: FamilySortKey::Name,
         descending,
