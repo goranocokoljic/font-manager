@@ -207,6 +207,8 @@ describe('keep this one', () => {
     toasts.show('Activated 2 faces.');
     await store.undo(store.history[0]!.id!);
     expect(toasts.toast?.message).toBe('Activated 2 faces.');
+    // E48.6: the stale Undo toast under it goes, also when it is not the newest.
+    expect(toasts.toasts.map((t) => t.message)).toEqual(['Activated 2 faces.']);
   });
 
   it('undoes from the history after the toast is gone', async () => {

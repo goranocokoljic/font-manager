@@ -45,7 +45,7 @@ function winner(c: Clash): string {
 
 <template>
   <div class="conflicts" @keydown="onKey">
-    <header class="bar">
+    <header class="bar" data-top-bar>
       <h1 id="conflicts-title" ref="title" class="title" tabindex="-1">
         {{ t('conflicts.title') }}
       </h1>

@@ -207,15 +207,20 @@ test.describe('drawers, popovers, selection bar and toasts (E46.3)', () => {
     ).toEqual(RISE);
   });
 
-  test('the selection bar and the toast rise 16 px over a fade in 200 ms', async ({ page }) => {
+  test('the selection bar rises 16 px over a fade in 200 ms; a toast 8 px in 120 ms', async ({
+    page,
+  }) => {
     await open(page);
     const { bar, toast } = await selectAndActivate(page);
-    for (const seen of [bar, toast]) {
-      expect(seen).toEqual([
-        { property: 'opacity', duration: 200, easing: EASE, from: '0' },
-        { property: 'transform', duration: 200, easing: EASE, from: 'translate(0px, 16px)' },
-      ]);
-    }
+    expect(bar).toEqual([
+      { property: 'opacity', duration: 200, easing: EASE, from: '0' },
+      { property: 'transform', duration: 200, easing: EASE, from: 'translate(0px, 16px)' },
+    ]);
+    // E48.6: the toast's fade + 8 px rise at --fm-motion-fast.
+    expect(toast).toEqual([
+      { property: 'opacity', duration: 120, easing: EASE, from: '0' },
+      { property: 'transform', duration: 120, easing: EASE, from: 'translate(0px, 8px)' },
+    ]);
   });
 
   test('under reduced motion every one of them only fades, on the reduced fade', async ({

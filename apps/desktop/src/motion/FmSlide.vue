@@ -6,6 +6,8 @@ import { setMotionSpeed, setReducedMotion, type MotionSpeed, type ReducedMotion 
  * comes from: `start` and `end` follow the reading direction, so they mirror in
  * right-to-left chrome. Other `<Transition>` props (`mode`, `appear`) pass through.
  * `reduced`: under reduced motion, `cut` (the default) or the reduced `fade` without the slide.
+ * `group`: the children are a keyed list, each slides in and out by itself (a
+ * `<TransitionGroup>`; its `tag` passes through), e.g. the toast stack (E48.6).
  */
 const props = withDefaults(
   defineProps<{
@@ -14,8 +16,9 @@ const props = withDefaults(
     distance?: string;
     speed?: MotionSpeed;
     reduced?: ReducedMotion;
+    group?: boolean;
   }>(),
-  { from: 'end', distance: '24px', speed: 'move', reduced: 'cut' },
+  { from: 'end', distance: '24px', speed: 'move', reduced: 'cut', group: false },
 );
 
 function prepare(el: Element): void {
@@ -31,7 +34,10 @@ function prepare(el: Element): void {
 </script>
 
 <template>
-  <Transition name="fm-slide" @before-enter="prepare" @before-leave="prepare">
+  <TransitionGroup v-if="group" name="fm-slide" @before-enter="prepare" @before-leave="prepare">
+    <slot />
+  </TransitionGroup>
+  <Transition v-else name="fm-slide" @before-enter="prepare" @before-leave="prepare">
     <slot />
   </Transition>
 </template>
