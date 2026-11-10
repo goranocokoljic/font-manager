@@ -75,9 +75,16 @@ function onKey(e: KeyboardEvent): void {
     emit('close');
     return;
   }
+  // The layer ends <body>, so Tab from it would leave the page: it closes the picker and
+  // the focus goes back to the letter, to go on from there (as FamilyStyles does).
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    emit('close');
+    return;
+  }
   // Plain keys stay in the picker: the app's one-key shortcuts (A activates) must not
   // act on the list behind it.
-  if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key !== 'Tab') e.stopPropagation();
+  if (!e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation();
 }
 
 function choose(value: string | null): void {

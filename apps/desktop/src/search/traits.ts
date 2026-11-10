@@ -51,10 +51,17 @@ export function withoutTrait(traits: readonly TraitFilter[], traitId: string): T
   return traits.filter((t) => t.traitId !== traitId);
 }
 
-/** "R leg" without its glyph: "leg". */
+/**
+ * Trait names that say no more than "the glyph": "O shape", "I form". The chip and the count
+ * line leave them out, as board 8-letters-filtered.png does ("O round", not "O shape round").
+ */
+const GENERIC_ASPECTS = new Set(['shape', 'form']);
+
+/** "R leg" without its glyph: "leg"; empty for a generic name ("O shape"). */
 function aspectOf(t: GlyphTraitInfo): string {
   const name = t.name.trim();
-  return name.startsWith(t.glyph) ? name.slice(t.glyph.length).trim() : name;
+  const aspect = name.startsWith(t.glyph) ? name.slice(t.glyph.length).trim() : name;
+  return GENERIC_ASPECTS.has(aspect.toLowerCase()) ? '' : aspect;
 }
 
 /** The value of a trait by id. */

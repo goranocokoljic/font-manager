@@ -89,7 +89,9 @@ describe('glyph-trait filters (E49.6)', () => {
     });
     expect(`${r!.glyph} ${traitChipTail(r!)}`).toBe('R · leg · straight');
     expect(traitLineLabel(r!)).toBe('R leg straight');
-    expect(traitLineLabel(o!)).toBe('O shape round');
+    // "O shape" names nothing beyond the glyph: the board says "O round" (criterion 4).
+    expect(traitLineLabel(o!)).toBe('O round');
+    expect(`${o!.glyph} ${traitChipTail(o!)}`).toBe('O · round');
   });
 
   it('shows the ids of a filter whose trait the catalog does not hold yet', () => {

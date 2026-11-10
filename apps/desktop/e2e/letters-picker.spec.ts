@@ -113,6 +113,12 @@ test('Escape closes the picker, focus back on the letter; Any takes a shape off'
   await page.keyboard.press('Escape');
   await expect(picker(page)).toBeHidden();
   await expect(o).toBeFocused();
+  // Tab from the picker (teleported to the end of the page) comes back to the letter.
+  await page.keyboard.press('Enter');
+  await expect(picker(page).getByRole('radio', { name: /Any/ })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(picker(page)).toBeHidden();
+  await expect(o).toBeFocused();
 
   await o.click();
   await picker(page).locator('label').filter({ hasText: 'Round' }).click();
@@ -150,7 +156,7 @@ test('R:straight O:round in the search box makes the same chips', async ({ page 
   await expect(traitChips(page).nth(0)).toHaveAttribute('title', 'R:straight');
   await expect(traitChips(page).nth(1)).toHaveAttribute('title', 'O:round');
   await expect(line(page)).toContainText('R leg straight');
-  await expect(line(page)).toContainText('O shape round');
+  await expect(line(page)).toContainText('R leg straight · O round');
   // The letters show what the box chose.
   await typeLetters(page, 'RO');
   await expect(letterRow(page).getByRole('button', { name: 'R, shape straight' })).toBeVisible();

@@ -635,6 +635,28 @@ describe('PreviewControls: the letters are the controls (E49.6)', () => {
     expect(letterButtons(wrapper)[0]!.classes('chosen')).toBe(false);
   });
 
+  it('Tab or Shift+Tab in the picker closes it and gives the focus back to the letter', async () => {
+    const { wrapper } = await lettersOn();
+    for (const shiftKey of [false, true]) {
+      await letterButtons(wrapper)[0]!.trigger('click');
+      await flushPromises();
+      const radio = picker()!.querySelector<HTMLInputElement>('input[type="radio"]')!;
+      const tab = new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey,
+        bubbles: true,
+        cancelable: true,
+      });
+      radio.dispatchEvent(tab);
+      await flushPromises();
+      // The layer ends <body>: Tab must not leave the page from it.
+      expect(tab.defaultPrevented).toBe(true);
+      expect(picker()).toBeNull();
+      expect(document.activeElement).toBe(letterButtons(wrapper)[0]!.element);
+    }
+    expect(useSearchStore().traits).toEqual([]);
+  });
+
   it('Escape closes the picker without a choice and gives the focus back to the letter', async () => {
     const { wrapper } = await lettersOn();
     const o = letterButtons(wrapper)[1]!;
