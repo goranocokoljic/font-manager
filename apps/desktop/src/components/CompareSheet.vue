@@ -72,8 +72,8 @@ const textToSave = computed(() => {
   if (compare.text !== null) return compare.text;
   const s = settings.value;
   if (s.sample === 'fontName' || (s.sample === 'custom' && !s.customText.trim())) return '';
-  const first = compare.pins[0];
-  return first ? sampleText(s, first, preview.pangramText) : '';
+  const base = compare.base;
+  return base ? sampleText(s, base, preview.pangramText) : '';
 });
 
 const saveName = ref(compare.current?.name ?? '');

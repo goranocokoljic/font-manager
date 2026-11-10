@@ -177,3 +177,22 @@ describe('errorMessage', () => {
     expect(errorMessage(new Error('boom'))).toBe(t('errors.internal', { message: '' }));
   });
 });
+
+describe("the Compare button's title (E48.8)", () => {
+  afterEach(() => setLocale('system'));
+
+  it('says that the chord starts a new comparison, in every locale, and never "pins"', () => {
+    const newComparison: Record<string, RegExp> = {
+      en: /starts a new comparison with the selected font/,
+      de: /beginnt einen neuen Vergleich mit der ausgewählten Schrift/,
+    };
+    for (const tag of Object.keys(CATALOGS)) {
+      setLocale(tag as Parameters<typeof setLocale>[0]);
+      const title = t('home.compareTitle', { chord: 'C' });
+      expect(title, tag).not.toMatch(/\bpin|anheft|heftet/i);
+      expect(newComparison[tag], `${tag}: a check for this locale`).toBeDefined();
+      expect(title, tag).toMatch(newComparison[tag]!);
+      expect(title, tag).toContain('C');
+    }
+  });
+});
