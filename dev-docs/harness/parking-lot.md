@@ -449,3 +449,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.7 #549] apps/desktop/src/list/previews.ts:44 — `useRowPreviews` has no unit test file.
 - [E49.7 #549] apps/desktop/src/components/PreviewControls.vue:576 — the preset `.hint` is not linked to the input via aria-describedby.
 - [E49.7 #549] apps/desktop/src/components/CompareSheet.vue:74 — a missing pangram (name fallback) saves the base face's name as every face's text.
+
+## 2026-11-11
+
+- [E49.6 #548] apps/desktop/src/stores/search.ts:127 — `run()` clears the pending debounce timer, so a chip click or letter choice within 80 ms of typing drops the typed text (already true of `setFilters`).
+- [E49.6 #548] apps/desktop/src/views/HomeView.vue:95 — `emptyCollection` already ignored the hide-missing switch (`search.hiding`) before E49.6 (now also the trait filters).
+- [E49.6 #548] apps/desktop/src/search/traits.ts:102 — `traitsText` has no caller outside tests; chips build their title from `c.text`.
+- [E49.6 #548] crates/fm-api/src/search.rs:209 — fm-api's trait text form `R.leg=straight` (`:` names a measure) and the UI's `R:straight` give `:` different meanings.
