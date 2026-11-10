@@ -335,7 +335,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 <template>
   <section class="studio" :aria-label="t('studio.region', { name: fontName })">
-    <header class="bar" data-testid="studio-toolbar">
+    <header class="bar" data-testid="studio-toolbar" data-top-bar>
       <UiButton
         class="back"
         :title="t('studio.closeTitle')"

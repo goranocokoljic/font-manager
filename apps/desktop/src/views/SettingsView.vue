@@ -189,7 +189,7 @@ function chooseLanguage(value: string): void {
 
 <template>
   <div class="settings" @keydown="onKey">
-    <header class="bar">
+    <header class="bar" data-top-bar>
       <h1 id="settings-title" class="title">{{ t('settings.title') }}</h1>
       <UiButton aria-keyshortcuts="Escape" @click="close">
         {{ t('common.close') }}

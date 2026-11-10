@@ -355,7 +355,8 @@ describe('compare store', () => {
         vi.advanceTimersByTime(ONLY_THIS_UNDO_MS - 1);
         expect(toast.toast?.action).toBeDefined();
         vi.advanceTimersByTime(1);
-        expect(toast.toast).toBeNull();
+        // The pin toasts below it may still show (E48.6 stacks them); the Undo is gone.
+        expect(toast.toasts.find((t) => t.action)).toBeUndefined();
         expect(ids(s)).toEqual([101]);
       } finally {
         vi.useRealTimers();
@@ -372,7 +373,7 @@ describe('compare store', () => {
         s.onlyThis(faces[1]!);
         expect(s.undoOnlyThis()).toBe(true);
         expect(ids(s)).toEqual([100, 101, 102]);
-        expect(toast.toast).toBeNull();
+        expect(toast.toasts.find((t) => t.action)).toBeUndefined();
         // Once: a second Undo does nothing.
         expect(s.undoOnlyThis()).toBe(false);
         // Not after the 5 s.
@@ -380,7 +381,7 @@ describe('compare store', () => {
         vi.advanceTimersByTime(ONLY_THIS_UNDO_MS);
         expect(s.undoOnlyThis()).toBe(false);
         expect(ids(s)).toEqual([102]);
-        // Not once another toast has replaced it.
+        // Not once a newer toast is on top of it.
         s.pin(faces[0]!);
         s.onlyThis(faces[0]!);
         s.pin(faces[3]!);

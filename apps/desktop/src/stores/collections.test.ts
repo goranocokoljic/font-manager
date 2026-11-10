@@ -133,7 +133,7 @@ describe('collections store', () => {
     expect(toast.toast?.message).toBe(`Saved the license inventory: ${all.rows} families.`);
 
     // A cancelled dialog saves nothing and says nothing.
-    toast.dismiss();
+    toast.clear();
     mockPickedSaves.push(null);
     await store.exportLicenseInventory(id);
     expect(mockSavedInventories).toHaveLength(2);

@@ -144,7 +144,8 @@ test('the undo toast stays after leaving the Problems view and while the pointer
 
   await page.goto('/#/');
   await expect(toast(page)).toBeVisible();
-  await toast(page).hover();
+  // E48.6: the toast is click-through; only its Undo button takes the pointer.
+  await toast(page).getByRole('button', { name: 'Undo' }).hover();
   await page.clock.runFor(12_000);
   await expect(toast(page)).toBeVisible();
 

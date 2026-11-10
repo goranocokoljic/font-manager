@@ -116,18 +116,22 @@ describe('the overlay moments go through the helpers (E46.3)', () => {
     expect(slide).toMatch(new RegExp(`class="${cls}"`));
   });
 
-  it('the selection bar and both toasts rise 16 px at the move speed', () => {
+  it('the selection bar and the MCP question rise 16 px at the move speed', () => {
     expect(
       tags('views/HomeView.vue', 'FmSlide').filter((t) => t.includes('distance="16px"')),
     ).toEqual(['from="bottom" distance="16px" reduced="fade"']);
     expect(source('views/HomeView.vue')).toMatch(
       /<FmSlide from="bottom" distance="16px" reduced="fade">\s*<SelectionBar\b/,
     );
-    for (const file of ['components/ToastMessage.vue', 'components/McpConfirmToast.vue']) {
-      expect(tags(file, 'FmSlide')).toEqual([
-        'from="bottom" distance="16px" reduced="fade" @before-leave="retireToast"',
-      ]);
-    }
+    expect(tags('components/McpConfirmToast.vue', 'FmSlide')).toEqual([
+      'from="bottom" distance="16px" reduced="fade" @before-leave="retireToast"',
+    ]);
+  });
+
+  it('each toast of the stack fades in on an 8 px rise at the fast speed (E48.6)', () => {
+    expect(tags('components/ToastMessage.vue', 'FmSlide')).toEqual([
+      'group tag="div" class="stack" from="bottom" distance="8px" speed="fast" reduced="fade" @before-leave="retireToast"',
+    ]);
   });
 });
 

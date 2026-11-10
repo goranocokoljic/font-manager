@@ -628,7 +628,7 @@ async function openFace(face: FaceId): Promise<void> {
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
       />
       <template v-else>
-        <header class="toolbar">
+        <header class="toolbar" data-top-bar>
           <UiIconButton
             icon="sidebar"
             :label="t('home.sidebar')"

@@ -166,14 +166,17 @@ test('"Deactivate everything not in the current set" keeps the set picked in the
   await expect(dot(page, 'Sample 1')).toHaveAttribute('data-activation', 'active');
 });
 
-test('the toast is announced and stays while the pointer is on it', async ({ page }) => {
+test('the toast is announced and stays while the pointer is on its Undo button', async ({
+  page,
+}) => {
   await page.clock.install();
   const tree = await open(page);
   await tree.getByRole('treeitem', { name: /^Sample 1,/ }).click();
   await page.keyboard.press('a');
   const region = page.getByRole('status').filter({ has: toast(page) });
   await expect(region).toHaveAttribute('aria-live', 'polite');
-  await toast(page).hover();
+  // E48.6: the toast is click-through; only its Undo button takes the pointer.
+  await toast(page).getByRole('button', { name: 'Undo' }).hover();
   await page.clock.runFor(30_000);
   await expect(toast(page)).toBeVisible();
   await page.mouse.move(5, 5);
