@@ -10,7 +10,8 @@
 // goes to the compare store's `toggle`; with `manual` it only emits `toggle`, for a parent
 // that must act around it (the sheet keeps the focus on the next face). With `fresh` a click
 // outside the set starts a new comparison with the face as its base (the family page's
-// Compare, E48.5) instead of adding to the set.
+// Compare, E48.5) instead of adding to the set. `disabledReason` disables the icon and puts the
+// reason in its title (a full set, E48.3).
 import { computed } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
@@ -25,8 +26,9 @@ const props = withDefaults(
     manual?: boolean;
     fresh?: boolean;
     shortcut?: string;
+    disabledReason?: string;
   }>(),
-  { scope: 'face', manual: false, fresh: false, shortcut: undefined },
+  { scope: 'face', manual: false, fresh: false, shortcut: undefined, disabledReason: undefined },
 );
 const emit = defineEmits<{ toggle: [inSet: boolean] }>();
 
@@ -37,7 +39,13 @@ const label = computed(() => {
   return t(inSet.value ? 'compare.removeLabel' : 'compare.addLabel', { name });
 });
 
+const title = computed(
+  () =>
+    props.disabledReason ?? (props.shortcut ? `${label.value} (${props.shortcut})` : label.value),
+);
+
 function onClick(): void {
+  if (props.disabledReason) return;
   const was = inSet.value;
   if (props.manual) {
     // The parent acts.
@@ -54,7 +62,8 @@ function onClick(): void {
     :class="{ 'in-set': inSet }"
     :data-in-set="inSet"
     :aria-label="label"
-    :title="shortcut ? `${label} (${shortcut})` : label"
+    :title="title"
+    :disabled="disabledReason ? true : undefined"
     @click.stop="onClick"
   >
     <UiIcon :name="inSet ? 'compareFilled' : 'compare'" />
@@ -84,6 +93,10 @@ function onClick(): void {
 .compare-toggle.in-set :deep(rect) {
   fill: var(--fm-accent);
   stroke: var(--fm-accent);
+}
+.compare-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .compare-toggle:focus-visible {
   outline: 2px solid var(--fm-accent);

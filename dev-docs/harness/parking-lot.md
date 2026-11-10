@@ -447,3 +447,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.4 #546] scripts/bench/lib.mjs — `traitPass` is a line-for-line copy of `firstScan` with other constants; they behave the same today.
 - [E48.5 #528] apps/desktop/src/components/CompareSheet.vue:64 — `textToSave` still reads `compare.pins[0]` instead of the new `compare.base` (same value today).
 - [E48.5 #528] apps/desktop/src/views/HomeView.vue:672 — the Compare button's title (`home.compareTitle`) still says C pins the selected font; C now starts a new comparison.
+- [E48.3 #526] dev-docs/harness/parking-lot.md:443 — the E48.4 entry about `apps/desktop/src/stores/pairings.ts:42` is obsolete: E48.3 deleted that store.
+- [E48.3 #526] apps/desktop/src/stores/compare.ts:114 — no library-change event prunes pins (or the Compare sheet's similar rows) when a face leaves the library.
