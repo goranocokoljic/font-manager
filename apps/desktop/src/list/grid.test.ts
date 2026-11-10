@@ -206,6 +206,16 @@ describe('the wall presets (E41.2)', () => {
     expect(wrappedLines(301, 50.4, 1.2)).toBe(4);
   });
 
+  it('Letters (E49.7): the slider at 1.2×, four squarer cards a line, one line of glyphs', () => {
+    expect(wallSpecimenPx(50, 'letters')).toBeCloseTo(60, 6);
+    expect(wallSpecimenPx(300, 'letters')).toBeCloseTo(144, 6);
+    expect(wallColumns(WIDE, 60, 'letters')).toBe(4);
+    expect(wallColumns(WIDE, 120, 'letters')).toBeLessThan(4);
+    expect(wallCardHeight(60, 'letters')).toBe(204);
+    expect(WALL_PRESETS.letters.wrapped).toBe(false);
+    expect(wallLayout('letters', 'letters', 'a long own text '.repeat(10))).toBe('letters');
+  });
+
   it('the specimen box and the line follow the preset', () => {
     expect(specimenBox(500, 60, 'pangram').height).toBe(
       wallCardHeight(60, 'pangram') - WALL.chromePx,

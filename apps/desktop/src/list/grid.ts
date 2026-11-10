@@ -77,7 +77,7 @@ export const wallSize = (sizePx: number) =>
   Math.min(WALL_SIZE.max, Math.max(WALL_SIZE.min, sizePx));
 
 /** The preset chips (E41.2): each is a different layout of the wall. */
-export type WallPreset = 'word' | 'pangram' | 'alphabet' | 'numerals' | 'paragraph';
+export type WallPreset = 'word' | 'pangram' | 'alphabet' | 'numerals' | 'paragraph' | 'letters';
 
 /** The body size of the Paragraph preset, in CSS px: the slider does not change it. */
 export const PARAGRAPH_PX = 17;
@@ -127,6 +127,16 @@ export const WALL_PRESETS: Record<
     minWidth: WALL.minWidth,
     widthPerPx: WALL.widthPerPx,
     heightPerPx: WALL.heightPerPx,
+    wrapped: false,
+    lineHeight: null,
+  },
+  // Letters (E49.7, board `8-letters-wall.png`): a few glyphs, larger than a word (the
+  // slider at 1.2×), in squarer cards than Word's: four a line at 1440 px up to slider 60.
+  letters: {
+    scale: 1.2,
+    minWidth: WALL.minWidth,
+    widthPerPx: 3.8,
+    heightPerPx: 2.1,
     wrapped: false,
     lineHeight: null,
   },

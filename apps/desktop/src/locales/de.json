@@ -260,6 +260,7 @@
       "empty": "Wähle eine Familie, um sie hier in der Vorschau zu sehen."
     },
     "focusField": "Vorschaufeld fokussieren",
+    "addLetter": "{letter} hinzufügen",
     "preset": "Vorlage",
     "noPangram": "Für diese Sprache gibt es noch kein Pangramm",
     "presets": {
@@ -267,7 +268,8 @@
       "pangram": "Pangramm",
       "alphabet": "Alphabet",
       "numerals": "Ziffern",
-      "paragraph": "Absatz"
+      "paragraph": "Absatz",
+      "letters": "Buchstaben"
     },
     "hints": {
       "custom": {
@@ -278,6 +280,7 @@
       "alphabet": "der Zeichensatz auf einen Blick",
       "numerals": "Ziffern · tabellarisch, wo die Schrift sie hat",
       "paragraph": "Fließtext in {size} px",
+      "letters": "Tippe die Buchstaben, auf die es ankommt — {letters} unterscheiden Schriften",
       "detected": "{language} erkannt · zeigt Schriften, die jedes Zeichen darstellen"
     }
   },
@@ -289,7 +292,8 @@
       "alphabet": "Alphabet",
       "numerals": "Ziffern",
       "fontName": "Schriftname",
-      "paragraph": "Absatz"
+      "paragraph": "Absatz",
+      "letters": "Buchstaben"
     }
   },
   "home": {

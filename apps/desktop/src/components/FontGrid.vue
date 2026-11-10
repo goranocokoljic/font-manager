@@ -395,9 +395,11 @@ const visible = computed(() => {
   const thumbs = new Map<string, HeldThumbnail>();
   const items = rendered.value.map((row, i) => {
     const p = previewOf(row);
-    const text = wrapped.value
-      ? p.text.trim()
-      : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
+    // Letters (E49.7) are never cut: every glyph you typed shows, shrunk to fit if need be.
+    const text =
+      wrapped.value || preset.value === 'letters'
+        ? p.text.trim()
+        : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     const usesThumb = !!face && !palette && !liveText.value && !p.tofu.length;

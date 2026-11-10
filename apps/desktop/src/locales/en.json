@@ -260,6 +260,7 @@
       "empty": "Select a family to preview it here."
     },
     "focusField": "Focus the preview field",
+    "addLetter": "Add {letter}",
     "preset": "Preset",
     "noPangram": "No pangram for this language yet",
     "presets": {
@@ -267,7 +268,8 @@
       "pangram": "Pangram",
       "alphabet": "Alphabet",
       "numerals": "Numerals",
-      "paragraph": "Paragraph"
+      "paragraph": "Paragraph",
+      "letters": "Letters"
     },
     "hints": {
       "custom": {
@@ -278,6 +280,7 @@
       "alphabet": "the character set at a glance",
       "numerals": "figures · tabular where the font has them",
       "paragraph": "body text at {size} px",
+      "letters": "Type the letters that matter — {letters} tell faces apart",
       "detected": "{language} detected · showing fonts that render every glyph"
     }
   },
@@ -289,7 +292,8 @@
       "alphabet": "Alphabet",
       "numerals": "Numerals",
       "fontName": "Font name",
-      "paragraph": "Paragraph"
+      "paragraph": "Paragraph",
+      "letters": "Letters"
     }
   },
   "home": {
