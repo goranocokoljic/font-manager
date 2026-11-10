@@ -32,6 +32,7 @@ mod family_license;
 mod family_notes;
 mod files;
 mod font_names;
+mod glyph_descriptors;
 mod glyph_traits;
 mod languages;
 mod license_inventory;
@@ -64,9 +65,11 @@ pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
 pub use faces::{FaceLocation, WebExportFace};
 pub use family_license::{DeclaredLicense, LicenseTarget};
 pub use files::{BATCH_SIZE, Persisted};
+pub use glyph_descriptors::{DescribedFace, DescriptorTodo};
 pub use glyph_traits::{MeasuredFace, StoredTrait, TraitTodo};
 pub(crate) use resolutions::StoredMove;
 pub use schema::SCHEMA_VERSION;
+pub(crate) use search::glyph_similar::check_code_point;
 pub use sidecars::SidecarSync;
 
 /// The file name of the index in the app-data folder.

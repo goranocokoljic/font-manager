@@ -74,6 +74,7 @@ service!(SearchService {
     detect_languages(req: DetectLanguagesRequest) -> Vec<LanguageHint>;
     find_similar(req: SimilarRequest) -> Vec<SimilarFace>;
     find_by_image(req: ImageMatchRequest) -> Vec<SimilarFace>;
+    find_similar_glyph(req: SimilarGlyphRequest) -> Vec<SimilarGlyphFace>;
     suggest_pairings(req: PairingRequest) -> Vec<PairingSuggestion>;
     list_glyph_traits() -> Vec<GlyphTraitInfo>;
 });

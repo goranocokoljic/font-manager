@@ -463,3 +463,25 @@ fn trait_search_times_every_search_after_the_pass() {
         "{res:?}"
     );
 }
+
+/// E49.8: similar-glyph queries are timed after the pass, from its stored
+/// descriptors.
+#[test]
+fn glyph_similar_times_queries_after_the_pass() {
+    let home = TempDir::new("glyph-similar");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    trait_pass(home.path()).expect("trait pass");
+    let res = glyph_similar(home.path(), 2).expect("glyph similar");
+    assert!(res.measured > 0, "{res:?}");
+    assert_eq!(res.samples, res.measured * 2);
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+}
+
+#[test]
+fn glyph_similar_needs_a_scanned_index() {
+    let home = TempDir::new("glyph-similar-empty");
+    assert!(glyph_similar(home.path(), 1).is_err());
+}

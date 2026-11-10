@@ -27,9 +27,12 @@ use fm_api::library::{
 use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
 use fm_api::search::{
-    Filters, PairingRequest, PairingRole, SearchRequest, SimilarRequest, Supports, TraitFilter,
+    Filters, PairingRequest, PairingRole, SearchRequest, SimilarGlyphRequest, SimilarRequest,
+    Supports, TraitFilter,
 };
-use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
+use fm_api::{
+    ActivationService, CollectionId, ErrorCode, OrganizationService, SearchService, SourceId,
+};
 use fm_core::glyphs::geometry::{GlyphOutline, TRAIT_GLYPHS, sfnt_data};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
@@ -1081,6 +1084,76 @@ pub fn trait_pass(home: &Path) -> BenchResult<TraitPassTimed> {
         faces: report.total,
         measured: report.measured,
         ms: ms(begin.elapsed()),
+    })
+}
+
+/// The characters the similar-glyph measurement asks about (E49.8): trait
+/// glyphs, described by the trait pass.
+pub const SIMILAR_GLYPHS: [char; 2] = ['R', 'g'];
+
+/// Similar-glyph latency (E49.8): [`SIMILAR_RESULTS`] faces whose glyph is
+/// closest to that of each of [`SIMILAR_FACES`] faces, for each of
+/// [`SIMILAR_GLYPHS`], from the descriptors the trait pass stored.
+#[derive(Debug, Serialize)]
+pub struct GlyphSimilarTimed {
+    /// Faces asked about that draw the glyph: 0 before the trait pass ran
+    /// on a library without them.
+    pub measured: usize,
+    /// Timed queries.
+    pub samples: usize,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds: the budgeted number.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// Times `find_similar_glyph` for [`SIMILAR_FACES`] faces of the index in
+/// `home` and each of [`SIMILAR_GLYPHS`], `rounds` times after one untimed
+/// query (which describes what the trait pass left, if anything). Run it
+/// after [`trait_pass`]. A face that does not draw the glyph is skipped.
+pub fn glyph_similar(home: &Path, rounds: usize) -> BenchResult<GlyphSimilarTimed> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let faces = index.activatable_faces(SIMILAR_FACES)?;
+    if faces.is_empty() {
+        return Err("the index has no faces: run the scan first".into());
+    }
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let mut measured = 0;
+    let mut samples = Vec::with_capacity(faces.len() * SIMILAR_GLYPHS.len() * rounds);
+    for &face in &faces {
+        for ch in SIMILAR_GLYPHS {
+            let req = SimilarGlyphRequest {
+                face,
+                code_point: u32::from(ch),
+                limit: SIMILAR_RESULTS,
+            };
+            match api.find_similar_glyph(req) {
+                Ok(_) => measured += 1,
+                Err(e) if e.code == ErrorCode::NotFound => continue,
+                Err(e) => return Err(e.into()),
+            }
+            for _ in 0..rounds {
+                let begin = Instant::now();
+                api.find_similar_glyph(req)?;
+                samples.push(ms(begin.elapsed()));
+            }
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(GlyphSimilarTimed {
+        measured,
+        samples: samples.len(),
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
     })
 }
 

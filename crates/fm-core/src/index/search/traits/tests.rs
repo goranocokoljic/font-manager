@@ -149,6 +149,7 @@ fn library(dir: &TempDir) -> Index {
                         ((*id).to_owned(), *version, detection)
                     })
                     .collect(),
+                descriptors: None,
             }
         })
         .collect();

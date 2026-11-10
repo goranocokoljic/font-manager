@@ -10,12 +10,18 @@
 //!   face lacks the glyph for is a stamp without a row. A write whose face is
 //!   gone, or whose file was read again since, writes nothing: the next pass
 //!   measures the new file.
+//! - **Descriptors.** The shape descriptors of the trait glyphs (E49.8) ride
+//!   along: [`crate::glyphs::similarity::STAMP`] is one more key of the
+//!   stamps, so a descriptor version bump describes every face again and
+//!   measures no trait.
 
 use fm_api::FaceId;
 use rusqlite::{OptionalExtension, params};
 
+use super::glyph_descriptors::{DescribedFace, write_descriptors};
 use super::{Index, db_error};
 use crate::error::FmResult;
+use crate::glyphs::similarity::{self, Descriptor};
 use crate::glyphs::traits::Detection;
 
 /// One face the trait pass has to measure.
@@ -45,6 +51,10 @@ pub struct MeasuredFace {
     /// Every trait measured, with its detector version and the detection;
     /// `None` when the face lacks the glyph or could not be read.
     pub traits: Vec<(String, u32, Option<Detection>)>,
+    /// The shape descriptors of the trait glyphs (E49.8), when the pass
+    /// described them: written, and the face stamped with
+    /// [`similarity::STAMP`] at [`similarity::VERSION`].
+    pub descriptors: Option<Vec<(u32, Option<Descriptor>)>>,
 }
 
 /// One stored detection.
@@ -229,6 +239,22 @@ impl Index {
                     }
                     stamp
                         .execute(params![face, trait_id, version, m.file_hash])
+                        .map_err(|e| db_error(&e))?;
+                }
+                if let Some(glyphs) = &m.descriptors {
+                    let described = DescribedFace {
+                        face: m.face,
+                        file_hash: m.file_hash.clone(),
+                        glyphs: glyphs.clone(),
+                    };
+                    write_descriptors(&tx, std::slice::from_ref(&described))?;
+                    stamp
+                        .execute(params![
+                            face,
+                            similarity::STAMP,
+                            similarity::VERSION,
+                            m.file_hash
+                        ])
                         .map_err(|e| db_error(&e))?;
                 }
                 written += 1;

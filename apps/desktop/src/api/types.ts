@@ -3473,6 +3473,33 @@ export type SimilarFace = {
 	reasons: string[],
 };
 
+/**  A face whose drawing of the character is close to the reference's. */
+export type SimilarGlyphFace = {
+	/**  The face. */
+	face: FaceSummary,
+	/**
+	 *  How far its glyph is from the reference glyph, `0.0..=1.0`; lower is
+	 *  closer, 0.0 is the same drawing.
+	 */
+	distance: number | null,
+};
+
+/**
+ *  Faces ranked by how close their drawing of one character is to the
+ *  reference face's (E49.8): "an R like this one".
+ */
+export type SimilarGlyphRequest = {
+	/**
+	 *  The reference face. A face that is unknown, or does not draw the
+	 *  character, is `NotFound`.
+	 */
+	face: FaceId,
+	/**  The character compared, as a Unicode code point (`82` for `R`). */
+	codePoint: number,
+	/**  Results to return. */
+	limit: number,
+};
+
 /**  Faces that look like this one. */
 export type SimilarRequest = {
 	/**  The face to compare against. */

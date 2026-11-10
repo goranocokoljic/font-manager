@@ -103,6 +103,9 @@ pub(super) struct SearchCache {
     /// The glyph-trait detections (E49.5), by trait: read on the first
     /// search with a trait filter after the database changed.
     detections: Option<traits::Detections>,
+    /// The glyph descriptors (E49.8) by code point: read on the first
+    /// similar-glyph query of that character after the database changed.
+    glyphs: glyph_similar::GlyphCache,
 }
 
 /// One searchable face.
@@ -450,6 +453,7 @@ impl Index {
             family_notes,
             profiles: None,
             detections: None,
+            glyphs: glyph_similar::GlyphCache::default(),
         };
         Ok(())
     }
@@ -762,6 +766,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(serde_json::Value::String(name.to_owned())).ok()
 }
 
+pub(crate) mod glyph_similar;
 mod pairing;
 mod similar;
 pub(super) mod smart;
