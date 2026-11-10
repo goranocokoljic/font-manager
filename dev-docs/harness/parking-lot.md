@@ -443,3 +443,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.4 #527] apps/desktop/src/stores/pairings.ts:42 — `pairings.add` has no production caller left (PairingsPanel uses CompareToggle); only pairings.test.ts uses it.
 - [E48.4 #527] apps/desktop/src/components/FontGrid.vue:822 — the accent on `--fm-surface` face cards is about 3.0:1 in both themes; it passes with no margin for the filled compare icon and the focus ring.
 - [E48.4 #527] apps/desktop/src/components/FontGrid.vue:127 — a user-chosen preview background (`--fm-card-bg`) can drop the accent icon and the chevron under 3:1.
+- [E49.4 #546] crates/fm-core/src/glyphs/geometry.rs:38 — `TRAIT_GLYPHS` lacks `'O'`, so the glyph-geometry bench never times the glyph O.roundness reads.
+- [E49.4 #546] scripts/bench/lib.mjs — `traitPass` is a line-for-line copy of `firstScan` with other constants; they behave the same today.
