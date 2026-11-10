@@ -82,6 +82,52 @@ describe('ToastMessage (E48.6)', () => {
     expect(rule('.region')).not.toMatch(/bottom:/);
   });
 
+  it('follows the top bar when it grows while a toast is up', async () => {
+    // A stand-in observer: the test says when the bar's size changed.
+    const watched: { cb: () => void; els: Element[] }[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        private readonly entry: { cb: () => void; els: Element[] };
+        constructor(cb: () => void) {
+          this.entry = { cb, els: [] };
+          watched.push(this.entry);
+        }
+        observe(el: Element) {
+          this.entry.els.push(el);
+        }
+        disconnect() {
+          this.entry.els = [];
+        }
+      },
+    );
+    try {
+      topBar(56);
+      const { w, toasts } = setup();
+      toasts.show('Done.');
+      await nextTick();
+      vi.advanceTimersToNextFrame();
+      await nextTick();
+      const region = w.find<HTMLElement>('.region').element;
+      expect(region.style.top).toBe('64px');
+      // The bar grows to 65 px (a control came into it): the stack moves down with it.
+      const bar = document.querySelector<HTMLElement>('[data-top-bar]')!;
+      bar.getBoundingClientRect = () =>
+        ({ top: 0, bottom: 65, height: 65, left: 0, right: 800, width: 800 }) as DOMRect;
+      const live = watched.filter((o) => o.els.includes(bar));
+      expect(live).toHaveLength(1);
+      live[0]!.cb();
+      await nextTick();
+      expect(region.style.top).toBe('73px');
+      // The last toast gone: the bar is no longer watched.
+      toasts.dismiss();
+      await nextTick();
+      expect(watched.some((o) => o.els.length > 0)).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('starts under a default bar height when the page has no top bar', async () => {
     const { w, toasts } = setup();
     toasts.show('Done.');
