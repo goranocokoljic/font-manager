@@ -99,6 +99,20 @@ test('Only this keeps one face as the base; the toast undoes it', async ({ page 
   await expect(dialog.getByTestId('pairings-panel')).toContainText('Legacy Grotesk');
   await toast(page).getByRole('button', { name: 'Undo' }).click();
   await expect(dialog.getByTestId('compare-count')).toHaveText(/^3 of 4 · base Inter /);
+
+  // By keyboard alone: Tab to 'Only this', Enter, then Ctrl/Cmd+Z in the sheet undoes it.
+  const only = faces.nth(1).getByTestId('face-only');
+  for (let i = 0; i < 30; i++) {
+    if (await only.evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press('Tab');
+  }
+  await expect(only).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByTestId('compare-count')).toHaveText(/^1 of 4 · base JetBrains Mono /);
+  await expect(toast(page)).toContainText('Z undoes it.');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(dialog.getByTestId('compare-count')).toHaveText(/^3 of 4 · base Inter /);
+  await expect(dialog).toBeVisible();
 });
 
 test('the sheet shows the pins in the sample text at one size, in three modes', async ({

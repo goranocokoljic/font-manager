@@ -226,6 +226,13 @@ describe('compare sheet', () => {
     expect(wrapper.text()).toContain(`1 of 4 · base ${name(faces[2]!)}`);
     // One face left: nothing to keep it from.
     expect(wrapper.findAll('[data-testid="face-only"]')).toHaveLength(0);
+    // The keyboard reaches the Undo: Ctrl/Cmd+Z in the sheet puts the set back.
+    await wrapper.get('[role="dialog"]').trigger('keydown', { key: 'z', ctrlKey: true });
+    expect(s.pins.map((p) => p.id)).toEqual([200, 201, 202]);
+    // The name field keeps the key for its own undo.
+    await wrapper.get('.face[data-face="201"] [data-testid="face-only"]').trigger('click');
+    await wrapper.get('input[type="text"]').trigger('keydown', { key: 'z', ctrlKey: true });
+    expect(s.pins.map((p) => p.id)).toEqual([201]);
   });
 
   it('is a bottom sheet whose height, scrim and Auto size follow the handle and maximize', async () => {

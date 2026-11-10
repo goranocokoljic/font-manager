@@ -12,6 +12,7 @@ import type {
 } from '../api/types';
 import type { IconName } from '../components/ui/icons';
 import { errorMessage, t } from '../i18n';
+import { formatChord, type Chord } from '../keyboard/keymap';
 import { fontNameSample } from '../preview/sampleText';
 import { useToastStore } from './toast';
 
@@ -20,6 +21,9 @@ export const MAX_PINS = 4;
 
 /** How long the toast of 'Only this' offers its Undo, in ms (E48.5). */
 export const ONLY_THIS_UNDO_MS = 5_000;
+
+/** The keyboard's way to the Undo of 'Only this' while the sheet holds the focus: Ctrl/Cmd+Z. */
+export const COMPARE_UNDO: Chord = { key: 'z', mod: true };
 
 export type CompareMode = ApiCompareMode;
 
@@ -102,6 +106,9 @@ export const useCompareStore = defineStore('compare', () => {
   const text = ref<string | null>(null);
   /** The faces of the reopened comparison the library no longer shows. */
   const missing = ref<MissingFace[]>([]);
+
+  /** The toast whose Undo puts back the set 'Only this' changed; null when none is showing. */
+  let onlyThisToast: number | null = null;
 
   /** The base: the first pin, the face the others are compared to (E48.5). */
   const base = computed<FaceSummary | null>(() => pins.value[0] ?? null);
@@ -204,8 +211,12 @@ export const useCompareStore = defineStore('compare', () => {
     const before = { pins: pins.value, overlay: overlayChoice.value };
     pins.value = [face];
     overlayChoice.value = [null, null];
-    useToastStore().show(
-      t('compare.toasts.onlyThis', { name: fontNameSample(face) }),
+    const toast = useToastStore();
+    toast.show(
+      t('compare.toasts.onlyThis', {
+        name: fontNameSample(face),
+        undo: formatChord(COMPARE_UNDO),
+      }),
       {
         label: t('common.undo'),
         run: () => {
@@ -215,6 +226,20 @@ export const useCompareStore = defineStore('compare', () => {
       },
       ONLY_THIS_UNDO_MS,
     );
+    onlyThisToast = toast.toast?.id ?? null;
+  }
+
+  /**
+   * The keyboard's Undo (Ctrl/Cmd+Z in the sheet): runs the Undo of 'Only this' while its
+   * toast shows. The toast lives outside the sheet's focus trap, so a keyboard user could
+   * not reach its button. False when there is nothing to undo.
+   */
+  function undoOnlyThis(): boolean {
+    const toast = useToastStore();
+    if (onlyThisToast === null || toast.toast?.id !== onlyThisToast) return false;
+    onlyThisToast = null;
+    toast.act();
+    return true;
   }
 
   /** Removes a pin; the sheet closes when none is left, and the next comparison is new. */
@@ -365,6 +390,7 @@ export const useCompareStore = defineStore('compare', () => {
     compareFresh,
     pin,
     onlyThis,
+    undoOnlyThis,
     pinMany,
     toggle,
     unpin,

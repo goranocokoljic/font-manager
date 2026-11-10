@@ -203,7 +203,7 @@
       "allAlready": "These fonts are already in Compare.",
       "removed": "{name} removed from Compare.",
       "fresh": "New comparison with {name} as its base.",
-      "onlyThis": "Only {name} is left in Compare."
+      "onlyThis": "Only {name} is left in Compare. {undo} undoes it."
     }
   },
   "quickLook": {

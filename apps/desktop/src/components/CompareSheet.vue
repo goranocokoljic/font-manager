@@ -28,7 +28,14 @@ import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { FmFade, FmSlide } from '../motion';
 import { SHEET_HEIGHT, heightAtPointer, useCompareSheetStore } from '../stores/compareSheet';
-import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
+import {
+  COMPARE_MODES,
+  COMPARE_UNDO,
+  MAX_PINS,
+  useCompareStore,
+  type CompareMode,
+} from '../stores/compare';
+import { matches } from '../keyboard/keymap';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import CompareToggle from './CompareToggle.vue';
 import PairingsPanel from './PairingsPanel.vue';
@@ -256,6 +263,11 @@ const pinOptions = computed(() =>
   compare.pins.map((p) => ({ value: p.id, label: fontNameSample(p) })),
 );
 
+/** A field that types text (the comparison's name) keeps Ctrl/Cmd+Z for its own undo. */
+function typesText(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement && target.type === 'text';
+}
+
 /** Tab cycles inside the sheet; Escape closes it; plain keys stay out of the list's shortcuts. */
 function onKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
@@ -263,6 +275,13 @@ function onKeyDown(e: KeyboardEvent): void {
     e.stopPropagation();
     if (savedOpen.value) closeSaved(true);
     else compare.close();
+    return;
+  }
+  // Ctrl/Cmd+Z: the Undo of 'Only this', whose toast the focus trap keeps out of reach. A
+  // field that types text keeps the key for its own undo.
+  if (matches(e, COMPARE_UNDO) && !typesText(e.target) && compare.undoOnlyThis()) {
+    e.preventDefault();
+    e.stopPropagation();
     return;
   }
   if (!e.ctrlKey && !e.metaKey) e.stopPropagation();

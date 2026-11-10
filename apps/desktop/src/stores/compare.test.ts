@@ -4,7 +4,14 @@ import { setClient } from '../api/client';
 import type { FaceSummary } from '../api/types';
 import { createMockClient, mockComparisons, mockFaces } from '../api/mock';
 import { setLocale } from '../i18n';
-import { COMPARE_MODES, MAX_PINS, ONLY_THIS_UNDO_MS, useCompareStore } from './compare';
+import { formatChord } from '../keyboard/keymap';
+import {
+  COMPARE_MODES,
+  COMPARE_UNDO,
+  MAX_PINS,
+  ONLY_THIS_UNDO_MS,
+  useCompareStore,
+} from './compare';
 import { useToastStore } from './toast';
 
 /** Five distinct faces: the mock's summaries with their own ids and styles. */
@@ -336,7 +343,7 @@ describe('compare store', () => {
         expect(ids(s)).toEqual([102]);
         expect(s.base?.id).toBe(102);
         expect(toast.toast?.message).toBe(
-          `Only ${faces[2]!.familyName} Style 2 is left in Compare.`,
+          `Only ${faces[2]!.familyName} Style 2 is left in Compare. ${formatChord(COMPARE_UNDO)} undoes it.`,
         );
         expect(toast.toast?.action?.label).toBe('Undo');
         toast.act();
@@ -350,6 +357,35 @@ describe('compare store', () => {
         vi.advanceTimersByTime(1);
         expect(toast.toast).toBeNull();
         expect(ids(s)).toEqual([101]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('the keyboard Undo runs only while the toast of only this shows', () => {
+      vi.useFakeTimers();
+      try {
+        const s = useCompareStore();
+        const toast = useToastStore();
+        expect(s.undoOnlyThis()).toBe(false);
+        faces.slice(0, 3).forEach((f) => s.pin(f));
+        s.onlyThis(faces[1]!);
+        expect(s.undoOnlyThis()).toBe(true);
+        expect(ids(s)).toEqual([100, 101, 102]);
+        expect(toast.toast).toBeNull();
+        // Once: a second Undo does nothing.
+        expect(s.undoOnlyThis()).toBe(false);
+        // Not after the 5 s.
+        s.onlyThis(faces[2]!);
+        vi.advanceTimersByTime(ONLY_THIS_UNDO_MS);
+        expect(s.undoOnlyThis()).toBe(false);
+        expect(ids(s)).toEqual([102]);
+        // Not once another toast has replaced it.
+        s.pin(faces[0]!);
+        s.onlyThis(faces[0]!);
+        s.pin(faces[3]!);
+        expect(s.undoOnlyThis()).toBe(false);
+        expect(ids(s)).toEqual([100, 103]);
       } finally {
         vi.useRealTimers();
       }

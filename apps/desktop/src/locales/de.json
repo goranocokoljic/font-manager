@@ -203,7 +203,7 @@
       "allAlready": "Diese Schriften sind bereits im Vergleich.",
       "removed": "{name} aus dem Vergleich entfernt.",
       "fresh": "Neuer Vergleich mit {name} als Basis.",
-      "onlyThis": "Nur {name} bleibt im Vergleich."
+      "onlyThis": "Nur {name} bleibt im Vergleich. {undo} macht es rückgängig."
     }
   },
   "quickLook": {
