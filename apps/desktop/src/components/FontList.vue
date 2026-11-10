@@ -85,7 +85,6 @@ const settings = useSettingsStore();
 const similar = useSimilarStore();
 const similarChord = chordOf(ACTIONS.similar)!;
 const activateChord = chordOf(ACTIONS.activateSession)!;
-const compareChord = chordOf(ACTIONS.compare)!;
 const activation = useActivationStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
@@ -387,8 +386,6 @@ function onToggle(row: ListRow): void {
             data-testid="row-compare"
             :face="item.face"
             :scope="item.row.kind === 'family' ? 'family' : 'face'"
-            :aria-keyshortcuts="ariaShortcut(compareChord)"
-            :shortcut="formatChord(compareChord)"
             @toggle="onCompareToggled(item.row)"
           />
           <UiIconButton

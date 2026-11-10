@@ -22,6 +22,23 @@ describe('toast store', () => {
     expect(toasts.toast).toBeNull();
   });
 
+  it('keeps a toast for its own time, also after a hold (E48.5)', () => {
+    const toasts = useToastStore();
+    toasts.show('Short.', { label: 'Undo', run: () => undefined }, 5_000);
+    vi.advanceTimersByTime(4_999);
+    expect(toasts.toast).not.toBeNull();
+    toasts.hold();
+    vi.advanceTimersByTime(TOAST_MS);
+    toasts.release();
+    vi.advanceTimersByTime(4_999);
+    expect(toasts.toast).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(toasts.toast).toBeNull();
+    toasts.show('Long.');
+    vi.advanceTimersByTime(5_000);
+    expect(toasts.toast?.message).toBe('Long.');
+  });
+
   it('replaces the toast and restarts the time', () => {
     const toasts = useToastStore();
     toasts.show('First.');

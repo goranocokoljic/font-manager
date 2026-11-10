@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { wallFixtures } from '../src/api/mockWall';
+import { compareRows } from './compare-pins';
 
 const fixture = (path: string) =>
   readFileSync(fileURLToPath(new URL(`../../../fixtures/fonts/${path}`, import.meta.url)));
@@ -298,13 +299,15 @@ test.describe('@screens', () => {
             if (pinRows) {
               const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
               await rows.first().click();
-              for (let i = 0; i < pinRows; i++) {
-                await page.keyboard.press('c');
-                await expect(page.getByTestId('toast')).toContainText(`(${i + 1} of 4)`);
-                await page.keyboard.press('ArrowDown');
-              }
+              await compareRows(page, page.getByRole('tree', { name: 'Font list' }), pinRows);
               await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
               await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
+              const sheet = page.getByRole('dialog', { name: 'Compare' });
+              await expect(sheet).toBeVisible();
+              // The sheet slides up (E48.1): wait until it rests on the bottom edge.
+              await expect
+                .poll(() => sheet.evaluate((d) => Math.round(d.getBoundingClientRect().bottom)))
+                .toBe(page.viewportSize()!.height);
               if (pinMode) await page.getByRole('radio', { name: pinMode }).check();
             }
             if (quickRows) {

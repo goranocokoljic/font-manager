@@ -163,7 +163,7 @@
     "saved": "Saved",
     "openLabel": "Open comparison {name}",
     "missing": "Not in the library now: {names}.",
-    "pinTwo": "Pin at least two fonts to compare them: select a font in the list and press C.",
+    "pinTwo": "Add a font to compare with this one: use the compare icon on a card or a row, or a suggestion below.",
     "overlay": "Overlay",
     "firstFont": "First font",
     "secondFont": "Second font",
@@ -171,9 +171,12 @@
     "legend": "Legend",
     "addLabel": "Add {name} to Compare",
     "removeLabel": "Remove {name} from Compare",
+    "baseTag": "base",
+    "onlyThis": "Only this",
+    "onlyThisLabel": "Keep only {name} in Compare",
     "pairings": {
       "title": "Pairings for {name}",
-      "hint": "Fonts of other families that go with the first pinned font, by rule.",
+      "hint": "Fonts of other families that go with the base, by rule.",
       "list": "Suggested pairings",
       "loading": "Looking for pairings…",
       "none": "No font in the library pairs with {name} by the rules.",
@@ -198,7 +201,9 @@
         "other": "{count} skipped: Compare holds {max} fonts."
       },
       "allAlready": "These fonts are already in Compare.",
-      "removed": "{name} removed from Compare."
+      "removed": "{name} removed from Compare.",
+      "fresh": "New comparison with {name} as its base.",
+      "onlyThis": "Only {name} is left in Compare. {undo} undoes it."
     }
   },
   "quickLook": {
@@ -382,7 +387,7 @@
       "quickToggle": "Add the selected fonts to the Quick Collection, or remove them",
       "quickOpen": "Open the Quick Collection",
       "tag": "Tag the selected fonts…",
-      "pin": "Pin the selected font to Compare",
+      "pin": "Compare the selected font (a new comparison)",
       "openCompare": "Open Compare",
       "activateSession": "Activate or deactivate for this session",
       "activatePermanent": "Activate or deactivate permanently",

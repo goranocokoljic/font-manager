@@ -18,10 +18,10 @@ import CompareToggle from './CompareToggle.vue';
 const compare = useCompareStore();
 const pairings = usePairingsStore();
 
-// The first pin is what the suggestions are for; a new first pin asks again.
+// The base is what the suggestions are for; a new base ('Only this', a fresh C) asks again.
 watch(
-  () => compare.pins[0]?.id,
-  () => void pairings.load(compare.pins[0] ?? null),
+  () => compare.base?.id,
+  () => void pairings.load(compare.base),
   { immediate: true },
 );
 

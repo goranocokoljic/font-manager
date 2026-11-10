@@ -1,0 +1,19 @@
+{
+  "id": "an-undo-shown-while-a-modal-is-open-must-be-reachable-from-i",
+  "title": "An Undo shown while a modal is open must be reachable from inside the modal",
+  "category": "accessibility",
+  "rule": "When an action inside a modal dialog (a focus-trapped sheet) offers its Undo in the app-level toast, give the keyboard a way to run that Undo from inside the dialog: a key handled by the dialog (Ctrl/Cmd+Z, left to text fields) that acts only while that toast shows, and name the key in the toast text. The toast region sits outside the dialog's focus trap, so Tab and focusin pull the focus back and the Undo button is mouse-only until it expires. Test it with a keyboard-only Playwright step: Tab to the action, Enter, the key, then assert the state came back.",
+  "rationale": "E48.5 (#528): 'Only this' in the Compare sheet offered Undo in a 5 s toast that the sheet's focus trap kept out of keyboard reach.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    528
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-11-10T04:45:23.580Z",
+  "last_seen": "2026-11-10T04:45:23.580Z"
+}
