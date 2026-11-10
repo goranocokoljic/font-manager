@@ -433,3 +433,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.2 #525] crates/fm-api/src/comparison.rs:20 — `CompareMode` defaults to `SideBySide` (Grid), so CLI/MCP saves without a mode or unparseable rows (fm-core index/comparisons.rs:37) open as Grid, not the UI's Stacked default.
 - [E48.2 #525] apps/desktop/src/components/CompareSheet.vue:755 — at 1,000×700 the comparison name field truncates its placeholder ("Name this co…").
 - [fix-main 38af3e9 #540] apps/desktop/e2e/motion-probe.ts — `movedFromStyle` reads the computed style when a late `transitionrun` comes; by then `crossfade()` may have removed `fm-crossfade`, so the move records 0 ms and the drag test's count check fails (seen under a 7x CPU throttle, not yet on CI).
+
+## 2026-11-10
+
+- [E49.3 #545] crates/fm-core/src/classify.rs:568 — `is_open_ring` decides a hole by contour winding sign; it disagrees with the new fill-based `glyphs::geometry` counters on overlapping variable outlines (e.g. Crimson Pro[wght]).
+- [E49.3 #545] crates/fm-core/src/preview.rs:328 — `pub(crate) fn sfnt_data` duplicates `glyphs::sfnt` with a different error type; fm-core now also has a public `glyphs::geometry::sfnt_data`.
