@@ -12,7 +12,7 @@ use fm_api::common::Health;
 use fm_api::export::{ExportWebResponse, SpecimenResponse};
 use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
 use fm_api::organization::{ImportSetResponse, SetExport};
-use fm_api::search::{CoverageReport, FamilyHit, SimilarFace};
+use fm_api::search::{CoverageReport, FamilyHit, GlyphTraitInfo, SimilarFace};
 use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
@@ -313,6 +313,48 @@ pub fn hits(hits: &[FamilyHit], out: &mut dyn Write) -> io::Result<()> {
     }
     writeln!(out, "{table}")?;
     writeln!(out, "{} families", hits.len())
+}
+
+/// `fm traits`: one row per trait value with its faces and families; the
+/// first row of a trait says how many faces were measured, how many are
+/// unsure, and whether the picker offers it.
+pub fn traits(traits: &[GlyphTraitInfo], out: &mut dyn Write) -> io::Result<()> {
+    let mut table = Table::new();
+    table
+        .load_preset(presets::NOTHING)
+        .set_header(["TRAIT", "VALUE", "FACES", "FAMILIES", "NOTE"]);
+    for t in traits {
+        for (at, v) in t.values.iter().enumerate() {
+            let bounds: Vec<String> = v
+                .when
+                .iter()
+                .map(|w| match (w.min, w.max) {
+                    (Some(lo), Some(hi)) => format!("{lo}<={}<{hi}", w.measure),
+                    (Some(lo), None) => format!("{}>={lo}", w.measure),
+                    (None, Some(hi)) => format!("{}<{hi}", w.measure),
+                    (None, None) => w.measure.clone(),
+                })
+                .collect();
+            let value = if bounds.is_empty() {
+                v.id.clone()
+            } else {
+                format!("{} ({})", v.id, bounds.join(", "))
+            };
+            let note = if at == 0 {
+                let mut note = format!("{}: {} measured, {} unsure", t.name, t.measured, t.unsure);
+                if !t.enabled {
+                    note.push_str(", low accuracy");
+                }
+                note
+            } else {
+                String::new()
+            };
+            let id = if at == 0 { t.id.clone() } else { String::new() };
+            table.add_row([id, value, v.faces.to_string(), v.families.to_string(), note]);
+        }
+    }
+    writeln!(out, "{table}")?;
+    writeln!(out, "{} traits", traits.len())
 }
 
 /// `fm info`: names, styles, axes, features, scripts and license bits.

@@ -73,6 +73,7 @@ import {
   type GlyphPage,
   type GlyphRequest,
   type GlyphStyles,
+  type GlyphTraitInfo,
   type GlyphsRequest,
   type FilterCounts,
   type Filters,
@@ -120,6 +121,81 @@ import {
   DocumentFormat,
   ThemeDefinition,
 } from './types';
+
+/** The mock's glyph trait catalog (E49.5): one enum and one scalar trait, no face measured. */
+const mockGlyphTraits: GlyphTraitInfo[] = [
+  {
+    id: 'R.leg',
+    script: 'Latn',
+    glyph: 'R',
+    kind: 'enum',
+    name: 'R leg',
+    description: 'The leg of the capital R.',
+    enabled: false,
+    measures: [],
+    values: [
+      {
+        id: 'straight',
+        label: 'Straight',
+        description: 'Straight.',
+        when: [],
+        example: 'M18 46V10',
+        faces: 0,
+        families: 0,
+      },
+      {
+        id: 'curved',
+        label: 'Curved',
+        description: 'Curved.',
+        when: [],
+        example: 'M18 46V10',
+        faces: 0,
+        families: 0,
+      },
+    ],
+    measured: 0,
+    unsure: 0,
+  },
+  {
+    id: 'O.roundness',
+    script: 'Latn',
+    glyph: 'O',
+    kind: 'scalar',
+    name: 'O shape',
+    description: 'How round the capital O is.',
+    enabled: true,
+    measures: [
+      {
+        id: 'roundness',
+        description: 'Width divided by height of the outer contour.',
+        min: 0,
+        max: 2,
+      },
+    ],
+    values: [
+      {
+        id: 'round',
+        label: 'Round',
+        description: 'Round.',
+        when: [{ measure: 'roundness', min: 0.95, max: null }],
+        example: 'M18 46V10',
+        faces: 0,
+        families: 0,
+      },
+      {
+        id: 'oval',
+        label: 'Oval',
+        description: 'Oval.',
+        when: [],
+        example: 'M18 46V10',
+        faces: 0,
+        families: 0,
+      },
+    ],
+    measured: 0,
+    unsure: 0,
+  },
+];
 
 /** Why the mock (browser mode) cannot drag files out, as the Rust mock says (E44.4). */
 export const MOCK_NO_FILE_DRAG = 'Dragging font files out needs the desktop app.';
@@ -3276,6 +3352,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       }
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
+      // As MockApi in fm-api: the mock's faces carry no glyph-trait detections, so a
+      // trait filter (E49.5) finds nothing.
+      if ((req.glyphTraits ?? []).length > 0) {
+        return { families: [], total: 0, counts: null } satisfies SearchResponse;
+      }
       return {
         families: structuredClone(paged.all.slice(offset, offset + limit)),
         total: paged.all.length,
@@ -3351,6 +3432,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // face per other family, the closest in weight; best first, then by family id.
     // `partnerOf` takes `face`'s place, and `face`'s family is left out. A role (the class
     // stands in for stroke contrast) adds +0.1 and its reason first, and names the x-height gap.
+    listGlyphTraits: async () => structuredClone(mockGlyphTraits),
     suggestPairings: async (req) => {
       const replaced = faceOrThrow(req.face).face.family;
       const me = faceOrThrow(req.partnerOf ?? req.face);

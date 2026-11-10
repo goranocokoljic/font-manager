@@ -678,3 +678,69 @@ async fn workflow_tools_map_to_the_api_and_need_their_grants() {
     assert!(api.mutations().contains(&"activate"));
     client.close().await;
 }
+
+/// Criterion 4 (E49.5): `tools/list` puts the glyph trait catalog in the
+/// `search_fonts` description, with each trait's values and a scalar
+/// value's bound, and the schema has `glyph_traits`.
+#[tokio::test(flavor = "multi_thread")]
+async fn search_fonts_lists_the_glyph_trait_catalog_in_its_description() {
+    let (api, client) = mock(Arc::new(AllowAll)).await;
+    let tools = client.list_all_tools().await.expect("tools/list");
+    let search = tools
+        .iter()
+        .find(|t| t.name == "search_fonts")
+        .expect("search_fonts");
+    let about = search.description.as_deref().expect("description");
+    assert!(about.contains("glyph_traits"), "{about}");
+    assert_eq!(
+        about,
+        fm_mcp::tools::search_description(&api.list_glyph_traits().unwrap())
+    );
+    assert!(
+        about.contains("- R.leg (R leg, low accuracy): straight, curved"),
+        "{about}"
+    );
+    assert!(
+        about.contains(
+            "- O.roundness (O shape): round (roundness>=0.95), oval; measures roundness 0..2"
+        ),
+        "{about}"
+    );
+    assert!(
+        search.input_schema["properties"]
+            .as_object()
+            .expect("properties")
+            .contains_key("glyph_traits")
+    );
+    client.close().await;
+}
+
+/// Criterion 4: `search_fonts` takes the traits as text or as objects, as
+/// `glyph_traits` or `glyphTraits`, in one call; a malformed one is a tool
+/// error. The mock measured no face, so a trait search finds nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn search_fonts_takes_glyph_traits_as_text_or_objects() {
+    let (_api, client) = mock(Arc::new(AllowAll)).await;
+    let all = client.ok("search_fonts", json!({})).await;
+    assert!(all["total"].as_u64().unwrap() > 0);
+    for args in [
+        json!({ "glyph_traits": ["R.leg=straight", "O.roundness>=0.95"] }),
+        json!({ "glyphTraits": ["R.leg=straight"] }),
+        json!({ "glyph_traits": [
+            { "trait_id": "R.leg", "value": "straight" },
+            { "trait_id": "O.roundness", "min": 0.95 }
+        ] }),
+    ] {
+        let found = client.ok("search_fonts", args.clone()).await;
+        assert_eq!(found["total"], 0, "{args}: {found}");
+    }
+    for args in [
+        json!({ "glyph_traits": ["O.roundness>0.9"] }),
+        json!({ "glyph_traits": [{ "trait_id": "R.leg", "value": "straight", "min": 1 }] }),
+        json!({ "glyph_traits": ["Z.tail=long"] }),
+    ] {
+        let e = client.err("search_fonts", args.clone()).await;
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{args}");
+    }
+    client.close().await;
+}

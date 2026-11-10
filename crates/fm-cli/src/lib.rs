@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use fm_api::export::{SpecimenFormat, WebFormat};
 use fm_api::library::{FontMatch, ResolveFontRequest};
-use fm_api::search::Supports;
+use fm_api::search::{Supports, TraitFilter};
 use fm_api::{Api, ApiError, ErrorCode};
 
 pub use commands::{Doctor, PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
@@ -81,7 +81,15 @@ pub enum Command {
         /// Only variable fonts.
         #[arg(long)]
         variable: bool,
+        /// Only fonts with this glyph trait (repeat for more):
+        /// `R.leg=straight`, `O.roundness>=0.95`, `O.roundness<=0.9`. `fm
+        /// traits` lists the traits. A font that lacks the letter is left out.
+        #[arg(long = "trait", value_name = "TRAIT")]
+        glyph_trait: Vec<TraitFilter>,
     },
+    /// List the glyph traits a search can ask for, with how many fonts of
+    /// the library have each value.
+    Traits,
     /// Show a face: names, styles, axes, features, scripts and license.
     Info {
         /// A face id or a font name.
@@ -321,11 +329,13 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
             supports,
             feature,
             variable,
+            glyph_trait,
         } => {
             let flags = SearchFlags {
                 supports: supports.clone(),
                 features: feature.clone(),
                 variable: *variable,
+                traits: glyph_trait.clone(),
             };
             output.print(commands::search(api, query, &flags), |h, o| {
                 output::hits(h, o)
@@ -355,6 +365,7 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
                 },
             )
         }
+        Command::Traits => output.print(api.list_glyph_traits(), |t, o| output::traits(t, o)),
         Command::Similar { font, limit } => output
             .print(commands::similar(api, font, *limit), |s, o| {
                 output::similar(s, o)

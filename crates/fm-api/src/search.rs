@@ -125,6 +125,232 @@ pub struct SearchRequest {
     /// Window over the family groups.
     #[serde(default)]
     pub page: Page,
+    /// Glyph traits every result face must have (E49.5), from
+    /// `list_glyph_traits`; they combine with AND, with each other and with
+    /// the filters. A face without a detection of the trait (it lacks the
+    /// glyph, or it is not measured yet) passes no trait filter.
+    #[serde(default)]
+    pub glyph_traits: Option<Vec<TraitFilter>>,
+}
+
+/// One glyph-trait filter of a search (E49.5).
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum TraitFilter {
+    /// The face's detected value of the trait is `value`, detected with
+    /// confidence (a guess between two values does not match).
+    #[serde(rename_all = "camelCase")]
+    Value {
+        /// The trait id (`R.leg`).
+        trait_id: String,
+        /// The value id (`straight`).
+        value: String,
+    },
+    /// A scalar trait's measure lies in `min..=max`; a bound left out is open.
+    #[serde(rename_all = "camelCase")]
+    Range {
+        /// The trait id (`O.roundness`).
+        trait_id: String,
+        /// The measure id; `None`: the trait's first measure.
+        #[serde(default)]
+        measure: Option<String>,
+        /// Inclusive lower bound.
+        #[serde(default)]
+        min: Option<f64>,
+        /// Inclusive upper bound.
+        #[serde(default)]
+        max: Option<f64>,
+    },
+}
+
+impl TraitFilter {
+    /// The trait the filter is on.
+    pub fn trait_id(&self) -> &str {
+        match self {
+            Self::Value { trait_id, .. } | Self::Range { trait_id, .. } => trait_id,
+        }
+    }
+}
+
+/// Bounds compare by their bits, so a filter equals itself (`SearchRequest`
+/// is `Eq`).
+impl PartialEq for TraitFilter {
+    fn eq(&self, other: &Self) -> bool {
+        let bits = |v: &Option<f64>| v.map(f64::to_bits);
+        match (self, other) {
+            (
+                Self::Value { trait_id, value },
+                Self::Value {
+                    trait_id: t,
+                    value: v,
+                },
+            ) => trait_id == t && value == v,
+            (
+                Self::Range {
+                    trait_id,
+                    measure,
+                    min,
+                    max,
+                },
+                Self::Range {
+                    trait_id: t,
+                    measure: m,
+                    min: lo,
+                    max: hi,
+                },
+            ) => trait_id == t && measure == m && bits(min) == bits(lo) && bits(max) == bits(hi),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for TraitFilter {}
+
+/// The text form of a trait filter, as `fm search --trait` takes it:
+/// `R.leg=straight` (a value), `O.roundness>=0.95` or `O.roundness<=0.9`
+/// (a bound on the first measure), `O.roundness:bulge<=0.1` (a bound on a
+/// named measure). The text is only split, not checked against the catalog;
+/// the search answers an unknown trait or value.
+impl std::str::FromStr for TraitFilter {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let text = text.trim();
+        let shape =
+            || format!("{text:?} is not <trait>=<value>, <trait>>=<number> or <trait><=<number>");
+        let at = text.find(['=', '<', '>']).ok_or_else(shape)?;
+        let (left, rest) = text.split_at(at);
+        let (trait_part, measure) = match left.split_once(':') {
+            Some((t, m)) => (t.trim(), Some(m.trim())),
+            None => (left.trim(), None),
+        };
+        if trait_part.is_empty() || measure.is_some_and(str::is_empty) {
+            return Err(format!("{text:?} names no trait"));
+        }
+        let number = |s: &str| {
+            s.trim()
+                .parse::<f64>()
+                .ok()
+                .filter(|v| v.is_finite())
+                .ok_or_else(|| format!("{:?} in {text:?} is not a number", s.trim()))
+        };
+        let range = |min: Option<f64>, max: Option<f64>| Self::Range {
+            trait_id: trait_part.to_owned(),
+            measure: measure.map(str::to_owned),
+            min,
+            max,
+        };
+        if let Some(v) = rest.strip_prefix(">=") {
+            Ok(range(Some(number(v)?), None))
+        } else if let Some(v) = rest.strip_prefix("<=") {
+            Ok(range(None, Some(number(v)?)))
+        } else if rest.starts_with(['<', '>']) {
+            Err(format!("{text:?}: use >= or <="))
+        } else if let Some(v) = rest.strip_prefix('=') {
+            let value = v.trim();
+            if measure.is_some() {
+                return Err(format!("{text:?}: a measure takes >= or <=, not ="));
+            }
+            if value.is_empty() || value.contains(['=', '<', '>']) {
+                return Err(format!("{text:?} names no value"));
+            }
+            Ok(Self::Value {
+                trait_id: trait_part.to_owned(),
+                value: value.to_owned(),
+            })
+        } else {
+            Err(shape())
+        }
+    }
+}
+
+/// How a glyph trait is detected (E49.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum GlyphTraitKind {
+    /// The detector picks one of the values.
+    Enum,
+    /// The detector measures numbers; the values are ranges of them.
+    Scalar,
+}
+
+/// One number a scalar trait measures.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphTraitMeasure {
+    /// The measure id (`roundness`), for a `TraitFilter::Range`.
+    pub id: String,
+    /// What the number is, in one line.
+    pub description: String,
+    /// The least value the detector reports.
+    pub min: f64,
+    /// The greatest value the detector reports.
+    pub max: f64,
+}
+
+/// One bound of a scalar value: `min <= measure < max`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphTraitThreshold {
+    /// The measure id.
+    pub measure: String,
+    /// Inclusive lower bound.
+    pub min: Option<f64>,
+    /// Exclusive upper bound.
+    pub max: Option<f64>,
+}
+
+/// One value of a glyph trait with its count in the library.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphTraitValue {
+    /// The value id (`straight`), for a `TraitFilter::Value`.
+    pub id: String,
+    /// The English chip text.
+    pub label: String,
+    /// What the value looks like, in one line.
+    pub description: String,
+    /// Scalar traits: the bounds that all hold for this value; empty for the
+    /// last value, which takes the rest, and for enum values.
+    pub when: Vec<GlyphTraitThreshold>,
+    /// A drawn example: an SVG path, stroked, in a 56-unit square box.
+    pub example: String,
+    /// Searchable faces detected with this value, with confidence: the faces
+    /// a `TraitFilter::Value` of it finds.
+    pub faces: u32,
+    /// The family groups of those faces.
+    pub families: u32,
+}
+
+/// One glyph trait of the catalog with its counts in the library (E49.5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphTraitInfo {
+    /// The trait id (`R.leg`).
+    pub id: String,
+    /// ISO 15924 script of the glyph (`Latn`).
+    pub script: String,
+    /// The character the trait is measured on.
+    pub glyph: String,
+    /// How it is detected.
+    pub kind: GlyphTraitKind,
+    /// The English name ("R leg").
+    pub name: String,
+    /// What the trait is, in one line.
+    pub description: String,
+    /// Whether the picker offers it. A trait whose detector misses the
+    /// accuracy bar is listed disabled; a search on it still works.
+    pub enabled: bool,
+    /// Scalar traits: the numbers measured; empty for an enum trait.
+    pub measures: Vec<GlyphTraitMeasure>,
+    /// The values, in picker order.
+    pub values: Vec<GlyphTraitValue>,
+    /// Searchable faces with a detection of this trait; the rest lack the
+    /// glyph or are not measured yet, and count under no value.
+    pub measured: u32,
+    /// Of `measured`, the faces whose detection is a guess between two
+    /// values: no value counts them.
+    pub unsure: u32,
 }
 
 /// Near-miss detail for a coverage filter.
@@ -461,4 +687,7 @@ pub trait SearchService {
     /// first; a face no rule holds for is not suggested. A role in the request
     /// also weighs stroke contrast, x-height, width and era for that role.
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>>;
+    /// The glyph trait catalog, in catalog order, each value with how many
+    /// searchable faces and family groups have it (E49.5).
+    fn list_glyph_traits(&self) -> ApiResult<Vec<GlyphTraitInfo>>;
 }

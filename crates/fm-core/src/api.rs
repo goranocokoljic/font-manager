@@ -78,7 +78,7 @@ use fm_api::preview::{
     PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters, GlyphTraitInfo,
     ImageMatchRequest, LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion,
     SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest, Supports,
 };
@@ -1083,6 +1083,10 @@ impl SearchService for CoreApi {
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
         Ok(self.lock().suggest_pairings(&req)?)
     }
+
+    fn list_glyph_traits(&self) -> ApiResult<Vec<GlyphTraitInfo>> {
+        Ok(self.lock().list_glyph_traits()?)
+    }
 }
 
 impl PreviewService for CoreApi {
@@ -1576,6 +1580,7 @@ impl WorkflowService for CoreApi {
         let coverage = brief::coverage_reason(&req.languages);
         let index = self.lock();
         let found = index.search(&SearchRequest {
+            glyph_traits: None,
             order: None,
             query: String::new(),
             filters: Filters {

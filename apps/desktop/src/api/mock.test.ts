@@ -492,3 +492,18 @@ describe('MockApi role-aware pairing (E42.13)', () => {
     ).rejects.toBeTruthy();
   });
 });
+
+describe('glyph traits (E49.5)', () => {
+  it('lists the catalog with counts and finds nothing by a trait, as the Rust mock', async () => {
+    const client = createMockClient();
+    const traits = await client.listGlyphTraits();
+    expect(traits.map((t) => t.id)).toEqual(['R.leg', 'O.roundness']);
+    expect(traits.every((t) => t.measured === 0)).toBe(true);
+    const all = await client.search({});
+    expect(all.total).toBeGreaterThan(0);
+    const byTrait = await client.search({
+      glyphTraits: [{ kind: 'value', traitId: 'R.leg', value: 'straight' }],
+    });
+    expect(byTrait.total).toBe(0);
+  });
+});

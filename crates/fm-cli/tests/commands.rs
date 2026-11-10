@@ -7,7 +7,7 @@ use clap::Parser;
 use fm_api::activation::ActivationMode;
 use fm_api::mock::MockApi;
 use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, SetEntry, SetExport};
-use fm_api::search::{Filters, SearchRequest, SimilarRequest, Supports};
+use fm_api::search::{Filters, SearchRequest, SimilarRequest, Supports, TraitFilter};
 use fm_api::{
     API_VERSION, ActivationService, ApiError, ErrorCode, FaceId, LibraryService,
     OrganizationService, PreviewService, SearchService, SetId,
@@ -289,6 +289,7 @@ fn search_flags_become_the_request_filters() {
         supports,
         features: feature,
         variable,
+        traits: Vec::new(),
     };
     assert_eq!(
         flags.filters(),
@@ -1109,4 +1110,90 @@ fn doctor_changes_nothing() {
     let (exit, _, _) = fm_on(&api, &["doctor"]);
     assert_eq!(exit, Exit::Problems);
     assert_eq!(state(&api), before);
+}
+
+/// Criterion 3 (E49.5): `--trait` takes a value or a bound, repeated, and
+/// they reach the request as `glyphTraits`.
+#[test]
+fn trait_flags_become_the_request_glyph_traits() {
+    let cli = Cli::try_parse_from([
+        "fm",
+        "search",
+        "--trait",
+        "R.leg=straight",
+        "--trait",
+        "O.roundness>=0.95",
+    ])
+    .expect("valid");
+    let fm_cli::Command::Search { glyph_trait, .. } = cli.command else {
+        panic!("a search");
+    };
+    assert_eq!(
+        glyph_trait,
+        vec![
+            TraitFilter::Value {
+                trait_id: "R.leg".into(),
+                value: "straight".into(),
+            },
+            TraitFilter::Range {
+                trait_id: "O.roundness".into(),
+                measure: None,
+                min: Some(0.95),
+                max: None,
+            },
+        ]
+    );
+    // A malformed one is a usage error, with the reason.
+    let err =
+        Cli::try_parse_from(["fm", "search", "--trait", "O.roundness>0.9"]).expect_err("malformed");
+    assert!(err.to_string().contains("use >= or <="), "{err}");
+}
+
+/// Criterion 3: the CLI sends the traits: the mock answers an unknown one
+/// with `invalidRequest`, and a known one with what its faces have (none).
+#[test]
+fn search_sends_the_traits_to_the_api() {
+    let (exit, out, _) = fm(&[
+        "--json",
+        "search",
+        "--trait",
+        "R.leg=straight",
+        "--trait",
+        "O.roundness>=0.95",
+    ]);
+    assert_eq!(exit, Exit::Success);
+    assert!(hits(&out).is_empty(), "the mock measured no face: {out}");
+    let (all, out_all, _) = fm(&["--json", "search"]);
+    assert_eq!(all, Exit::Success);
+    assert!(
+        !hits(&out_all).is_empty(),
+        "without traits the mock finds faces"
+    );
+
+    let (exit, _, err) = fm(&["--json", "search", "--trait", "Z.tail=long"]);
+    assert_ne!(exit, Exit::Success);
+    assert_eq!(json(&err)["code"], "invalidRequest", "{err}");
+}
+
+/// Criterion 3: `fm traits` prints the catalog with counts; `--json` is the
+/// API's answer.
+#[test]
+fn traits_prints_the_catalog_with_counts() {
+    let api = MockApi::new();
+    let direct = SearchService::list_glyph_traits(&api).expect("catalog");
+    let (exit, out, _) = fm_on(&api, &["--json", "traits"]);
+    assert_eq!(exit, Exit::Success);
+    let printed: Vec<fm_api::search::GlyphTraitInfo> =
+        serde_json::from_value(json(&out)).expect("catalog");
+    assert_eq!(printed, direct);
+
+    let (exit, out, _) = fm(&["traits"]);
+    assert_eq!(exit, Exit::Success);
+    for header in ["TRAIT", "VALUE", "FACES", "FAMILIES"] {
+        assert!(out.contains(header), "{out}");
+    }
+    assert!(out.contains("R.leg") && out.contains("straight"), "{out}");
+    assert!(out.contains("round (roundness>=0.95)"), "{out}");
+    assert!(out.contains("low accuracy"), "R.leg is disabled: {out}");
+    assert!(out.contains("2 traits"), "{out}");
 }

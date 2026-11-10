@@ -74,6 +74,9 @@ use crate::search::{
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
     WeightRange, WidthRange,
 };
+use crate::search::{
+    GlyphTraitInfo, GlyphTraitKind, GlyphTraitMeasure, GlyphTraitThreshold, GlyphTraitValue,
+};
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
     McpClient, McpConfirmationAnswer, McpGrant, McpGrantUpdate, McpSnippet, McpStatus, McpToolCall,
@@ -2409,7 +2412,72 @@ impl State {
     }
 }
 
+/// The mock's glyph trait catalog: one enum and one scalar trait, no face
+/// measured.
+fn mock_glyph_traits() -> Vec<GlyphTraitInfo> {
+    let value = |id: &str, label: &str, when: Vec<GlyphTraitThreshold>| GlyphTraitValue {
+        id: id.into(),
+        label: label.into(),
+        description: format!("{label}."),
+        when,
+        example: "M18 46V10".into(),
+        faces: 0,
+        families: 0,
+    };
+    vec![
+        GlyphTraitInfo {
+            id: "R.leg".into(),
+            script: "Latn".into(),
+            glyph: "R".into(),
+            kind: GlyphTraitKind::Enum,
+            name: "R leg".into(),
+            description: "The leg of the capital R.".into(),
+            enabled: false,
+            measures: Vec::new(),
+            values: vec![
+                value("straight", "Straight", Vec::new()),
+                value("curved", "Curved", Vec::new()),
+            ],
+            measured: 0,
+            unsure: 0,
+        },
+        GlyphTraitInfo {
+            id: "O.roundness".into(),
+            script: "Latn".into(),
+            glyph: "O".into(),
+            kind: GlyphTraitKind::Scalar,
+            name: "O shape".into(),
+            description: "How round the capital O is.".into(),
+            enabled: true,
+            measures: vec![GlyphTraitMeasure {
+                id: "roundness".into(),
+                description: "Width divided by height of the outer contour.".into(),
+                min: 0.0,
+                max: 2.0,
+            }],
+            values: vec![
+                value(
+                    "round",
+                    "Round",
+                    vec![GlyphTraitThreshold {
+                        measure: "roundness".into(),
+                        min: Some(0.95),
+                        max: None,
+                    }],
+                ),
+                value("oval", "Oval", Vec::new()),
+            ],
+            measured: 0,
+            unsure: 0,
+        },
+    ]
+}
+
 impl SearchService for MockApi {
+    fn list_glyph_traits(&self) -> ApiResult<Vec<GlyphTraitInfo>> {
+        Ok(mock_glyph_traits())
+    }
+
     fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse> {
         let st = self.state();
         let words: Vec<String> = req
@@ -2418,6 +2486,23 @@ impl SearchService for MockApi {
             .map(str::to_lowercase)
             .collect();
         let mut hits = st.hits(&words, &req.filters, req.rule.as_ref())?;
+        // The mock's faces carry no glyph-trait detections: a trait filter
+        // on a known trait finds nothing, as a face without one passes none.
+        let traits = req.glyph_traits.as_deref().unwrap_or_default();
+        for filter in traits {
+            if !mock_glyph_traits()
+                .iter()
+                .any(|t| t.id == filter.trait_id())
+            {
+                return Err(ApiError::invalid(format!(
+                    "There is no glyph trait {}.",
+                    filter.trait_id()
+                )));
+            }
+        }
+        if !traits.is_empty() {
+            hits.clear();
+        }
         if let Some(order) = req.order {
             order.sort_by_family(&mut hits, |hit| &hit.family);
         }

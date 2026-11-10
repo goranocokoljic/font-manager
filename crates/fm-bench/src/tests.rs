@@ -440,3 +440,26 @@ fn the_trait_pass_measures_every_face_of_the_scanned_index_once() {
         "nothing left: {again:?}"
     );
 }
+
+/// E49.5: trait searches are timed after the pass, and find faces then.
+#[test]
+fn trait_search_times_every_search_after_the_pass() {
+    let home = TempDir::new("trait-search");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let before = trait_search(home.path(), 1).expect("before the pass");
+    assert_eq!(before.measured, 0, "{before:?}");
+    assert!(before.found.iter().all(|&n| n == 0), "{before:?}");
+    trait_pass(home.path()).expect("trait pass");
+    let res = trait_search(home.path(), 2).expect("trait search");
+    assert_eq!(res.samples, trait_searches().len() * 2);
+    assert_eq!(res.found.len(), trait_searches().len());
+    assert!(res.measured > 0, "{res:?}");
+    assert!(
+        res.found.iter().any(|&n| n > 0),
+        "some search finds faces: {res:?}"
+    );
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+}

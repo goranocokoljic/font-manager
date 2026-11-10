@@ -125,6 +125,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             r#"{"path":"no-such-image.png","limit":3}"#.into(),
         ),
         ("suggest_pairings", r#"{"face":1,"limit":3}"#.into()),
+        ("list_glyph_traits", String::new()),
         // preview
         (
             "render_preview",

@@ -105,6 +105,7 @@ routes! {
     find_similar(req),
     find_by_image(req),
     suggest_pairings(req),
+    list_glyph_traits(),
     // preview
     render_preview(req),
     compare_preview(req),

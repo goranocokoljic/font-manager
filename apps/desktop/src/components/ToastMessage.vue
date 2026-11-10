@@ -6,7 +6,7 @@
 // middle. The live region is always in the page, so a screen reader reads each new message;
 // a toast stays while the pointer is on its button or the focus is in it, and Escape there
 // takes it away. `data-testid="toast"` is the newest; the ones under it are `toast-stacked`.
-import { ref, watch } from 'vue';
+import { onBeforeUnmount, ref, watch } from 'vue';
 import { useToastStore } from '../stores/toast';
 import { FmSlide } from '../motion';
 import { retireToast } from './retireToast';
@@ -22,8 +22,24 @@ const FALLBACK_TOP = 56;
 const top = ref(FALLBACK_TOP);
 
 function measure(): void {
-  const bar = document.querySelector('[data-top-bar]')?.getBoundingClientRect();
-  top.value = bar && bar.height > 0 ? Math.max(GAP, Math.round(bar.bottom) + GAP) : FALLBACK_TOP;
+  const bar = document.querySelector<HTMLElement>('[data-top-bar]');
+  const rect = bar?.getBoundingClientRect();
+  top.value = rect && rect.height > 0 ? Math.max(GAP, Math.round(rect.bottom) + GAP) : FALLBACK_TOP;
+  follow(bar ?? undefined);
+}
+
+// The bar can change its height while a toast is up: a control in it comes or goes, a font
+// loads, the window narrows and the bar wraps. So the stack follows the bar's size while a
+// toast is on screen, and lets go of it when the last toast is gone.
+let observer: ResizeObserver | undefined;
+let observed: HTMLElement | undefined;
+function follow(bar: HTMLElement | undefined): void {
+  if (bar === observed) return;
+  observer?.disconnect();
+  observed = bar;
+  if (!bar || typeof ResizeObserver === 'undefined') return;
+  observer ??= new ResizeObserver(() => measure());
+  observer.observe(bar);
 }
 
 // Measured as a toast comes: the bar wraps to two rows in a narrow window. In the next frame,
@@ -33,8 +49,10 @@ watch(
   () => toasts.toast?.id,
   (id) => {
     if (id !== undefined) requestAnimationFrame(measure);
+    else follow(undefined);
   },
 );
+onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>

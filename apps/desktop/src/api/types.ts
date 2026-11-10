@@ -1936,6 +1936,94 @@ export type GlyphSvgRequest = {
 	variations?: AxisValue[],
 };
 
+/**  One glyph trait of the catalog with its counts in the library (E49.5). */
+export type GlyphTraitInfo = {
+	/**  The trait id (`R.leg`). */
+	id: string,
+	/**  ISO 15924 script of the glyph (`Latn`). */
+	script: string,
+	/**  The character the trait is measured on. */
+	glyph: string,
+	/**  How it is detected. */
+	kind: GlyphTraitKind,
+	/**  The English name ("R leg"). */
+	name: string,
+	/**  What the trait is, in one line. */
+	description: string,
+	/**
+	 *  Whether the picker offers it. A trait whose detector misses the
+	 *  accuracy bar is listed disabled; a search on it still works.
+	 */
+	enabled: boolean,
+	/**  Scalar traits: the numbers measured; empty for an enum trait. */
+	measures: GlyphTraitMeasure[],
+	/**  The values, in picker order. */
+	values: GlyphTraitValue[],
+	/**
+	 *  Searchable faces with a detection of this trait; the rest lack the
+	 *  glyph or are not measured yet, and count under no value.
+	 */
+	measured: number,
+	/**
+	 *  Of `measured`, the faces whose detection is a guess between two
+	 *  values: no value counts them.
+	 */
+	unsure: number,
+};
+
+/**  How a glyph trait is detected (E49.5). */
+export type GlyphTraitKind = 
+/**  The detector picks one of the values. */
+"enum" | 
+/**  The detector measures numbers; the values are ranges of them. */
+"scalar";
+
+/**  One number a scalar trait measures. */
+export type GlyphTraitMeasure = {
+	/**  The measure id (`roundness`), for a `TraitFilter::Range`. */
+	id: string,
+	/**  What the number is, in one line. */
+	description: string,
+	/**  The least value the detector reports. */
+	min: number | null,
+	/**  The greatest value the detector reports. */
+	max: number | null,
+};
+
+/**  One bound of a scalar value: `min <= measure < max`. */
+export type GlyphTraitThreshold = {
+	/**  The measure id. */
+	measure: string,
+	/**  Inclusive lower bound. */
+	min: number | null,
+	/**  Exclusive upper bound. */
+	max: number | null,
+};
+
+/**  One value of a glyph trait with its count in the library. */
+export type GlyphTraitValue = {
+	/**  The value id (`straight`), for a `TraitFilter::Value`. */
+	id: string,
+	/**  The English chip text. */
+	label: string,
+	/**  What the value looks like, in one line. */
+	description: string,
+	/**
+	 *  Scalar traits: the bounds that all hold for this value; empty for the
+	 *  last value, which takes the rest, and for enum values.
+	 */
+	when: GlyphTraitThreshold[],
+	/**  A drawn example: an SVG path, stroked, in a 56-unit square box. */
+	example: string,
+	/**
+	 *  Searchable faces detected with this value, with confidence: the faces
+	 *  a `TraitFilter::Value` of it finds.
+	 */
+	faces: number,
+	/**  The family groups of those faces. */
+	families: number,
+};
+
 /**
  *  One page of a face's glyph map (E11.1): its mapped characters by Unicode
  *  block, optionally one block only or the ones a search finds.
@@ -3125,6 +3213,13 @@ export type SearchRequest = {
 	order?: FamilyOrder | null,
 	/**  Window over the family groups. */
 	page?: Page,
+	/**
+	 *  Glyph traits every result face must have (E49.5), from
+	 *  `list_glyph_traits`; they combine with AND, with each other and with
+	 *  the filters. A face without a detection of the trait (it lacks the
+	 *  glyph, or it is not measured yet) passes no trait filter.
+	 */
+	glyphTraits?: TraitFilter[] | null,
 };
 
 /**  Search results grouped by family. */
@@ -3645,6 +3740,28 @@ export type ThemeTokens = {
 	/**  Hairlines between rows and panels. */
 	border: string,
 };
+
+/**  One glyph-trait filter of a search (E49.5). */
+export type TraitFilter = 
+/**
+ *  The face's detected value of the trait is `value`, detected with
+ *  confidence (a guess between two values does not match).
+ */
+{ kind: "value"; 
+/**  The trait id (`R.leg`). */
+traitId: string; 
+/**  The value id (`straight`). */
+value: string } | 
+/**  A scalar trait's measure lies in `min..=max`; a bound left out is open. */
+{ kind: "range"; 
+/**  The trait id (`O.roundness`). */
+traitId: string; 
+/**  The measure id; `None`: the trait's first measure. */
+measure?: string | null; 
+/**  Inclusive lower bound. */
+min?: number | null; 
+/**  Inclusive upper bound. */
+max?: number | null };
 
 /**  One copy of a [`Resolution`]. */
 export type TrashMove = {

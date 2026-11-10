@@ -36,7 +36,8 @@ use fm_api::preview::{
     ComparePreviewRequest, MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest,
 };
 use fm_api::search::{
-    CoverageRequest, Filters, PairingRequest, SearchRequest, SimilarRequest, Supports,
+    CoverageRequest, Filters, GlyphTraitInfo, GlyphTraitKind, PairingRequest, SearchRequest,
+    SimilarRequest, Supports, TraitFilter,
 };
 use fm_api::settings::McpToolCall;
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
@@ -229,10 +230,74 @@ pub struct SearchFontsInput {
     pub active: Option<bool>,
     /// Faces in this collection only.
     pub collection_id: Option<u32>,
+    /// Letter shapes every result face must have (glyph traits), all of
+    /// them: `"R.leg=straight"`, `"O.roundness>=0.95"`, or the same as an
+    /// object. A face that lacks the letter is left out.
+    #[serde(alias = "glyphTraits")]
+    pub glyph_traits: Vec<TraitInput>,
     /// Family groups to return (default 20).
     pub limit: Option<u32>,
     /// Family groups to skip.
     pub offset: u32,
+}
+
+/// One glyph-trait filter of `search_fonts`.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(untagged)]
+#[schemars(crate = "rmcp::schemars")]
+pub enum TraitInput {
+    /// `<trait>=<value>`, `<trait>>=<number>`, `<trait><=<number>`, or
+    /// `<trait>:<measure>>=<number>` for a measure other than the first.
+    Text(String),
+    /// A value (`value`) or a range on a measure (`min` and/or `max`).
+    Object {
+        /// The trait id (`R.leg`).
+        trait_id: String,
+        /// The wanted value (`straight`).
+        #[serde(default)]
+        value: Option<String>,
+        /// The measure of a range; the trait's first when left out.
+        #[serde(default)]
+        measure: Option<String>,
+        /// Inclusive lower bound of a range.
+        #[serde(default)]
+        min: Option<f64>,
+        /// Inclusive upper bound of a range.
+        #[serde(default)]
+        max: Option<f64>,
+    },
+}
+
+impl TryFrom<TraitInput> for TraitFilter {
+    type Error = ApiError;
+
+    fn try_from(input: TraitInput) -> Result<Self, ApiError> {
+        match input {
+            TraitInput::Text(text) => text.parse().map_err(ApiError::invalid),
+            TraitInput::Object {
+                trait_id,
+                value: Some(value),
+                measure: None,
+                min: None,
+                max: None,
+            } => Ok(Self::Value { trait_id, value }),
+            TraitInput::Object { value: Some(_), .. } => Err(ApiError::invalid(
+                "A glyph trait takes a value or a range, not both.",
+            )),
+            TraitInput::Object {
+                trait_id,
+                value: None,
+                measure,
+                min,
+                max,
+            } => Ok(Self::Range {
+                trait_id,
+                measure,
+                min,
+                max,
+            }),
+        }
+    }
 }
 
 /// One face, by id.
@@ -504,13 +569,74 @@ fn tool<T: JsonSchema + 'static>(name: &'static str, description: &'static str) 
     Tool::new(name, description, schema).annotate(annotations)
 }
 
+/// What `search_fonts` does, before the glyph trait catalog.
+const SEARCH_FONTS_ABOUT: &str = "Search the font library by text and filters. Returns family groups with face ids and metadata. `glyph_traits` asks for letter shapes, all of them: \"<trait>=<value>\" or \"<trait>>=<number>\" / \"<trait><=<number>\" on a measured trait; a font without the letter is left out.";
+
+/// Every tool's definition, in [`NAMES`] order, with the glyph trait
+/// catalog of `api` in the `search_fonts` description, so an assistant can
+/// ask for letter shapes in one call. When the catalog cannot be read, the
+/// description goes without it.
+pub fn list_for(api: &dyn Api) -> Vec<Tool> {
+    let mut tools = list();
+    if let Ok(catalog) = api.list_glyph_traits()
+        && let Some(search) = tools.iter_mut().find(|t| t.name == SEARCH_FONTS)
+    {
+        search.description = Some(search_description(&catalog).into());
+    }
+    tools
+}
+
+/// [`SEARCH_FONTS_ABOUT`] and one line per trait: its id, name, values (a
+/// scalar value with its bound) and, for a scalar trait, its measures.
+pub fn search_description(catalog: &[GlyphTraitInfo]) -> String {
+    let mut text = format!("{SEARCH_FONTS_ABOUT} The traits:");
+    for t in catalog {
+        let values: Vec<String> = t
+            .values
+            .iter()
+            .map(|v| {
+                let bounds: Vec<String> = v
+                    .when
+                    .iter()
+                    .map(|w| match (w.min, w.max) {
+                        (Some(lo), Some(hi)) => format!("{lo}<={}<{hi}", w.measure),
+                        (Some(lo), None) => format!("{}>={lo}", w.measure),
+                        (None, Some(hi)) => format!("{}<{hi}", w.measure),
+                        (None, None) => w.measure.clone(),
+                    })
+                    .collect();
+                if bounds.is_empty() {
+                    v.id.clone()
+                } else {
+                    format!("{} ({})", v.id, bounds.join(", "))
+                }
+            })
+            .collect();
+        text.push_str(&format!(
+            "
+- {} ({}",
+            t.id, t.name
+        ));
+        if !t.enabled {
+            text.push_str(", low accuracy");
+        }
+        text.push_str(&format!("): {}", values.join(", ")));
+        if t.kind == GlyphTraitKind::Scalar {
+            let measures: Vec<String> = t
+                .measures
+                .iter()
+                .map(|m| format!("{} {}..{}", m.id, m.min, m.max))
+                .collect();
+            text.push_str(&format!("; measures {}", measures.join(", ")));
+        }
+    }
+    text
+}
+
 /// Every tool's definition, in [`NAMES`] order.
 pub fn list() -> Vec<Tool> {
     vec![
-        tool::<SearchFontsInput>(
-            SEARCH_FONTS,
-            "Search the font library by text and filters. Returns family groups with face ids and metadata.",
-        ),
+        tool::<SearchFontsInput>(SEARCH_FONTS, SEARCH_FONTS_ABOUT),
         tool::<FaceInput>(
             GET_FONT,
             "Details of one face: names, file path, metrics, axes, features, scripts, license and tags.",
@@ -832,11 +958,17 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                 supports: supports(a.languages, a.text, false)?,
                 ..Filters::default()
             };
+            let glyph_traits = a
+                .glyph_traits
+                .into_iter()
+                .map(TraitFilter::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
             to_json(&api.search(SearchRequest {
                 order: None,
                 query: a.query,
                 filters,
                 rule: None,
+                glyph_traits: (!glyph_traits.is_empty()).then_some(glyph_traits),
                 page: Page {
                     offset: a.offset,
                     limit: a.limit.unwrap_or(DEFAULT_SEARCH_LIMIT),

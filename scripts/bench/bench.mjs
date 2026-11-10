@@ -142,6 +142,7 @@ async function run(opts) {
     const needed = bench(bin, ['fonts-needed', '--home', home]);
     const traits = bench(bin, ['trait-pass', '--home', home]);
     console.log(`trait pass: ${traits.measured}/${traits.faces} faces measured`);
+    const traitSearch = bench(bin, ['trait-search', '--home', home, '--rounds', String(opts.rounds)]);
     console.log(`fonts needed: ${needed.matched}/${needed.fonts} fonts matched, ${needed.done} activated, ${needed.conflicts} clashes`);
     const idle = await idleMemory(os, bin, home, opts.settleMs);
     const report = {
@@ -166,12 +167,15 @@ async function run(opts) {
         activation_100: activation100(activation),
         fonts_needed_100: fontsNeeded100(needed),
         trait_pass: traitPass(traits.ms, traits.faces),
+        trait_search: traitSearch.measured
+          ? metric('trait_search', traitSearch.p95_ms)
+          : metric('trait_search', null, 'no face has a glyph trait measured'),
         idle_memory: metric('idle_memory', idle),
         preview_cache_hit: previewCache.samples
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits },
+      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits, trait_search: traitSearch },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');

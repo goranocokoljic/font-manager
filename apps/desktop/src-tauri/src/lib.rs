@@ -44,9 +44,9 @@ use fm_api::preview::{
     SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, LanguageHint,
-    LanguagePreset, PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SimilarFace,
-    SimilarRequest,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, GlyphTraitInfo,
+    LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion, SearchRequest, SearchResponse,
+    SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
@@ -937,6 +937,12 @@ async fn suggest_pairings(
     call(&state, move |api| api.suggest_pairings(req)).await
 }
 
+/// The glyph trait catalog with per-value counts in the library (E49.5).
+#[tauri::command]
+async fn list_glyph_traits(state: State<'_, AppState>) -> ApiResult<Vec<GlyphTraitInfo>> {
+    call(&state, |api| api.list_glyph_traits()).await
+}
+
 /// How well one face covers some languages or text, for the glyph compare overlay.
 #[tauri::command]
 async fn check_coverage(
@@ -1485,6 +1491,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             search,
             find_similar,
             suggest_pairings,
+            list_glyph_traits,
             check_coverage,
             face_coverage,
             list_languages,

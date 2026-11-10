@@ -98,7 +98,12 @@ impl ServerHandler for McpServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(tools::list()))
+        // The catalog is read from the API, which is synchronous (ADR 0006).
+        let api = Arc::clone(&self.api);
+        let tools = tokio::task::spawn_blocking(move || tools::list_for(api.as_ref()))
+            .await
+            .unwrap_or_else(|_| tools::list());
+        Ok(ListToolsResult::with_all_items(tools))
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {

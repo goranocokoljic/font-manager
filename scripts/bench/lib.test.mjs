@@ -49,8 +49,9 @@ describe('metric', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
       'activation_100', 'cold_start', 'first_scan', 'fonts_needed_100', 'glyph_geometry', 'idle_memory',
       'incremental_update', 'layout_png', 'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
-      'trait_pass',
+      'trait_pass', 'trait_search',
     ]);
+    assert.equal(BUDGETS.trait_search.target, 50);
     assert.equal(BUDGETS.trait_pass.target, 60000);
     assert.equal(BUDGETS.preview_cache_hit.target, 2);
     assert.equal(BUDGETS.glyph_geometry.target, 2);

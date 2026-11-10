@@ -21,6 +21,11 @@
 //! A `collection` filter naming a smart collection (E14.2) applies its rule
 //! ([`smart`]), compiled once per search.
 //!
+//! Glyph-trait filters (E49.5, [`traits`]) read the detections the cache
+//! keeps (read on the first trait search after a change): only the faces
+//! with the traits asked for are scored, and a face without them is no
+//! result and, like a face outside a draft rule, counts under no filter value.
+//!
 //! The searchable rows are read once and kept in memory until the database
 //! changes ([`SearchCache`]): this connection's writes move
 //! `total_changes`, another process's commits move `PRAGMA data_version`.
@@ -95,6 +100,9 @@ pub(super) struct SearchCache {
     /// What similar-font search compares (E23.2), by face id: read on the
     /// first such search after the database changed.
     profiles: Option<HashMap<u32, crate::similar::Profile>>,
+    /// The glyph-trait detections (E49.5), by trait: read on the first
+    /// search with a trait filter after the database changed.
+    detections: Option<traits::Detections>,
 }
 
 /// One searchable face.
@@ -155,15 +163,21 @@ impl Index {
         let activated_cutoff = smart::cutoff(&self.conn, req.filters.activated_within_days)?;
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
+        let traits = self.trait_faces(req.glyph_traits.as_deref().unwrap_or_default())?;
         let cache = self.search_cache.borrow();
         let rows = cache.rows.as_slice();
-        let candidates = query
+        let fts = query
             .fts_match()
             .map(|expr| self.fts_candidates(&expr))
             .transpose()?;
-        let mut hits = score(&query, rows, candidates.as_ref());
+        // Only the faces with the traits asked for are scored at all.
+        let candidates = match (fts, traits.as_ref()) {
+            (Some(fts), Some(traits)) => Some(fts.intersection(traits).copied().collect()),
+            (fts, _) => fts,
+        };
+        let mut hits = score(&query, rows, candidates.as_ref().or(traits.as_ref()));
         if hits.is_empty() && candidates.is_some() {
-            hits = score(&query, rows, None);
+            hits = score(&query, rows, traits.as_ref());
         }
 
         let mut members: HashMap<&str, Vec<&Row>> = HashMap::new();
@@ -183,6 +197,13 @@ impl Index {
                 .filter_map(|(row, score)| {
                     // A face outside the draft rule counts under no value.
                     if draft.as_ref().is_some_and(|d| !d.holds(row, &[])) {
+                        return None;
+                    }
+                    // So does a face without the glyph traits asked for (E49.5).
+                    if traits
+                        .as_ref()
+                        .is_some_and(|faces| !faces.contains(&row.id))
+                    {
                         return None;
                     }
                     let mut failed = failed(&req.filters, &row.text, &row.facts)
@@ -428,6 +449,7 @@ impl Index {
             tag_names,
             family_notes,
             profiles: None,
+            detections: None,
         };
         Ok(())
     }
@@ -743,6 +765,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
 mod pairing;
 mod similar;
 pub(super) mod smart;
+mod traits;
 
 #[cfg(test)]
 mod tests;

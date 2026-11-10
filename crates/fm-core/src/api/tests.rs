@@ -15,7 +15,7 @@ use fm_api::library::{
     FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest, LicenseType,
     OpenLicense, ProblemKind, TrashMoveStatus,
 };
-use fm_api::search::{Filters, Supports};
+use fm_api::search::{Filters, SearchRequest, Supports, TraitFilter};
 use fm_platform::{MockActivator, MockTrash};
 
 use super::*;
@@ -339,6 +339,116 @@ fn the_trait_pass_runs_after_a_scan_and_reports_through_events() {
             .expect("remaining")
             > 0
     );
+}
+
+/// E49.5 through the `CoreApi` entry path, on the real detectors: after a
+/// trait pass, `list_glyph_traits` counts what a value filter finds, a
+/// search combines a trait with a filter, and an unknown trait is an
+/// `InvalidRequest`.
+#[test]
+fn glyph_trait_search_runs_through_the_api_on_measured_fonts() {
+    let (lib, _, _) = Lib::scanned("api-trait-search");
+    let empty = lib.api.list_glyph_traits().expect("catalog");
+    assert!(
+        empty.iter().all(|t| t.measured == 0),
+        "nothing measured yet"
+    );
+    crate::trait_pass::run(
+        &lib.api.index,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _| {},
+    )
+    .expect("trait pass");
+    let catalog = lib.api.list_glyph_traits().expect("catalog");
+    assert!(
+        catalog.iter().any(|t| t.measured > 0),
+        "the pass measured faces"
+    );
+    let search = |traits: Vec<TraitFilter>, filters: Filters| {
+        lib.api.search(SearchRequest {
+            glyph_traits: Some(traits),
+            filters,
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..SearchRequest::default()
+        })
+    };
+    let mut checked = 0;
+    let mut strictly_narrowed = 0;
+    for t in &catalog {
+        for v in t.values.iter().filter(|v| v.faces > 0) {
+            let filter = TraitFilter::Value {
+                trait_id: t.id.clone(),
+                value: v.id.clone(),
+            };
+            let found = search(vec![filter.clone()], Filters::default()).expect("search");
+            let faces: usize = found.families.iter().map(|f| f.faces.len()).sum();
+            assert_eq!(faces as u32, v.faces, "{}={}", t.id, v.id);
+            assert_eq!(found.total, v.families, "{}={}", t.id, v.families);
+            // Every face found has that value stored.
+            for face in found.families.iter().flat_map(|f| &f.faces) {
+                let stored = lib.api.lock().face_glyph_traits(*face).expect("stored");
+                assert!(stored.iter().any(|s| s.trait_id == t.id && s.value == v.id));
+            }
+            // With a filter on top, a subset.
+            let statics = Filters {
+                variable: Some(false),
+                ..Filters::default()
+            };
+            // Exactly the static faces of the trait result: the filter
+            // still applies to faces the trait lets through.
+            let narrowed = search(vec![filter], statics).expect("search");
+            let narrowed: Vec<FaceId> = narrowed
+                .families
+                .iter()
+                .flat_map(|f| f.faces.clone())
+                .collect();
+            let mut statics_found: Vec<FaceId> = found
+                .families
+                .iter()
+                .flat_map(|f| f.faces.clone())
+                .filter(|face| !lib.api.get_face(*face).expect("face").face.is_variable)
+                .collect();
+            let mut narrowed_sorted = narrowed.clone();
+            narrowed_sorted.sort_by_key(|f| f.0);
+            statics_found.sort_by_key(|f| f.0);
+            assert_eq!(narrowed_sorted, statics_found, "{}={}", t.id, v.id);
+            if statics_found.len() < faces {
+                strictly_narrowed += 1;
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "some value was found");
+    assert!(
+        strictly_narrowed > 0,
+        "some trait result held a variable face the filter removed"
+    );
+    let o = catalog.iter().find(|t| t.id == "O.roundness").expect("O");
+    let wide = search(
+        vec![TraitFilter::Range {
+            trait_id: "O.roundness".into(),
+            measure: None,
+            min: Some(0.0),
+            max: None,
+        }],
+        Filters::default(),
+    )
+    .expect("range");
+    let faces: u32 = wide.families.iter().map(|f| f.faces.len() as u32).sum();
+    assert_eq!(faces, o.measured, "every measured O, unsure or not");
+
+    let err = search(
+        vec![TraitFilter::Value {
+            trait_id: "Z.tail".into(),
+            value: "long".into(),
+        }],
+        Filters::default(),
+    )
+    .expect_err("unknown trait");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
 }
 
 #[test]
@@ -3873,6 +3983,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
     let mut variable: Vec<String> = lib
         .api
         .search(SearchRequest {
+            glyph_traits: None,
             order: None,
             query: String::new(),
             filters: Filters {
@@ -4533,6 +4644,7 @@ fn page_families(page: &str) -> Vec<String> {
 fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
     lib.api
         .search(SearchRequest {
+            glyph_traits: None,
             order: None,
             query: String::new(),
             filters: Filters {
