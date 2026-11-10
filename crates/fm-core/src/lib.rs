@@ -28,6 +28,7 @@ pub mod font_switch;
 pub mod framework_snippet;
 pub mod glyph_features;
 pub mod glyph_svg;
+pub mod glyph_traits;
 pub mod glyphs;
 pub mod grouping;
 pub mod image_match;

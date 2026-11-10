@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/classification/glyph-traits.schema.json",
+  "title": "Font Manager glyph trait catalog",
+  "description": "The distinctive glyph traits the detectors compute and the letter picker shows (E49): one entry per trait, each with its values, their labels and a drawn example.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "traits"],
+  "properties": {
+    "$schema": { "const": "./glyph-traits.schema.json" },
+    "traits": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/trait" }
+    }
+  },
+  "$defs": {
+    "labels": {
+      "description": "Friendly text by language: en and de are required; other two-letter languages may follow.",
+      "type": "object",
+      "required": ["en", "de"],
+      "propertyNames": { "pattern": "^[a-z]{2}$" },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^\\S(.*\\S)?$"
+      }
+    },
+    "oneLine": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\n]*\\S$"
+    },
+    "example": {
+      "description": "An SVG path (the d attribute) drawn as a stroke, without fill, in a 56 × 56 box (viewBox 0 0 56 56). Absolute commands only (M L H V C S Q T A Z); every number lies in 0–56.",
+      "type": "string",
+      "maxLength": 400,
+      "pattern": "^M[MLHVCSQTAZ0-9 .,-]*$"
+    },
+    "trait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "script", "glyph", "codepoint", "kind", "name", "description", "values"],
+      "properties": {
+        "id": {
+          "description": "The glyph's name and the trait, joined by a dot (R.leg, one.flag). Unique.",
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9]*\\.[a-z][a-zA-Z0-9]*$"
+        },
+        "script": {
+          "description": "ISO 15924 script of the glyph (Latn; Cyrl and Grek later).",
+          "type": "string",
+          "pattern": "^[A-Z][a-z]{3}$"
+        },
+        "glyph": {
+          "description": "The character the trait is measured on: exactly one Unicode scalar value.",
+          "type": "string",
+          "minLength": 1
+        },
+        "codepoint": {
+          "description": "The glyph's code point, U+ and four to six uppercase hex digits; the same character as glyph.",
+          "type": "string",
+          "pattern": "^U\\+[0-9A-F]{4,6}$"
+        },
+        "kind": {
+          "description": "enum: the detector picks one value. scalar: the detector measures numbers, and the first value whose when conditions hold is the chip.",
+          "enum": ["enum", "scalar"]
+        },
+        "name": { "$ref": "#/$defs/labels" },
+        "description": { "$ref": "#/$defs/oneLine" },
+        "measures": {
+          "description": "Scalar traits only: the numbers the detector measures.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "description", "min", "max"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9]*$" },
+              "description": { "$ref": "#/$defs/oneLine" },
+              "min": { "type": "number" },
+              "max": { "type": "number" }
+            }
+          }
+        },
+        "values": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/value" }
+        }
+      }
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "description", "example"],
+      "properties": {
+        "id": {
+          "description": "Unique within the trait.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "label": { "$ref": "#/$defs/labels" },
+        "description": { "$ref": "#/$defs/oneLine" },
+        "when": {
+          "description": "Scalar traits only: the thresholds that map the measures to this chip, all of which must hold (min inclusive, max exclusive). Values are tried in order; the last one has an empty list and catches the rest.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["measure"],
+            "minProperties": 2,
+            "properties": {
+              "measure": { "type": "string" },
+              "min": { "type": "number" },
+              "max": { "type": "number" }
+            }
+          }
+        },
+        "example": { "$ref": "#/$defs/example" }
+      }
+    }
+  }
+}

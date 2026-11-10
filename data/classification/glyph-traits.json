@@ -1,0 +1,499 @@
+{
+  "$schema": "./glyph-traits.schema.json",
+  "traits": [
+    {
+      "id": "R.leg",
+      "script": "Latn",
+      "glyph": "R",
+      "codepoint": "U+0052",
+      "kind": "enum",
+      "name": {
+        "en": "R leg",
+        "de": "Bein des R"
+      },
+      "description": "The leg of the capital R: one straight stroke, one curve, or a curve that runs into a straight stroke.",
+      "values": [
+        {
+          "id": "straight",
+          "label": {
+            "en": "Straight",
+            "de": "Gerade"
+          },
+          "description": "The leg is a straight stroke from the bowl to the baseline.",
+          "example": "M18 46V10H30A9 9 0 0 1 30 28H18M28 28L40 46"
+        },
+        {
+          "id": "curved",
+          "label": {
+            "en": "Curved",
+            "de": "Geschwungen"
+          },
+          "description": "The leg bends along its whole length.",
+          "example": "M18 46V10H30A9 9 0 0 1 30 28H18M26 28C34 30 36 42 44 46"
+        },
+        {
+          "id": "both",
+          "label": {
+            "en": "Curve, then straight",
+            "de": "Bogen, dann gerade"
+          },
+          "description": "Part curve, part straight: the leg bends where it leaves the bowl or kicks out at its foot.",
+          "example": "M18 46V10H30A9 9 0 0 1 30 28H18M30 28C36 30 38 34 38 40V46"
+        }
+      ]
+    },
+    {
+      "id": "O.roundness",
+      "script": "Latn",
+      "glyph": "O",
+      "codepoint": "U+004F",
+      "kind": "scalar",
+      "name": {
+        "en": "O shape",
+        "de": "Form des O"
+      },
+      "description": "How round the capital O is: its width against its height, and how far its outline departs from an ellipse.",
+      "measures": [
+        {
+          "id": "roundness",
+          "description": "Width divided by height of the outer contour.",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "id": "deviation",
+          "description": "Mean distance of the outer contour from the ellipse that fits its bounding box, divided by the height.",
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "values": [
+        {
+          "id": "squared",
+          "label": {
+            "en": "Squared",
+            "de": "Eckig"
+          },
+          "description": "Straight sides or corners: the outline departs from an ellipse by 0.04 of the height or more.",
+          "when": [
+            {
+              "measure": "deviation",
+              "min": 0.04
+            }
+          ],
+          "example": "M20 10H36Q44 10 44 18V38Q44 46 36 46H20Q12 46 12 38V18Q12 10 20 10Z"
+        },
+        {
+          "id": "round",
+          "label": {
+            "en": "Round",
+            "de": "Rund"
+          },
+          "description": "An ellipse at least 0.95 as wide as it is tall: a circle or wider.",
+          "when": [
+            {
+              "measure": "roundness",
+              "min": 0.95
+            }
+          ],
+          "example": "M28 10A18 18 0 1 1 28 46A18 18 0 1 1 28 10Z"
+        },
+        {
+          "id": "oval",
+          "label": {
+            "en": "Oval",
+            "de": "Oval"
+          },
+          "description": "An ellipse from 0.75 to 0.95 as wide as it is tall.",
+          "when": [
+            {
+              "measure": "roundness",
+              "min": 0.75
+            }
+          ],
+          "example": "M28 10A14 18 0 1 1 28 46A14 18 0 1 1 28 10Z"
+        },
+        {
+          "id": "narrow",
+          "label": {
+            "en": "Narrow",
+            "de": "Schmal"
+          },
+          "description": "An ellipse less than 0.75 as wide as it is tall.",
+          "when": [],
+          "example": "M28 10A9 18 0 1 1 28 46A9 18 0 1 1 28 10Z"
+        }
+      ]
+    },
+    {
+      "id": "g.storeys",
+      "script": "Latn",
+      "glyph": "g",
+      "codepoint": "U+0067",
+      "kind": "enum",
+      "name": {
+        "en": "g storeys",
+        "de": "Stockwerke des g"
+      },
+      "description": "The lowercase g: one bowl with a descending tail, or two bowls joined by a link.",
+      "values": [
+        {
+          "id": "single",
+          "label": {
+            "en": "Single-storey",
+            "de": "Einstöckig"
+          },
+          "description": "One bowl on a stem that turns into the descender.",
+          "example": "M35 30A8 8 0 1 1 19 30A8 8 0 1 1 35 30ZM35 22V46Q35 54 27 54Q21 54 18 50"
+        },
+        {
+          "id": "double",
+          "label": {
+            "en": "Double-storey",
+            "de": "Zweistöckig"
+          },
+          "description": "An upper bowl and a closed or open lower loop, joined by a link.",
+          "example": "M33 27A6 6 0 1 1 21 27A6 6 0 1 1 33 27ZM31 22L37 20M23 32Q19 37 26 38H31Q39 38 39 45Q39 52 28 52Q17 52 17 45Q17 39 26 38"
+        }
+      ]
+    },
+    {
+      "id": "a.storeys",
+      "script": "Latn",
+      "glyph": "a",
+      "codepoint": "U+0061",
+      "kind": "enum",
+      "name": {
+        "en": "a storeys",
+        "de": "Stockwerke des a"
+      },
+      "description": "The lowercase a: a bowl beside a stem, or a bowl under an arching hook.",
+      "values": [
+        {
+          "id": "single",
+          "label": {
+            "en": "Single-storey",
+            "de": "Einstöckig"
+          },
+          "description": "A round bowl beside a straight stem, as in handwriting.",
+          "example": "M35 36A8 8 0 1 1 19 36A8 8 0 1 1 35 36ZM35 28V46"
+        },
+        {
+          "id": "double",
+          "label": {
+            "en": "Double-storey",
+            "de": "Zweistöckig"
+          },
+          "description": "A small bowl under a stem that arches over it.",
+          "example": "M20 25Q23 20 28 20Q36 20 36 28V46M36 34H27Q19 34 19 40Q19 46 26 46Q32 46 36 41"
+        }
+      ]
+    },
+    {
+      "id": "G.spur",
+      "script": "Latn",
+      "glyph": "G",
+      "codepoint": "U+0047",
+      "kind": "enum",
+      "name": {
+        "en": "G spur",
+        "de": "Sporn des G"
+      },
+      "description": "Whether the capital G has a vertical stroke or spur at its lower right, meeting the bowl at a corner.",
+      "values": [
+        {
+          "id": "spur",
+          "label": {
+            "en": "Spur",
+            "de": "Mit Sporn"
+          },
+          "description": "A vertical stroke or spur at the lower right, below the bar.",
+          "example": "M41 17Q37 10 29 10Q14 10 14 28Q14 46 29 46Q36 46 41 41M41 30V46M31 30H41"
+        },
+        {
+          "id": "none",
+          "label": {
+            "en": "No spur",
+            "de": "Ohne Sporn"
+          },
+          "description": "The bowl curves straight into the bar, or ends without a corner.",
+          "example": "M41 17Q37 10 29 10Q14 10 14 28Q14 46 29 46Q42 46 42 30H30"
+        }
+      ]
+    },
+    {
+      "id": "Q.tail",
+      "script": "Latn",
+      "glyph": "Q",
+      "codepoint": "U+0051",
+      "kind": "enum",
+      "name": {
+        "en": "Q tail",
+        "de": "Schwanz des Q"
+      },
+      "description": "Where the tail of the capital Q goes.",
+      "values": [
+        {
+          "id": "inside",
+          "label": {
+            "en": "Inside",
+            "de": "Innen"
+          },
+          "description": "The tail stays within the width of the bowl: inside the counter or a short stub under it.",
+          "example": "M28 10A16 18 0 1 1 28 46A16 18 0 1 1 28 10ZM30 34L38 42"
+        },
+        {
+          "id": "crossing",
+          "label": {
+            "en": "Crossing",
+            "de": "Kreuzend"
+          },
+          "description": "The tail crosses the outline of the bowl at the lower right and ends just past it.",
+          "example": "M28 10A16 18 0 1 1 28 46A16 18 0 1 1 28 10ZM32 38L46 52"
+        },
+        {
+          "id": "swash",
+          "label": {
+            "en": "Swash",
+            "de": "Ausladend"
+          },
+          "description": "The tail sweeps far out to the right or under the letter.",
+          "example": "M28 10A16 18 0 1 1 28 46A16 18 0 1 1 28 10ZM22 44Q30 50 40 48Q47 47 54 52"
+        }
+      ]
+    },
+    {
+      "id": "t.terminal",
+      "script": "Latn",
+      "glyph": "t",
+      "codepoint": "U+0074",
+      "kind": "enum",
+      "name": {
+        "en": "t top",
+        "de": "Oberes Ende des t"
+      },
+      "description": "How the stem of the lowercase t ends at the top.",
+      "values": [
+        {
+          "id": "flat",
+          "label": {
+            "en": "Flat",
+            "de": "Flach"
+          },
+          "description": "The top of the stem is cut parallel to the baseline.",
+          "example": "M25 10V40Q25 46 31 46H36M17 20H35M22 10H28"
+        },
+        {
+          "id": "angled",
+          "label": {
+            "en": "Angled",
+            "de": "Schräg"
+          },
+          "description": "The top of the stem is cut or tapered on a slant.",
+          "example": "M20 14L26 9V40Q26 46 32 46H37M17 20H35"
+        }
+      ]
+    },
+    {
+      "id": "one.flag",
+      "script": "Latn",
+      "glyph": "1",
+      "codepoint": "U+0031",
+      "kind": "enum",
+      "name": {
+        "en": "1 flag",
+        "de": "Fahne der 1"
+      },
+      "description": "Whether the figure one has a flag: the stroke at the top that points down to the left.",
+      "values": [
+        {
+          "id": "flag",
+          "label": {
+            "en": "Flag",
+            "de": "Mit Fahne"
+          },
+          "description": "A flag at the top of the stem.",
+          "example": "M19 17L29 10V46"
+        },
+        {
+          "id": "none",
+          "label": {
+            "en": "No flag",
+            "de": "Ohne Fahne"
+          },
+          "description": "A plain stem, with or without serifs.",
+          "example": "M29 10V46"
+        }
+      ]
+    },
+    {
+      "id": "seven.bar",
+      "script": "Latn",
+      "glyph": "7",
+      "codepoint": "U+0037",
+      "kind": "enum",
+      "name": {
+        "en": "7 crossbar",
+        "de": "Querstrich der 7"
+      },
+      "description": "Whether the figure seven has a bar across its stem.",
+      "values": [
+        {
+          "id": "bar",
+          "label": {
+            "en": "Crossbar",
+            "de": "Mit Querstrich"
+          },
+          "description": "A short bar crosses the stem, as in handwriting.",
+          "example": "M16 10H40L24 46M21 28H37"
+        },
+        {
+          "id": "none",
+          "label": {
+            "en": "No crossbar",
+            "de": "Ohne Querstrich"
+          },
+          "description": "A plain stem from the arm to the baseline.",
+          "example": "M16 10H40L24 46"
+        }
+      ]
+    },
+    {
+      "id": "I.form",
+      "script": "Latn",
+      "glyph": "I",
+      "codepoint": "U+0049",
+      "kind": "enum",
+      "name": {
+        "en": "I form",
+        "de": "Form des I"
+      },
+      "description": "The ends of the capital I.",
+      "values": [
+        {
+          "id": "plain",
+          "label": {
+            "en": "Plain",
+            "de": "Schlicht"
+          },
+          "description": "A stroke with neither serifs nor horizontal bars.",
+          "example": "M28 10V46"
+        },
+        {
+          "id": "serifed",
+          "label": {
+            "en": "Serifs",
+            "de": "Mit Serifen"
+          },
+          "description": "Serifs at both ends, usually bracketed or tapering.",
+          "example": "M28 12V44M21 10Q26 11 28 13Q30 11 35 10M21 46Q26 45 28 43Q30 45 35 46"
+        },
+        {
+          "id": "barred",
+          "label": {
+            "en": "Bars",
+            "de": "Mit Balken"
+          },
+          "description": "Flat horizontal bars across both ends, as in many monospaced and legibility faces.",
+          "example": "M28 10V46M17 10H39M17 46H39"
+        }
+      ]
+    },
+    {
+      "id": "l.form",
+      "script": "Latn",
+      "glyph": "l",
+      "codepoint": "U+006C",
+      "kind": "enum",
+      "name": {
+        "en": "l form",
+        "de": "Form des l"
+      },
+      "description": "How the lowercase l ends at the baseline.",
+      "values": [
+        {
+          "id": "plain",
+          "label": {
+            "en": "Plain",
+            "de": "Schlicht"
+          },
+          "description": "The stem ends without a turn: a straight end or a symmetric foot serif.",
+          "example": "M28 8V46"
+        },
+        {
+          "id": "tailed",
+          "label": {
+            "en": "Tail",
+            "de": "Mit Auslauf"
+          },
+          "description": "The stem turns to the right at the baseline.",
+          "example": "M25 8V39Q25 46 32 46H36"
+        }
+      ]
+    },
+    {
+      "id": "M.sides",
+      "script": "Latn",
+      "glyph": "M",
+      "codepoint": "U+004D",
+      "kind": "enum",
+      "name": {
+        "en": "M sides",
+        "de": "Seiten des M"
+      },
+      "description": "Whether the outer strokes of the capital M are parallel or lean outward.",
+      "values": [
+        {
+          "id": "vertical",
+          "label": {
+            "en": "Vertical",
+            "de": "Senkrecht"
+          },
+          "description": "The outer strokes are parallel (upright, or slanted together in an italic).",
+          "example": "M14 46V10L28 36L42 10V46"
+        },
+        {
+          "id": "splayed",
+          "label": {
+            "en": "Splayed",
+            "de": "Gespreizt"
+          },
+          "description": "The outer strokes lean outward towards the baseline.",
+          "example": "M9 46L16 10L28 36L40 10L47 46"
+        }
+      ]
+    },
+    {
+      "id": "e.bar",
+      "script": "Latn",
+      "glyph": "e",
+      "codepoint": "U+0065",
+      "kind": "enum",
+      "name": {
+        "en": "e bar",
+        "de": "Querstrich des e"
+      },
+      "description": "The bar that closes the eye of the lowercase e.",
+      "values": [
+        {
+          "id": "horizontal",
+          "label": {
+            "en": "Horizontal",
+            "de": "Waagrecht"
+          },
+          "description": "The bar runs parallel to the baseline.",
+          "example": "M15 34H41Q41 22 28 22Q15 22 15 34Q15 46 28 46Q36 46 40 42"
+        },
+        {
+          "id": "angled",
+          "label": {
+            "en": "Angled",
+            "de": "Schräg"
+          },
+          "description": "The bar rises to the right, as in Venetian and handwritten styles; a looped eye counts as angled.",
+          "example": "M15 38L40 28Q37 22 28 22Q15 22 15 34Q15 46 28 46Q36 46 40 42"
+        }
+      ]
+    }
+  ]
+}
