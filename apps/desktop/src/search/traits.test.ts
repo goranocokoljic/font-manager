@@ -9,6 +9,7 @@ import {
   traitForGlyph,
   traitLineLabel,
   traitsText,
+  withoutTrait,
 } from './traits';
 
 const trait = (
@@ -70,6 +71,12 @@ describe('glyph-trait filters (E49.6)', () => {
     traits = chooseTrait(traits, 'R.leg', null);
     expect(traits).toEqual([value('O.roundness', 'round')]);
     expect(chosenValue(traits, 'R.leg')).toBeNull();
+  });
+
+  it('counts a trait against the others: withoutTrait drops only that trait', () => {
+    const traits = [value('R.leg', 'straight'), value('O.roundness', 'round')];
+    expect(withoutTrait(traits, 'R.leg')).toEqual([value('O.roundness', 'round')]);
+    expect(withoutTrait(traits, 'g.storeys')).toEqual(traits);
   });
 
   it('names a chip "R · leg · straight" and the count line "R leg straight"', () => {
