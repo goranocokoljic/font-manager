@@ -158,9 +158,27 @@ export function formatDate(
   return new Intl.DateTimeFormat(current.value, options).format(value);
 }
 
+/** One `Intl.PluralRules` per locale: building one costs more than every card label of a frame. */
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+function pluralRulesOf(tag: string): Intl.PluralRules {
+  let rules = pluralRules.get(tag);
+  if (!rules) pluralRules.set(tag, (rules = new Intl.PluralRules(tag)));
+  return rules;
+}
+
+/** One plain `Intl.NumberFormat` per locale, for the counts in messages. */
+const numberFormats = new Map<string, Intl.NumberFormat>();
+
+function numberFormatOf(tag: string): Intl.NumberFormat {
+  let format = numberFormats.get(tag);
+  if (!format) numberFormats.set(tag, (format = new Intl.NumberFormat(tag)));
+  return format;
+}
+
 function pick(forms: PluralForms, count: number, tag: string): string {
   if (count === 0 && forms.zero !== undefined) return forms.zero;
-  const category = new Intl.PluralRules(tag).select(count) as keyof PluralForms;
+  const category = pluralRulesOf(tag).select(count) as keyof PluralForms;
   return forms[category] ?? forms.other;
 }
 
@@ -184,7 +202,7 @@ export function t(key: MessageKey, params?: MessageParams): string {
   return text.replace(/\{(\w+)\}/g, (whole, name: string) => {
     const value = params[name];
     if (value === undefined) return whole;
-    return typeof value === 'number' ? new Intl.NumberFormat(used).format(value) : value;
+    return typeof value === 'number' ? numberFormatOf(used).format(value) : value;
   });
 }
 

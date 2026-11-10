@@ -656,8 +656,7 @@ function onToggle(row: ListRow): void {
   >
     <FmFlipGroup
       tag="div"
-      :move-class="gliding ? undefined : 'fm-flip-still'"
-      :css="false"
+      :glide="gliding && !reducedMotion"
       class="spacer"
       role="none"
       :style="{ height: `${WALL.gap + lineCount(count, columns) * linePx}px` }"
