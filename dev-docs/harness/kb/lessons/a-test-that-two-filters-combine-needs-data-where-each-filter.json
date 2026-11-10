@@ -1,0 +1,20 @@
+{
+  "id": "a-test-that-two-filters-combine-needs-data-where-each-filter",
+  "title": "A test that two filters combine needs data where each filter removes what the other keeps",
+  "category": "testing",
+  "rule": "When a test claims that a new filter combines with the existing ones (AND), build the fixture so each filter alone keeps an item that the other removes: for example a face that passes the trait filter but fails the variable filter, and one the other way round. Assert the exact result of each filter alone and of both together. If the item the second filter should remove is already removed by the first, the test passes even when the second filter is skipped. A loose check such as `narrowed <= found` passes when the filter is ignored; assert the exact set, and check that the mutation which skips one filter fails the test.",
+  "rationale": "E49.5 (#547): the trait search test combined O.roundness>=0.95 with variable=false, but the only variable fixture face was not round, so the result was the same with or without the variable filter; the CoreApi test asserted only narrowed.total <= found.total.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    547
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/tests.rs",
+    "crates/fm-core/src/**/tests/*.rs",
+    "crates/*/tests/*.rs"
+  ],
+  "first_seen": "2026-11-10T10:27:50.601Z",
+  "last_seen": "2026-11-10T10:27:50.601Z"
+}

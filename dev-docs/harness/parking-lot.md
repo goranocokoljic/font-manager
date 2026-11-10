@@ -449,3 +449,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.5 #528] apps/desktop/src/views/HomeView.vue:672 — the Compare button's title (`home.compareTitle`) still says C pins the selected font; C now starts a new comparison.
 - [E48.3 #526] dev-docs/harness/parking-lot.md:443 — the E48.4 entry about `apps/desktop/src/stores/pairings.ts:42` is obsolete: E48.3 deleted that store.
 - [E48.3 #526] apps/desktop/src/stores/compare.ts:114 — no library-change event prunes pins (or the Compare sheet's similar rows) when a face leaves the library.
+- [E49.5 #547] crates/fm-mcp/src/lib.rs:110 — `get_tool` returns `tools::list()`, whose `search_fonts` description lacks the glyph trait catalog; only `list_tools` carries it.
