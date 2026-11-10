@@ -705,7 +705,8 @@ test('scan progress, activation changes and toasts are announced in live regions
   // Toasts: the message lands inside the always-present polite region.
   const toast = page.getByTestId('toast');
   await expect(toast).toBeVisible();
-  const region = toast.locator('xpath=..');
+  // E48.6: the toast sits in a stack inside the region.
+  const region = page.locator('[role="status"]').filter({ has: toast });
   await expect(region).toHaveRole('status');
   await expect(region).toHaveAttribute('aria-live', 'polite');
   await expect(region).toContainText(/Activated/);

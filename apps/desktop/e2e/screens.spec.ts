@@ -300,7 +300,6 @@ test.describe('@screens', () => {
               const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
               await rows.first().click();
               await compareRows(page, page.getByRole('tree', { name: 'Font list' }), pinRows);
-              await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
               await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
               const sheet = page.getByRole('dialog', { name: 'Compare' });
               await expect(sheet).toBeVisible();
@@ -318,7 +317,6 @@ test.describe('@screens', () => {
                 await expect(page.getByTestId('quick-count')).not.toHaveText(String(i));
                 await page.keyboard.press('ArrowDown');
               }
-              await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
               await page.getByTestId('quick-collection').click();
             }
             if (tagNames.length) {

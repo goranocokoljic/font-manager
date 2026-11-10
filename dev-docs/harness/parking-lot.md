@@ -450,3 +450,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E48.3 #526] dev-docs/harness/parking-lot.md:443 — the E48.4 entry about `apps/desktop/src/stores/pairings.ts:42` is obsolete: E48.3 deleted that store.
 - [E48.3 #526] apps/desktop/src/stores/compare.ts:114 — no library-change event prunes pins (or the Compare sheet's similar rows) when a face leaves the library.
 - [E49.5 #547] crates/fm-mcp/src/lib.rs:110 — `get_tool` returns `tools::list()`, whose `search_fonts` description lacks the glyph trait catalog; only `list_tools` carries it.
+- [E48.6 #529] apps/desktop/src/components/CatalogBrowser.vue:168 — its wrapping toolbar has no `data-top-bar`, so a toast falls back to 56 px and can sit on the bar's second row.
+- [E48.6 #529] apps/desktop/src/components/ToastMessage.vue — pointer and focus hold/release are not paired: a pointerleave re-arms the timer while the focus is still in the toast.
+- [E48.6 #529] apps/desktop/src/components/ToastMessage.vue — clicking Undo moves focus to body (act → dismiss → inert); nothing returns it.

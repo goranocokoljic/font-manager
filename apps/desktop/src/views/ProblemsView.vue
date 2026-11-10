@@ -89,7 +89,7 @@ function when(at: string): string {
 
 <template>
   <div class="problems" @keydown="onKey">
-    <header class="bar">
+    <header class="bar" data-top-bar>
       <h1 id="problems-title" ref="title" class="title" tabindex="-1">
         {{ t('problems.title') }}
       </h1>

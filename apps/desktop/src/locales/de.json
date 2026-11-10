@@ -630,9 +630,6 @@
       "activation": "Aktivierung"
     }
   },
-  "toast": {
-    "dismiss": "Schließen"
-  },
   "health": {
     "ok": "In Ordnung",
     "broken": "Defekt",

@@ -49,7 +49,7 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 |--------|------------|
 | `useReducedMotion()` | motion that a script decides on; CSS follows the tokens by itself |
 | `<FmFade speed reduced>` | crossfades and fade-ins: a ring, a count, a list, the drawer's scrim (`mode="out-in"` passes through) |
-| `<FmSlide from distance speed reduced>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar and the toasts, `from="bottom" distance="4px" speed="fast"` for a popover |
+| `<FmSlide from distance speed reduced group>` | a sheet, drawer, bar or toast: `from="start" distance="100%"` for the drawer, `from="bottom" distance="16px"` for the selection bar and the MCP question, `from="bottom" distance="4px" speed="fast"` for a popover; `group` slides each child of a keyed list by itself: the toast stack, `from="bottom" distance="8px" speed="fast"` (E48.6) |
 | `<FmCrossfade value speed tag>` | one element whose content crossfades, old over new, when `value` changes: the collection count after a drop (E46.4) |
 | `<FmFlipGroup tag>` | keyed children that change place (`--fm-motion-move`); the grid passes `move-class="fm-flip-still"` except while the size changes, so a search or typed text never glides the cards |
 | `withViewTransition(fn)` | a page change; it runs `fn` directly without view transitions or under reduced motion (`viewTransitionsRun()` says which) |
@@ -60,6 +60,14 @@ In `apps/desktop/src/motion/`. They animate `transform` and `opacity` only.
 reduced motion: `cut` (the default) or `fade`, a plain fade at `--fm-motion-reduced-fade`
 without the slide (E46.3: the drawer and its scrim, the popovers, the selection bar, the toasts;
 E46.4: Quick Look's sheet and the Studio's roles rail).
+
+## The toasts (E48.6)
+
+The toasts sit at the top right, just under the page's top bar, and stack newest on top, up
+to three. Each fades in on an 8 px rise at `--fm-motion-fast` and leaves the same way
+(`<FmSlide group from="bottom" distance="8px" speed="fast" reduced="fade">` in
+`ToastMessage.vue`); under reduced motion it only fades. They are click-through
+(`pointer-events: none`); only an action button (Undo) takes the pointer.
 
 ## The moments of E46.4
 

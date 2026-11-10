@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TOAST_MS, useToastStore } from './toast';
+import { TOAST_MS, TOAST_STACK, useToastStore } from './toast';
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -39,13 +39,55 @@ describe('toast store', () => {
     expect(toasts.toast?.message).toBe('Long.');
   });
 
-  it('replaces the toast and restarts the time', () => {
+  it('stacks a new toast on top, and each one goes after its own time (E48.6)', () => {
     const toasts = useToastStore();
     toasts.show('First.');
     vi.advanceTimersByTime(TOAST_MS - 10);
     toasts.show('Second.');
-    vi.advanceTimersByTime(TOAST_MS - 10);
+    expect(toasts.toasts.map((t) => t.message)).toEqual(['Second.', 'First.']);
     expect(toasts.toast?.message).toBe('Second.');
+    vi.advanceTimersByTime(10);
+    expect(toasts.toasts.map((t) => t.message)).toEqual(['Second.']);
+    vi.advanceTimersByTime(TOAST_MS - 20);
+    expect(toasts.toast?.message).toBe('Second.');
+    vi.advanceTimersByTime(10);
+    expect(toasts.toasts).toEqual([]);
+  });
+
+  it('keeps at most three, newest first: a fourth pushes the oldest out (E48.6)', () => {
+    expect(TOAST_STACK).toBe(3);
+    const toasts = useToastStore();
+    const run = vi.fn();
+    toasts.show('One.', { label: 'Undo', run });
+    toasts.show('Two.');
+    toasts.show('Three.');
+    toasts.show('Four.');
+    expect(toasts.toasts.map((t) => t.message)).toEqual(['Four.', 'Three.', 'Two.']);
+    // The one pushed out takes its timer with it; the rest keep theirs.
+    vi.advanceTimersByTime(TOAST_MS);
+    expect(toasts.toasts).toEqual([]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('dismisses, holds and acts on one toast of the stack by id (E48.6)', () => {
+    const toasts = useToastStore();
+    const run = vi.fn();
+    toasts.show('Undoable.', { label: 'Undo', run });
+    const undoable = toasts.toast!.id;
+    toasts.show('Plain.');
+    toasts.show('Other.');
+    toasts.dismiss(toasts.toasts[1]!.id);
+    expect(toasts.toasts.map((t) => t.message)).toEqual(['Other.', 'Undoable.']);
+    toasts.hold(undoable);
+    vi.advanceTimersByTime(TOAST_MS * 2);
+    expect(toasts.toasts.map((t) => t.message)).toEqual(['Undoable.']);
+    toasts.act(undoable);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(toasts.toasts).toEqual([]);
+    toasts.show('A.');
+    toasts.show('B.');
+    toasts.clear();
+    expect(toasts.toasts).toEqual([]);
   });
 
   it('stays while held and goes TOAST_MS after release', () => {

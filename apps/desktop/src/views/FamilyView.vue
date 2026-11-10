@@ -330,7 +330,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="family-page" :class="{ 'slide-in': slideIn }">
-    <header class="bar">
+    <header class="bar" data-top-bar>
       <UiButton class="back" aria-keyshortcuts="Escape Alt+ArrowLeft" @click="back">
         <UiIcon name="chevronBack" class="fm-directional" />
         {{ t('family.library') }}

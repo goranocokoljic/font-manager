@@ -630,9 +630,6 @@
       "activation": "Activation"
     }
   },
-  "toast": {
-    "dismiss": "Dismiss"
-  },
   "health": {
     "ok": "OK",
     "broken": "Broken",

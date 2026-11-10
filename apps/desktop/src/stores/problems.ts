@@ -180,7 +180,11 @@ export const useProblemsStore = defineStore('problems', () => {
   /** Takes down the toast that offers the undo of `id`, if it is still up. */
   function dismissToastOf(id: ResolutionId): void {
     const toasts = useToastStore();
-    if (toastUndo?.id === id && toasts.toast?.action === toastUndo.action) toasts.dismiss();
+    const offered = toastUndo;
+    if (offered?.id === id) {
+      const up = toasts.toasts.find((shown) => shown.action === offered.action);
+      if (up) toasts.dismiss(up.id);
+    }
     if (toastUndo?.id === id) toastUndo = undefined;
   }
 

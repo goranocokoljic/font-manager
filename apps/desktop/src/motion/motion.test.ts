@@ -226,6 +226,44 @@ describe('FmFade and FmSlide', () => {
   });
 });
 
+describe('FmSlide as a group (E48.6)', () => {
+  it('slides each keyed child in and out by itself, and passes its tag through', async () => {
+    const items = ref([1]);
+    const wrapper = mount(
+      defineComponent({
+        setup: () => () =>
+          h(
+            FmSlide,
+            {
+              group: true,
+              tag: 'ol',
+              from: 'bottom',
+              distance: '8px',
+              speed: 'fast',
+              reduced: 'fade',
+            },
+            () => items.value.map((key) => h('li', { key, id: `t${key}` })),
+          ),
+      }),
+      { global: { stubs: REAL_TRANSITIONS }, attachTo: document.body },
+    );
+    expect(wrapper.element.tagName).toBe('OL');
+    items.value = [2, 1];
+    await nextTick();
+    const added = wrapper.find<HTMLElement>('#t2').element;
+    expect(added.classList).toContain('fm-slide-enter-active');
+    expect(added.style.getPropertyValue('--fm-slide-block')).toBe('calc(8px * 1)');
+    expect(added.style.getPropertyValue('--fm-transition-time')).toBe('var(--fm-motion-fast)');
+    expect(added.dataset.fmReduced).toBe('fade');
+    const old = wrapper.find<HTMLElement>('#t1').element;
+    items.value = [2];
+    await nextTick();
+    expect(old.classList).toContain('fm-slide-leave-active');
+    expect(added.classList).not.toContain('fm-slide-leave-active');
+    wrapper.unmount();
+  });
+});
+
 describe('the reduced prop of FmFade and FmSlide (E46.3)', () => {
   it.each([
     ['FmFade', FmFade],
