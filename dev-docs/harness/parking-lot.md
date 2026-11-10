@@ -441,3 +441,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.4 #546] crates/fm-core/src/glyphs/geometry.rs:38 — `TRAIT_GLYPHS` lacks `'O'`, so the glyph-geometry bench never times the glyph O.roundness reads.
 - [E49.4 #546] scripts/bench/lib.mjs — `traitPass` is a line-for-line copy of `firstScan` with other constants; they behave the same today.
 - [E49.5 #547] crates/fm-mcp/src/lib.rs:110 — `get_tool` returns `tools::list()`, whose `search_fonts` description lacks the glyph trait catalog; only `list_tools` carries it.
+- [E48.8 #561] apps/desktop/src/stores/toast.ts — `show` pushes out the oldest toast even while the focus is inside it; the focus then drops to body.
+- [E48.8 #561] apps/desktop/src/components/CommandPalette.vue — about ten panels (DocumentFontsPanel, SimilarPanel, ShortcutSheet, SmartRuleEditor, TaggingPanel, UpdateDialog, GlyphCompare, CommandPalette) keep their own `returnFocus` instead of `keyboard/returnFocus.ts`.
+- [E48.8 #561] apps/desktop/src/components/CompareSheet.vue — at 1,000 px the sheet head's count truncates the base font's name ("base Inte…").
