@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
 import type { FaceSummary } from '../api/types';
 import { createMockClient, mockComparisons, mockFaces } from '../api/mock';
-import { MAX_PINS, useCompareStore } from './compare';
+import { setLocale } from '../i18n';
+import { COMPARE_MODES, MAX_PINS, useCompareStore } from './compare';
 import { useToastStore } from './toast';
 
 /** Five distinct faces: the mock's summaries with their own ids and styles. */
@@ -162,5 +163,48 @@ describe('compare store', () => {
     expect(useToastStore().toast?.message).toBe(
       'None of the fonts of “Headline shortlist” are in the library now: Retired Sans Bold.',
     );
+  });
+
+  it('offers Stacked, Grid and Overlay with icons, in that order (en, de)', () => {
+    try {
+      expect(COMPARE_MODES.map((m) => [m.value, m.icon, m.label])).toEqual([
+        ['stacked', 'stacked', 'Stacked'],
+        ['sideBySide', 'grid', 'Grid'],
+        ['overlay', 'overlay', 'Overlay'],
+      ]);
+      setLocale('de');
+      expect(COMPARE_MODES.map((m) => m.label)).toEqual(['Untereinander', 'Raster', 'Überlagert']);
+    } finally {
+      setLocale('en');
+    }
+  });
+
+  it('opens a new comparison Stacked, also after the last pin of the previous one goes', () => {
+    const s = useCompareStore();
+    expect(s.mode).toBe('stacked');
+    s.pin(faces[0]!);
+    s.pin(faces[1]!);
+    s.setMode('overlay');
+    s.unpin(100);
+    // One pin is left: the comparison and its mode stay.
+    expect(s.mode).toBe('overlay');
+    s.unpin(101);
+    expect(s.mode).toBe('stacked');
+  });
+
+  it('stores Grid as sideBySide, so old Side by side saves reopen as Grid', async () => {
+    const client = createMockClient();
+    setClient(client);
+    const s = useCompareStore();
+    s.pin(mockFaces[0]!.face);
+    s.pin(mockFaces[1]!.face);
+    s.setMode('sideBySide');
+    expect(await s.save('Grid pair', '')).toBe(true);
+    const id = s.current!.id;
+    expect((await client.getComparison({ id })).mode).toBe('sideBySide');
+    s.setMode('overlay');
+    await s.reopen(id);
+    expect(s.mode).toBe('sideBySide');
+    expect(COMPARE_MODES.find((m) => m.value === s.mode)?.label).toBe('Grid');
   });
 });

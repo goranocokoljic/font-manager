@@ -9,6 +9,7 @@ import type {
   FaceSummary,
   MissingFace,
 } from '../api/types';
+import type { IconName } from '../components/ui/icons';
 import { errorMessage, t } from '../i18n';
 import { fontNameSample } from '../preview/sampleText';
 import { useToastStore } from './toast';
@@ -18,11 +19,24 @@ export const MAX_PINS = 4;
 
 export type CompareMode = ApiCompareMode;
 
+/** The layout a new comparison opens in. */
+export const DEFAULT_COMPARE_MODE: CompareMode = 'stacked';
+
+/**
+ * The layouts, in the order the switch shows them: Stacked, Grid, Overlay. Grid is
+ * stored as the API's `sideBySide` (E48.2), so saved comparisons reopen unchanged and
+ * old Side by side saves show as Grid.
+ */
 // Getters: the label is read in the language shown now.
-export const COMPARE_MODES: { value: CompareMode; label: string }[] = (
-  ['sideBySide', 'stacked', 'overlay'] as const
-).map((value) => ({
+export const COMPARE_MODES: { value: CompareMode; icon: IconName; label: string }[] = (
+  [
+    ['stacked', 'stacked'],
+    ['sideBySide', 'grid'],
+    ['overlay', 'overlay'],
+  ] as const
+).map(([value, icon]) => ({
   value,
+  icon,
   get label() {
     return t(`compare.modes.${value}`);
   },
@@ -49,7 +63,7 @@ export interface CurrentComparison {
 export const useCompareStore = defineStore('compare', () => {
   const pins = ref<FaceSummary[]>([]);
   const open = ref(false);
-  const mode = ref<CompareMode>('sideBySide');
+  const mode = ref<CompareMode>(DEFAULT_COMPARE_MODE);
   /** The two faces Overlay draws, as the user chose them; see `overlayPair`. */
   const overlayChoice = ref<[FaceId | null, FaceId | null]>([null, null]);
   /** Every saved comparison, by name. */
@@ -83,7 +97,7 @@ export const useCompareStore = defineStore('compare', () => {
     return 'pinned';
   }
 
-  /** Removes a pin; the sheet closes when none is left. */
+  /** Removes a pin; the sheet closes when none is left, and the next comparison is new. */
   function unpin(face: FaceId): void {
     pins.value = pins.value.filter((p) => p.id !== face);
     overlayChoice.value = overlayChoice.value.map((id) => (id === face ? null : id)) as [
@@ -92,6 +106,7 @@ export const useCompareStore = defineStore('compare', () => {
     ];
     if (!pins.value.length) {
       open.value = false;
+      mode.value = DEFAULT_COMPARE_MODE;
       forget();
     }
   }

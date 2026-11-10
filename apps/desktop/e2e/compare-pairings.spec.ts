@@ -31,7 +31,7 @@ const panel = (page: Page) => sheet(page).getByRole('region', { name: /^Pairings
 const suggestions = (page: Page) =>
   panel(page).getByRole('list', { name: 'Suggested pairings' }).getByRole('listitem');
 const pinned = (page: Page) =>
-  sheet(page).getByRole('list', { name: 'Side by side' }).getByRole('listitem');
+  sheet(page).getByRole('list', { name: 'Stacked' }).getByRole('listitem');
 
 test('the Pairings panel suggests fonts for the first pin; Add to compare pins one by keyboard', async ({
   page,
