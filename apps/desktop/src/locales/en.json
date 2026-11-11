@@ -2017,5 +2017,16 @@
     "count": "{before} → {after}",
     "countLabel": "{before}, {after} after the drop",
     "smartRefused": "A smart collection fills itself from its rules, so fonts cannot be dropped on it."
+  },
+  "letters": {
+    "row": "Letters",
+    "shape": "shape",
+    "letterShape": "{letter}, choose its shape",
+    "letterChosen": "{letter}, shape {value}",
+    "pickerLabel": "Shape of {name}",
+    "any": "Any",
+    "matchByLetters": "Match by letters…",
+    "hintPick": "click an underlined letter for its shape",
+    "hintNarrowed": "{letters} narrowed · click a letter to change"
   }
 }
