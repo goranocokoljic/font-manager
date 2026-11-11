@@ -12,7 +12,7 @@ Boards 1, 2 and 3 have several states. Each state is a Tweak, so an export is re
 3. **Share › Export** the board as PNG at 2× and save it under the file name in the table.
 4. Put the files in this folder; fill in the export date at the bottom.
 
-Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has three, set by its state tweak.
+Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak.
 
 ## The files
 
@@ -43,10 +43,10 @@ Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare
 | `8-letters-wall.png` | 8 · Match by letters | state = Letters only | the Letters preset: ROag on every card, underlined letters in the field, no chips | E49.7 |
 | `8-letters-picker.png` | 8 | state = Picker open | the R picker open under the field: three drawn values with counts, Any | E49.6 |
 | `8-letters-filtered.png` | 8 | state = Filtered | R leg straight and O round chosen: accent underlines, two chips, 41 families | E49.6, E49.10 |
-| `8-letters-like.png` | 8 | state = Like | the wall sorted by an R like Roboto Slab: the card's letters on hover, the 'R like Roboto Slab' chip in the count line | E49.9 (not exported yet) |
+| `8-letters-like.png` | 8 | state = Like | the wall sorted by an R like Inter: the card's letters on hover with 'Fonts with an R like this', the 'R like Inter' chip, 'Sorted by R like Inter' in the count line | E49.9 |
 
 A UI story is reviewed against its image, not against the previous screenshot. The boards show
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-10 (25 of 26; `8-letters-like.png` needs a Like state on board 8 and an export).
+Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11).
