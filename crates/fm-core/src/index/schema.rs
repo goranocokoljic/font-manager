@@ -671,6 +671,23 @@ CREATE TABLE glyph_trait_stamp (
 ) WITHOUT ROWID;
 ";
 
+/// Glyph shape descriptors (E49.8, `index/glyph_descriptors.rs`, ADR 0023):
+/// one row per character and face described, with the descriptor's version
+/// and the file hash it is of; `descriptor` is `NULL` for a face that does
+/// not draw the character. Keyed by character first: a similar-glyph query
+/// reads one character's rows in one range.
+const V24: &str = r"
+CREATE TABLE glyph_descriptor (
+    code_point  INTEGER NOT NULL,
+    face_id     INTEGER NOT NULL REFERENCES face (id) ON DELETE CASCADE,
+    version     INTEGER NOT NULL,
+    file_hash   BLOB    NOT NULL,
+    descriptor  BLOB,
+    PRIMARY KEY (code_point, face_id)
+) WITHOUT ROWID;
+CREATE INDEX glyph_descriptor_face ON glyph_descriptor (face_id);
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -678,7 +695,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
-    V22, V23,
+    V22, V23, V24,
 ];
 
 /// The schema version this build writes.
@@ -706,6 +723,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_tag",
     "family_meta",
     "font_file",
+    "glyph_descriptor",
     "glyph_trait_stamp",
     "glyph_traits",
     "index_meta",

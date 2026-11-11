@@ -107,6 +107,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; find_by_image, json!({ "path": format!("{out}-missing.png"), "limit": 3 }));
     same!(seen, d, c; suggest_pairings, json!({ "face": 1, "limit": 3 }));
     same!(seen, d, c; list_glyph_traits);
+    same!(seen, d, c; find_similar_glyph, json!({ "face": 1, "codePoint": 82, "limit": 3 }));
+    same!(seen, d, c; find_similar_glyph, json!({ "face": 999_999, "codePoint": 82, "limit": 3 }));
     same!(seen, d, c; search, json!({ "glyphTraits": [{ "kind": "value", "traitId": "R.leg", "value": "straight" }] }));
     same!(seen, d, c; search, json!({ "glyphTraits": [{ "kind": "value", "traitId": "Z.tail", "value": "long" }] }));
     // preview

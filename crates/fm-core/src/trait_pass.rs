@@ -13,8 +13,14 @@
 //! - **Resumes.** Every measured face is stamped in the index with its
 //!   detector versions and file hash, so a pass stopped by a cancel, an exit
 //!   or a crash continues with the faces it had not measured.
+//! - **Descriptors too** (E49.8): the shape descriptors of the trait glyphs
+//!   ([`crate::glyphs::similarity`]) are taken from the same file read and
+//!   written with the traits, under the stamp key
+//!   [`similarity::STAMP`]; a similar-glyph query of a trait glyph then reads
+//!   them and describes nothing.
 //! - A file that cannot be read is skipped and tried again by the next
-//!   pass; a face whose data cannot be parsed is stamped without traits.
+//!   pass; a face whose data cannot be parsed is stamped without traits and
+//!   with no descriptor for each trait glyph.
 
 use std::num::NonZero;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -24,7 +30,7 @@ use std::thread::JoinHandle;
 use fm_api::{Event, JobId};
 
 use crate::error::FmResult;
-use crate::glyphs::traits;
+use crate::glyphs::{similarity, traits};
 use crate::index::{Index, MeasuredFace, TraitTodo};
 
 /// The faces one batch lists, measures and writes.
@@ -56,8 +62,16 @@ pub fn run(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u32, u32),
 ) -> FmResult<PassReport> {
-    let versions: Vec<(&str, u32)> = traits::versions().collect();
-    run_at(index, cancel, &versions, progress)
+    run_at(index, cancel, &versions(), progress)
+}
+
+/// What the pass stamps a face with: every detector's id and version, in
+/// detector order, then the descriptors' [`similarity::STAMP`] and
+/// [`similarity::VERSION`].
+pub fn versions() -> Vec<(&'static str, u32)> {
+    traits::versions()
+        .chain([(similarity::STAMP, similarity::VERSION)])
+        .collect()
 }
 
 /// [`run`] with the detector `versions` given, in detector order: a test
@@ -143,22 +157,41 @@ fn measure_one(item: &TraitTodo, versions: &[(&str, u32)]) -> Option<MeasuredFac
         }
     };
     let wanted = |id: &str| item.traits.iter().any(|t| t == id);
-    let found = traits::detect_only(&data, item.collection_index, &wanted);
+    let detectors: Vec<&(&str, u32)> = versions
+        .iter()
+        .filter(|(id, _)| *id != similarity::STAMP)
+        .collect();
+    let detect = |id: &str| id != similarity::STAMP && wanted(id);
+    // Only the descriptors out of date (a descriptor version bump): no
+    // outline is measured for the traits.
+    let found = item
+        .traits
+        .iter()
+        .any(|t| detect(t))
+        .then(|| traits::detect_only(&data, item.collection_index, &detect))
+        .flatten();
     let variable = found.as_ref().is_some_and(|f| f.variable);
     let mut detections: Vec<Option<traits::Detection>> =
         found.map(|f| f.traits).unwrap_or_default();
-    detections.resize(versions.len(), None);
-    let traits = versions
-        .iter()
+    detections.resize(detectors.len(), None);
+    let traits = detectors
+        .into_iter()
         .zip(detections)
         .filter(|((id, _), _)| wanted(id))
         .map(|((id, version), d)| ((*id).to_owned(), *version, d))
         .collect();
+    let descriptors = wanted(similarity::STAMP).then(|| {
+        let chars = similarity::TRAIT_GLYPHS.map(u32::from);
+        let found = similarity::describe_many(&data, item.collection_index, &chars)
+            .unwrap_or_else(|| vec![None; chars.len()]);
+        chars.into_iter().zip(found).collect()
+    });
     Some(MeasuredFace {
         face: item.face,
         file_hash: item.file_hash.clone(),
         variable,
         traits,
+        descriptors,
     })
 }
 
