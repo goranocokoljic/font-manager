@@ -353,6 +353,20 @@ pub struct GlyphTraitInfo {
     pub unsure: u32,
 }
 
+/// One glyph trait detected on a face with confidence (E49.10): a value a
+/// `TraitFilter::Value` of it finds the face by.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedTrait {
+    /// The trait id (`R.leg`), as in `list_glyph_traits`.
+    pub trait_id: String,
+    /// The value id (`straight`).
+    pub value: String,
+    /// How sure the detector was, 0–1; at least the bar a value filter
+    /// asks for.
+    pub confidence: f32,
+}
+
 /// Near-miss detail for a coverage filter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]

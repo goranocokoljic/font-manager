@@ -183,6 +183,7 @@ pub fn types() -> specta::Types {
         search::GlyphTraitThreshold,
         search::GlyphTraitValue,
         search::GlyphTraitInfo,
+        search::DetectedTrait,
         search::SearchResponse,
         search::CoverageRequest,
         search::CoverageReport,

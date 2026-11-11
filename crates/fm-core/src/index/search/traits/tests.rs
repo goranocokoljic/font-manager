@@ -509,3 +509,81 @@ fn a_changed_detection_is_found_by_the_next_search() {
         .expect("R.leg");
     assert_eq!((leg.measured, leg.unsure), (3, 0));
 }
+
+/// The family page's trait tags (E49.10): a face's sure detections of the
+/// traits the catalog offers, in catalog order, on its detail too.
+#[test]
+fn a_face_detail_lists_its_sure_offered_traits_in_catalog_order() {
+    let dir = TempDir::new("trait-face-detail");
+    let index = library(&dir);
+    let tag = |t: &str, v: &str| (t.to_owned(), v.to_owned());
+    let tags = |name: &str| -> Vec<(String, String)> {
+        index
+            .face_detail(face(&index, name))
+            .expect("detail")
+            .glyph_traits
+            .into_iter()
+            .map(|d| {
+                assert!(f64::from(d.confidence) >= CONFIDENT, "{d:?}");
+                (d.trait_id, d.value)
+            })
+            .collect()
+    };
+    // a: R.leg is sure but disabled in the catalog, so only O and G show,
+    // O first as in the catalog.
+    assert_eq!(
+        tags("a.ttf"),
+        vec![tag("O.roundness", "round"), tag("G.spur", "spur")]
+    );
+    // b: the unsure R (0.5) is left out.
+    assert_eq!(
+        tags("b.ttf"),
+        vec![tag("O.roundness", "oval"), tag("G.spur", "none")]
+    );
+    assert_eq!(tags("c.ttf"), vec![tag("O.roundness", "round")]);
+}
+
+/// A face not measured yet has no trait tags.
+#[test]
+fn a_face_not_measured_has_no_trait_tags() {
+    let dir = TempDir::new("trait-face-none");
+    let index = scanned(&dir);
+    let detail = index.face_detail(face(&index, "a.ttf")).expect("detail");
+    assert!(detail.glyph_traits.is_empty());
+}
+
+/// The bar, the catalog's values and its order, on hand-made rows: 0.7 is
+/// shown, just under it is not; a value or a trait the catalog does not list
+/// is left out; the order is the catalog's, not the rows'.
+#[test]
+fn confident_traits_keeps_the_bar_the_values_and_the_catalog_order() {
+    use crate::index::glyph_traits::{StoredTrait, confident_traits};
+    let catalog = glyph_traits::load().expect("catalog");
+    let row = |t: &str, v: &str, confidence: f64| StoredTrait {
+        trait_id: t.into(),
+        value: v.into(),
+        scalar: None,
+        scalars: None,
+        confidence,
+        detector_version: 1,
+        instance: "static".into(),
+    };
+    let stored = [
+        row("G.spur", "spur", CONFIDENT),
+        row("g.storeys", "double", CONFIDENT - 0.01),
+        row("a.storeys", "triple", 0.99),
+        row("x.unknown", "any", 0.99),
+        row("O.roundness", "round", 1.0),
+    ];
+    let shown: Vec<(String, String)> = confident_traits(catalog, &stored)
+        .into_iter()
+        .map(|d| (d.trait_id, d.value))
+        .collect();
+    assert_eq!(
+        shown,
+        vec![
+            ("O.roundness".to_owned(), "round".to_owned()),
+            ("G.spur".to_owned(), "spur".to_owned()),
+        ]
+    );
+}

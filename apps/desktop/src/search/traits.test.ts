@@ -8,6 +8,7 @@ import {
   traitChipTail,
   traitForGlyph,
   traitLineLabel,
+  traitTags,
   traitsText,
   withoutTrait,
 } from './traits';
@@ -129,5 +130,51 @@ describe('glyph-trait filters (E49.6)', () => {
     expect(parseTraitWords('R:straight R:curved', catalog).traits).toEqual([
       value('R.leg', 'curved'),
     ]);
+  });
+});
+
+describe('trait tags of the family page (E49.10)', () => {
+  it("words each detection as the catalog does, in fm-core's order, with the value's example", () => {
+    const withExample = catalog.map((t) => ({
+      ...t,
+      values: t.values.map((v) => ({ ...v, example: `M${v.id}` })),
+    }));
+    const tags = traitTags(
+      [
+        { traitId: 'O.roundness', value: 'round', confidence: 0.9 },
+        { traitId: 'R.leg', value: 'straight', confidence: 0.8 },
+      ],
+      withExample,
+    );
+    expect(tags.map((tag) => [tag.glyph, tag.aspect, tag.valueLabel, tag.example])).toEqual([
+      ['O', '', 'round', 'Mround'],
+      ['R', 'leg', 'straight', 'Mstraight'],
+    ]);
+    expect(traitLineLabel(tags[1]!)).toBe('R leg straight');
+  });
+
+  it('shows the ids of a detection the catalog does not know yet, with no example', () => {
+    const [tag] = traitTags([{ traitId: 'g.storeys', value: 'double', confidence: 1 }], []);
+    expect(tag).toMatchObject({ glyph: 'g', aspect: 'storeys', valueLabel: 'double', example: '' });
+  });
+
+  it('leaves out an aspect the value label already names', () => {
+    const storeys = [
+      trait('g.storeys', 'g', 'g storeys', [['double', 'Double-storey']]),
+      trait('G.spur', 'G', 'G spur', [['none', 'No spur']]),
+    ];
+    const tags = traitTags(
+      [
+        { traitId: 'g.storeys', value: 'double', confidence: 1 },
+        { traitId: 'G.spur', value: 'none', confidence: 1 },
+        { traitId: 'R.leg', value: 'straight', confidence: 1 },
+      ],
+      [...storeys, ...catalog],
+    );
+    expect(tags.map(traitLineLabel)).toEqual(['g double-storey', 'G no spur', 'R leg straight']);
+  });
+
+  it('has no tags for a face without detections', () => {
+    expect(traitTags([], catalog)).toEqual([]);
   });
 });

@@ -12,11 +12,13 @@
 //!   measures the new file.
 
 use fm_api::FaceId;
+use fm_api::search::DetectedTrait;
 use rusqlite::{OptionalExtension, params};
 
 use super::{Index, db_error};
 use crate::error::FmResult;
-use crate::glyphs::traits::Detection;
+use crate::glyph_traits::{self, GlyphTrait};
+use crate::glyphs::traits::{CONFIDENT, Detection};
 
 /// One face the trait pass has to measure.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -262,6 +264,39 @@ impl Index {
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| db_error(&e))
     }
+
+    /// The traits `face` is detected with confidence, as the family page
+    /// shows them (E49.10): see [`confident_traits`].
+    pub fn face_traits(&self, face: FaceId) -> FmResult<Vec<DetectedTrait>> {
+        Ok(confident_traits(
+            glyph_traits::load()?,
+            &self.face_glyph_traits(face)?,
+        ))
+    }
+}
+
+/// The detections of `stored` a value filter finds the face by, in
+/// `catalog` order: of a trait the catalog offers (`enabled`; a disabled
+/// detector misses the accuracy bar, so its answer is not shown as a fact),
+/// of a value the catalog lists, and at least [`CONFIDENT`] (a guess between
+/// two values is not a trait of the face).
+#[allow(clippy::cast_possible_truncation)] // A confidence in 0..=1 fits an f32.
+pub(crate) fn confident_traits(
+    catalog: &[GlyphTrait],
+    stored: &[StoredTrait],
+) -> Vec<DetectedTrait> {
+    catalog
+        .iter()
+        .filter(|t| t.enabled)
+        .filter_map(|t| {
+            let d = stored.iter().find(|d| d.trait_id == t.id)?;
+            (d.confidence >= CONFIDENT && t.value(&d.value).is_some()).then(|| DetectedTrait {
+                trait_id: t.id.clone(),
+                value: d.value.clone(),
+                confidence: d.confidence as f32,
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
