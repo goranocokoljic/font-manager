@@ -10,14 +10,20 @@
 //!   face lacks the glyph for is a stamp without a row. A write whose face is
 //!   gone, or whose file was read again since, writes nothing: the next pass
 //!   measures the new file.
+//! - **Descriptors.** The shape descriptors of the trait glyphs (E49.8) ride
+//!   along: [`crate::glyphs::similarity::STAMP`] is one more key of the
+//!   stamps, so a descriptor version bump describes every face again and
+//!   measures no trait.
 
 use fm_api::FaceId;
 use fm_api::search::DetectedTrait;
 use rusqlite::{OptionalExtension, params};
 
+use super::glyph_descriptors::{DescribedFace, write_descriptors};
 use super::{Index, db_error};
 use crate::error::FmResult;
 use crate::glyph_traits::{self, GlyphTrait};
+use crate::glyphs::similarity::{self, Descriptor};
 use crate::glyphs::traits::{CONFIDENT, Detection};
 
 /// One face the trait pass has to measure.
@@ -47,6 +53,10 @@ pub struct MeasuredFace {
     /// Every trait measured, with its detector version and the detection;
     /// `None` when the face lacks the glyph or could not be read.
     pub traits: Vec<(String, u32, Option<Detection>)>,
+    /// The shape descriptors of the trait glyphs (E49.8), when the pass
+    /// described them: written, and the face stamped with
+    /// [`similarity::STAMP`] at [`similarity::VERSION`].
+    pub descriptors: Option<Vec<(u32, Option<Descriptor>)>>,
 }
 
 /// One stored detection.
@@ -71,16 +81,17 @@ pub struct StoredTrait {
 
 /// The faces whose traits are not all measured at `versions` for their
 /// file's current hash: every read face but those with a current stamp for
-/// each trait. One pass over the stamps, not one query per face. `?1` is the
-/// versions as a JSON object, `?2` their count.
+/// each trait. `?1` is the versions as a JSON object, `?2` their count.
+///
+/// The stamps are counted per face, through the `(face_id, trait)` key:
+/// a batch query stops after its `LIMIT` faces and reads only their stamps.
+/// (A subquery over every stamp, as before, was read again for each batch:
+/// 70 of the 83 s of a 15k-face pass.)
 const NEEDS: &str = "
 font_file.hash IS NOT NULL
-AND face.id NOT IN (
-    SELECT s.face_id FROM glyph_trait_stamp s
-    JOIN json_each(?1) v ON v.key = s.trait AND v.value = s.detector_version
-    JOIN face f ON f.id = s.face_id
-    JOIN font_file ff ON ff.id = f.file_id AND ff.hash = s.file_hash
-    GROUP BY s.face_id HAVING COUNT(*) = ?2)";
+AND (SELECT COUNT(*) FROM glyph_trait_stamp s
+     JOIN json_each(?1) v ON v.key = s.trait AND v.value = s.detector_version
+     WHERE s.face_id = face.id AND s.file_hash = font_file.hash) < ?2";
 
 fn versions_json(versions: &[(&str, u32)]) -> String {
     let map: serde_json::Map<String, serde_json::Value> = versions
@@ -231,6 +242,22 @@ impl Index {
                     }
                     stamp
                         .execute(params![face, trait_id, version, m.file_hash])
+                        .map_err(|e| db_error(&e))?;
+                }
+                if let Some(glyphs) = &m.descriptors {
+                    let described = DescribedFace {
+                        face: m.face,
+                        file_hash: m.file_hash.clone(),
+                        glyphs: glyphs.clone(),
+                    };
+                    write_descriptors(&tx, std::slice::from_ref(&described))?;
+                    stamp
+                        .execute(params![
+                            face,
+                            similarity::STAMP,
+                            similarity::VERSION,
+                            m.file_hash
+                        ])
                         .map_err(|e| db_error(&e))?;
                 }
                 written += 1;

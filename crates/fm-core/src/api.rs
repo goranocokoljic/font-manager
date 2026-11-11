@@ -80,7 +80,8 @@ use fm_api::preview::{
 use fm_api::search::{
     CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters, GlyphTraitInfo,
     ImageMatchRequest, LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion,
-    SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest, Supports,
+    SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarGlyphFace,
+    SimilarGlyphRequest, SimilarRequest, Supports,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
@@ -1078,6 +1079,20 @@ impl SearchService for CoreApi {
     fn find_by_image(&self, req: ImageMatchRequest) -> ApiResult<Vec<SimilarFace>> {
         let print = crate::image_match::fingerprint_file(Path::new(&req.path))?;
         Ok(self.lock().find_by_image(&print, req.limit)?)
+    }
+
+    /// Describes the faces whose glyph of the character is missing or out of
+    /// date first, reading their files off the index lock (the trait pass
+    /// has described the trait glyphs already), then ranks from the stored
+    /// descriptors.
+    fn find_similar_glyph(&self, req: SimilarGlyphRequest) -> ApiResult<Vec<SimilarGlyphFace>> {
+        crate::index::check_code_point(req.code_point)?;
+        let todo = self.lock().similar_glyph_todo(req.code_point)?;
+        if !todo.is_empty() {
+            let described = crate::glyphs::similarity::describe_todo(&todo, req.code_point);
+            self.lock().write_glyph_descriptors(&described)?;
+        }
+        Ok(self.lock().find_similar_glyph(&req)?)
     }
 
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {

@@ -71,8 +71,8 @@ use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage,
     FaceLanguageCoverage, FamilyHit, FilterCount, FilterCounts, Filters, ImageMatchRequest,
     LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingRole,
-    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
-    WeightRange, WidthRange,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarGlyphFace,
+    SimilarGlyphRequest, SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::search::{
     GlyphTraitInfo, GlyphTraitKind, GlyphTraitMeasure, GlyphTraitThreshold, GlyphTraitValue,
@@ -2692,6 +2692,47 @@ impl SearchService for MockApi {
                 reasons: vec!["similar letter shapes".to_string()],
             })
             .collect())
+    }
+
+    /// A stand-in for the core's glyph distance: the other visible faces,
+    /// 0.05 apart for another family plus the weight difference over 1000,
+    /// closest first, then by face id. Every mock face draws every
+    /// character; a number that is no character is `InvalidRequest`, checked
+    /// before the face, as the core does.
+    fn find_similar_glyph(&self, req: SimilarGlyphRequest) -> ApiResult<Vec<SimilarGlyphFace>> {
+        if char::from_u32(req.code_point).is_none() {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                format!("U+{:04X} is not a character.", req.code_point),
+            ));
+        }
+        let st = self.state();
+        let me = st.face(req.face)?;
+        let mut out: Vec<SimilarGlyphFace> = st
+            .faces
+            .iter()
+            .filter(|f| f.detail.face.id != req.face && st.visible(f))
+            .map(|f| {
+                let family = if f.detail.face.family == me.detail.face.family {
+                    0.0
+                } else {
+                    0.05
+                };
+                let weight =
+                    f32::from(f.detail.face.weight.abs_diff(me.detail.face.weight)) / 1000.0;
+                SimilarGlyphFace {
+                    face: st.summary(f),
+                    distance: (family + weight).min(1.0),
+                }
+            })
+            .collect();
+        out.sort_by(|a, b| {
+            a.distance
+                .total_cmp(&b.distance)
+                .then(a.face.id.0.cmp(&b.face.id.0))
+        });
+        out.truncate(req.limit as usize);
+        Ok(out)
     }
 
     /// fm-core's rules on the sample families, without the superfamily one:

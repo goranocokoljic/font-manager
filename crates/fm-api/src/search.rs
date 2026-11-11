@@ -610,6 +610,31 @@ pub struct ImageMatchRequest {
     pub limit: u32,
 }
 
+/// Faces ranked by how close their drawing of one character is to the
+/// reference face's (E49.8): "an R like this one".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarGlyphRequest {
+    /// The reference face. A face that is unknown, or does not draw the
+    /// character, is `NotFound`.
+    pub face: FaceId,
+    /// The character compared, as a Unicode code point (`82` for `R`).
+    pub code_point: u32,
+    /// Results to return.
+    pub limit: u32,
+}
+
+/// A face whose drawing of the character is close to the reference's.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarGlyphFace {
+    /// The face.
+    pub face: FaceSummary,
+    /// How far its glyph is from the reference glyph, `0.0..=1.0`; lower is
+    /// closer, 0.0 is the same drawing.
+    pub distance: f32,
+}
+
 /// The part a suggested face plays in a layout (E42.13).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -696,6 +721,12 @@ pub trait SearchService {
     /// candidates. An image that is not a readable PNG, or shows no text, is
     /// an error.
     fn find_by_image(&self, req: ImageMatchRequest) -> ApiResult<Vec<SimilarFace>>;
+    /// Faces ranked by how close their glyph of `req.code_point` is to the
+    /// reference face's, closest first, at most `limit`, each with the
+    /// distance (E49.8). The reference face itself is not listed; the other
+    /// faces of its family are. A face that does not draw the character is
+    /// not a candidate. The whole-face [`Self::find_similar`] is unchanged.
+    fn find_similar_glyph(&self, req: SimilarGlyphRequest) -> ApiResult<Vec<SimilarGlyphFace>>;
     /// Faces of other families that pair with this one by rule: contrasting
     /// classes, a matching x-height, the same designer or superfamily. Best
     /// first; a face no rule holds for is not suggested. A role in the request

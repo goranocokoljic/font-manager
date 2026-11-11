@@ -1281,10 +1281,11 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
     {
         // The schema as it was before fingerprints (V18), and so before the
         // sidecar conflict versions (V19), full names (V20), document
-        // tags (V21), collection colours (V22) and glyph traits (V23) too.
+        // tags (V21), collection colours (V22), glyph traits (V23) and glyph
+        // descriptors (V24) too.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(
-            "DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
+            "DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
              ALTER TABLE collection DROP COLUMN color;
              DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;
@@ -1364,7 +1365,7 @@ fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
         // `face.parsed`); a tag and a rating on one of them.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(&format!(
-            "DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
+            "DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
              ALTER TABLE collection DROP COLUMN color;
              DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;

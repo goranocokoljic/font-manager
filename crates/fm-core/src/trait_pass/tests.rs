@@ -396,7 +396,7 @@ fn an_index_from_before_glyph_traits_measures_them_after_the_upgrade() {
     let index = scanned(&dir, &fonts);
     let face = face_of(&index, "static.ttf");
     index.trait_debug_sql(
-        "DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits; PRAGMA user_version = 22;",
+        "DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits; PRAGMA user_version = 22;",
     );
     drop(index);
     let index = Index::open(&dir.path().join("data").join(INDEX_FILE))
@@ -439,4 +439,142 @@ fn a_pass_with_nothing_to_measure_is_silent() {
     });
     runner.stop();
     assert!(rx.try_iter().next().is_none(), "no events");
+}
+
+/// E49.8 criterion 1 and 4: the pass stores the descriptor of every trait
+/// glyph for every face, so a similar-glyph query of one has nothing left
+/// to describe; a face's descriptor is the one its file gives.
+#[test]
+fn the_pass_describes_every_trait_glyph_of_every_face() {
+    let dir = TempDir::new("trait-pass-descriptors");
+    let fonts = dir.path().join("fonts");
+    copy(&fonts, STATIC, "static.ttf");
+    copy(&fonts, VARIABLE, "variable.ttf");
+    let index = Mutex::new(scanned(&dir, &fonts));
+    {
+        let index = index.lock().unwrap();
+        assert_eq!(index.glyph_descriptor_todo('R' as u32).unwrap().len(), 2);
+        assert_eq!(index.trait_pass_remaining(&versions()).unwrap(), 2);
+    }
+    run_all(&index);
+    let index = index.into_inner().unwrap();
+    assert_eq!(index.trait_pass_remaining(&versions()).unwrap(), 0);
+    for ch in similarity::TRAIT_GLYPHS {
+        assert!(
+            index
+                .glyph_descriptor_todo(u32::from(ch))
+                .unwrap()
+                .is_empty(),
+            "{ch} described for every face"
+        );
+    }
+    assert_eq!(
+        index.glyph_descriptor_todo('x' as u32).unwrap().len(),
+        2,
+        "a glyph that is not a trait glyph is left for on demand"
+    );
+    let data = fs::read(fixtures().join(STATIC)).unwrap();
+    let stored = index.glyph_debug_descriptor(face_of(&index, "static.ttf"), 'R' as u32);
+    assert_eq!(stored, similarity::describe(&data, 0, 'R' as u32));
+}
+
+/// E49.8: a descriptor version bump describes every face again and measures
+/// no trait; a detector bump leaves the descriptors alone.
+#[test]
+fn a_descriptor_version_bump_describes_again_and_measures_no_trait() {
+    let dir = TempDir::new("trait-pass-descriptor-bump");
+    let fonts = dir.path().join("fonts");
+    copy(&fonts, STATIC, "static.ttf");
+    copy(&fonts, VARIABLE, "variable.ttf");
+    let index = Mutex::new(scanned(&dir, &fonts));
+    run_all(&index);
+    index.lock().unwrap().trait_debug_sql(
+        "UPDATE glyph_traits SET confidence = 0.123;
+         UPDATE glyph_descriptor SET descriptor = x'00';",
+    );
+    let bumped: Vec<(&str, u32)> = versions()
+        .into_iter()
+        .map(|(id, v)| (id, if id == similarity::STAMP { v + 1 } else { v }))
+        .collect();
+    let todo = index
+        .lock()
+        .unwrap()
+        .trait_pass_todo(&bumped, 0, 10)
+        .unwrap();
+    assert!(todo.iter().all(|t| t.traits == [similarity::STAMP]));
+    let report = run_at(&index, &AtomicBool::new(false), &bumped, &mut |_, _| {}).unwrap();
+    assert_eq!(report.measured, 2);
+    let index = index.into_inner().unwrap();
+    for file in ["static.ttf", "variable.ttf"] {
+        let face = face_of(&index, file);
+        let rows = index.face_glyph_traits(face).unwrap();
+        assert!(
+            rows.iter().all(|r| r.confidence == 0.123),
+            "{file}: traits untouched"
+        );
+        assert_eq!(
+            index
+                .glyph_debug_descriptor(face, 'R' as u32)
+                .map(|d| d.as_bytes().len()),
+            Some(similarity::LEN),
+            "{file}: R described again"
+        );
+    }
+}
+
+/// E49.8: a face whose data cannot be parsed is stamped with no descriptor
+/// of each trait glyph, so it is not described again on every query.
+#[test]
+fn a_broken_face_has_no_descriptors_and_is_not_described_again() {
+    let dir = TempDir::new("trait-pass-descriptor-broken");
+    let fonts = dir.path().join("fonts");
+    copy(&fonts, STATIC, "static.ttf");
+    let index = Mutex::new(scanned(&dir, &fonts));
+    let face = face_of(&index.lock().unwrap(), "static.ttf");
+    // The file now holds garbage; its hash in the index stays, as if the
+    // pass read a file that is damaged.
+    fs::write(fonts.join("static.ttf"), b"not a font, not at all").unwrap();
+    run_all(&index);
+    let index = index.into_inner().unwrap();
+    assert_eq!(index.glyph_debug_descriptor(face, 'R' as u32), None);
+    assert!(index.glyph_descriptor_todo('R' as u32).unwrap().is_empty());
+}
+
+/// E49.8: an index from before glyph descriptors (V23), its traits all
+/// measured, gains the table on open; the next pass describes its faces and
+/// measures no trait again.
+#[test]
+fn an_index_from_before_glyph_descriptors_describes_them_after_the_upgrade() {
+    let dir = TempDir::new("trait-pass-descriptor-migration");
+    let fonts = dir.path().join("fonts");
+    copy(&fonts, STATIC, "static.ttf");
+    let index = Mutex::new(scanned(&dir, &fonts));
+    run_at(&index, &AtomicBool::new(false), &current(), &mut |_, _| {}).unwrap();
+    let index = index.into_inner().unwrap();
+    let face = face_of(&index, "static.ttf");
+    index.trait_debug_sql(
+        "UPDATE glyph_traits SET confidence = 0.123;
+         DROP TABLE glyph_descriptor; PRAGMA user_version = 23;",
+    );
+    drop(index);
+    let index = Index::open(&dir.path().join("data").join(INDEX_FILE))
+        .unwrap()
+        .index;
+    assert_eq!(
+        index.schema_version().unwrap(),
+        crate::index::SCHEMA_VERSION
+    );
+    assert_eq!(index.trait_pass_remaining(&current()).unwrap(), 0);
+    assert_eq!(index.trait_pass_remaining(&versions()).unwrap(), 1);
+    let index = Mutex::new(index);
+    assert_eq!(run_all(&index).measured, 1);
+    let index = index.into_inner().unwrap();
+    assert!(
+        index
+            .face_glyph_traits(face)
+            .unwrap()
+            .iter()
+            .all(|r| r.confidence == 0.123)
+    );
+    assert!(index.glyph_debug_descriptor(face, 'R' as u32).is_some());
 }

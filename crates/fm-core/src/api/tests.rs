@@ -7384,6 +7384,101 @@ fn the_default_fetch_budget_is_sixty_seconds() {
     assert_eq!(fetch_missing::FETCH_BUDGET, Duration::from_secs(60));
 }
 
+/// E49.8 criteria 1 and 2: `find_similar_glyph` describes a glyph that is
+/// not a trait glyph on demand, once, and ranks from the stored descriptors
+/// with the distance; a trait glyph the pass described is ranked without
+/// describing anything. The whole-face `find_similar` is not changed.
+#[test]
+fn similar_glyphs_are_described_on_demand_once_and_ranked() {
+    use fm_api::search::{SimilarGlyphRequest, SimilarRequest};
+    let (lib, _, _) = Lib::scanned_with(
+        "api-similar-glyph",
+        &[
+            "google-repo/mulish/Mulish[wght].ttf",
+            "google-repo/opensanshebrew/OpenSansHebrew-Bold.ttf",
+            "google-repo/zeyada/Zeyada.ttf",
+        ],
+    );
+    let face = lib
+        .api
+        .lock()
+        .trait_debug_face("Mulish[wght].ttf")
+        .expect("Mulish");
+    let x = 'x' as u32;
+    let waiting = lib.api.lock().glyph_descriptor_todo(x).expect("todo").len();
+    assert!(waiting >= 3, "{waiting} faces to describe");
+    let ask = |code_point: u32| SimilarGlyphRequest {
+        face,
+        code_point,
+        limit: 4,
+    };
+    let found = lib.api.find_similar_glyph(ask(x)).expect("similar x");
+    assert!(!found.is_empty() && found.len() <= 4, "{found:?}");
+    assert!(found.iter().all(|f| f.face.id != face));
+    assert!(found.windows(2).all(|w| w[0].distance <= w[1].distance));
+    assert!(found.iter().all(|f| (0.0..=1.0).contains(&f.distance)));
+    assert!(
+        lib.api
+            .lock()
+            .glyph_descriptor_todo(x)
+            .expect("todo")
+            .is_empty(),
+        "cached"
+    );
+    // A second ask reads the cache and gives the same answer.
+    let stamp = lib.api.lock().trait_debug_total_changes();
+    assert_eq!(lib.api.find_similar_glyph(ask(x)).expect("again"), found);
+    assert_eq!(
+        lib.api.lock().trait_debug_total_changes(),
+        stamp,
+        "nothing written"
+    );
+    // After the trait pass, a trait glyph has nothing left to describe.
+    crate::trait_pass::run(
+        &lib.api.index,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _| {},
+    )
+    .expect("trait pass");
+    assert!(
+        lib.api
+            .lock()
+            .glyph_descriptor_todo('R' as u32)
+            .expect("todo")
+            .is_empty()
+    );
+    let r = lib
+        .api
+        .find_similar_glyph(ask('R' as u32))
+        .expect("similar R");
+    assert!(!r.is_empty());
+    // Errors: no character, an unknown face.
+    let err = lib
+        .api
+        .find_similar_glyph(ask(0xD800))
+        .expect_err("surrogate");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    let err = lib
+        .api
+        .find_similar_glyph(SimilarGlyphRequest {
+            face: FaceId(99_999),
+            code_point: x,
+            limit: 3,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+    // The whole-face ranking still answers as before.
+    let whole = lib
+        .api
+        .find_similar(SimilarRequest { face, limit: 3 })
+        .expect("similar");
+    assert!(
+        whole
+            .iter()
+            .all(|s| s.face.id != face && (0.0..=1.0).contains(&s.score))
+    );
+}
+
 /// E49.10 through the `CoreApi` entry path, on the real detectors: each trait
 /// tag `get_face` gives is sure, in catalog order, of an offered trait, and
 /// its value filter (the chip 'find fonts with this' sets) finds the face.

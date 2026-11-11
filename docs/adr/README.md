@@ -27,5 +27,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0020](0020-keep-the-webview-shell.md) | Keep the webview shell: the E35 measurements, the fixes, and the rules that keep it within budget | Accepted |
 | [0021](0021-font-pairing-and-roles.md) | Font pairing: the rules, the model and role-aware scoring | Accepted |
 | [0022](0022-dragging-font-files-out.md) | Dragging font files out of the window: a native file drag per OS, copy only | Accepted |
+| [0023](0023-per-glyph-similarity.md) | Per-glyph similarity: a histogram of edge orientations, stored per face and glyph | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

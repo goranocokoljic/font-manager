@@ -104,6 +104,7 @@ routes! {
     detect_languages(req),
     find_similar(req),
     find_by_image(req),
+    find_similar_glyph(req),
     suggest_pairings(req),
     list_glyph_traits(),
     // preview
