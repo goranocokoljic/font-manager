@@ -588,3 +588,46 @@ fn confident_traits_keeps_the_bar_the_values_and_the_catalog_order() {
         ]
     );
 }
+
+/// E49.9 criterion 2: a likeness sort combines with a glyph-trait filter:
+/// the trait chooses the faces (b and d have no G spur), the likeness
+/// orders them by their `R`'s distance to a's, and a is no result.
+#[test]
+fn a_likeness_sort_combines_with_trait_filters() {
+    use fm_api::search::GlyphReference;
+    let dir = TempDir::new("trait-search-like");
+    let mut index = library(&dir);
+    let r = 'R' as u32;
+    let todo = index.glyph_descriptor_todo(r).expect("todo");
+    let done = crate::glyphs::similarity::describe_todo(&todo, r);
+    index.write_glyph_descriptors(&done).expect("write");
+    let a = face(&index, "a.ttf");
+    let found = index
+        .search(&SearchRequest {
+            glyph_traits: Some(vec![value("G.spur", "none")]),
+            like_glyph: Some(GlyphReference {
+                face: a,
+                code_point: r,
+            }),
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    let faces: Vec<FaceId> = found.families.iter().map(|f| f.faces[0]).collect();
+    assert_eq!(
+        sorted(faces.clone()),
+        sorted(vec![face(&index, "b.ttf"), face(&index, "d.ttf")])
+    );
+    let ranked = index
+        .find_similar_glyph(&fm_api::search::SimilarGlyphRequest {
+            face: a,
+            code_point: r,
+            limit: 10,
+        })
+        .expect("rank");
+    let expected: Vec<FaceId> = ranked
+        .iter()
+        .map(|f| f.face.id)
+        .filter(|id| faces.contains(id))
+        .collect();
+    assert_eq!(faces, expected, "closest to a's R first");
+}

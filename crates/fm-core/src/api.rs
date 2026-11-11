@@ -1050,7 +1050,13 @@ fn file_drag_support(support: Option<&DragSupport>) -> FileDragSupport {
 }
 
 impl SearchService for CoreApi {
+    /// A likeness sort (E49.9) first describes the faces whose glyph of the
+    /// character is missing or out of date, off the index lock, as
+    /// [`Self::find_similar_glyph`] does.
     fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse> {
+        if let Some(reference) = req.like_glyph {
+            self.describe_glyph(reference.code_point)?;
+        }
         Ok(self.lock().search(&req)?)
     }
 
@@ -1086,12 +1092,7 @@ impl SearchService for CoreApi {
     /// has described the trait glyphs already), then ranks from the stored
     /// descriptors.
     fn find_similar_glyph(&self, req: SimilarGlyphRequest) -> ApiResult<Vec<SimilarGlyphFace>> {
-        crate::index::check_code_point(req.code_point)?;
-        let todo = self.lock().similar_glyph_todo(req.code_point)?;
-        if !todo.is_empty() {
-            let described = crate::glyphs::similarity::describe_todo(&todo, req.code_point);
-            self.lock().write_glyph_descriptors(&described)?;
-        }
+        self.describe_glyph(req.code_point)?;
         Ok(self.lock().find_similar_glyph(&req)?)
     }
 
@@ -1563,6 +1564,20 @@ impl ExportService for CoreApi {
 }
 
 impl CoreApi {
+    /// Describes the faces whose glyph of `code_point` is missing or out of
+    /// date, reading their files off the index lock, and stores them (the
+    /// trait pass has described the trait glyphs already). A code point that
+    /// is no character is `InvalidRequest`.
+    fn describe_glyph(&self, code_point: u32) -> ApiResult<()> {
+        crate::index::check_code_point(code_point)?;
+        let todo = self.lock().similar_glyph_todo(code_point)?;
+        if !todo.is_empty() {
+            let described = crate::glyphs::similarity::describe_todo(&todo, code_point);
+            self.lock().write_glyph_descriptors(&described)?;
+        }
+        Ok(())
+    }
+
     /// The printer a specimen in `format` needs: none for HTML, the injected
     /// one for a PDF (`Unsupported` without it, the CLI's direct link).
     fn specimen_printer(&self, format: SpecimenFormat) -> ApiResult<Option<&dyn PdfPrinter>> {
@@ -1609,6 +1624,7 @@ impl WorkflowService for CoreApi {
                 offset: 0,
                 limit: u32::MAX,
             },
+            like_glyph: None,
         })?;
         let mut picks = Vec::new();
         for hit in found.families {

@@ -5,11 +5,14 @@
 // families render it completely (E43.1; the API checks the coverage), and the reading rows
 // add their body size and line height. A switch beside the count hides the families with
 // missing glyphs (E43.3): a filter remembered with the view, shown as a chip by the Filters.
+// A likeness sort (E49.9) reads 'Sorted by R like Inter': a chip with the reference glyph in its
+// own face, removable; removing it, or choosing a sort in the menu, ends it.
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { errorMessage, t, type MessageKey } from '../i18n';
 import { FmSlide } from '../motion';
 import { columnById, SORT_COLUMNS, type ColumnId } from '../list/columns';
 import { rowStateLabel, styleName } from '../list/rows';
+import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useActiveFilters } from '../search/activeFilters';
 import { beyondBasicLatin } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
@@ -86,6 +89,36 @@ const bodyText = computed(() =>
   }),
 );
 
+const like = computed(() => search.likeGlyph);
+const likeText = computed(() =>
+  like.value ? t('home.sort.like', { glyph: like.value.glyph, family: like.value.family }) : '',
+);
+// The chip draws the reference glyph in the reference face, held while the chip shows it.
+const loader = useFaceLoader();
+let heldFace: number | null = null;
+watch(
+  () => like.value?.face ?? null,
+  (face) => {
+    if (face === heldFace) return;
+    if (heldFace !== null) loader.release(heldFace);
+    heldFace = face;
+    if (face !== null) void loader.acquire(face).catch(() => {});
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  if (heldFace !== null) loader.release(heldFace);
+});
+const likeGlyphStyle = computed(() =>
+  like.value ? { fontFamily: `"${faceFamily(like.value.face)}", system-ui, sans-serif` } : {},
+);
+/** Removes the likeness sort; the chip goes, so the focus goes to the menu's button. */
+async function removeLike(): Promise<void> {
+  search.setLikeGlyph(null);
+  await nextTick();
+  button.value?.focus();
+}
+
 const sort = computed(() => views.tableFor(props.view).sort);
 const typing = computed(() => search.query.trim() !== '');
 /** The API's default: best match for a text search, else A to Z. */
@@ -98,9 +131,13 @@ const sortText = computed(() => {
 });
 /** A menu row stands for its API key: the table's Style column is the Weight row here. */
 const isCurrent = (id: ColumnId) =>
-  column.value !== null && columnById(column.value).sortKey === columnById(id).sortKey;
+  !like.value &&
+  column.value !== null &&
+  columnById(column.value).sortKey === columnById(id).sortKey;
 
+/** A sort chosen in the menu replaces a likeness sort. */
 function choose(id: ColumnId | null): void {
+  search.setLikeGlyph(null);
   views.setSort(props.view, id, id !== null && !!sort.value?.descending);
 }
 function setDescending(on: boolean): void {
@@ -174,7 +211,26 @@ function onFocusOut(e: FocusEvent): void {
     </p>
     <p v-if="rows" class="body" data-testid="body-size">{{ bodyText }}</p>
     <div class="sort" @keydown.esc.stop="close">
-      <span>{{ sortText }}</span> ·
+      <template v-if="like">
+        <span>{{ t('home.sort.byLike') + ' ' }}</span>
+        <button
+          type="button"
+          class="like-chip"
+          data-testid="like-chip"
+          :title="t('home.sort.likeHint')"
+          :aria-label="t('home.sort.removeLike', { name: likeText })"
+          @click="removeLike"
+        >
+          <b class="like-glyph" data-testid="like-glyph" :style="likeGlyphStyle">{{
+            like.glyph
+          }}</b>
+          <span>{{ ' ' + t('home.sort.likeTail', { family: like.family }) }}</span>
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+        </button>
+      </template>
+      <span v-else>{{ sortText }}</span> ·
       <button
         ref="button"
         type="button"
@@ -199,7 +255,12 @@ function onFocusOut(e: FocusEvent): void {
           @focusout="onFocusOut"
         >
           <label v-if="typing">
-            <input type="radio" :name="uid" :checked="column === null" @change="choose(null)" />
+            <input
+              type="radio"
+              :name="uid"
+              :checked="!like && column === null"
+              @change="choose(null)"
+            />
             {{ t('home.sort.bestMatch') }}
           </label>
           <label v-for="id in SORT_COLUMNS" :key="id">
@@ -301,6 +362,33 @@ function onFocusOut(e: FocusEvent): void {
 }
 .change:hover {
   color: var(--fm-fg);
+}
+/* The likeness sort's chip (E49.9): the reference glyph in its own face, an accent edge, as
+   the glyph-trait chips have. */
+.like-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  margin-inline-start: var(--fm-space-1);
+  padding: 0 var(--fm-space-2);
+  border: 1px solid var(--fm-accent);
+  border-radius: var(--fm-radius-lg);
+  background: none;
+  color: var(--fm-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.like-chip:hover {
+  background-color: var(--fm-surface-2);
+}
+.like-chip:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+.like-glyph {
+  font-size: 1.15em;
+  font-weight: 400;
+  line-height: 1;
 }
 .menu {
   position: absolute;

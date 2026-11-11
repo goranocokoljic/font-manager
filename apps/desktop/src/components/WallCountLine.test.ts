@@ -286,3 +286,39 @@ describe('the count line with your own text (E43.1)', () => {
     expect(asked.find((r) => (r.page?.limit ?? 0) > 1)?.rule).toBeUndefined();
   });
 });
+
+describe('the likeness sort chip (E49.9)', () => {
+  it("reads 'Sorted by R like Inter' with the glyph in the reference face, and removes it", async () => {
+    const { w, store } = await mountLine();
+    store.setLikeGlyph({ face: 3, codePoint: 82, glyph: 'R', family: 'Inter' });
+    await flushPromises();
+    expect(w.get('.sort').text().replace(/\s+/g, ' ')).toBe('Sorted by R like Inter · change');
+    const glyph = w.get('[data-testid="like-glyph"]');
+    expect(glyph.text()).toBe('R');
+    expect(glyph.attributes('style')).toContain('fm-face-3');
+    const chip = w.get('[data-testid="like-chip"]');
+    expect(chip.attributes('aria-label')).toBe('Remove sort R like Inter');
+    await chip.trigger('click');
+    await flushPromises();
+    expect(store.likeGlyph).toBeNull();
+    expect(w.find('[data-testid="like-chip"]').exists()).toBe(false);
+    expect(w.get('.sort').text().replace(/\s+/g, ' ')).toBe('Sorted by name · change');
+    // The chip is gone: the focus is on the menu's button, not on the body.
+    expect(document.activeElement).toBe(w.get('.change').element);
+  });
+
+  it('a sort chosen in the menu ends the likeness sort', async () => {
+    const { w, store } = await mountLine();
+    store.setLikeGlyph({ face: 3, codePoint: 82, glyph: 'R', family: 'Inter' });
+    await flushPromises();
+    await w.get('.change').trigger('click');
+    await flushPromises();
+    // No row is the current one: any of them changes the sort.
+    expect(w.findAll('.menu input[type="radio"]').some((r) => r.element.matches(':checked'))).toBe(
+      false,
+    );
+    await w.findAll('.menu input[type="radio"]')[0]!.setValue(true);
+    await flushPromises();
+    expect(store.likeGlyph).toBeNull();
+  });
+});

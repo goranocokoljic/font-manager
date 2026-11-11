@@ -151,6 +151,24 @@ export function useFamilyNavigation() {
     });
   }
 
+  /**
+   * 'Fonts with an R like this' on a glyph of the Characters section (E49.9): back to the wall
+   * in the Letters preset with that letter typed, sorted by how close each font's drawing of it
+   * is to this face's. The wall's filters stay.
+   */
+  function findLikeGlyph(like: { face: FaceId; glyph: string; family: string }): Promise<void> {
+    return leave(() => {
+      preview.update(ALL_FONTS_VIEW, { preset: 'letters', sample: 'letters', letters: like.glyph });
+      views.setMode(ALL_FONTS_VIEW, 'grid');
+      search.setLikeGlyph({
+        face: like.face,
+        codePoint: like.glyph.codePointAt(0)!,
+        glyph: like.glyph,
+        family: like.family,
+      });
+    });
+  }
+
   /** Back to the library; `arrive` sets the wall up once the library is the page again. */
   async function leave(arrive?: () => void): Promise<void> {
     const family = page.id;
@@ -199,5 +217,5 @@ export function useFamilyNavigation() {
     if (!animated) fadeIn(familyContent());
   }
 
-  return { open, back, findWithTrait, step };
+  return { open, back, findWithTrait, findLikeGlyph, step };
 }

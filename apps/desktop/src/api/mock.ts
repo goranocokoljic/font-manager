@@ -3117,6 +3117,26 @@ export function createMockClient(options: MockOptions = {}): FmClient {
 
   // The install hooks activate through the client's own `activate`, bound below.
   let activateFaces: FmClient['activate'] = async () => [];
+  /**
+   * The Rust mock's likeness sort (E49.9): its stand-in glyph distance (0.05 for another
+   * family plus the weight difference over 1000), each family by its closest face, that face
+   * first, closest family first, ties in the order given.
+   */
+  function likenessOrder(all: FamilyHit[], reference: FaceId): FamilyHit[] {
+    const me = find(reference)!;
+    const distance = (id: FaceId) => {
+      const f = find(id);
+      if (!f) return null;
+      const family = f.face.family === me.face.family ? 0 : 0.05;
+      return Math.min(1, family + Math.abs(f.face.weight - me.face.weight) / 1000);
+    };
+    const ranked = all.map((h) => {
+      const faces = [...h.faces].sort((a, b) => (distance(a) ?? 2) - (distance(b) ?? 2) || a - b);
+      return { ...h, faces, glyphDistance: faces.length ? distance(faces[0]!) : null };
+    });
+    return ranked.sort((a, b) => (a.glyphDistance ?? 2) - (b.glyphDistance ?? 2));
+  }
+
   const client: FmClient = {
     getAppInfo: async () => {
       const base: AppInfo = {
@@ -3402,6 +3422,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
       const traits = req.glyphTraits ?? [];
+      const like = req.likeGlyph ?? null;
+      if (like) {
+        if (!find(like.face)) throw notFound(like.face);
+        paged = { ...paged, all: likenessOrder(paged.all, like.face) };
+      }
       if (traits.length > 0) {
         // As MockApi in fm-api: the sample faces carry no glyph-trait detections, so a
         // trait filter (E49.5) finds nothing. The wall's families have some (E49.6).

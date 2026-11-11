@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 
 use fm_api::FaceId;
-use fm_api::search::{SimilarGlyphFace, SimilarGlyphRequest};
+use fm_api::search::{GlyphReference, SimilarGlyphFace, SimilarGlyphRequest};
 
 use super::Index;
 use crate::error::{FmError, FmResult};
@@ -73,48 +73,15 @@ impl Index {
     /// An unknown face, or one with no descriptor of the character (it does
     /// not draw it, or it was not described yet), is `NotFound`.
     pub fn find_similar_glyph(&self, req: &SimilarGlyphRequest) -> FmResult<Vec<SimilarGlyphFace>> {
-        let ch = check_code_point(req.code_point)?;
-        self.face_summary(req.face)?;
-        self.refresh_search_cache()?;
-        if !self
-            .search_cache
-            .borrow()
-            .glyphs
-            .stored
-            .contains_key(&req.code_point)
-        {
-            let stored = self.current_glyph_descriptors(req.code_point)?;
-            let mut cache = self.search_cache.borrow_mut();
-            let searchable: HashSet<u32> = cache.rows.iter().map(|r| r.id).collect();
-            let stored = stored
-                .into_iter()
-                .map(|(face, d)| (face, searchable.contains(&face), Prepared::new(d)))
-                .collect();
-            cache.glyphs.stored.insert(req.code_point, stored);
-        }
-        let mut ranked: Vec<(u32, f32)> = {
-            let cache = self.search_cache.borrow();
-            let stored = cache
-                .glyphs
-                .stored
-                .get(&req.code_point)
-                .ok_or_else(|| FmError::internal("glyph descriptors were not read"))?;
-            let reference = stored
-                .binary_search_by_key(&req.face.0, |(face, _, _)| *face)
-                .ok()
-                .map(|at| &stored[at].2)
-                .ok_or_else(|| {
-                    FmError::not_found(format!(
-                        "The glyph '{ch}' (U+{:04X}) of face {}",
-                        req.code_point, req.face
-                    ))
-                })?;
-            stored
-                .iter()
-                .filter(|(face, searchable, _)| *searchable && *face != req.face.0)
-                .map(|(face, _, d)| (*face, reference.distance(d)))
-                .collect()
+        let reference = GlyphReference {
+            face: req.face,
+            code_point: req.code_point,
         };
+        let mut ranked: Vec<(u32, f32)> = self
+            .glyph_distances(reference)?
+            .into_iter()
+            .filter(|(face, _)| *face != req.face.0)
+            .collect();
         let closer = |a: &(u32, f32), b: &(u32, f32)| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0));
         let limit = req.limit as usize;
         if limit < ranked.len() {
@@ -135,6 +102,60 @@ impl Index {
                 })
             })
             .collect()
+    }
+}
+
+impl Index {
+    /// The distance of every searchable face's stored glyph of
+    /// `reference.code_point` to the reference face's, the reference itself
+    /// included, in face-id order (E49.9: the likeness sort of a search).
+    /// Faces with no descriptor of the character are not listed. An unknown
+    /// reference face, or one with no descriptor of the character, is
+    /// `NotFound`; a code point that is no character is `InvalidRequest`.
+    pub(in crate::index) fn glyph_distances(
+        &self,
+        reference: GlyphReference,
+    ) -> FmResult<Vec<(u32, f32)>> {
+        let ch = check_code_point(reference.code_point)?;
+        self.face_summary(reference.face)?;
+        self.refresh_search_cache()?;
+        if !self
+            .search_cache
+            .borrow()
+            .glyphs
+            .stored
+            .contains_key(&reference.code_point)
+        {
+            let stored = self.current_glyph_descriptors(reference.code_point)?;
+            let mut cache = self.search_cache.borrow_mut();
+            let searchable: HashSet<u32> = cache.rows.iter().map(|r| r.id).collect();
+            let stored = stored
+                .into_iter()
+                .map(|(face, d)| (face, searchable.contains(&face), Prepared::new(d)))
+                .collect();
+            cache.glyphs.stored.insert(reference.code_point, stored);
+        }
+        let cache = self.search_cache.borrow();
+        let stored = cache
+            .glyphs
+            .stored
+            .get(&reference.code_point)
+            .ok_or_else(|| FmError::internal("glyph descriptors were not read"))?;
+        let mine = stored
+            .binary_search_by_key(&reference.face.0, |(face, _, _)| *face)
+            .ok()
+            .map(|at| &stored[at].2)
+            .ok_or_else(|| {
+                FmError::not_found(format!(
+                    "The glyph '{ch}' (U+{:04X}) of face {}",
+                    reference.code_point, reference.face
+                ))
+            })?;
+        Ok(stored
+            .iter()
+            .filter(|(_, searchable, _)| *searchable)
+            .map(|(face, _, d)| (*face, mine.distance(d)))
+            .collect())
     }
 }
 

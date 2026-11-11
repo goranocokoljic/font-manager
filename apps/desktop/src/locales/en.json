@@ -319,7 +319,12 @@
         "license": "license",
         "added": "date added",
         "tags": "tags"
-      }
+      },
+      "byLike": "Sorted by",
+      "like": "{glyph} like {family}",
+      "likeTail": "like {family}",
+      "likeHint": "Sorted by how close each font's letter is to this one",
+      "removeLike": "Remove sort {name}"
     },
     "allFonts": "All fonts",
     "selected": "{count} selected",
@@ -1113,7 +1118,9 @@
   },
   "grid": {
     "label": "Font grid",
-    "inCompare": ", in Compare"
+    "inCompare": ", in Compare",
+    "likeThis": "Fonts with a {glyph} like this",
+    "likeThisAn": "Fonts with an {glyph} like this"
   },
   "waterfall": {
     "label": "Font waterfall",

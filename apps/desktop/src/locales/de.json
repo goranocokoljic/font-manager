@@ -319,7 +319,12 @@
         "license": "Lizenz",
         "added": "Datum hinzugefügt",
         "tags": "Tags"
-      }
+      },
+      "byLike": "Sortiert nach",
+      "like": "{glyph} wie {family}",
+      "likeTail": "wie {family}",
+      "likeHint": "Sortiert danach, wie nah der Buchstabe jeder Schrift diesem ist",
+      "removeLike": "Sortierung {name} entfernen"
     },
     "allFonts": "Alle Schriften",
     "selected": "{count} ausgewählt",
@@ -1113,7 +1118,9 @@
   },
   "grid": {
     "label": "Schriftraster",
-    "inCompare": ", im Vergleich"
+    "inCompare": ", im Vergleich",
+    "likeThis": "Schriften mit einem {glyph} wie diesem",
+    "likeThisAn": "Schriften mit einem {glyph} wie diesem"
   },
   "waterfall": {
     "label": "Schriftwasserfall",

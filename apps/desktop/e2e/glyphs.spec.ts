@@ -211,6 +211,9 @@ test('Tab reaches the card; Escape closes it and returns to the grid', async ({ 
   await page.keyboard.press('Tab');
   await expect(detail.getByRole('button', { name: 'Compare with…' })).toBeFocused();
   await page.keyboard.press('Tab');
+  // 'Fonts with an a like this' (E49.9) is the card's next action.
+  await expect(detail.getByTestId('glyph-like')).toBeFocused();
+  await page.keyboard.press('Tab');
   const more = detail.getByRole('button', { name: 'More details' });
   await expect(more).toBeFocused();
   await page.keyboard.press('Enter');

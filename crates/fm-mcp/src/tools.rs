@@ -36,8 +36,8 @@ use fm_api::preview::{
     ComparePreviewRequest, MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest,
 };
 use fm_api::search::{
-    CoverageRequest, Filters, GlyphTraitInfo, GlyphTraitKind, PairingRequest, SearchRequest,
-    SimilarRequest, Supports, TraitFilter,
+    CoverageRequest, Filters, GlyphReference, GlyphTraitInfo, GlyphTraitKind, PairingRequest,
+    SearchRequest, SimilarRequest, Supports, TraitFilter,
 };
 use fm_api::settings::McpToolCall;
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
@@ -235,10 +235,32 @@ pub struct SearchFontsInput {
     /// object. A face that lacks the letter is left out.
     #[serde(alias = "glyphTraits")]
     pub glyph_traits: Vec<TraitInput>,
+    /// Sort the results by how close their drawing of one character is to
+    /// a reference face's ("an a like Futura's"): `{ "face": <face id>,
+    /// "codePoint": 97 }`. Closest family first, each with `glyphDistance`
+    /// (0 is the same drawing, 1 the farthest); families that do not draw
+    /// the character come last. Combines with every filter and
+    /// `glyph_traits`.
+    #[serde(alias = "likeGlyph")]
+    pub like_glyph: Option<LikeGlyphInput>,
     /// Family groups to return (default 20).
     pub limit: Option<u32>,
     /// Family groups to skip.
     pub offset: u32,
+}
+
+/// The reference glyph of a `search_fonts` likeness sort.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct LikeGlyphInput {
+    /// The reference face id (from `search_fonts`).
+    #[serde(alias = "face_id")]
+    pub face: u32,
+    /// The character as a Unicode code point (`97` for `a`).
+    #[serde(alias = "code_point")]
+    #[serde(rename = "codePoint")]
+    pub code_point: u32,
 }
 
 /// One glyph-trait filter of `search_fonts`.
@@ -570,7 +592,7 @@ fn tool<T: JsonSchema + 'static>(name: &'static str, description: &'static str) 
 }
 
 /// What `search_fonts` does, before the glyph trait catalog.
-const SEARCH_FONTS_ABOUT: &str = "Search the font library by text and filters. Returns family groups with face ids and metadata. `glyph_traits` asks for letter shapes, all of them: \"<trait>=<value>\" or \"<trait>>=<number>\" / \"<trait><=<number>\" on a measured trait; a font without the letter is left out.";
+const SEARCH_FONTS_ABOUT: &str = "Search the font library by text and filters. Returns family groups with face ids and metadata. `glyph_traits` asks for letter shapes, all of them: \"<trait>=<value>\" or \"<trait>>=<number>\" / \"<trait><=<number>\" on a measured trait; a font without the letter is left out. `like_glyph` { face, codePoint } sorts the results by how close their drawing of that character is to the reference face's, closest first, with `glyphDistance`; it combines with `glyph_traits` (a sans whose a looks like Futura's but with a double-storey g is one call).";
 
 /// Every tool's definition, in [`NAMES`] order, with the glyph trait
 /// catalog of `api` in the `search_fonts` description, so an assistant can
@@ -973,6 +995,10 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                     offset: a.offset,
                     limit: a.limit.unwrap_or(DEFAULT_SEARCH_LIMIT),
                 },
+                like_glyph: a.like_glyph.map(|g| GlyphReference {
+                    face: FaceId(g.face),
+                    code_point: g.code_point,
+                }),
             })?)
         }
         GET_FONT => {

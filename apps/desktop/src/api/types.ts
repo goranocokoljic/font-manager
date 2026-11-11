@@ -1398,6 +1398,12 @@ export type FamilyHit = {
 	score: number | null,
 	/**  With a `supports` filter: what the best face misses (empty when full). */
 	missing: Missing | null,
+	/**
+	 *  With `like_glyph`: the distance of the family's closest face's glyph
+	 *  to the reference, `0.0..=1.0`, lower is closer; `None` when none of
+	 *  its matching faces draws the character (E49.9).
+	 */
+	glyphDistance?: number | null,
 };
 
 /**  A family: faces grouped by typographic family name. */
@@ -1925,6 +1931,14 @@ export type GlyphPage = {
 	health: Health,
 	/**  The Unicode version of the block table (`17.0.0`). */
 	unicodeVersion: string,
+};
+
+/**  One glyph of one face: the reference of a likeness sort (E49.9). */
+export type GlyphReference = {
+	/**  The reference face. */
+	face: FaceId,
+	/**  The character, as a Unicode code point (`82` for `R`). */
+	codePoint: number,
 };
 
 /**  One character of a face, for its glyph detail (E11.2). */
@@ -3243,6 +3257,16 @@ export type SearchRequest = {
 	 *  glyph, or it is not measured yet) passes no trait filter.
 	 */
 	glyphTraits?: TraitFilter[] | null,
+	/**
+	 *  Sorts the families by how close their drawing of one character is to
+	 *  a reference face's (E49.9, "an R like this one"): each family by its
+	 *  closest matching face, closest first; families none of whose matching
+	 *  faces draws the character follow in the default order. When set it
+	 *  decides the order and `order` is not used; the filters, the query and
+	 *  the glyph traits still choose the families. A reference face that is
+	 *  unknown or does not draw the character is `NotFound`.
+	 */
+	likeGlyph?: GlyphReference | null,
 };
 
 /**  Search results grouped by family. */
