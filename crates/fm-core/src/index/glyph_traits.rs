@@ -79,16 +79,17 @@ pub struct StoredTrait {
 
 /// The faces whose traits are not all measured at `versions` for their
 /// file's current hash: every read face but those with a current stamp for
-/// each trait. One pass over the stamps, not one query per face. `?1` is the
-/// versions as a JSON object, `?2` their count.
+/// each trait. `?1` is the versions as a JSON object, `?2` their count.
+///
+/// The stamps are counted per face, through the `(face_id, trait)` key:
+/// a batch query stops after its `LIMIT` faces and reads only their stamps.
+/// (A subquery over every stamp, as before, was read again for each batch:
+/// 70 of the 83 s of a 15k-face pass.)
 const NEEDS: &str = "
 font_file.hash IS NOT NULL
-AND face.id NOT IN (
-    SELECT s.face_id FROM glyph_trait_stamp s
-    JOIN json_each(?1) v ON v.key = s.trait AND v.value = s.detector_version
-    JOIN face f ON f.id = s.face_id
-    JOIN font_file ff ON ff.id = f.file_id AND ff.hash = s.file_hash
-    GROUP BY s.face_id HAVING COUNT(*) = ?2)";
+AND (SELECT COUNT(*) FROM glyph_trait_stamp s
+     JOIN json_each(?1) v ON v.key = s.trait AND v.value = s.detector_version
+     WHERE s.face_id = face.id AND s.file_hash = font_file.hash) < ?2";
 
 fn versions_json(versions: &[(&str, u32)]) -> String {
     let map: serde_json::Map<String, serde_json::Value> = versions
