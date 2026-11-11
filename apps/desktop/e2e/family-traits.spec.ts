@@ -66,7 +66,11 @@ test('a tag goes back to the wall with its letter typed and its value as a chip'
     controls(page).getByRole('group', { name: 'Letters' }).getByRole('button'),
   ).toHaveText(['g']);
   await expect(traitChips(page)).toHaveCount(1);
-  await expect(traitChips(page)).toHaveAttribute('aria-label', /^Remove filter g storeys /);
+  // The chip holds the value the tag showed, not just the trait: "g · double-storey" gives
+  // "g storeys double-storey", never the other storey count.
+  const value = words[g]!.split(' · ')[1]!;
+  await expect(traitChips(page)).toHaveAttribute('aria-label', `Remove filter g storeys ${value}`);
+  await expect(page.getByTestId('count-line')).toContainText(`g storeys ${value}`);
   await expect(formatChip).toBeVisible();
 });
 
