@@ -315,6 +315,73 @@ fn a_likeness_sort_orders_families_by_glyph_distance() {
     assert!(plain.families.iter().all(|f| f.glyph_distance.is_none()));
 }
 
+/// E49.9 criterion 1, with a family of two faces: the family ranks by its
+/// closest face, and that face comes first in its `faces`, also when it is
+/// not the face the default order puts first (the lighter weight).
+#[test]
+fn a_likeness_sort_ranks_a_family_by_its_closest_face_and_puts_it_first() {
+    let dir = TempDir::new("glyph-like-closest-face");
+    let (index, _) = described(
+        &dir,
+        &[
+            ("google-static/glory/Glory-Bold.ttf", "glory-bold.ttf"),
+            (
+                "google-static/glory/Glory-ExtraBoldItalic.ttf",
+                "glory-xbi.ttf",
+            ),
+            (MULISH, "mulish.ttf"),
+            (ZEYADA, "zeyada.ttf"),
+        ],
+    );
+    let bold = face(&index, "glory-bold.ttf");
+    let heavy = face(&index, "glory-xbi.ttf");
+    let glory = |found: &fm_api::search::SearchResponse| {
+        found
+            .families
+            .iter()
+            .find(|f| f.faces.contains(&bold))
+            .cloned()
+            .expect("the Glory family")
+    };
+
+    // The reference is the family's second face by weight: it still comes
+    // first, at distance 0, and its family leads.
+    let found = index.search(&like(heavy, 'R')).expect("search");
+    let family = glory(&found);
+    assert_eq!(family.faces.len(), 2, "one family of two faces");
+    assert_eq!(
+        found.families[0].faces, family.faces,
+        "the reference's family first"
+    );
+    assert_eq!(
+        family.faces[0], heavy,
+        "the closest face first, not the lighter one"
+    );
+    assert_eq!(family.glyph_distance, Some(0.0));
+
+    // Against another reference, the family's distance is the smaller of
+    // its two faces' distances, and that face comes first.
+    let mulish = face(&index, "mulish.ttf");
+    let ranked = index
+        .find_similar_glyph(&ask(mulish, 'R', 10))
+        .expect("rank");
+    let distance_of = |id: FaceId| {
+        ranked
+            .iter()
+            .find(|f| f.face.id == id)
+            .map(|f| f.distance)
+            .expect("ranked")
+    };
+    let (closest, distance) = [bold, heavy]
+        .into_iter()
+        .map(|id| (id, distance_of(id)))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .expect("two faces");
+    let family = glory(&index.search(&like(mulish, 'R')).expect("search"));
+    assert_eq!(family.faces[0], closest);
+    assert_eq!(family.glyph_distance, Some(distance));
+}
+
 /// The likeness sort keeps the query and the filters: it orders what they
 /// find, and the reference face need not be one of the results.
 #[test]
