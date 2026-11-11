@@ -461,3 +461,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.10 #550] crates/fm-core/src/index/search/traits.rs:152 — the value-filter rule (known value, confidence ≥ CONFIDENT) is restated in `confident_traits`; the two are tied only by a test.
 - [E49.10 #550] apps/desktop/src/stores/preview.ts:279 — `applyPreset` exists, but `findWithTrait` writes `{ preset, sample }` by hand, bypassing `PRESET_SAMPLE`.
 - [E49.9 #552] apps/desktop/src/components/WallCountLine.vue:178 — sort changes from the count line's menu are not announced: the `.sort` part sits outside the status region.
+- [E49.9 #552] apps/desktop/e2e/dynamic-previews.spec.ts:24 — flaky under parallel load (fails 3/3 locally with default workers on main, passes with --workers 1); failed the Windows CI job of PR #567 with selection.spec.ts:198 (transition 0s).
