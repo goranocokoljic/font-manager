@@ -3995,6 +3995,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
                 limit: 1000,
             },
             rule: None,
+            like_glyph: None,
         })
         .expect("search")
         .families
@@ -4656,6 +4657,7 @@ fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
                 limit: 1000,
             },
             rule: None,
+            like_glyph: None,
         })
         .expect("search")
         .families
@@ -7536,4 +7538,66 @@ fn a_faces_trait_tags_find_that_face_through_the_api() {
         tagged += usize::from(!tags.is_empty());
     }
     assert!(tagged > 0, "some face has trait tags");
+}
+
+/// E49.9: a search sorted by a glyph that is not a trait glyph describes it
+/// on demand first (through the CoreApi entry path), then orders by it.
+#[test]
+fn a_likeness_search_describes_the_glyph_on_demand() {
+    use fm_api::search::GlyphReference;
+    let (lib, _, _) = Lib::scanned_with(
+        "api-like-glyph",
+        &[
+            "google-repo/mulish/Mulish[wght].ttf",
+            "google-repo/opensanshebrew/OpenSansHebrew-Bold.ttf",
+            "google-repo/zeyada/Zeyada.ttf",
+        ],
+    );
+    let face = lib
+        .api
+        .lock()
+        .trait_debug_face("Mulish[wght].ttf")
+        .expect("Mulish");
+    let x = 'x' as u32;
+    assert!(
+        !lib.api
+            .lock()
+            .glyph_descriptor_todo(x)
+            .expect("todo")
+            .is_empty()
+    );
+    let found = lib
+        .api
+        .search(SearchRequest {
+            like_glyph: Some(GlyphReference {
+                face,
+                code_point: x,
+            }),
+            page: Page {
+                offset: 0,
+                limit: 10,
+            },
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    assert_eq!(
+        found.families[0].faces[0], face,
+        "the reference's family first"
+    );
+    assert_eq!(found.families[0].glyph_distance, Some(0.0));
+    let drawn: Vec<f32> = found
+        .families
+        .iter()
+        .filter_map(|f| f.glyph_distance)
+        .collect();
+    assert!(drawn.len() >= 3, "{drawn:?}");
+    assert!(drawn.windows(2).all(|w| w[0] <= w[1]), "{drawn:?}");
+    assert!(
+        lib.api
+            .lock()
+            .glyph_descriptor_todo(x)
+            .expect("todo")
+            .is_empty(),
+        "described and stored"
+    );
 }

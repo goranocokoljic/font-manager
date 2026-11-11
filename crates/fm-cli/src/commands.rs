@@ -236,6 +236,7 @@ pub fn search(api: &dyn Api, query: &str, flags: &SearchFlags) -> Result<Vec<Fam
                 offset: hits.len() as u32,
                 limit: PAGE,
             },
+            like_glyph: None,
         })?;
         let last = page.families.is_empty();
         hits.extend(page.families);

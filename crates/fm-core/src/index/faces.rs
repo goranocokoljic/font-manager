@@ -457,6 +457,7 @@ impl Index {
                 limit: u32::MAX,
             },
             rule: None,
+            like_glyph: None,
         })?;
         let families = found
             .families

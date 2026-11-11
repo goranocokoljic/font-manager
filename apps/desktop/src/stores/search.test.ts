@@ -397,3 +397,56 @@ describe('glyph-trait filters (E49.6)', () => {
     expect(requests.at(-1)?.glyphTraits).toBeUndefined();
   });
 });
+
+describe('the likeness sort (E49.9)', () => {
+  it('sorts by the reference glyph in place of the order, and ending it brings the order back', async () => {
+    const search = await setup();
+    const library = useLibraryStore();
+    await library.setOrder({ by: 'name', descending: false });
+    search.setFilters({ slant: 'italic' });
+    await flushPromises();
+    expect(search.hits!.map((h) => h.family.name)).toEqual(['Sample 1', 'Sample 2']);
+    const reference = search.hits![1]!.faces[0]!;
+    requests = [];
+    search.setLikeGlyph({ face: reference, codePoint: 82, glyph: 'R', family: 'Sample 2' });
+    await flushPromises();
+    const asked = requests.at(-1)!;
+    expect(asked.likeGlyph).toEqual({ face: reference, codePoint: 82 });
+    expect(asked.order).toBeUndefined();
+    // The filter stays; the reference's family comes first, its face first.
+    expect(asked.filters).toEqual({ slant: 'italic' });
+    expect(search.hits!.map((h) => h.family.name)).toEqual(['Sample 2', 'Sample 1']);
+    expect(search.hits![0]!.faces[0]).toBe(reference);
+    expect(library.order).toEqual({ by: 'name', descending: false });
+
+    search.setLikeGlyph(null);
+    await flushPromises();
+    expect(requests.at(-1)!.likeGlyph).toBeUndefined();
+    expect(requests.at(-1)!.order).toEqual({ by: 'name', descending: false });
+    expect(search.hits!.map((h) => h.family.name)).toEqual(['Sample 1', 'Sample 2']);
+  });
+
+  it('is a search on its own: with no text or filter the wall shows its order', async () => {
+    const search = await setup();
+    const face = useLibraryStore().families[1]!;
+    const hits = await client.search({ query: '', filters: {}, page: { offset: 0, limit: 10 } });
+    const reference = hits.families.find((h) => h.family.id === face.id)!.faces[0]!;
+    search.setLikeGlyph({ face: reference, codePoint: 97, glyph: 'a', family: face.name });
+    await flushPromises();
+    expect(search.active).toBe(true);
+    expect(search.hits?.[0]?.family.id).toBe(face.id);
+    search.setLikeGlyph(null);
+    await flushPromises();
+    expect(search.hits).toBeNull();
+  });
+
+  it('keeps the likeness when the filters are cleared: it is a sort, not a filter', async () => {
+    const search = await setup();
+    const like = { face: 1, codePoint: 82, glyph: 'R', family: 'Sample 1' };
+    search.setLikeGlyph(like);
+    search.clear();
+    await flushPromises();
+    expect(search.likeGlyph).toEqual(like);
+    expect(requests.at(-1)!.likeGlyph).toEqual({ face: 1, codePoint: 82 });
+  });
+});

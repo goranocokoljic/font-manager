@@ -2217,6 +2217,36 @@ impl LibraryService for MockApi {
 }
 
 impl State {
+    /// The stand-in glyph distance of every visible face to `face`'s drawing
+    /// of `code_point`, `face` itself included: 0.05 for another family
+    /// plus the weight difference over 1000. Every mock face draws every
+    /// character; a number that is no character is `InvalidRequest`, checked
+    /// before the face, as the core does.
+    fn glyph_distances(&self, face: FaceId, code_point: u32) -> ApiResult<Vec<(u32, f32)>> {
+        if char::from_u32(code_point).is_none() {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                format!("U+{code_point:04X} is not a character."),
+            ));
+        }
+        let me = self.face(face)?;
+        Ok(self
+            .faces
+            .iter()
+            .filter(|f| self.visible(f))
+            .map(|f| {
+                let family = if f.detail.face.family == me.detail.face.family {
+                    0.0
+                } else {
+                    0.05
+                };
+                let weight =
+                    f32::from(f.detail.face.weight.abs_diff(me.detail.face.weight)) / 1000.0;
+                (f.detail.face.id.0, (family + weight).min(1.0))
+            })
+            .collect())
+    }
+
     /// The family groups a search returns, best first.
     fn hits(
         &self,
@@ -2273,6 +2303,7 @@ impl State {
                         .map_or(0.0, |m| m.chars.len() as f32 * 0.1),
                 faces,
                 missing: best_missing,
+                glyph_distance: None,
             });
         }
         hits.sort_by(|a, b| {
@@ -2504,7 +2535,26 @@ impl SearchService for MockApi {
         if !traits.is_empty() {
             hits.clear();
         }
-        if let Some(order) = req.order {
+        if let Some(reference) = req.like_glyph {
+            // The stand-in distance of `find_similar_glyph`, the reference
+            // face included (0.0): each family by its closest face, that
+            // face first, closest family first, then in the default order.
+            let distances: HashMap<u32, f32> = st
+                .glyph_distances(reference.face, reference.code_point)?
+                .into_iter()
+                .collect();
+            let of = |face: &FaceId| distances.get(&face.0).copied().unwrap_or(f32::MAX);
+            for hit in &mut hits {
+                hit.faces
+                    .sort_by(|a, b| of(a).total_cmp(&of(b)).then(a.0.cmp(&b.0)));
+                hit.glyph_distance = hit.faces.first().and_then(|f| distances.get(&f.0).copied());
+            }
+            hits.sort_by(|a, b| {
+                a.glyph_distance
+                    .unwrap_or(f32::MAX)
+                    .total_cmp(&b.glyph_distance.unwrap_or(f32::MAX))
+            });
+        } else if let Some(order) = req.order {
             order.sort_by_family(&mut hits, |hit| &hit.family);
         }
         let counts = st.counts(&words, &req.filters, req.rule.as_ref())?;
@@ -2700,32 +2750,18 @@ impl SearchService for MockApi {
     /// character; a number that is no character is `InvalidRequest`, checked
     /// before the face, as the core does.
     fn find_similar_glyph(&self, req: SimilarGlyphRequest) -> ApiResult<Vec<SimilarGlyphFace>> {
-        if char::from_u32(req.code_point).is_none() {
-            return Err(ApiError::new(
-                ErrorCode::InvalidRequest,
-                format!("U+{:04X} is not a character.", req.code_point),
-            ));
-        }
         let st = self.state();
-        let me = st.face(req.face)?;
         let mut out: Vec<SimilarGlyphFace> = st
-            .faces
-            .iter()
-            .filter(|f| f.detail.face.id != req.face && st.visible(f))
-            .map(|f| {
-                let family = if f.detail.face.family == me.detail.face.family {
-                    0.0
-                } else {
-                    0.05
-                };
-                let weight =
-                    f32::from(f.detail.face.weight.abs_diff(me.detail.face.weight)) / 1000.0;
-                SimilarGlyphFace {
-                    face: st.summary(f),
-                    distance: (family + weight).min(1.0),
-                }
+            .glyph_distances(req.face, req.code_point)?
+            .into_iter()
+            .filter(|(id, _)| *id != req.face.0)
+            .map(|(id, distance)| {
+                Ok(SimilarGlyphFace {
+                    face: st.summary(st.face(FaceId(id))?),
+                    distance,
+                })
             })
-            .collect();
+            .collect::<ApiResult<_>>()?;
         out.sort_by(|a, b| {
             a.distance
                 .total_cmp(&b.distance)

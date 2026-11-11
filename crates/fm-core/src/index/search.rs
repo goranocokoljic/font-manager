@@ -26,6 +26,11 @@
 //! with the traits asked for are scored, and a face without them is no
 //! result and, like a face outside a draft rule, counts under no filter value.
 //!
+//! A likeness sort (E49.9, `like_glyph`) reads the stored glyph
+//! descriptors of the character ([`glyph_similar`]): each family ranks by
+//! its closest matching face, that face first; a family none of whose
+//! matching faces draws the character follows in the default order.
+//!
 //! The searchable rows are read once and kept in memory until the database
 //! changes ([`SearchCache`]): this connection's writes move
 //! `total_changes`, another process's commits move `PRAGMA data_version`.
@@ -167,6 +172,11 @@ impl Index {
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
         let traits = self.trait_faces(req.glyph_traits.as_deref().unwrap_or_default())?;
+        let likeness: Option<HashMap<u32, f32>> = req
+            .like_glyph
+            .map(|reference| self.glyph_distances(reference))
+            .transpose()?
+            .map(|list| list.into_iter().collect());
         let cache = self.search_cache.borrow();
         let rows = cache.rows.as_slice();
         let fts = query
@@ -237,15 +247,25 @@ impl Index {
                 continue;
             };
             faces.sort_by(|(a, sa, fa), (b, sb, fb)| {
-                lacking(fa.as_ref())
-                    .cmp(&lacking(fb.as_ref()))
+                // A likeness sort puts the family's closest face first (E49.9).
+                let closer = likeness.as_ref().map_or(std::cmp::Ordering::Equal, |d| {
+                    by_distance(d.get(&a.id).copied(), d.get(&b.id).copied())
+                });
+                closer
+                    .then(lacking(fa.as_ref()).cmp(&lacking(fb.as_ref())))
                     .then(sb.total_cmp(sa))
                     .then(a.text.weight.cmp(&b.text.weight))
                     .then(a.text.width.cmp(&b.text.width))
                     .then(slant_rank(a.text.slant).cmp(&slant_rank(b.text.slant)))
                     .then(a.id.cmp(&b.id))
             });
+            let glyph_distance = likeness.as_ref().and_then(|d| {
+                faces
+                    .first()
+                    .and_then(|(row, _, _)| d.get(&row.id).copied())
+            });
             ranked.push(Ranked {
+                glyph_distance,
                 key,
                 id: first.id,
                 members,
@@ -269,6 +289,11 @@ impl Index {
                 .then_with(|| a.key.cmp(b.key))
                 .then(a.id.cmp(&b.id))
         });
+        // A likeness sort decides the order; the default one breaks its ties
+        // and orders the families without the glyph (a stable sort).
+        if likeness.is_some() {
+            ranked.sort_by(|a, b| by_distance(a.glyph_distance, b.glyph_distance));
+        }
         let total = u32::try_from(ranked.len()).unwrap_or(u32::MAX);
         let (offset, limit) = (req.page.offset as usize, req.page.limit as usize);
         let family_hit = |hit: Ranked<'_>| FamilyHit {
@@ -276,8 +301,10 @@ impl Index {
             faces: hit.faces,
             score: hit.score,
             missing: hit.missing,
+            glyph_distance: hit.glyph_distance,
         };
-        let families = match req.order {
+        let order = if likeness.is_some() { None } else { req.order };
+        let families = match order {
             None => ranked
                 .into_iter()
                 .skip(offset)
@@ -621,6 +648,18 @@ struct Ranked<'a> {
     missing: Option<Missing>,
     /// The faces that matched, best first.
     faces: Vec<FaceId>,
+    /// With a likeness sort: its first face's glyph distance (E49.9).
+    glyph_distance: Option<f32>,
+}
+
+/// Closer first; a face or family without a distance after every one with.
+fn by_distance(a: Option<f32>, b: Option<f32>) -> std::cmp::Ordering {
+    match (a, b) {
+        (Some(a), Some(b)) => a.total_cmp(&b),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
 }
 
 /// The four-letter tags of a `face.features` JSON array.

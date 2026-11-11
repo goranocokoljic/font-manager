@@ -131,6 +131,25 @@ pub struct SearchRequest {
     /// glyph, or it is not measured yet) passes no trait filter.
     #[serde(default)]
     pub glyph_traits: Option<Vec<TraitFilter>>,
+    /// Sorts the families by how close their drawing of one character is to
+    /// a reference face's (E49.9, "an R like this one"): each family by its
+    /// closest matching face, closest first; families none of whose matching
+    /// faces draws the character follow in the default order. When set it
+    /// decides the order and `order` is not used; the filters, the query and
+    /// the glyph traits still choose the families. A reference face that is
+    /// unknown or does not draw the character is `NotFound`.
+    #[serde(default)]
+    pub like_glyph: Option<GlyphReference>,
+}
+
+/// One glyph of one face: the reference of a likeness sort (E49.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphReference {
+    /// The reference face.
+    pub face: FaceId,
+    /// The character, as a Unicode code point (`82` for `R`).
+    pub code_point: u32,
 }
 
 /// One glyph-trait filter of a search (E49.5).
@@ -389,6 +408,11 @@ pub struct FamilyHit {
     pub score: f32,
     /// With a `supports` filter: what the best face misses (empty when full).
     pub missing: Option<Missing>,
+    /// With `like_glyph`: the distance of the family's closest face's glyph
+    /// to the reference, `0.0..=1.0`, lower is closer; `None` when none of
+    /// its matching faces draws the character (E49.9).
+    #[serde(default)]
+    pub glyph_distance: Option<f32>,
 }
 
 /// Search results grouped by family.

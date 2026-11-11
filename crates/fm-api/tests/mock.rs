@@ -3916,3 +3916,50 @@ fn the_mock_magazine_context_has_its_four_roles_and_saving_keeps_them() {
         .expect("save");
     assert_eq!(again.layout.roles, saved.layout.roles);
 }
+
+/// E49.9: the mock's likeness sort orders the families by their closest
+/// face's stand-in glyph distance, the reference's family first with its
+/// face first, each with its distance; an unknown reference is `NotFound`.
+#[test]
+fn search_sorts_by_a_reference_glyph() {
+    use fm_api::search::{GlyphReference, SearchRequest};
+    let api = api();
+    let all = api
+        .search(SearchRequest {
+            page: Page {
+                offset: 0,
+                limit: 100,
+            },
+            ..SearchRequest::default()
+        })
+        .unwrap();
+    let last = all.families.last().unwrap();
+    let reference = *last.faces.last().unwrap();
+    let like = |face: FaceId| SearchRequest {
+        like_glyph: Some(GlyphReference {
+            face,
+            code_point: 'R' as u32,
+        }),
+        page: Page {
+            offset: 0,
+            limit: 100,
+        },
+        ..SearchRequest::default()
+    };
+    let found = api.search(like(reference)).unwrap();
+    assert_eq!(found.total, all.total);
+    assert_eq!(found.families[0].family.id, last.family.id);
+    assert_eq!(found.families[0].faces[0], reference);
+    assert_eq!(found.families[0].glyph_distance, Some(0.0));
+    let d: Vec<f32> = found
+        .families
+        .iter()
+        .map(|f| f.glyph_distance.unwrap())
+        .collect();
+    assert!(d.windows(2).all(|w| w[0] <= w[1]), "{d:?}");
+    assert!(all.families.iter().all(|f| f.glyph_distance.is_none()));
+    assert_eq!(
+        api.search(like(FaceId(999_999))).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}

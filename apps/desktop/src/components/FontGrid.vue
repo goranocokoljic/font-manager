@@ -69,6 +69,8 @@ import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow, type RowKey } from '../list/rows';
 import { poolSize, scrollToShow, type RowRange } from '../list/virtual';
 import { useCompareStore } from '../stores/compare';
+import { useSearchStore } from '../stores/search';
+import { likeThisLabel } from '../search/like';
 import { useFontListStore } from '../stores/fontList';
 import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
@@ -119,6 +121,7 @@ const thumbnails = useThumbnailsStore();
 const palettes = usePalettesStore();
 const previewStore = usePreviewStore();
 const compare = useCompareStore();
+const search = useSearchStore();
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -512,7 +515,38 @@ async function revealCursor(): Promise<void> {
   await nextTick();
 }
 
+/**
+ * The letters of a Letters card that offer 'Fonts with an R like this' (E49.9): each typed
+ * character once, not a space and not one the face lacks (it has no drawing to compare).
+ */
+function likeLetters(item: { text: string; tofu: readonly string[] }): string[] {
+  if (preset.value !== 'letters') return [];
+  const lacking = new Set(item.tofu);
+  return [...new Set([...item.text])].filter((c) => c.trim() !== '' && !lacking.has(c));
+}
+
+/** Sorts the wall by `glyph` of the card's face (E49.9); the keyboard stays on the wall. */
+function likeThis(face: FaceSummary, glyph: string): void {
+  search.setLikeGlyph({
+    face: face.id,
+    codePoint: glyph.codePointAt(0)!,
+    glyph,
+    family: face.familyName,
+  });
+  viewport.value?.focus({ preventScroll: true });
+}
+
 function onKeyDown(e: KeyboardEvent): void {
+  // L on the cursor card of the Letters preset: fonts with its first letter like this one.
+  if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    const item = visible.value.find((v) => v.id === activeId.value);
+    const first = item ? likeLetters(item)[0] : undefined;
+    if (item?.face && first) {
+      e.preventDefault();
+      likeThis(item.face, first);
+      return;
+    }
+  }
   const page = Math.max(1, Math.floor(height.value / linePx.value)) * columns.value;
   const opts = {
     page,
@@ -580,7 +614,7 @@ function drawMarquee(): void {
 function onGroundDown(e: PointerEvent): void {
   const el = viewport.value;
   if (!el || e.button !== 0) return;
-  if (e.target instanceof Element && e.target.closest('.slot, .card-compare')) return;
+  if (e.target instanceof Element && e.target.closest('.slot, .card-compare, .card-likes')) return;
   const x = e.clientX - el.getBoundingClientRect().left - el.clientLeft;
   if (x < 0 || x > el.clientWidth) return;
   boxAdds = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -765,6 +799,21 @@ function onToggle(row: ListRow): void {
           :data-for="item.row.key"
           :style="cardStyle(item.index)"
         >
+          <div v-if="likeLetters(item).length" class="card-likes" data-testid="card-likes">
+            <button
+              v-for="glyph in likeLetters(item)"
+              :key="glyph"
+              type="button"
+              class="like-letter"
+              data-testid="card-like"
+              tabindex="-1"
+              :title="likeThisLabel(glyph)"
+              :aria-label="likeThisLabel(glyph)"
+              @click.stop="likeThis(item.face, glyph)"
+            >
+              {{ glyph }}
+            </button>
+          </div>
           <CompareToggle
             class="card-compare"
             data-testid="card-compare"
@@ -970,6 +1019,39 @@ function onToggle(row: ListRow): void {
 .card-compare:focus-visible,
 .card-compare.in-set {
   opacity: 1;
+}
+/* 'Fonts with an R like this' (E49.9): the Letters card's letters at its top start, shown like
+   the compare icon. The keyboard uses L on the cursor card. */
+.card-likes {
+  position: absolute;
+  top: var(--fm-space-1);
+  inset-inline-start: var(--fm-space-1);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.slot:hover + .corner .card-likes,
+.slot:focus-within + .corner .card-likes,
+.viewport:focus .corner.cursor .card-likes,
+.card-likes:hover {
+  opacity: 1;
+}
+.like-letter {
+  min-inline-size: 24px;
+  block-size: 24px;
+  padding: 0 var(--fm-space-1);
+  border: 1px solid var(--fm-control-border);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-surface);
+  color: var(--fm-fg);
+  font-size: var(--fm-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.like-letter:hover {
+  border-color: var(--fm-accent);
 }
 /* The card keeps its hover shadow while the pointer is on its icon. */
 .slot:has(+ .corner .card-compare:hover) .card {

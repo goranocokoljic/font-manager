@@ -233,3 +233,177 @@ fn a_stale_descriptor_is_not_ranked() {
         ErrorCode::NotFound
     );
 }
+
+/// A search sorted by the `R` of `face`, with `order` asked for too.
+fn like(face: FaceId, ch: char) -> fm_api::search::SearchRequest {
+    fm_api::search::SearchRequest {
+        like_glyph: Some(GlyphReference {
+            face,
+            code_point: u32::from(ch),
+        }),
+        page: fm_api::common::Page {
+            offset: 0,
+            limit: 100,
+        },
+        ..Default::default()
+    }
+}
+
+fn family_names(found: &fm_api::search::SearchResponse) -> Vec<String> {
+    found
+        .families
+        .iter()
+        .map(|f| f.family.name.clone())
+        .collect()
+}
+
+/// E49.9 criterion 1: a likeness sort orders the families by their closest
+/// face's glyph distance to the reference, the reference's own family first
+/// (distance 0), each with its distance; the family's closest face is its
+/// first face; a family order asked for as well is not used.
+#[test]
+fn a_likeness_sort_orders_families_by_glyph_distance() {
+    let dir = TempDir::new("glyph-like-sort");
+    let (index, _) = described(
+        &dir,
+        &[
+            (MULISH, "mulish.ttf"),
+            (OPEN_SANS, "open-sans.ttf"),
+            (ZEYADA, "zeyada.ttf"),
+            (MINIVER, "miniver.ttf"),
+        ],
+    );
+    let mulish = face(&index, "mulish.ttf");
+    let found = index.search(&like(mulish, 'R')).expect("search");
+    assert_eq!(found.total, 4);
+    let first = &found.families[0];
+    assert_eq!(first.faces[0], mulish, "the reference's family first");
+    assert_eq!(first.glyph_distance, Some(0.0));
+    // The order is the ranking of find_similar_glyph, face by face.
+    let ranked = index
+        .find_similar_glyph(&ask(mulish, 'R', 10))
+        .expect("rank");
+    let rest: Vec<(FaceId, Option<f32>)> = found.families[1..]
+        .iter()
+        .map(|f| (f.faces[0], f.glyph_distance))
+        .collect();
+    let expected: Vec<(FaceId, Option<f32>)> = ranked
+        .iter()
+        .map(|f| (f.face.id, Some(f.distance)))
+        .collect();
+    assert_eq!(rest, expected);
+    // A name order asked for as well does not change it.
+    let mut by_name = like(mulish, 'R');
+    by_name.order = Some(fm_api::library::FamilyOrder {
+        by: fm_api::library::FamilySortKey::Name,
+        descending: true,
+    });
+    assert_eq!(
+        family_names(&index.search(&by_name).expect("search")),
+        family_names(&found)
+    );
+    // Without the likeness sort, the families carry no distance.
+    let plain = index
+        .search(&fm_api::search::SearchRequest {
+            page: fm_api::common::Page {
+                offset: 0,
+                limit: 100,
+            },
+            ..Default::default()
+        })
+        .expect("search");
+    assert!(plain.families.iter().all(|f| f.glyph_distance.is_none()));
+}
+
+/// The likeness sort keeps the query and the filters: it orders what they
+/// find, and the reference face need not be one of the results.
+#[test]
+fn a_likeness_sort_combines_with_the_query_and_filters() {
+    let dir = TempDir::new("glyph-like-filters");
+    let (index, _) = described(
+        &dir,
+        &[
+            (MULISH, "mulish.ttf"),
+            (OPEN_SANS, "open-sans.ttf"),
+            (ZEYADA, "zeyada.ttf"),
+            (MINIVER, "miniver.ttf"),
+        ],
+    );
+    let mulish = face(&index, "mulish.ttf");
+    let mut req = like(mulish, 'R');
+    // Mulish is the variable one: a static-only filter leaves it out.
+    req.filters.variable = Some(false);
+    let found = index.search(&req).expect("search");
+    assert_eq!(found.total, 3);
+    assert!(found.families.iter().all(|f| !f.faces.contains(&mulish)));
+    let distances: Vec<f32> = found
+        .families
+        .iter()
+        .map(|f| f.glyph_distance.expect("drawn"))
+        .collect();
+    assert!(distances.windows(2).all(|w| w[0] <= w[1]), "{distances:?}");
+    assert_eq!(found.families[0].faces[0], face(&index, "open-sans.ttf"));
+    // A query narrows the same way.
+    let mut req = like(mulish, 'R');
+    req.query = "zeyada".into();
+    let found = index.search(&req).expect("search");
+    assert_eq!(family_names(&found), ["Zeyada"]);
+}
+
+/// A family whose faces do not draw the character follows the others, with
+/// no distance; an unknown reference, or one that does not draw the
+/// character, is `NotFound`; a number that is no character is invalid.
+#[test]
+fn a_likeness_sort_puts_families_without_the_glyph_last() {
+    let dir = TempDir::new("glyph-like-missing");
+    let (mut index, _) = described(
+        &dir,
+        &[
+            (MULISH, "mulish.ttf"),
+            (OPEN_SANS, "open.ttf"),
+            (ZEYADA, "zeyada.ttf"),
+        ],
+    );
+    let alef = 0x05D0;
+    describe_all(&mut index, alef);
+    let open = face(&index, "open.ttf");
+    let mut req = like(open, 'R');
+    req.like_glyph = Some(GlyphReference {
+        face: open,
+        code_point: alef,
+    });
+    let found = index.search(&req).expect("search");
+    assert_eq!(found.total, 3, "no family is dropped");
+    assert_eq!(found.families[0].faces[0], open);
+    assert_eq!(found.families[0].glyph_distance, Some(0.0));
+    assert!(
+        found.families[1..]
+            .iter()
+            .all(|f| f.glyph_distance.is_none())
+    );
+    // Those keep the default order (A to Z here).
+    let rest = family_names(&found)[1..].to_vec();
+    let mut sorted = rest.clone();
+    sorted.sort();
+    assert_eq!(rest, sorted);
+
+    let mulish = face(&index, "mulish.ttf");
+    req.like_glyph = Some(GlyphReference {
+        face: mulish,
+        code_point: alef,
+    });
+    assert_eq!(index.search(&req).unwrap_err().code(), ErrorCode::NotFound);
+    req.like_glyph = Some(GlyphReference {
+        face: FaceId(999_999),
+        code_point: 'R' as u32,
+    });
+    assert_eq!(index.search(&req).unwrap_err().code(), ErrorCode::NotFound);
+    req.like_glyph = Some(GlyphReference {
+        face: open,
+        code_point: 0xD800,
+    });
+    assert_eq!(
+        index.search(&req).unwrap_err().code(),
+        ErrorCode::InvalidRequest
+    );
+}

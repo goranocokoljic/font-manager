@@ -10,6 +10,7 @@ import type {
   FamilyOrder,
   FilterCounts,
   Filters,
+  GlyphReference,
   GlyphTraitInfo,
   LanguageHint,
   LanguagePreset,
@@ -22,6 +23,17 @@ import { useLibraryStore } from './library';
 
 /** Typing waits this long for the next key before it searches (spec: 80 ms). */
 export const SEARCH_DEBOUNCE_MS = 80;
+
+/**
+ * The reference of a likeness sort (E49.9, "Fonts with an R like this"): the face and the
+ * character, with what the chip and the count line call it.
+ */
+export type LikeGlyph = GlyphReference & {
+  /** The character as typed: `R`. */
+  glyph: string;
+  /** The reference face's family name: `Inter`. */
+  family: string;
+};
 
 /** Family groups fetched per `search` call. */
 const PAGE = 500;
@@ -45,6 +57,12 @@ export const useSearchStore = defineStore('search', () => {
    * does not take them.
    */
   const traits = shallowRef<TraitFilter[]>([]);
+  /**
+   * The likeness sort (E49.9): while set the API orders the results by how close each
+   * family's drawing of the character is to the reference face's. It replaces the view's
+   * sort without changing it, so removing it brings that sort back. Not a filter.
+   */
+  const likeGlyph = shallowRef<LikeGlyph | null>(null);
   /** The glyph trait catalog from the API, read once (`loadTraitCatalog`). */
   const traitCatalog = shallowRef<GlyphTraitInfo[]>([]);
   let catalogLoad: Promise<void> | null = null;
@@ -86,6 +104,7 @@ export const useSearchStore = defineStore('search', () => {
       query.value.trim() !== '' ||
       hasFilters(filters.value) ||
       traits.value.length > 0 ||
+      likeGlyph.value !== null ||
       hiding.value,
   );
 
@@ -131,8 +150,11 @@ export const useSearchStore = defineStore('search', () => {
     const f = filters.value;
     const rule = hiding.value ? rendersText(coverText.value) : null;
     const chosenTraits = traits.value;
-    const searching = q !== '' || hasFilters(f) || chosenTraits.length > 0 || rule !== null;
-    const order = orderOf(q, f, searching);
+    const like = likeGlyph.value;
+    const searching =
+      q !== '' || hasFilters(f) || chosenTraits.length > 0 || rule !== null || like !== null;
+    // A likeness sort decides the order itself.
+    const order = like ? null : orderOf(q, f, searching);
     const client = useClient();
     try {
       const list: FamilyHit[] = [];
@@ -146,6 +168,7 @@ export const useSearchStore = defineStore('search', () => {
           ...traitPart(chosenTraits),
           ...(rule ? { rule } : {}),
           ...(order ? { order } : {}),
+          ...(like ? { likeGlyph: { face: like.face, codePoint: like.codePoint } } : {}),
           page: { offset, limit: searching ? PAGE : 1 },
         });
         if (mine !== generation) return;
@@ -323,6 +346,18 @@ export const useSearchStore = defineStore('search', () => {
     return new Map(totals.filter((x) => x !== null));
   }
 
+  /**
+   * Sorts the results by the glyph `like.glyph` of face `like.face` (E49.9); `null` ends the
+   * likeness sort and the view's own sort applies again. Searches at once.
+   */
+  function setLikeGlyph(like: LikeGlyph | null): void {
+    const now = likeGlyph.value;
+    if (like === now) return;
+    if (like && now && like.face === now.face && like.codePoint === now.codePoint) return;
+    likeGlyph.value = like;
+    void run();
+  }
+
   /** Replaces the chosen filters and searches at once (a chip click is not typing). */
   function setFilters(next: Filters): void {
     filters.value = next;
@@ -363,6 +398,7 @@ export const useSearchStore = defineStore('search', () => {
     query,
     filters,
     traits,
+    likeGlyph,
     traitCatalog,
     hits,
     counts,
@@ -381,6 +417,7 @@ export const useSearchStore = defineStore('search', () => {
     setText,
     setFilters,
     setTraits,
+    setLikeGlyph,
     chooseTraitValue,
     countTraitValues,
     loadTraitCatalog,

@@ -320,6 +320,19 @@ describe('the Characters section', () => {
     expect(compare.codePoint).toBe(97);
   });
 
+  it("'Fonts with an a like this' asks for the wall sorted by this face's glyph (E49.9)", async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="97"]').trigger('click');
+    await flushPromises();
+    const button = card(w).get('[data-testid="glyph-like"]');
+    expect(button.text()).toBe('Fonts with an a like this');
+    await button.trigger('click');
+    const detail = useSelectionStore().detail!;
+    expect(w.emitted('findLike')).toEqual([
+      [{ face: 1, glyph: 'a', family: detail.face.familyName }],
+    ]);
+  });
+
   it('More details keeps the glyph id, advance width, block and features', async () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="97"]').trigger('click');

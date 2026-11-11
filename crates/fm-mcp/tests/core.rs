@@ -456,3 +456,64 @@ async fn workflow_tools_run_on_the_core_and_are_refused_until_granted() {
     client.ok("build_specimen", again).await;
     client.close().await;
 }
+
+/// E49.9 criterion 3: `search_fonts` takes `likeGlyph { face, codePoint }`
+/// on the core: the families come closest first with `glyphDistance`, the
+/// reference's family first; it goes in one call with `glyph_traits` and
+/// the other filters. An unknown reference face is a tool error.
+#[tokio::test(flavor = "multi_thread")]
+async fn search_fonts_sorts_by_a_reference_glyph_on_the_core() {
+    let home = Home::new("like-glyph");
+    let api = scanned_core(&home, &["derived/agdasima", "google-repo/barlow"]);
+    let client = client_over(&api).await;
+    let barlow = client
+        .ok("search_fonts", json!({ "query": "barlow", "limit": 1 }))
+        .await;
+    let face = id(&barlow["families"][0]["faces"][0]);
+
+    let found = client
+        .ok(
+            "search_fonts",
+            json!({ "likeGlyph": { "face": face, "codePoint": 97 }, "limit": 50 }),
+        )
+        .await;
+    let families = found["families"].as_array().expect("families");
+    assert!(families.len() >= 2, "{found}");
+    assert_eq!(families[0]["family"]["name"], "Barlow");
+    assert_eq!(id(&families[0]["faces"][0]), face, "the reference first");
+    assert_eq!(families[0]["glyphDistance"], 0.0);
+    let distances: Vec<f64> = families
+        .iter()
+        .filter_map(|f| f["glyphDistance"].as_f64())
+        .collect();
+    assert!(distances.windows(2).all(|w| w[0] <= w[1]), "{distances:?}");
+    // Narrowed by a filter, the order stays the likeness.
+    let static_only = client
+        .ok(
+            "search_fonts",
+            json!({ "like_glyph": { "face": face, "codePoint": 97 }, "variable": false, "limit": 50 }),
+        )
+        .await;
+    assert_eq!(static_only["families"][0]["family"]["name"], "Barlow");
+    // Trait and likeness in one call: accepted (no face is measured here,
+    // so the trait finds nothing; fm-core tests the combination itself).
+    let both = client
+        .ok(
+            "search_fonts",
+            json!({
+                "glyph_traits": ["g.storeys=double"],
+                "likeGlyph": { "face": face, "codePoint": 97 }
+            }),
+        )
+        .await;
+    assert_eq!(both["total"], 0, "{both}");
+
+    let e = client
+        .err(
+            "search_fonts",
+            json!({ "likeGlyph": { "face": 999_999, "codePoint": 97 } }),
+        )
+        .await;
+    assert_eq!(e.code, fm_api::ErrorCode::NotFound);
+    client.close().await;
+}

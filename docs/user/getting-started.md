@@ -33,6 +33,13 @@ your team, read [Shared libraries](shared-libraries.md).
   **Characters** section (for example "g · double-storey"). Point to a shape (or go to it
   with `Tab`) and choose **find fonts with this**: the list comes back in **Letters** with
   that letter and that shape chosen. Your other filters stay.
+- To find fonts with a letter like one you see, point to a card in **Letters** and click
+  the letter above its preview (**Fonts with an R like this**), or press `L` for the
+  first letter of the card you are on. On a family's page, select a character in
+  **Characters** and choose the same button. The list is then sorted by how close each
+  font's letter is to that one, closest first. The line above the list says **Sorted by
+  R like Inter**. Your filters stay. Click the **R like Inter** button to remove the sort:
+  the list goes back to the sort it had before.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
 - Some fonts look small or large at the same size. Set **Auto size** to **x-height**

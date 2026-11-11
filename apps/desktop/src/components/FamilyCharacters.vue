@@ -12,7 +12,7 @@
 // list (GlyphCoverage): a block chosen there shows that block in the grid and focuses it.
 // Under the grid, the face's detected letter shapes (FamilyTraits, E49.10).
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, watchEffect } from 'vue';
-import type { FaceDetail, FeatureInfo, GlyphInfo } from '../api/types';
+import type { FaceDetail, FaceId, FeatureInfo, GlyphInfo } from '../api/types';
 import { glyphAlternates, type GlyphAlternate } from '../glyphs/alternates';
 import {
   GLYPH_COLUMNS,
@@ -36,6 +36,7 @@ import GlyphCoverage from './GlyphCoverage.vue';
 import UiChevron from './ui/UiChevron.vue';
 import UiIcon from './ui/UiIcon.vue';
 import { useCopy } from './useCopy';
+import { likeThisLabel } from '../search/like';
 import type { TraitTag } from '../search/traits';
 
 const props = withDefaults(
@@ -52,6 +53,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** 'find fonts with this' on a trait tag (E49.10). */
   findTrait: [tag: TraitTag];
+  /** 'Fonts with an R like this' on the selected glyph (E49.9). */
+  findLike: [like: { face: FaceId; glyph: string; family: string }];
 }>();
 
 /** Window size before the first measurement (and where there is no layout). */
@@ -202,6 +205,13 @@ function choose(index: number): void {
 function openCompare(): void {
   const g = glyphs.selected;
   if (g && faceId.value !== null) void compare.start(faceId.value, g.codePoint);
+}
+
+/** Sorts the wall by the selected glyph of this face (E49.9). */
+function findLike(): void {
+  const g = glyphs.selected;
+  const face = props.detail?.face;
+  if (g && face) emit('findLike', { face: face.id, glyph: charOf(g), family: face.familyName });
 }
 
 /** Closes the glyph detail and puts focus back on the grid. */
@@ -500,6 +510,9 @@ const noResults = computed(
           @click="openCompare"
         >
           {{ t('glyphs.compareWith') }}
+        </button>
+        <button type="button" class="action" data-testid="glyph-like" @click="findLike">
+          {{ likeThisLabel(charOf(sel)) }}
         </button>
         <span class="muted copied" role="status">
           <template v-if="copyStatus === 'copied'">{{ t('common.copied') }}</template>
