@@ -460,3 +460,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.10 #550] data/classification/glyph-traits.json:10 — R.leg is disabled in the real catalog, so E49.10 criterion 1's own example 'R leg · straight' never shows on the family page.
 - [E49.10 #550] crates/fm-core/src/index/search/traits.rs:152 — the value-filter rule (known value, confidence ≥ CONFIDENT) is restated in `confident_traits`; the two are tied only by a test.
 - [E49.10 #550] apps/desktop/src/stores/preview.ts:279 — `applyPreset` exists, but `findWithTrait` writes `{ preset, sample }` by hand, bypassing `PRESET_SAMPLE`.
+- [E49.9 #552] apps/desktop/src/components/WallCountLine.vue:178 — sort changes from the count line's menu are not announced: the `.sort` part sits outside the status region.
