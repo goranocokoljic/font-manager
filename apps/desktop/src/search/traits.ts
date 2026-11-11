@@ -3,7 +3,7 @@
 // choice is a `TraitFilter` of the search (`SearchRequest.glyphTraits`, E49.5) and shows as
 // an ordinary chip. The catalog and every count come from the API (`listGlyphTraits`,
 // `search`); this module only maps between the catalog, the request and the words shown.
-import type { GlyphTraitInfo, GlyphTraitValue, TraitFilter } from '../api/types';
+import type { DetectedTrait, GlyphTraitInfo, GlyphTraitValue, TraitFilter } from '../api/types';
 
 /** A chosen value of one trait, with the catalog words a chip and the count line show. */
 export interface TraitChip {
@@ -140,4 +140,45 @@ export function parseTraitWords(
     return lead;
   });
   return { text: traits.length ? rest.replace(/\s+/g, ' ').trim() : text, traits };
+}
+
+/** A trait tag of the family page (E49.10): a chip's words and the value's drawn example. */
+export interface TraitTag extends TraitChip {
+  /** The value's example glyph, an SVG path in a 56-unit box; empty when the catalog has none. */
+  example: string;
+}
+
+/**
+ * The tags of a face's detected traits, in the order fm-core gives them (catalog order,
+ * sure detections only). A detection the catalog (not loaded yet) does not know shows its ids.
+ */
+export function traitTags(
+  detected: readonly DetectedTrait[],
+  catalog: readonly GlyphTraitInfo[],
+): TraitTag[] {
+  const filters: TraitFilter[] = detected.map((d) => ({
+    kind: 'value',
+    traitId: d.traitId,
+    value: d.value,
+  }));
+  return traitChips(filters, catalog).map((c) => {
+    const t = catalog.find((x) => x.id === c.traitId);
+    const aspect = saysAspect(c.valueLabel, c.aspect) ? '' : c.aspect;
+    return { ...c, aspect, example: (t && valueOf(t, c.value)?.example) || '' };
+  });
+}
+
+/**
+ * Whether a value label already names the aspect ("double-storey" of "storeys", "no spur" of
+ * "spur"): the tag then says "g · double-storey", not "g · storeys · double-storey".
+ */
+function saysAspect(label: string, aspect: string): boolean {
+  const stem = aspect.toLowerCase().replace(/s$/u, '');
+  return (
+    stem !== '' &&
+    label
+      .toLowerCase()
+      .split(/[\s-]+/u)
+      .some((w) => w.replace(/s$/u, '') === stem)
+  );
 }

@@ -14,6 +14,7 @@ import { useFamilyRailStore, withLanguage } from '../stores/familyRail';
 import { useFontListStore } from '../stores/fontList';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
+import { useViewsStore } from '../stores/views';
 
 /** The name FamilyView's hero carries in its stylesheet. */
 export const SHARED_SPECIMEN = 'fm-family-specimen';
@@ -89,6 +90,7 @@ export function useFamilyNavigation() {
   const preview = usePreviewStore();
   const rail = useFamilyRailStore();
   const search = useSearchStore();
+  const views = useViewsStore();
 
   /** Pushes the family page from the library, on `face` when a style was the one chosen. */
   async function open(family: FamilyId, face?: FaceId): Promise<void> {
@@ -133,7 +135,24 @@ export function useFamilyNavigation() {
    * back as they were; a deep link has nothing to pop and replaces itself with the library.
    * With the rail's language filter chosen, the wall shows only the fonts that cover it.
    */
-  async function back(): Promise<void> {
+  function back(): Promise<void> {
+    return leave();
+  }
+
+  /**
+   * 'find fonts with this' on a trait tag (E49.10): back to the wall in the Letters preset with
+   * that letter typed and the value chosen as a chip. The wall's other filters stay.
+   */
+  function findWithTrait(tag: { traitId: string; value: string; glyph: string }): Promise<void> {
+    return leave(() => {
+      preview.update(ALL_FONTS_VIEW, { preset: 'letters', sample: 'letters', letters: tag.glyph });
+      views.setMode(ALL_FONTS_VIEW, 'grid');
+      search.chooseTraitValue(tag.traitId, tag.value);
+    });
+  }
+
+  /** Back to the library; `arrive` sets the wall up once the library is the page again. */
+  async function leave(arrive?: () => void): Promise<void> {
     const family = page.id;
     // "Show only fonts that can do …" in the rail (E42.9): the wall comes back filtered.
     const language = rail.takeWallLanguage();
@@ -141,6 +160,7 @@ export function useFamilyNavigation() {
       if (cameFromLibrary()) await pop();
       else await router.replace({ name: 'home' });
       if (language) search.setFilters(withLanguage(search.filters, language));
+      arrive?.();
       await nextTick();
       if (family === null) return;
       const specimen = specimenOf(family);
@@ -179,5 +199,5 @@ export function useFamilyNavigation() {
     if (!animated) fadeIn(familyContent());
   }
 
-  return { open, back, step };
+  return { open, back, findWithTrait, step };
 }

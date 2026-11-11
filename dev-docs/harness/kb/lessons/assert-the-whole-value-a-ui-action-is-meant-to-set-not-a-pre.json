@@ -1,0 +1,19 @@
+{
+  "id": "assert-the-whole-value-a-ui-action-is-meant-to-set-not-a-pre",
+  "title": "Assert the whole value a UI action is meant to set, not a prefix",
+  "category": "testing",
+  "rule": "When a test checks that an action set a specific value (a filter chip, a chosen option, a label built from an id and a value), assert the full text or attribute derived from the expected value, read from the same source the user picked (the tag, the row). A regex that stops at the field name (`/^Remove filter g storeys /`) passes when the action chose the wrong value. Check that a mutation which picks a different value fails the test.",
+  "rationale": "E49.10 (#550): the Playwright check for 'find fonts with this' matched only the chip's trait prefix, so a wrong value chosen by findWithTrait would have passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    550
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-11-11T01:47:55.968Z",
+  "last_seen": "2026-11-11T01:47:55.968Z"
+}

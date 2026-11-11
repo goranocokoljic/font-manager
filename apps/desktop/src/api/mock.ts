@@ -3304,6 +3304,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       detail.face.active = active.get(id) ?? null;
       detail.license.webUse = mockWebUse(detail.license);
       detail.license.permissions = mockPermissions(detail.license);
+      // As fm-core: the sure detections, in catalog order (E49.10). Only the wall's
+      // families are measured; the sample faces have none.
+      detail.glyphTraits =
+        options.library === 'wall'
+          ? wallGlyphTraits.map((t) => ({
+              traitId: t.id,
+              value: wallTraitValue(detail.face.family, t),
+              confidence: 0.9,
+            }))
+          : [];
       return detail;
     },
     // Families in id order (the sample ones first), or in `order`; `sort` is not mocked.

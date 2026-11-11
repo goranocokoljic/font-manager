@@ -10,6 +10,7 @@
 // card follows. Enter or a click selects the cursor's glyph again after Escape closed the card.
 // Tab reaches the card; Escape closes it and returns to the grid. Below the grid, the coverage
 // list (GlyphCoverage): a block chosen there shows that block in the grid and focuses it.
+// Under the grid, the face's detected letter shapes (FamilyTraits, E49.10).
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, watchEffect } from 'vue';
 import type { FaceDetail, FeatureInfo, GlyphInfo } from '../api/types';
 import { glyphAlternates, type GlyphAlternate } from '../glyphs/alternates';
@@ -30,10 +31,12 @@ import { useGlyphCompareStore } from '../stores/glyphCompare';
 import { useGlyphsStore } from '../stores/glyphs';
 import CopyValue from './CopyValue.vue';
 import GlyphCompare from './GlyphCompare.vue';
+import FamilyTraits from './FamilyTraits.vue';
 import GlyphCoverage from './GlyphCoverage.vue';
 import UiChevron from './ui/UiChevron.vue';
 import UiIcon from './ui/UiIcon.vue';
 import { useCopy } from './useCopy';
+import type { TraitTag } from '../search/traits';
 
 const props = withDefaults(
   defineProps<{
@@ -46,6 +49,10 @@ const props = withDefaults(
   }>(),
   { overscan: 3 },
 );
+const emit = defineEmits<{
+  /** 'find fonts with this' on a trait tag (E49.10). */
+  findTrait: [tag: TraitTag];
+}>();
 
 /** Window size before the first measurement (and where there is no layout). */
 const FALLBACK_HEIGHT = 384;
@@ -429,6 +436,7 @@ const noResults = computed(
           </div>
         </div>
       </div>
+      <FamilyTraits :traits="detail.glyphTraits ?? []" @find="emit('findTrait', $event)" />
       <GlyphCoverage @block="showBlock" />
       <p v-if="glyphs.unicodeVersion" class="muted note">
         {{ t('glyphs.unicodeVersion', { version: glyphs.unicodeVersion }) }}

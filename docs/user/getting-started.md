@@ -29,6 +29,10 @@ your team, read [Shared libraries](shared-libraries.md).
   list now have it. Your choice shows as a filter next to **Filters**, and it stays when
   you change the preview. Click the filter to remove it, or choose **Any**. You can also
   type the shapes in the search box: `R:straight O:round`.
+- A family's page shows the shapes of its letters under the characters, in the
+  **Characters** section (for example "g · double-storey"). Point to a shape (or go to it
+  with `Tab`) and choose **find fonts with this**: the list comes back in **Letters** with
+  that letter and that shape chosen. Your other filters stay.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
 - Some fonts look small or large at the same size. Set **Auto size** to **x-height**

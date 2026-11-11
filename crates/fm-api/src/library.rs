@@ -7,7 +7,7 @@ use crate::common::{
     Axis, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics, NamedInstance, Page,
     Paged, Slant, Timestamp,
 };
-use crate::search::WeightRange;
+use crate::search::{DetectedTrait, WeightRange};
 use crate::{
     ApiError, ApiResult, ApiVersion, CollectionId, ErrorCode, FaceId, FamilyId, JobId,
     ResolutionId, SidecarConflictId, SourceId,
@@ -695,6 +695,12 @@ pub struct FaceDetail {
     /// The tags of the tables in the font file, in directory order (E42.8).
     #[serde(default)]
     pub tables: Vec<String>,
+    /// The glyph traits detected on the face with confidence, of the traits
+    /// the catalog offers, in catalog order (E49.10: the Characters
+    /// section's trait tags). Empty when the face lacks the glyphs or is not
+    /// measured yet.
+    #[serde(default)]
+    pub glyph_traits: Vec<DetectedTrait>,
 }
 
 /// What kind of health problem.

@@ -199,6 +199,7 @@ impl Index {
             .declared_license(&row.summary.family_name)?
             .unwrap_or_default();
         let code_point_count = u32::try_from(self.face_cmap(face)?.len()).ok();
+        let glyph_traits = self.face_traits(face)?;
         let parsed = row.parsed.as_ref();
         let text = |f: fn(&ParsedFace) -> &Option<String>| parsed.and_then(|p| f(p).clone());
         let license_description = text(|p| &p.license);
@@ -264,6 +265,7 @@ impl Index {
             palettes,
             description: text(|p| &p.description),
             tables: parsed.map(|p| p.tables.clone()).unwrap_or_default(),
+            glyph_traits,
             face: row.summary,
         })
     }

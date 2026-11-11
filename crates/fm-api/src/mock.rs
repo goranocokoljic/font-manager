@@ -847,6 +847,7 @@ fn face(
             palettes: Vec::new(), // the sample has no color fonts
             description: None,
             tables: Vec::new(),
+            glyph_traits: Vec::new(),
         },
         source: SourceId(1),
         chars: char_set,

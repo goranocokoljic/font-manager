@@ -457,3 +457,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.6 #548] apps/desktop/src/views/HomeView.vue:95 — `emptyCollection` already ignored the hide-missing switch (`search.hiding`) before E49.6 (now also the trait filters).
 - [E49.6 #548] apps/desktop/src/search/traits.ts:102 — `traitsText` has no caller outside tests; chips build their title from `c.text`.
 - [E49.6 #548] crates/fm-api/src/search.rs:209 — fm-api's trait text form `R.leg=straight` (`:` names a measure) and the UI's `R:straight` give `:` different meanings.
+- [E49.10 #550] data/classification/glyph-traits.json:10 — R.leg is disabled in the real catalog, so E49.10 criterion 1's own example 'R leg · straight' never shows on the family page.
+- [E49.10 #550] crates/fm-core/src/index/search/traits.rs:152 — the value-filter rule (known value, confidence ≥ CONFIDENT) is restated in `confident_traits`; the two are tied only by a test.
+- [E49.10 #550] apps/desktop/src/stores/preview.ts:279 — `applyPreset` exists, but `findWithTrait` writes `{ preset, sample }` by hand, bypassing `PRESET_SAMPLE`.

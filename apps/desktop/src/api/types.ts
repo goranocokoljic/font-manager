@@ -770,6 +770,22 @@ export type DetectLanguagesRequest = {
 	text: string,
 };
 
+/**
+ *  One glyph trait detected on a face with confidence (E49.10): a value a
+ *  `TraitFilter::Value` of it finds the face by.
+ */
+export type DetectedTrait = {
+	/**  The trait id (`R.leg`), as in `list_glyph_traits`. */
+	traitId: string,
+	/**  The value id (`straight`). */
+	value: string,
+	/**
+	 *  How sure the detector was, 0–1; at least the bar a value filter
+	 *  asks for.
+	 */
+	confidence: number | null,
+};
+
 /**  A design app closed a document (E29.3). */
 export type DocumentClosedRequest = {
 	/**  The document, as [`FontsNeededRequest::document`] named it. */
@@ -1277,6 +1293,13 @@ export type FaceDetail = {
 	description?: string | null,
 	/**  The tags of the tables in the font file, in directory order (E42.8). */
 	tables?: string[],
+	/**
+	 *  The glyph traits detected on the face with confidence, of the traits
+	 *  the catalog offers, in catalog order (E49.10: the Characters
+	 *  section's trait tags). Empty when the face lacks the glyphs or is not
+	 *  measured yet.
+	 */
+	glyphTraits?: DetectedTrait[],
 };
 
 /**  One face (style) inside a font file; a collection file has several. */

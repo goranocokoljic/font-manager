@@ -64,7 +64,7 @@ const search = useSearchStore();
 const selection = useSelectionStore();
 const similar = useSimilarStore();
 const tagging = useTaggingStore();
-const { back, step } = useFamilyNavigation();
+const { back, findWithTrait, step } = useFamilyNavigation();
 
 useLiveLibrary('home');
 
@@ -472,6 +472,7 @@ onBeforeUnmount(() => {
                     v-else-if="page.section === 'characters'"
                     :detail="shown"
                     :face-style="specimenStyle"
+                    @find-trait="findWithTrait"
                   />
                   <FamilyFeatures
                     v-else-if="page.section === 'features'"
