@@ -7383,3 +7383,62 @@ fn the_fetch_work_of_one_request_ends_with_its_budget() {
 fn the_default_fetch_budget_is_sixty_seconds() {
     assert_eq!(fetch_missing::FETCH_BUDGET, Duration::from_secs(60));
 }
+
+/// E49.10 through the `CoreApi` entry path, on the real detectors: each trait
+/// tag `get_face` gives is sure, in catalog order, of an offered trait, and
+/// its value filter (the chip 'find fonts with this' sets) finds the face.
+#[test]
+fn a_faces_trait_tags_find_that_face_through_the_api() {
+    let (lib, _, _) = Lib::scanned("api-trait-tags");
+    crate::trait_pass::run(
+        &lib.api.index,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _| {},
+    )
+    .expect("trait pass");
+    let catalog = lib.api.list_glyph_traits().expect("catalog");
+    let place = |id: &str| catalog.iter().position(|t| t.id == id).expect("in catalog");
+    let all = lib
+        .api
+        .search(SearchRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..SearchRequest::default()
+        })
+        .expect("all");
+    let mut tagged = 0;
+    for face in all.families.iter().flat_map(|f| f.faces.clone()) {
+        let tags = lib.api.get_face(face).expect("face").glyph_traits;
+        let order: Vec<usize> = tags.iter().map(|d| place(&d.trait_id)).collect();
+        assert!(order.windows(2).all(|w| w[0] < w[1]), "{tags:?}");
+        for d in &tags {
+            assert!(
+                f64::from(d.confidence) >= crate::glyphs::traits::CONFIDENT,
+                "{d:?}"
+            );
+            assert!(catalog[place(&d.trait_id)].enabled, "{d:?}");
+            let found = lib
+                .api
+                .search(SearchRequest {
+                    glyph_traits: Some(vec![TraitFilter::Value {
+                        trait_id: d.trait_id.clone(),
+                        value: d.value.clone(),
+                    }]),
+                    page: Page {
+                        offset: 0,
+                        limit: 1000,
+                    },
+                    ..SearchRequest::default()
+                })
+                .expect("search");
+            assert!(
+                found.families.iter().any(|f| f.faces.contains(&face)),
+                "{d:?} does not find {face:?}"
+            );
+        }
+        tagged += usize::from(!tags.is_empty());
+    }
+    assert!(tagged > 0, "some face has trait tags");
+}
