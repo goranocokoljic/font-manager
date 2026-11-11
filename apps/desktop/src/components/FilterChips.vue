@@ -13,6 +13,7 @@ import {
   toggleLanguage,
   type Chip,
 } from '../search/chips';
+import { traitChipTail, traitLineLabel, type TraitChip } from '../search/traits';
 import { useCollectionsStore } from '../stores/collections';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
@@ -23,7 +24,15 @@ import UiDrawer from './ui/UiDrawer.vue';
 const search = useSearchStore();
 const collections = useCollectionsStore();
 const preview = usePreviewStore();
-const { groups, languages, rendersText, chips: active, labels } = useActiveFilters();
+const { groups, languages, traits, rendersText, chips: active, labels } = useActiveFilters();
+// A trait chip names its glyph and value from the catalog (E49.6).
+watch(
+  () => search.traits.length,
+  (n) => {
+    if (n) void search.loadTraitCatalog();
+  },
+  { immediate: true },
+);
 
 /** The first languages sit in the drawer; the rest hide behind an expander. */
 const LANGUAGES_SHOWN = 10;
@@ -33,7 +42,9 @@ const shownLanguages = computed(() => {
   if (allLanguages.value) return all;
   return all.filter((l, i) => i < LANGUAGES_SHOWN || languages.value.includes(l.code));
 });
-const filtering = computed(() => hasFilters(search.filters) || rendersText.value);
+const filtering = computed(
+  () => hasFilters(search.filters) || traits.value.length > 0 || rendersText.value,
+);
 
 /** The count line's switch (E43.3) is remembered with the All fonts view: off goes there. */
 function stopHiding(): void {
@@ -42,6 +53,7 @@ function stopHiding(): void {
 
 /** Clear: every filter, the count line's switch too. */
 function clearAll(): void {
+  search.traits = [];
   search.setFilters({});
   stopHiding();
 }
@@ -105,6 +117,9 @@ async function remove(off: () => void): Promise<void> {
   await nextTick();
   if (!drawerOpen.value) opener.value?.focus();
 }
+
+/** A trait chip's accessible name: "R leg straight". */
+const traitName = (c: TraitChip) => traitLineLabel(c);
 
 // The chips stay on one row: those that do not fit stay in the page, unseen, to be
 // measured again, and "+N" stands for them and opens the drawer.
@@ -230,11 +245,28 @@ async function save(): Promise<void> {
         </svg>
       </button>
       <button
+        v-for="(c, i) in traits"
+        :key="`trait:${c.traitId}`"
+        type="button"
+        class="chip active trait"
+        data-testid="trait-chip"
+        :class="{ spilled: active.length + languages.length + i >= fit }"
+        :title="c.text"
+        :aria-label="t('chips.remove', { name: traitName(c) })"
+        @click="remove(() => search.chooseTraitValue(c.traitId, null))"
+      >
+        <b class="glyph">{{ c.glyph }}</b>
+        <span>{{ traitChipTail(c) }}</span>
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </button>
+      <button
         v-if="rendersText"
         type="button"
         class="chip active"
         data-testid="renders-text-chip"
-        :class="{ spilled: active.length + languages.length >= fit }"
+        :class="{ spilled: active.length + languages.length + traits.length >= fit }"
         :aria-label="t('chips.remove', { name: t('chips.rendersText') })"
         @click="remove(stopHiding)"
       >
@@ -480,6 +512,13 @@ async function save(): Promise<void> {
 }
 .more-chips {
   color: var(--fm-muted);
+}
+/* A glyph-trait chip (E49.6, board 8-letters-filtered.png): the glyph in semibold, an accent edge. */
+.chip.trait {
+  border-color: var(--fm-accent);
+}
+.chip.trait .glyph {
+  font-weight: 600;
 }
 .link {
   padding: 2px 4px;

@@ -1,0 +1,18 @@
+{
+  "id": "a-popover-that-takes-the-focus-must-handle-tab-close-it-and-",
+  "title": "A popover that takes the focus must handle Tab: close it and refocus its opener",
+  "category": "accessibility",
+  "rule": "When a component moves the focus into a UiPopover (or any layer teleported to the end of <body>), handle Tab and Shift+Tab in its keydown handler: preventDefault, close the layer and put the focus back on the element that opened it. UiPopover closes only on an outside pointerdown or a scroll, and the layer is the last thing in the document, so an unhandled Tab leaves the page (or wraps to the top) and the layer stays open with no focus in it. Test it with a component test that dispatches Tab and Shift+Tab inside the layer and asserts defaultPrevented, the layer closed and the opener focused, and a Playwright step that presses Tab from the layer.",
+  "rationale": "E49.6 (#548): the Letters shape picker let Tab through; focus left the page past every control after the letter and the picker stayed open.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    548
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue"
+  ],
+  "first_seen": "2026-11-10T23:53:12.212Z",
+  "last_seen": "2026-11-10T23:53:12.212Z"
+}

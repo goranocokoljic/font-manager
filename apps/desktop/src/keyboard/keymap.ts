@@ -26,6 +26,8 @@ export const ACTIONS = {
   quickCollection: 'quickCollection.toggle',
   tag: 'tags.openPanel',
   previewField: 'preview.focusField',
+  /** "Match by letters…" (E49.6): palette only, no key. */
+  matchLetters: 'preview.matchLetters',
   similar: 'face.findSimilar',
   openFamily: 'family.open',
   viewMode: (n: 1 | 2 | 3 | 4 | 5) => `view.mode${n}`,

@@ -308,3 +308,92 @@ describe('the switch interrupting a search (E43.3 review COR-1)', () => {
     expect(store.coverBase).toBe((await base).total);
   });
 });
+
+describe('glyph-trait filters (E49.6)', () => {
+  const wall = () => createMockClient({ library: 'wall' });
+
+  it('puts the chosen traits on every search, and Any takes one off', async () => {
+    const search = await setup(wall());
+    search.chooseTraitValue('R.leg', 'straight');
+    await flushPromises();
+    expect(requests.at(-1)?.glyphTraits).toEqual([
+      { kind: 'value', traitId: 'R.leg', value: 'straight' },
+    ]);
+    expect(search.active).toBe(true);
+    const narrowed = search.total;
+    expect(narrowed).toBeGreaterThan(0);
+    expect(search.hits!.length).toBe(narrowed);
+    search.chooseTraitValue('R.leg', null);
+    await flushPromises();
+    expect(requests.at(-1)?.glyphTraits).toBeUndefined();
+    expect(search.active).toBe(false);
+  });
+
+  it('turns R:straight O:round typed in the box into trait filters, out of the text', async () => {
+    const search = await setup(wall());
+    vi.useFakeTimers();
+    search.setText('R:straight O:round');
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    vi.useRealTimers();
+    await flushPromises();
+    expect(search.text).toBe('');
+    expect(search.query).toBe('');
+    expect(search.traits).toEqual([
+      { kind: 'value', traitId: 'R.leg', value: 'straight' },
+      { kind: 'value', traitId: 'O.roundness', value: 'round' },
+    ]);
+    expect(requests.at(-1)?.glyphTraits).toEqual(search.traits);
+    // A word that names no value stays text.
+    vi.useFakeTimers();
+    search.setText('R:wiggly');
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    vi.useRealTimers();
+    await flushPromises();
+    expect(search.query).toBe('R:wiggly');
+    expect(search.traits).toHaveLength(2);
+  });
+
+  it('counts each value in the current result: the other traits kept, its own replaced', async () => {
+    const search = await setup(wall());
+    await search.loadTraitCatalog();
+    const r = search.traitCatalog.find((t) => t.id === 'R.leg')!;
+    search.setTraits([
+      { kind: 'value', traitId: 'O.roundness', value: 'round' },
+      { kind: 'value', traitId: 'R.leg', value: 'curved' },
+    ]);
+    await flushPromises();
+    requests = [];
+    const counts = await search.countTraitValues(r);
+    expect(requests.map((q) => q.glyphTraits)).toEqual(
+      r.values.map((v) => [
+        { kind: 'value', traitId: 'O.roundness', value: 'round' },
+        { kind: 'value', traitId: 'R.leg', value: v.id },
+      ]),
+    );
+    // Each count is the API's total for that search, not the library count.
+    for (const v of r.values) {
+      const page = await client.search({
+        query: '',
+        filters: {},
+        glyphTraits: [
+          { kind: 'value', traitId: 'O.roundness', value: 'round' },
+          { kind: 'value', traitId: 'R.leg', value: v.id },
+        ],
+        page: { offset: 0, limit: 1 },
+      });
+      expect(counts.get(v.id)).toBe(page.total);
+    }
+    const sum = [...counts.values()].reduce((a, b) => a + b, 0);
+    expect(sum).toBeLessThan(r.values.reduce((a, v) => a + v.families, 0));
+  });
+
+  it('clear takes the traits off with everything else', async () => {
+    const search = await setup(wall());
+    search.chooseTraitValue('R.leg', 'straight');
+    await flushPromises();
+    search.clear();
+    await flushPromises();
+    expect(search.traits).toEqual([]);
+    expect(requests.at(-1)?.glyphTraits).toBeUndefined();
+  });
+});

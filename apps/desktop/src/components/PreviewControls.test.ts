@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mockLanguages } from '../api/mock';
+import { setClient } from '../api/client';
+import { createMockClient, mockLanguages } from '../api/mock';
 import { ACTIONS } from '../keyboard/keymap';
 import { PARAGRAPH } from '../preview/sampleText';
 import { useCommandsStore } from '../stores/commands';
@@ -541,5 +542,176 @@ describe('PreviewControls in the Letters preset (E49.7)', () => {
     setActivePinia(createPinia());
     const again = usePreviewStore();
     expect(again.settingsFor('all')).toMatchObject({ preset: 'letters', letters: 'Жж' });
+  });
+});
+
+describe('PreviewControls: the letters are the controls (E49.6)', () => {
+  beforeEach(() => setClient(createMockClient({ library: 'wall' })));
+  afterEach(() => setClient(undefined));
+
+  async function lettersOn(letters = 'RO7') {
+    const got = controls();
+    got.store.applyPreset('all', 'letters');
+    got.store.update('all', { letters });
+    await flushPromises();
+    return got;
+  }
+  const letterButtons = (w: ReturnType<typeof mountControls>['wrapper']) =>
+    w.get('[data-testid="letter-row"]').findAll('button');
+  const picker = () => document.querySelector<HTMLElement>('[data-testid="letter-picker"]');
+
+  it('draws each typed letter as a button; a letter with a trait is underlined, "shape"', async () => {
+    const { wrapper } = await lettersOn('RO7x');
+    const buttons = letterButtons(wrapper);
+    expect(buttons.map((b) => b.text())).toEqual(['R', 'O', '7', 'x']);
+    // R, O and 7 have traits in the catalog; x has none: no hairline, no tooltip.
+    expect(buttons.map((b) => b.classes('shape'))).toEqual([true, true, true, false]);
+    expect(buttons.map((b) => b.attributes('title'))).toEqual([
+      'shape',
+      'shape',
+      'shape',
+      undefined,
+    ]);
+    expect(buttons[3]!.attributes('aria-haspopup')).toBeUndefined();
+    // Nothing else joins the toolbar: the six presets, as before.
+    expect(wrapper.findAll('.chip')).toHaveLength(6);
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe(
+      'click an underlined letter for its shape',
+    );
+  });
+
+  it('a letter opens its picker: a radio per value with the count in the result, plus Any', async () => {
+    const { wrapper } = await lettersOn();
+    const search = useSearchStore();
+    const r = search.traitCatalog.find((t) => t.id === 'R.leg')!;
+    await letterButtons(wrapper)[0]!.trigger('click');
+    await flushPromises();
+    const radios = [...picker()!.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+    const labels = [...picker()!.querySelectorAll('.option')].map((o) =>
+      [...o.querySelectorAll('span')]
+        .map((x) => x.textContent!.trim())
+        .filter(Boolean)
+        .join(' '),
+    );
+    const counts = await search.countTraitValues(r);
+    expect(labels).toEqual([
+      ...r.values.map((v) => `${v.label} ${counts.get(v.id)} families`),
+      'Any',
+    ]);
+    expect(radios).toHaveLength(r.values.length + 1);
+    expect(picker()!.querySelectorAll('svg.example path')[0]!.getAttribute('d')).toBe(
+      r.values[0]!.example,
+    );
+    // Nothing is chosen: Any is checked and has the focus.
+    expect(radios.at(-1)!.checked).toBe(true);
+    expect(document.activeElement).toBe(radios.at(-1));
+  });
+
+  it('choosing a value narrows the search and marks the letter; Any takes it off', async () => {
+    const { wrapper } = await lettersOn();
+    const search = useSearchStore();
+    await letterButtons(wrapper)[0]!.trigger('click');
+    await flushPromises();
+    (picker()!.querySelector('.option') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true, detail: 1 }),
+    );
+    await flushPromises();
+    expect(search.traits).toEqual([{ kind: 'value', traitId: 'R.leg', value: 'straight' }]);
+    // A click chooses and closes; the focus is back on the letter, now accent-underlined.
+    expect(picker()).toBeNull();
+    const r = letterButtons(wrapper)[0]!;
+    expect(r.classes('chosen')).toBe(true);
+    expect(r.attributes('aria-label')).toBe('R, shape straight');
+    expect(document.activeElement).toBe(r.element);
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe(
+      'R narrowed · click a letter to change',
+    );
+    await r.trigger('click');
+    await flushPromises();
+    const any = [...picker()!.querySelectorAll<HTMLElement>('.option')].at(-1)!;
+    any.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await flushPromises();
+    expect(search.traits).toEqual([]);
+    expect(letterButtons(wrapper)[0]!.classes('chosen')).toBe(false);
+  });
+
+  it('Tab or Shift+Tab in the picker closes it and gives the focus back to the letter', async () => {
+    const { wrapper } = await lettersOn();
+    for (const shiftKey of [false, true]) {
+      await letterButtons(wrapper)[0]!.trigger('click');
+      await flushPromises();
+      const radio = picker()!.querySelector<HTMLInputElement>('input[type="radio"]')!;
+      const tab = new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey,
+        bubbles: true,
+        cancelable: true,
+      });
+      radio.dispatchEvent(tab);
+      await flushPromises();
+      // The layer ends <body>: Tab must not leave the page from it.
+      expect(tab.defaultPrevented).toBe(true);
+      expect(picker()).toBeNull();
+      expect(document.activeElement).toBe(letterButtons(wrapper)[0]!.element);
+    }
+    expect(useSearchStore().traits).toEqual([]);
+  });
+
+  it('Escape closes the picker without a choice and gives the focus back to the letter', async () => {
+    const { wrapper } = await lettersOn();
+    const o = letterButtons(wrapper)[1]!;
+    await o.trigger('click');
+    await flushPromises();
+    expect(o.attributes('aria-expanded')).toBe('true');
+    picker()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(picker()).toBeNull();
+    expect(document.activeElement).toBe(letterButtons(wrapper)[1]!.element);
+    expect(useSearchStore().traits).toEqual([]);
+  });
+
+  it('a press outside closes the picker', async () => {
+    const { wrapper } = await lettersOn();
+    await letterButtons(wrapper)[0]!.trigger('click');
+    await flushPromises();
+    expect(picker()).not.toBeNull();
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(picker()).toBeNull();
+  });
+
+  it('a one-key shortcut pressed in the picker does not reach the app', async () => {
+    const { wrapper } = await lettersOn();
+    await letterButtons(wrapper)[0]!.trigger('click');
+    await flushPromises();
+    let reached = false;
+    const listen = () => (reached = true);
+    window.addEventListener('keydown', listen);
+    picker()!
+      .querySelector('input')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    window.removeEventListener('keydown', listen);
+    expect(reached).toBe(false);
+  });
+
+  it('focusing the field shows the letters as text to edit', async () => {
+    const { wrapper } = await lettersOn();
+    await field(wrapper).trigger('focus');
+    expect(wrapper.find('[data-testid="letter-row"]').exists()).toBe(false);
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('RO7');
+    await field(wrapper).trigger('blur');
+    expect(wrapper.find('[data-testid="letter-row"]').exists()).toBe(true);
+  });
+
+  it('"Match by letters…" in the palette switches to the Letters preset', async () => {
+    const { store } = controls();
+    await flushPromises();
+    expect(store.settingsFor('all').sample).not.toBe('letters');
+    const commands = useCommandsStore();
+    const action = commands.actions.find((a) => a.id === ACTIONS.matchLetters)!;
+    expect(action.title).toBe('Match by letters…');
+    expect(commands.run(ACTIONS.matchLetters)).toBe(true);
+    await flushPromises();
+    expect(store.settingsFor('all').sample).toBe('letters');
   });
 });

@@ -2,6 +2,7 @@
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
 import permissionRules from '../../../../data/licenses/permissions.json';
+import glyphTraitCatalog from '../../../../data/classification/glyph-traits.json';
 import graphiteTheme from '../../../../data/themes/graphite.json';
 import indigoTheme from '../../../../data/themes/indigo.json';
 import mossTheme from '../../../../data/themes/moss.json';
@@ -196,6 +197,44 @@ const mockGlyphTraits: GlyphTraitInfo[] = [
     unsure: 0,
   },
 ];
+
+/**
+ * The wall library's glyph trait catalog (E49.6): the real catalog
+ * (data/classification/glyph-traits.json) in English, every trait offered, so each letter
+ * of the Letters preset can be tried in browser mode. Counts are filled from `wallTraitValue`.
+ */
+const wallGlyphTraits: GlyphTraitInfo[] = glyphTraitCatalog.traits.map((t) => ({
+  id: t.id,
+  script: t.script,
+  glyph: t.glyph,
+  kind: t.kind as GlyphTraitInfo['kind'],
+  name: t.name.en,
+  description: t.description,
+  enabled: true,
+  measures: [],
+  values: t.values.map((v) => ({
+    id: v.id,
+    label: v.label.en,
+    description: v.description,
+    when: [],
+    example: v.example,
+    faces: 0,
+    families: 0,
+  })),
+  measured: 0,
+  unsure: 0,
+}));
+
+/**
+ * The value a wall family's faces are detected with for a trait (E49.6): a fixed spread
+ * over the values, so each value finds some families and the counts differ.
+ */
+export function wallTraitValue(family: FamilyId, trait: GlyphTraitInfo): string {
+  // FNV-1a over "<trait>:<family>": the traits vary independently of each other.
+  let hash = 0x811c9dc5;
+  for (const ch of `${trait.id}:${family}`) hash = Math.imul(hash ^ ch.charCodeAt(0), 0x01000193);
+  return trait.values[(hash >>> 0) % trait.values.length]!.id;
+}
 
 /** Why the mock (browser mode) cannot drag files out, as the Rust mock says (E44.4). */
 export const MOCK_NO_FILE_DRAG = 'Dragging font files out needs the desktop app.';
@@ -3352,10 +3391,24 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       }
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
-      // As MockApi in fm-api: the mock's faces carry no glyph-trait detections, so a
-      // trait filter (E49.5) finds nothing.
-      if ((req.glyphTraits ?? []).length > 0) {
-        return { families: [], total: 0, counts: null } satisfies SearchResponse;
+      const traits = req.glyphTraits ?? [];
+      if (traits.length > 0) {
+        // As MockApi in fm-api: the sample faces carry no glyph-trait detections, so a
+        // trait filter (E49.5) finds nothing. The wall's families have some (E49.6).
+        if (options.library !== 'wall') {
+          return { families: [], total: 0, counts: null } satisfies SearchResponse;
+        }
+        const passing = paged.all.filter((h) =>
+          traits.every((f) => {
+            const trait = wallGlyphTraits.find((t) => t.id === f.traitId);
+            return f.kind === 'value' && !!trait && wallTraitValue(h.family.id, trait) === f.value;
+          }),
+        );
+        return {
+          families: structuredClone(passing.slice(offset, offset + limit)),
+          total: passing.length,
+          counts: structuredClone(paged.counts),
+        } satisfies SearchResponse;
       }
       return {
         families: structuredClone(paged.all.slice(offset, offset + limit)),
@@ -3432,7 +3485,17 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // face per other family, the closest in weight; best first, then by family id.
     // `partnerOf` takes `face`'s place, and `face`'s family is left out. A role (the class
     // stands in for stroke contrast) adds +0.1 and its reason first, and names the x-height gap.
-    listGlyphTraits: async () => structuredClone(mockGlyphTraits),
+    listGlyphTraits: async () => {
+      if (options.library !== 'wall') return structuredClone(mockGlyphTraits);
+      const families = [...mockWall().classes.keys()];
+      return wallGlyphTraits.map((t) => {
+        const values = t.values.map((v) => {
+          const n = families.filter((id) => wallTraitValue(id, t) === v.id).length;
+          return { ...v, faces: n, families: n };
+        });
+        return { ...t, values: structuredClone(values), measured: families.length };
+      });
+    },
     suggestPairings: async (req) => {
       const replaced = faceOrThrow(req.face).face.family;
       const me = faceOrThrow(req.partnerOf ?? req.face);

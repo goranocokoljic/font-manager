@@ -453,3 +453,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-11
 
 - [E49.8 #551] crates/fm-core/src/index/glyph_traits.rs:84 — the trait pass's `NEEDS` lists faces of gone files on every pass, so they are re-read (and fail) each time.
+- [E49.6 #548] apps/desktop/src/stores/search.ts:127 — `run()` clears the pending debounce timer, so a chip click or letter choice within 80 ms of typing drops the typed text (already true of `setFilters`).
+- [E49.6 #548] apps/desktop/src/views/HomeView.vue:95 — `emptyCollection` already ignored the hide-missing switch (`search.hiding`) before E49.6 (now also the trait filters).
+- [E49.6 #548] apps/desktop/src/search/traits.ts:102 — `traitsText` has no caller outside tests; chips build their title from `c.text`.
+- [E49.6 #548] crates/fm-api/src/search.rs:209 — fm-api's trait text form `R.leg=straight` (`:` names a measure) and the UI's `R:straight` give `:` different meanings.

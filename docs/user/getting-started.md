@@ -22,6 +22,13 @@ your team, read [Shared libraries](shared-libraries.md).
 ## Find a font
 
 - Type in the search box at the top. Press `/` to go to it from anywhere.
+- To find fonts by the shape of their letters, click **Letters** above the list (or
+  choose **Match by letters…** in the command palette) and type the letters that
+  matter, for example `ROag`. A letter with a line under it has shapes to choose from:
+  click it and choose a shape. The number beside each shape is how many families of the
+  list now have it. Your choice shows as a filter next to **Filters**, and it stays when
+  you change the preview. Click the filter to remove it, or choose **Any**. You can also
+  type the shapes in the search box: `R:straight O:round`.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
 - Some fonts look small or large at the same size. Set **Auto size** to **x-height**
