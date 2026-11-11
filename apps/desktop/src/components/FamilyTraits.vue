@@ -113,7 +113,8 @@ const tags = computed(() => traitTags(props.traits, search.traitCatalog));
   border: 0;
   border-radius: var(--fm-radius-sm);
   background: none;
-  color: var(--fm-accent);
+  /* The accent is never a text color (contrast.test.ts): the link is the text color, underlined. */
+  color: var(--fm-fg);
   font: inherit;
   font-size: var(--fm-text-xs);
   text-decoration: underline;
