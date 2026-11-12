@@ -489,6 +489,11 @@ describe('PreviewControls in the Letters preset (E49.7)', () => {
       'Add g',
       'Add e',
     ]);
+    // The words are part of the field: a press on them puts the caret in it.
+    (document.activeElement as HTMLElement | null)?.blur();
+    await hint.get('.hint-text').trigger('click');
+    expect(document.activeElement).toBe(field(wrapper).element);
+    expect(store.settingsFor('all').letters).toBe('');
     await adds[0]!.trigger('click');
     expect(store.settingsFor('all').letters).toBe('R');
     expect(document.activeElement).toBe(field(wrapper).element);

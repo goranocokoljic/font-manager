@@ -407,7 +407,7 @@ function colorFrom(e: Event): string {
           dir="auto"
           autocomplete="off"
           spellcheck="false"
-          :class="{ letters, behind: showLetterButtons }"
+          :class="{ letters, behind: showLetterButtons, empty: letters && !s.letters }"
           :aria-keyshortcuts="ariaShortcut(fieldChord)"
           :value="fieldText"
           :placeholder="letters ? '' : t('preview.heroPlaceholder')"
@@ -423,10 +423,10 @@ function colorFrom(e: Event): string {
           v-if="letters && !s.letters"
           class="hint letters-hint"
           data-testid="preview-hint"
-          @click="focusField"
+          @click="field?.focus()"
         >
-          {{ lettersHint.before
-          }}<button
+          <span class="hint-text">{{ lettersHint.before }}</span>
+          <button
             v-for="g in LETTERS_HINT"
             :key="g"
             type="button"
@@ -434,10 +434,13 @@ function colorFrom(e: Event): string {
             :aria-label="t('preview.addLetter', { letter: g })"
             @click="addLetter(g)"
           >
-            {{ g }}</button
-          >{{ lettersHint.after }}
+            {{ g }}
+          </button>
+          <span class="hint-text tail">{{ lettersHint.after }}</span>
         </span>
-        <span v-else-if="hint" class="hint" data-testid="preview-hint">{{ hint }}</span>
+        <span v-else-if="hint && !(letters && editing)" class="hint" data-testid="preview-hint">{{
+          hint
+        }}</span>
         <LetterPicker
           v-if="pickerTrait"
           :open="pickerGlyph !== null"
@@ -726,8 +729,9 @@ function colorFrom(e: Event): string {
   outline: 2px solid var(--fm-accent);
   outline-offset: -1px;
 }
+/* The text keeps more than half of a narrow field: the note beside it gives way first. */
 .hero input {
-  flex: 1 1 0;
+  flex: 1 0 55%;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -743,12 +747,30 @@ function colorFrom(e: Event): string {
 .hero input.letters {
   letter-spacing: 0.5em;
 }
+/* No glyph yet: the hint is the content, the field only holds the caret. */
+.hero input.empty {
+  flex: 1 1 0;
+  min-width: 1ch;
+}
+/* The hint's words are part of the field: a press on them starts the typing. */
 .letters-hint {
   display: inline-flex;
   align-items: center;
   white-space: pre;
+  cursor: text;
+}
+/* In a narrow field the words give way, the tail first; the five letters always stay. */
+.hint-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hint-text.tail {
+  flex-shrink: 1000;
 }
 .add-letter {
+  flex: none;
   min-width: 24px;
   height: 24px;
   margin: 0 1px;

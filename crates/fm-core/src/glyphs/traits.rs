@@ -52,7 +52,7 @@ struct Detector {
 const DETECTORS: [Detector; 13] = [
     Detector {
         id: "R.leg",
-        version: 1,
+        version: 2,
         detect: r_leg,
     },
     Detector {
@@ -394,46 +394,83 @@ fn stem_at(s: &Shape, f: f64) -> Option<(f64, f64)> {
 
 // ---------------------------------------------------------------- R.leg
 
-/// The leg's centre line between the foot and the bowl: straight when it
-/// stays near its chord, curved when its lower part bends too, both when
-/// only the upper part bends.
+/// The leg's outer edge between its foot and the notch under the bowl, and
+/// its centre line. An outer edge that is one straight line is a straight
+/// leg, whatever the foot does. An edge that bends hard where it leaves the
+/// bowl and then runs straight is both; a centre line that bends along its
+/// whole length is curved. Between these the detector guesses below
+/// [`CONFIDENT`]: a flared or lightly bowed leg reads either way by eye.
 fn r_leg(s: &Shape) -> Measured {
     let h = s.height();
-    let mut mids = Vec::new();
-    for i in 0..=14 {
-        let f = 0.08 + 0.025 * f64::from(i);
-        let y = s.y_at(f);
-        let row = s.row(y);
-        if row.len() < 2 {
-            continue;
-        }
-        let leg = row[row.len() - 1];
-        mids.push((y, (leg.0 + leg.1) / 2.0));
-    }
-    if mids.len() < 8 {
-        return Measured::unread("straight");
-    }
-    let Some((_, all)) = fit(&mids, h) else {
+    // The rightmost inked run of each row of the lower two thirds.
+    let rows: Vec<(f64, f64, f64, f64)> = (0..=130)
+        .filter_map(|i| {
+            let f = 0.004 + 0.005 * f64::from(i);
+            let y = s.y_at(f);
+            let last = *s.row(y).last()?;
+            Some((f, y, last.0, last.1))
+        })
+        .collect();
+    // The notch between the bowl and the leg, and the foot's tip.
+    let notch = rows
+        .iter()
+        .filter(|r| (0.25..=0.65).contains(&r.0))
+        .min_by(|a, b| a.3.total_cmp(&b.3));
+    let tip = rows
+        .iter()
+        .filter(|r| r.0 <= 0.3)
+        .max_by(|a, b| a.3.total_cmp(&b.3));
+    let (Some(notch), Some(tip)) = (notch, tip) else {
         return Measured::unread("straight");
     };
-    let lower = &mids[..mids.len() * 3 / 5];
-    let low = fit(lower, h).map_or(1.0, |f| f.1);
-    let mut m = if all < 0.025 {
-        Measured::new("straight", ramp(-all, -0.025, -0.008))
-    } else if all > 0.04 {
-        if low < 0.012 {
-            Measured::new(
-                "both",
-                ramp(-low, -0.012, -0.004).min(ramp(all, 0.04, 0.07)),
-            )
-        } else {
-            Measured::new("curved", ramp(low, 0.012, 0.03).min(ramp(all, 0.04, 0.07)))
-        }
+    // Above the foot (a serif, a round end, a flick) and below the notch.
+    let (lo, hi) = ((tip.0 + 0.04).max(0.10), notch.0 - 0.03);
+    let outer: Vec<(f64, f64)> = rows
+        .iter()
+        .filter(|r| r.0 >= lo && r.0 <= hi)
+        .map(|r| (r.1, r.3))
+        .collect();
+    if outer.len() < 8 {
+        return Measured::unread("straight");
+    }
+    let Some((_, edge)) = fit(&outer, h) else {
+        return Measured::unread("straight");
+    };
+    // How far the edge turns from its upper half to its lower, in degrees:
+    // negative when it leaves the bowl flatter than it reaches the foot.
+    let half = outer.len() / 2;
+    let slope = |points: &[(f64, f64)]| fit(points, h).map_or(0.0, |f| f.0.atan().to_degrees());
+    let turn = slope(&outer[outer.len() - half..]) - slope(&outer[..half]);
+    let (all, low) = r_leg_centre(&rows, h);
+    let mut m = if edge < 0.004 {
+        Measured::new("straight", ramp(-edge, -0.004, -0.0015))
+    } else if turn <= -25.0 && edge >= 0.045 {
+        Measured::new("both", ramp(edge, 0.045, 0.06).min(ramp(-turn, 25.0, 32.0)))
+    } else if all > 0.04 && low >= 0.012 {
+        Measured::new("curved", ramp(low, 0.012, 0.03).min(ramp(all, 0.04, 0.07)))
+    } else if turn <= -15.0 {
+        Measured::new("both", 0.4)
+    } else if turn >= 10.0 && edge >= 0.015 {
+        Measured::new("curved", 0.4)
     } else {
         Measured::new("straight", 0.4)
     };
-    m.debug = vec![("all", all), ("low", low)];
+    m.debug = vec![("edge", edge), ("turn", turn), ("all", all), ("low", low)];
     m
+}
+
+/// How far the leg's centre line leaves its chord between 8 % and 43 % of
+/// the height, and how far its lower three fifths do, over the height; 0
+/// when the leg is not read there.
+fn r_leg_centre(rows: &[(f64, f64, f64, f64)], h: f64) -> (f64, f64) {
+    let mids: Vec<(f64, f64)> = rows
+        .iter()
+        .filter(|r| (0.08..=0.43).contains(&r.0))
+        .map(|r| (r.1, (r.2 + r.3) / 2.0))
+        .collect();
+    let all = fit(&mids, h).map_or(0.0, |f| f.1);
+    let low = fit(&mids[..mids.len() * 3 / 5], h).map_or(0.0, |f| f.1);
+    (all, low)
 }
 
 // ---------------------------------------------------------- O.roundness

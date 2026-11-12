@@ -63,9 +63,9 @@ test('the empty field hints R O a g e; a tap adds a letter; cards show only the 
     await expect(hint.getByRole('button', { name: `Add ${g}`, exact: true })).toBeVisible();
   await hint.getByRole('button', { name: 'Add R', exact: true }).click();
   await expect(field(page)).toHaveValue('R');
-  // The tap-to-add hint has done its work; the shape hint of E49.6 takes its place.
-  await expect(hint.getByRole('button')).toHaveCount(0);
-  await expect(hint).not.toContainText('Type the letters that matter');
+  // The tap-to-add hint has done its work. While the field is edited no note stands
+  // beside the text; the shape hint of E49.6 comes when the letters are buttons again.
+  await expect(hint).toHaveCount(0);
   await expect(field(page)).toBeFocused();
   await page.keyboard.press('End');
   await page.keyboard.type('Oag');
