@@ -102,6 +102,8 @@ fn library(dir: &TempDir) -> Index {
                     &[("roundness", 1.0), ("corners", 0.01)],
                 ),
                 d("G.spur", "spur", 0.9, &[]),
+                // Sure, but the catalog ships Q.tail disabled.
+                d("Q.tail", "crossing", 0.9, &[]),
             ],
             "b.ttf" => vec![
                 d("R.leg", "straight", 0.5, &[]),
@@ -427,7 +429,8 @@ fn the_catalog_lists_every_trait_with_its_counts() {
 
     let leg = get("R.leg");
     assert_eq!(leg.kind, GlyphTraitKind::Enum);
-    assert!(!leg.enabled, "R.leg ships disabled (E49.4)");
+    assert!(leg.enabled, "R.leg meets the accuracy bar");
+    assert!(!get("Q.tail").enabled, "Q.tail ships disabled (E49.4)");
     assert_eq!((leg.measured, leg.unsure), (3, 1));
     assert_eq!(count(leg, "straight"), (1, 1));
     assert_eq!(count(leg, "curved"), (1, 1));
@@ -530,11 +533,15 @@ fn a_face_detail_lists_its_sure_offered_traits_in_catalog_order() {
             })
             .collect()
     };
-    // a: R.leg is sure but disabled in the catalog, so only O and G show,
-    // O first as in the catalog.
+    // a: Q.tail is sure but disabled in the catalog, so only R, O and G
+    // show, in the catalog's order.
     assert_eq!(
         tags("a.ttf"),
-        vec![tag("O.roundness", "round"), tag("G.spur", "spur")]
+        vec![
+            tag("R.leg", "straight"),
+            tag("O.roundness", "round"),
+            tag("G.spur", "spur")
+        ]
     );
     // b: the unsure R (0.5) is left out.
     assert_eq!(

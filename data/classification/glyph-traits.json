@@ -7,7 +7,6 @@
       "glyph": "R",
       "codepoint": "U+0052",
       "kind": "enum",
-      "enabled": false,
       "name": {
         "en": "R leg",
         "de": "Bein des R"
