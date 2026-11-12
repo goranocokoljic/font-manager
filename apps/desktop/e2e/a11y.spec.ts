@@ -360,9 +360,23 @@ async function labelInName(page: Page, selector: string): Promise<boolean> {
 
 /** The WCAG 2.2 AA violations on the page now, one line each. */
 async function violations(page: Page): Promise<string[]> {
-  // Sheets and the palette rise in; scan them where they come to rest.
-  await page.waitForFunction(() =>
-    document.getAnimations().every((a) => a.playState !== 'running'),
+  // Sheets and the palette rise in; scan them where they come to rest. A sheet that has
+  // just opened starts its transition a frame later, and a pending one is not yet
+  // "running": wait until nothing has moved for three frames in a row.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let still = 0;
+        const frame = () => {
+          const moving = document
+            .getAnimations()
+            .some((a) => a.playState === 'running' || a.pending);
+          still = moving ? 0 : still + 1;
+          if (still >= 3) resolve();
+          else requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }),
   );
   const result = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   // The 24×24 target check (2.5.8) is part of the run.
