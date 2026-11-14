@@ -21,6 +21,10 @@
     {
       "title": "Match by letters",
       "description": "Find fonts by the shape of their distinctive letters: named traits computed from the outlines (R leg straight or curved, O round, g single- or double-storey …) as filter chips, a Letters wall preset that shows only the glyphs you care about, and later per-glyph similarity ('an R like this one'). Gate: trait detectors ≥ 90 % against the labelled corpus, search stays under 50 ms, the first scan stays under 10 s."
+    },
+    {
+      "title": "After the designers' test",
+      "description": "What the first designers at WMG hit in a week of use: families not legible as families, icons and the activation dot too small, a toolbar that changes shape per view, a Layout mode that shows one font, a Characters section that does not scale and clips descenders, a Sources screen that looks like a form, and no way to browse by foundry. Boards 9–11 on the concept canvas are the targets."
     }
   ],
   "labels": [
@@ -113,6 +117,11 @@
       "name": "letters",
       "color": "0052CC",
       "description": "Match-by-letters epic (E49)"
+    },
+    {
+      "name": "designers-test",
+      "color": "5319E7",
+      "description": "Fixes from the first designers' test (E50)"
     }
   ],
   "epics": [
@@ -1120,6 +1129,209 @@
             "The wall's count line reads 'sorted by R like Inter'; the reference glyph is shown in the chip; the sort combines with any filter including traits",
             "The MCP `search_fonts` tool accepts `likeGlyph { face, codePoint }` so an assistant can ask for 'a sans whose a looks like Futura's but with a double-storey g' (trait + likeness in one call)",
             "Playwright covers choose reference → sorted → remove chip restores the previous sort; a target image is added to board 8 when this story is picked up"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E50",
+      "title": "After the designers' test — legibility, targets, the split Layout, Characters, Sources, Foundries",
+      "phase": 3,
+      "track": "ui",
+      "milestone": "After the designers' test",
+      "depends": [
+        "E41",
+        "E42",
+        "E44",
+        "E48"
+      ],
+      "labels": [
+        "designers-test"
+      ],
+      "summary": "Feedback from the first designers using the app at WMG, turned into one rule and a set of fixes. The rule: the toolbar never changes shape — view-specific controls live inside the view. The fixes: Layout becomes a split (the list stays on the left, the layout pane follows the cursor, ↑/↓ read the next font); Lines rows get a fixed chevron gutter so a family is seen as a family; the activation dot becomes a 24 px three-state control (off · session · permanent) that toggles session activation; every icon button is 28 px with a 16 px glyph, catalogs included (Download and Activate become icons); the Characters section scales its cells with the pane, draws a discreet grid, keeps descenders, shows glyph details in a popover that can be switched off and metrics only while Compare with… is on; Waterfall joins the Family page as a section; Sources in Settings becomes cards with watch, rescan and progress; a Foundries section in the sidebar, folded by default, lists normalised foundry names with counts and filters by one. Targets: dev-docs/design/redesign/9-split.png, 10-characters-*.png, 11-sources.png.",
+      "stories": [
+        {
+          "id": "E50.1",
+          "title": "Boards 9–11: export the target images",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "dev-docs/design/redesign/ gains 9-split.png (board 9, foundries = Open), 10-characters-plain.png, 10-characters-popover.png, 10-characters-compare.png (board 10, state = Plain / Popover / Compare metrics) and 11-sources.png (board 11, scanning = on), exported at 2×; the README table and export date are updated",
+            "DESIGN.md gets the rule 'the toolbar never changes shape: view-specific controls live inside the view' and the three dot states with their meaning"
+          ]
+        },
+        {
+          "id": "E50.2",
+          "title": "The toolbar never changes shape",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E50.1"
+          ],
+          "criteria": [
+            "`HomeView`'s toolbar renders the same controls at the same positions in every view mode: title · search · filter chips · view switch · density · compare; nothing is inserted or removed when the mode changes — a test asserts the toolbar's children are identical across all five modes",
+            "`TableColumnsMenu` moves to a ⋯ button at the end of the table's header row (its natural place); the preset picker moves into the layout pane's header (E50.3)",
+            "The view switch keeps its order Wall · Lines · Table · Waterfall · Layout and its position; Playwright checks the switch's bounding box does not move when switching Table → Layout → Wall — matches the toolbar of dev-docs/design/redesign/9-split.png"
+          ]
+        },
+        {
+          "id": "E50.3",
+          "title": "Layout as a split: the list stays, the pane follows the cursor",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E50.2"
+          ],
+          "criteria": [
+            "In Layout mode the page is a split: the current list on the left in Lines form (560 px by default, draggable 400–760 px, remembered as a view preference) and the layout pane on the right; the list is the same list as Lines — selection, filters, search, keyboard and the chevron gutter (E50.4) all work",
+            "The pane shows the list's cursor face: clicking a row, ↑/↓, and the pane's own prev/next buttons change the font, the layout, width and edited text stay; the change is a 120 ms crossfade (MOTION.md)",
+            "The pane header holds the face name and style, the preset picker, the width, prev/next and 'Open in Studio'; the toolbar above does not change (E50.2)",
+            "Below 1100 px the split collapses to the pane with a 'Fonts' button that slides the list over it; the e2e spec covers switch to Layout → ↓ three times → preset change → font kept — matches dev-docs/design/redesign/9-split.png"
+          ]
+        },
+        {
+          "id": "E50.4",
+          "title": "Lines: a chevron gutter so a family reads as a family",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E50.1"
+          ],
+          "criteria": [
+            "Every Lines row (and the split's list) has a fixed 24 px gutter on the left; the family chevron sits in it (20 × 24 px target, 12 px glyph, 55 % ink, rotates 90° when expanded, 120 ms); single-font rows leave the gutter empty, so name and specimen start at the same x on every row",
+            "A family's style count is a small outlined pill after the name ('6 styles', 'Variable · 2 axes'); a single font shows its style name there instead ('Regular') and no pill",
+            "Expanded styles are indented 16 px under the family with a hairline on the left, so an open family is one block; keyboard: → expands, ← collapses, as before",
+            "Matches the list of dev-docs/design/redesign/9-split.png; `FontList` tests cover the gutter on both row kinds"
+          ]
+        },
+        {
+          "id": "E50.5",
+          "title": "The activation dot: 24 px, three states, click to toggle",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E50.1"
+          ],
+          "criteria": [
+            "`ActivationDot` becomes a button: 24 px target, 10 px dot, three states — off (hollow, 35 % ink), session (filled accent), permanent (filled accent with a 2 px white gap and a 1.5 px accent ring); hover shows the 6 % hover ground, focus a ring; the states are told apart by shape, not colour alone",
+            "Click toggles session activation (activate when off, deactivate when session) through the activation store with the usual toast; on a permanent face the click opens the row's menu instead, since removal is the heavier action; the aria-label says the state and what a click does (en, de)",
+            "The same component is used in Lines, Table, Wall cards, the Family page hero and the catalog items; `ActivationDot` tests cover the three states and the two click behaviours — matches the dots of dev-docs/design/redesign/9-split.png"
+          ]
+        },
+        {
+          "id": "E50.6",
+          "title": "One icon size everywhere: 28 px targets, 16 px glyphs — catalogs included",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E50.1"
+          ],
+          "criteria": [
+            "`UiIconButton` gets a `size` with a default of 28 px / 16 px glyph; every icon button in rows, cards, the compare sheet, the family page, the selection bar and the catalogs uses it; a Vitest scans the components for icon buttons outside the component and fails on any",
+            "`CatalogFamilyItem` and `CatalogDownload`: the Download and Activate text buttons become icon buttons (download arrow; the activation dot of E50.5), with the label as tooltip and aria-label; a downloading item shows its progress ring in the same 28 px slot",
+            "Row actions appear on hover or focus-within and stay visible while a menu is open; the compare icon's two states (E48.4) are unchanged",
+            "Playwright at 1280 × 800 checks every icon button's box is at least 28 × 28"
+          ]
+        },
+        {
+          "id": "E50.7",
+          "title": "Characters: cells that scale, a discreet grid, descenders kept",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E50.1"
+          ],
+          "criteria": [
+            "The glyph grid uses `repeat(auto-fill, minmax(<cell>px, 1fr))` with the cell size from a slider (48–140 px, default 88) remembered per view, so a maximised window gives larger glyphs, not more small ones; the glyph is drawn at 0.5 × the cell",
+            "A hairline grid (0.5 px at 7 % ink) between cells, on by default, with a Grid switch in the section's control row; hover shows the cell's code point in 9 px mono at its corner",
+            "The preview above the grid sizes its box from the face's ascender and descender (`faceMetrics`), not from line-height, so g j p q y are never clipped; faint rulers mark ascender, x-height, baseline and descender with 10 px labels at the right",
+            "Matches dev-docs/design/redesign/10-characters-plain.png; the 60 fps scroll budget holds at 812 glyphs and 48 px cells"
+          ]
+        },
+        {
+          "id": "E50.8",
+          "title": "Glyph metrics in fm-api (side bearings and bounds)",
+          "size": "S",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`GlyphDetail` gains, additively, `left_side_bearing: Option<i32>`, `right_side_bearing: Option<i32>` and `bounds: Option<GlyphBounds>` (x_min, y_min, x_max, y_max in font units at the default instance), all `#[serde(default)]`; no existing field changes (rule 6)",
+            "Computed from the outline through skrifa for TrueType and CFF; a glyph without an outline (space) has bearings and no bounds; malformed data keeps `health: Broken` and leaves the new fields absent",
+            "Unit tests on fixture fonts assert known values for one glyph per outline format; `pnpm gen:types` shows only additions"
+          ]
+        },
+        {
+          "id": "E50.9",
+          "title": "Glyph details as a popover; metrics only while comparing",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E50.7",
+            "E50.8"
+          ],
+          "criteria": [
+            "Clicking a cell opens a popover anchored to it (360 px): the glyph at 92 px on paper, the character, U+code, Unicode name, glyph name, and the features that produce or replace it as chips; Escape, outside-click and the close button close it; focus returns to the cell",
+            "A 'Details on click' switch in the control row turns the popover off (a view preference); with it off, a click only selects the cell and the glyph detail is reachable from the context menu",
+            "While 'Compare with…' is active (a face chosen), the popover adds a metrics row — advance, left and right bearing, x-height, per 1000 em — showing this face's value and the compared face's in the accent, and the compared glyph ghosted under the glyph at 40 % accent; with no comparison the row is absent and no metrics are shown anywhere in the section",
+            "Matches dev-docs/design/redesign/10-characters-popover.png and 10-characters-compare.png; `FamilyCharacters` tests cover the switch and the metrics gating"
+          ]
+        },
+        {
+          "id": "E50.10",
+          "title": "Waterfall as a section of the Family page",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "The Family page's section switch gains Waterfall after Characters: the family's default style (or the hero's current instance for a variable family) in the same text at 8–10 sizes from 10 to 96 px, each line labelled with its size in 10 px mono at the left; the hero's language and the user's text apply",
+            "Reuses the Waterfall rendering of the wall (`FontWaterfall`), with no logic in the component beyond the size ladder; the section is remembered per view like the others",
+            "The wall's Waterfall mode is unchanged; a target image is added to board 2 of the concept canvas by the human before this story is picked up (export 2-family-waterfall.png) and the criteria say 'matches' it"
+          ]
+        },
+        {
+          "id": "E50.11",
+          "title": "Foundries: normalised names and a filter in fm-api",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`data/foundries.json` maps raw name-table manufacturer/foundry strings (name IDs 8 and 9 variants, trademark lines) to a canonical foundry name — 'Google', 'Google Fonts', 'The Google Font Team' → 'Google' — with a JSON schema beside it and the data test validating it; matching is case- and punctuation-insensitive with a few regexes for 'Copyright (c) 20xx <foundry>' patterns",
+            "`fm-api` adds, additively, `listFoundries` (canonical name, family count, the raw names it folds) and `SearchRequest.foundries: Option<Vec<String>>` (`#[serde(default)]`); families with no foundry fall under 'Unknown foundry' and are listed last",
+            "A user merge (two canonical names into one) is stored in the database as an override and survives a rescan; the CLI gets `fm foundries` and `--foundry`",
+            "Search with a foundry filter stays under 50 ms on the reference library; tests cover the alias folding on the fixture corpus"
+          ]
+        },
+        {
+          "id": "E50.12",
+          "title": "Foundries in the sidebar, folded by default",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E50.1",
+            "E50.11"
+          ],
+          "criteria": [
+            "The sidebar gains a Foundries section between Collections and Tags, folded by default (`useFolded`, remembered); the header shows the count when folded; open, it lists the ten largest foundries with family counts and an 'all N foundries…' row that opens a searchable list",
+            "Clicking a foundry filters the wall by it, shown as a chip ('Foundry · Google'); the section row is highlighted while the filter is on; a second click clears it",
+            "Right-click on a foundry offers 'Merge into…' (E50.11's override) with an undo toast; matches the sidebar of dev-docs/design/redesign/9-split.png"
+          ]
+        },
+        {
+          "id": "E50.13",
+          "title": "Sources in Settings as cards",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E50.1"
+          ],
+          "criteria": [
+            "Settings › Sources: a title and one-line explanation, 'Add folder' as the one primary button, and one card per source: a folder or cloud icon, the name, the path in 11 px mono, font count and last scan, a Watch switch, and on hover Rescan · Show in file manager · Remove (28 px icons, E50.6); a scanning source shows a 'Scanning' badge and a 3 px progress bar fed by the scan events; a missing folder shows a 'Missing' badge in the warning colour",
+            "A dashed drop zone under the cards accepts a dropped folder and is also the empty state; a problems strip below links to Problems with the counts; the System fonts card keeps its Show switch and the 'never writes to system folders' line",
+            "Removing a source asks once and removes only the index entries (rule 2); the e2e spec covers add → scanning → done → watch off → remove — matches dev-docs/design/redesign/11-sources.png"
           ]
         }
       ]
