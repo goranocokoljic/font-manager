@@ -145,22 +145,36 @@ function countLabel(n: number): string {
 .chip:hover {
   background-color: var(--fm-active);
 }
-/* A tag the dragged fonts already carry. */
+/* A tag the dragged fonts already carry: a ring, not bold type, so no chip changes width and
+   moves another under the pointer during the drag. */
 .carried {
   box-shadow: inset 0 0 0 1px var(--fm-accent);
   color: var(--fm-fg);
-  font-weight: 600;
 }
 .drop {
   outline: 2px solid var(--fm-accent);
 }
-.chip:has(.drop-count) {
-  display: flex;
-  gap: var(--fm-space-1);
+/* The count floats above the chip, so the chip under the pointer keeps its size and place: a
+   wider chip could wrap to the next line, leave the pointer and miss the drop. */
+.chip {
+  position: relative;
 }
 .drop-count {
+  position: absolute;
+  inset-block-end: calc(100% + var(--fm-space-1));
+  inset-inline-start: 50%;
+  z-index: var(--fm-z-popover);
+  padding: 2px var(--fm-space-2);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
   font-weight: 600;
   white-space: nowrap;
+  pointer-events: none;
+  translate: -50% 0;
+}
+:dir(rtl) .drop-count {
+  translate: 50% 0;
 }
 .name {
   display: block;

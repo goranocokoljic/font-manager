@@ -163,10 +163,16 @@ test.describe('dragging fonts to a target', () => {
     const wall = await openWall(page);
     await selectFirst(wall, 2);
     const display = tag(page, 'display');
+    const at = (await display.boundingBox())!;
     await dragOver(page, cards(wall).nth(1), display);
     await expect(display).toHaveClass(/drop/);
     const count = display.getByTestId('tag-drop-count');
     await expect(count).toHaveText(/^1 → \d+$/);
+    // The count floats above the chip: the chip under the pointer keeps its place and size, so
+    // it cannot wrap to the next line and lose the drop (it did on Linux's wider fonts).
+    expect(await display.boundingBox()).toEqual(at);
+    const c = (await count.boundingBox())!;
+    expect(c.y + c.height).toBeLessThanOrEqual(at.y);
     const after = (await count.textContent())!.split(' → ')[1]!;
     await page.mouse.up();
     await expect(page.getByTestId('toast')).toContainText('display');
