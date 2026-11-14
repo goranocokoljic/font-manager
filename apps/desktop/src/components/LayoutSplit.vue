@@ -4,12 +4,13 @@
 // 760 px (arrow keys too), and the width is a view preference in the layout store.
 //
 // Below 1100 px of window the split collapses to the pane. A Fonts button at the start of the
-// pane's head slides the list in over the pane (`FmSlide`, the drawer's motion); the button
-// again, or Escape in the list, slides it out and gives the focus back to the button.
+// pane's head slides the list in over the pane's body (`FmSlide`, the drawer's motion); the
+// head stays above it, so the button again, or Escape in the list (which gives the focus back to
+// the button), slides it out. The covered body is inert meanwhile: no focus lands under the list.
 //
 // The parent fills three slots: `list` (the font list), `head` (the pane's controls, after the
 // Fonts button) and the default slot (the pane's body). No font logic lives here.
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { t } from '../i18n';
 import FmSlide from '../motion/FmSlide.vue';
 import { SPLIT_COLLAPSE_PX, SPLIT_LIST, useLayoutStore } from '../stores/layout';
@@ -41,6 +42,9 @@ watch(narrow, (n) => {
   if (!n) listOpen.value = false;
 });
 
+/** The list lies over the pane's body: the body takes no focus or clicks (narrow only). */
+const covered = computed(() => narrow.value && listOpen.value);
+
 /** The font view inside the list column: the one the keys drive. */
 const FONT_VIEW = '[role="tree"], [role="treegrid"], [role="listbox"]';
 
@@ -67,21 +71,7 @@ function onListKey(e: KeyboardEvent): void {
 
 <template>
   <div class="split" :class="{ narrow }" data-testid="layout-split">
-    <FmSlide v-if="narrow" from="start" distance="100%" reduced="fade">
-      <section
-        v-if="listOpen"
-        :id="LIST_ID"
-        ref="listEl"
-        class="split-list overlay"
-        :aria-label="t('home.split.list')"
-        data-testid="split-list"
-        :style="{ width: `min(${layout.splitListWidth}px, 100%)` }"
-        @keydown="onListKey"
-      >
-        <slot name="list" />
-      </section>
-    </FmSlide>
-    <template v-else>
+    <template v-if="!narrow">
       <section
         :id="LIST_ID"
         ref="listEl"
@@ -117,7 +107,27 @@ function onListKey(e: KeyboardEvent): void {
         </UiButton>
         <slot name="head" />
       </div>
-      <slot />
+      <!-- Narrow: the list slides over the pane's body only, so the head and its Fonts button
+           stay in reach; the covered body is inert while the list is over it. -->
+      <div class="pane-body">
+        <FmSlide v-if="narrow" from="start" distance="100%" reduced="fade">
+          <section
+            v-if="listOpen"
+            :id="LIST_ID"
+            ref="listEl"
+            class="split-list overlay"
+            :aria-label="t('home.split.list')"
+            data-testid="split-list"
+            :style="{ width: `min(${layout.splitListWidth}px, 100%)` }"
+            @keydown="onListKey"
+          >
+            <slot name="list" />
+          </section>
+        </FmSlide>
+        <div class="pane-content" data-testid="split-pane-content" :inert="covered || undefined">
+          <slot />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -136,7 +146,7 @@ function onListKey(e: KeyboardEvent): void {
   min-width: 0;
   min-height: 0;
 }
-/* Narrow: the list lies over the pane from the inline start, as the filters drawer does. */
+/* Narrow: the list lies over the pane's body from the inline start, as the filters drawer does. */
 .split-list.overlay {
   position: absolute;
   inset-block: 0;
@@ -147,11 +157,20 @@ function onListKey(e: KeyboardEvent): void {
   border-inline-end: 1px solid var(--fm-border);
   box-shadow: var(--fm-shadow-2);
 }
-.split-pane {
+.split-pane,
+.pane-content {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+}
+/* The containing block of the narrow overlay: the pane under its head. */
+.pane-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
 }
 .pane-head {

@@ -201,7 +201,48 @@ test('below 1100 px the split is the pane; Fonts slides the list over it', async
   await page.keyboard.press('ArrowDown');
   await expect(shownFamily(page)).not.toHaveText(before);
 
+  // The list covers the pane's body, not its head: the Fonts button stays visible and clickable.
+  const head = (await paneHead(page).boundingBox())!;
+  const over = (await page.getByTestId('split-list').boundingBox())!;
+  expect(over.y).toBeGreaterThanOrEqual(head.y + head.height - 1);
+  // The covered body takes no focus: Tab from the list does not land under it.
+  await expect(page.getByTestId('split-pane-content')).toHaveJSProperty('inert', true);
+  await tree(page).focus();
+  await page.keyboard.press('Tab');
+  expect(
+    await page.evaluate(
+      () => !!document.activeElement?.closest('[data-testid="split-pane-content"]'),
+    ),
+  ).toBe(false);
+
+  await tree(page).focus();
   await page.keyboard.press('Escape');
   await expect(tree(page)).toHaveCount(0);
   await expect(fonts).toBeFocused();
+  await expect(page.getByTestId('split-pane-content')).toHaveJSProperty('inert', false);
+
+  // A click on Fonts closes it as it opened it.
+  await fonts.click();
+  await expect(tree(page)).toBeVisible();
+  await fonts.click();
+  await expect(tree(page)).toHaveCount(0);
+  await expect(fonts).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('selection works in the split: Ctrl+click and Shift+click raise the selection bar', async ({
+  page,
+}) => {
+  await open(page);
+  await toLayout(page);
+  const rows = tree(page).getByRole('treeitem');
+  await rows.nth(0).click();
+  await rows.nth(2).click({ modifiers: ['ControlOrMeta'] });
+  await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.nth(2)).toHaveAttribute('aria-selected', 'true');
+  const bar = page.getByTestId('selection-bar');
+  await expect(bar).toBeVisible();
+  await expect(bar.getByTestId('selection-bar-name')).toHaveText('2 families');
+  await rows.nth(0).click();
+  await rows.nth(2).click({ modifiers: ['Shift'] });
+  await expect(bar.getByTestId('selection-bar-name')).toHaveText('3 families');
 });

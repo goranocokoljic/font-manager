@@ -101,12 +101,28 @@ describe('LayoutSplit (E50.3)', () => {
     // The keys go to the list at once.
     expect(document.activeElement).toBe(list.get('[data-testid="the-list"]').element);
 
+    // The list lies over the pane's body, under the head: the Fonts button stays in reach, and
+    // the covered body takes no focus.
+    expect(list.element.closest('.pane-body')).not.toBeNull();
+    expect(list.element.closest('.pane-head')).toBeNull();
+    expect(w.get('[data-testid="split-pane-content"]').attributes('inert')).toBeDefined();
+
     // Escape in the list slides it out and gives the focus back to the button.
     await list.get('[data-testid="the-list"]').trigger('keydown', { key: 'Escape' });
     await nextTick();
     await nextTick();
     expect(fonts.attributes('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(fonts.element);
+    expect(w.get('[data-testid="split-pane-content"]').attributes('inert')).toBeUndefined();
+
+    // The button itself closes it again.
+    await fonts.trigger('click');
+    await nextTick();
+    expect(w.find('[data-testid="split-list"]').exists()).toBe(true);
+    await fonts.trigger('click');
+    await nextTick();
+    expect(fonts.attributes('aria-expanded')).toBe('false');
+    expect(w.get('[data-testid="split-pane-content"]').attributes('inert')).toBeUndefined();
     w.unmount();
   });
 
