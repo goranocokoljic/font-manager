@@ -1292,7 +1292,7 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
              DROP TABLE sidecar_absorb;
              ALTER TABLE sidecar_conflict DROP COLUMN disk_rev;
              ALTER TABLE sidecar_conflict DROP COLUMN file_rev;
-             DROP TABLE face_fingerprint; PRAGMA user_version = 17;",
+             DROP TABLE face_fingerprint; DROP TABLE foundry_merge; PRAGMA user_version = 17;",
         )
         .expect("downgrade");
     }
@@ -1374,6 +1374,7 @@ fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
              INSERT INTO tag (id, name) VALUES (1, 'display');
              INSERT INTO face_tag VALUES ({last}, 1);
              INSERT INTO user_meta (face_id, rating) VALUES ({last}, 4);
+             DROP TABLE foundry_merge;
              PRAGMA user_version = 19;",
             last = ids_before[2]
         ))

@@ -163,13 +163,20 @@ fn search_times_every_query_for_every_round() {
     let home = TempDir::new("search");
     first_scan(&fixtures(), home.path()).expect("scan");
     let res = search(home.path(), 3).expect("search");
-    assert_eq!(res.samples, QUERIES.len() * 3);
+    // E50.11: three foundry filters (the largest, the three largest, the
+    // unknown foundry: the fixtures have all three), two queries each.
+    assert_eq!(res.foundry_samples, 3 * 2 * 3, "{res:?}");
+    assert_eq!(res.samples, QUERIES.len() * 3 + res.foundry_samples);
+    assert!(res.foundry_p95_ms <= res.max_ms, "{res:?}");
     assert!(res.families > 10, "{res:?}");
     assert!(
         res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
         "{res:?}"
     );
-    assert!(QUERIES.contains(&res.slowest.as_str()), "{res:?}");
+    assert!(
+        QUERIES.contains(&res.slowest.as_str()) || res.slowest.contains("(foundries "),
+        "{res:?}"
+    );
 }
 
 #[test]

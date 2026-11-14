@@ -126,6 +126,12 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ),
         ("suggest_pairings", r#"{"face":1,"limit":3}"#.into()),
         ("list_glyph_traits", String::new()),
+        ("list_foundries", String::new()),
+        (
+            "merge_foundries",
+            r#"{"from":"rsms","into":"Adobe"}"#.into(),
+        ),
+        ("unmerge_foundry", r#"{"name":"rsms"}"#.into()),
         (
             "find_similar_glyph",
             r#"{"face":1,"codePoint":82,"limit":3}"#.into(),

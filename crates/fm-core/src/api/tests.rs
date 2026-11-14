@@ -15,7 +15,9 @@ use fm_api::library::{
     FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest, LicenseType,
     OpenLicense, ProblemKind, TrashMoveStatus,
 };
-use fm_api::search::{Filters, SearchRequest, Supports, TraitFilter};
+use fm_api::search::{
+    Filters, MergeFoundriesRequest, SearchRequest, Supports, TraitFilter, UnmergeFoundryRequest,
+};
 use fm_platform::{MockActivator, MockTrash};
 
 use super::*;
@@ -3996,6 +3998,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
             },
             rule: None,
             like_glyph: None,
+            foundries: None,
         })
         .expect("search")
         .families
@@ -4658,6 +4661,7 @@ fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
             },
             rule: None,
             like_glyph: None,
+            foundries: None,
         })
         .expect("search")
         .families
@@ -7600,4 +7604,127 @@ fn a_likeness_search_describes_the_glyph_on_demand() {
             .is_empty(),
         "described and stored"
     );
+}
+
+/// E50.11 criterion 4 on the fixture corpus, through the `CoreApi` entry
+/// path: the spellings of one foundry fold into one, a notice or the
+/// designer names a foundry the manufacturer does not, a family with no
+/// foundry is the unknown one, listed last; the filter finds every family of
+/// the folded names, and a merge tells the subscribers which faces moved.
+#[test]
+fn foundry_aliases_fold_on_the_fixture_corpus() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-foundries",
+        &[
+            "google-static/rosario/Rosario-SemiBold.ttf",
+            "google-repo/labrada/Labrada[wght].ttf",
+            "google-repo/notosansoriyaui/NotoSansOriyaUI-Bold.ttf",
+            "google-repo/nosifer/Nosifer-Regular.ttf",
+            "google-static/robotoslab/RobotoSlab-ExtraBold.ttf",
+            "google-repo/epilogue/Epilogue[wght].ttf",
+            "google-static/anybody/Anybody_Expanded-MediumItalic.ttf",
+            "google-repo/mulish/Mulish[wght].ttf",
+            "google-repo/nobile/Nobile-Medium.ttf",
+            "google-repo/jost/Jost-Italic[wght].ttf",
+        ],
+    );
+    let list = lib.api.list_foundries().expect("foundries");
+    let get = |name: &str| {
+        list.iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("{name} in {list:?}"))
+    };
+    // name ID 8 written three ways.
+    let omnibus = get("Omnibus-Type");
+    assert_eq!(
+        omnibus.raw_names,
+        ["Omnibus Type", "Omnibus-Type", "Omnibus-Type Team"]
+    );
+    // Archivo, Asap Sharp, Rosario, Labrada.
+    assert_eq!(omnibus.families, 4, "{omnibus:?}");
+    assert_eq!(
+        get("Etcetera Type Co").raw_names,
+        ["Etcetera Type Co", "Etcetera Type Company"]
+    );
+    // Case alone does not split a foundry.
+    let vernon = get("Vernon Adams");
+    assert_eq!(vernon.raw_names, ["Vernon Adams", "vernon adams"]);
+    assert_eq!(vernon.families, 2);
+    // Agdasima (`Google`), Noto Sans Oriya UI (`Google LLC`) and Roboto Slab
+    // (no manufacturer, a project-authors copyright, designer `Google`).
+    let google = get("Google");
+    assert_eq!(google.raw_names, ["Google", "Google LLC"]);
+    assert_eq!(google.families, 3, "{google:?}");
+    // Nosifer: no manufacturer, the holder of its copyright.
+    assert_eq!(get("Typomondo").families, 1);
+    // Jost states no foundry at all: the unknown one, last.
+    let last = list.last().expect("listed");
+    assert!(last.unknown, "{list:?}");
+    assert_eq!(last.name, fm_api::search::UNKNOWN_FOUNDRY);
+    assert!(list[..list.len() - 1].iter().all(|f| !f.unknown));
+    let names: Vec<String> = list[..list.len() - 1]
+        .iter()
+        .map(|f| f.name.to_lowercase())
+        .collect();
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(names, sorted, "A to Z");
+
+    let found = |foundries: &[&str]| {
+        let mut names: Vec<String> = lib
+            .api
+            .search(SearchRequest {
+                foundries: Some(foundries.iter().map(|f| (*f).to_owned()).collect()),
+                page: Page {
+                    offset: 0,
+                    limit: 1000,
+                },
+                ..SearchRequest::default()
+            })
+            .expect("search")
+            .families
+            .into_iter()
+            .map(|h| h.family.name)
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(
+        found(&["omnibus type"]),
+        ["Archivo", "Asap Sharp", "Labrada", "Rosario"]
+    );
+    // The truncated Agdasima has no name table to read.
+    assert_eq!(found(&["Unknown foundry"]), ["Jost", "agdasima-truncated"]);
+
+    // A merge: the faces of Typomondo now list under Google.
+    let rx = lib.api.subscribe();
+    let nosifer = found(&["Typomondo"]);
+    assert_eq!(nosifer, ["Nosifer"]);
+    let merged = lib
+        .api
+        .merge_foundries(MergeFoundriesRequest {
+            from: "Typomondo".into(),
+            into: "Google".into(),
+        })
+        .expect("merge");
+    assert!(merged.iter().all(|f| f.name != "Typomondo"));
+    let google = merged.iter().find(|f| f.name == "Google").expect("Google");
+    assert_eq!(google.merged, ["Typomondo"]);
+    assert_eq!(google.families, 4);
+    let Ok(Event::LibraryChanged { updated, .. }) = rx.recv_timeout(WAIT) else {
+        panic!("no library change");
+    };
+    assert_eq!(updated.len(), 1, "{updated:?}");
+    assert!(found(&["Google"]).contains(&"Nosifer".to_owned()));
+    let back = lib
+        .api
+        .unmerge_foundry(UnmergeFoundryRequest {
+            name: "Typomondo".into(),
+        })
+        .expect("unmerge");
+    assert!(back.iter().any(|f| f.name == "Typomondo"));
+    let Ok(Event::LibraryChanged { updated: again, .. }) = rx.recv_timeout(WAIT) else {
+        panic!("no library change");
+    };
+    assert_eq!(again, updated);
 }

@@ -28,7 +28,7 @@ use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
 use fm_api::search::{
     Filters, PairingRequest, PairingRole, SearchRequest, SimilarGlyphRequest, SimilarRequest,
-    Supports, TraitFilter,
+    Supports, TraitFilter, UNKNOWN_FOUNDRY,
 };
 use fm_api::{
     ActivationService, CollectionId, ErrorCode, OrganizationService, SearchService, SourceId,
@@ -237,10 +237,21 @@ pub struct Searched {
     pub slowest: String,
     /// Family groups in the library (the empty query).
     pub families: u32,
+    /// The timed searches filtered by foundry (E50.11), part of `samples`.
+    pub foundry_samples: usize,
+    /// Their 95th percentile, in milliseconds.
+    pub foundry_p95_ms: f64,
 }
 
+/// The foundry filters [`search`] times (E50.11): the largest foundry, the
+/// three largest together, and the unknown foundry, each with the empty
+/// query and with `sans`.
+const FOUNDRY_QUERIES: [&str; 2] = ["", "sans"];
+
 /// Times every query of [`QUERIES`] `rounds` times on the index in `home`,
-/// after one untimed run each to warm the caches, as a running app has them.
+/// after one untimed run each to warm the caches, as a running app has them;
+/// then the [`FOUNDRY_QUERIES`] with foundry filters, counted in the same
+/// percentiles.
 pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
     let paths = home_paths(home);
     let index = startup::open_index(&paths)?.index;
@@ -274,6 +285,43 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
             samples.push(took);
         }
     }
+    let mut foundries = api.list_foundries()?;
+    foundries.sort_by_key(|f| std::cmp::Reverse(f.families));
+    let named: Vec<String> = foundries
+        .iter()
+        .filter(|f| !f.unknown)
+        .map(|f| f.name.clone())
+        .collect();
+    let filters: Vec<Vec<String>> = [
+        named.iter().take(1).cloned().collect(),
+        named.iter().take(3).cloned().collect(),
+        vec![UNKNOWN_FOUNDRY.to_owned()],
+    ]
+    .into_iter()
+    .filter(|f: &Vec<String>| !f.is_empty())
+    .collect();
+    let mut by_foundry = Vec::new();
+    for wanted in &filters {
+        for query in FOUNDRY_QUERIES {
+            let req = SearchRequest {
+                query: query.to_owned(),
+                foundries: Some(wanted.clone()),
+                ..SearchRequest::default()
+            };
+            api.search(req.clone())?;
+            for _ in 0..rounds {
+                let begin = Instant::now();
+                api.search(req.clone())?;
+                let took = ms(begin.elapsed());
+                if took > slowest.0 {
+                    slowest = (took, format!("{query} (foundries {wanted:?})"));
+                }
+                by_foundry.push(took);
+            }
+        }
+    }
+    samples.extend(&by_foundry);
+    by_foundry.sort_by(f64::total_cmp);
     samples.sort_by(f64::total_cmp);
     Ok(Searched {
         samples: samples.len(),
@@ -282,6 +330,8 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
         max_ms: samples.last().copied().unwrap_or_default(),
         slowest: slowest.1,
         families,
+        foundry_samples: by_foundry.len(),
+        foundry_p95_ms: percentile(&by_foundry, 95),
     })
 }
 

@@ -24,6 +24,7 @@ import {
   type ActivationMode,
   type ActivationOutcome,
   type ApiError,
+  type FoundryInfo,
   type AppFolders,
   type AppInfo,
   type DragFilesRequest,
@@ -1001,6 +1002,9 @@ export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewByte
   const blob = await canvas.convertToBlob({ type: 'image/png' });
   return { width, height, png: new Uint8Array(await blob.arrayBuffer()) };
 }
+
+// fm-api's UNKNOWN_FOUNDRY (E50.11): the name the faces with no foundry list under.
+const UNKNOWN_FOUNDRY = 'Unknown foundry';
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
 const checkCollectionColor = (color: string | null | undefined): void => {
@@ -2769,6 +2773,55 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     if (!f) throw notFound(id);
     return f;
   };
+  // Foundries (E50.11), as the Rust mock: each family's foundry as written, names equal
+  // without case folded, the user's merges applied; no alias table. The merged name,
+  // lowercased → [the name, the name it became].
+  const foundryMerges = new Map<string, [string, string]>();
+  const foundryOf = (raw: string | null): string | null => {
+    let name = raw;
+    for (let i = 0; name != null && i <= foundryMerges.size; i++) {
+      const next = foundryMerges.get(name.toLowerCase());
+      if (!next) break;
+      name = next[1];
+    }
+    return name;
+  };
+  const foundryList = (): FoundryInfo[] => {
+    const by = new Map<string, FoundryInfo>();
+    let unknown = 0;
+    for (const id of familyIds) {
+      const raw = summaryOf(id).foundry;
+      const name = foundryOf(raw);
+      if (raw == null || name == null) {
+        unknown++;
+        continue;
+      }
+      const key = name.toLowerCase();
+      const info = by.get(key) ?? { name, families: 0, rawNames: [], merged: [], unknown: false };
+      info.families++;
+      if (!info.rawNames.includes(raw)) info.rawNames = [...info.rawNames, raw].sort();
+      by.set(key, info);
+    }
+    for (const [from, into] of foundryMerges.values()) {
+      const info = by.get((foundryOf(into) ?? into).toLowerCase());
+      if (info) info.merged = [...info.merged, from].sort();
+    }
+    const list = [...by.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const out = list.map(([, info]) => info);
+    if (unknown > 0)
+      out.push({
+        name: UNKNOWN_FOUNDRY,
+        families: unknown,
+        rawNames: [],
+        merged: [],
+        unknown: true,
+      });
+    return out;
+  };
+  const inFoundries = (hit: FamilyHit, wanted: string[]) => {
+    const name = foundryOf(hit.family.foundry) ?? UNKNOWN_FOUNDRY;
+    return wanted.some((w) => w.trim().toLowerCase() === name.toLowerCase());
+  };
   // The Quick Collection (E13.3), first added first, like the Rust mock.
   let quick: FaceId[] = [];
   const quickView = (): QuickCollection => ({
@@ -3430,6 +3483,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const limit = req.page?.limit ?? 100;
       const traits = req.glyphTraits ?? [];
       const like = req.likeGlyph ?? null;
+      const wanted = req.foundries ?? [];
+      if (wanted.length > 0)
+        paged = { ...paged, all: paged.all.filter((h) => inFoundries(h, wanted)) };
       if (like) {
         if (!find(like.face)) throw notFound(like.face);
         paged = { ...paged, all: likenessOrder(paged.all, like.face) };
@@ -3527,6 +3583,37 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // face per other family, the closest in weight; best first, then by family id.
     // `partnerOf` takes `face`'s place, and `face`'s family is left out. A role (the class
     // stands in for stroke contrast) adds +0.1 and its reason first, and names the x-height gap.
+    listFoundries: async () => foundryList(),
+    mergeFoundries: async (req) => {
+      const unknown = (n: string) => n.trim().toLowerCase() === UNKNOWN_FOUNDRY.toLowerCase();
+      if (unknown(req.from) || unknown(req.into))
+        throw invalid('The unknown foundry cannot be merged.');
+      const listed = foundryList();
+      const findName = (n: string) => {
+        const f = listed.find((x) => x.name.toLowerCase() === n.trim().toLowerCase());
+        if (!f)
+          throw {
+            code: 'notFound' as const,
+            message: `foundry ${n} was not found.`,
+            detail: null,
+          };
+        return f.name;
+      };
+      const from = findName(req.from);
+      const into = findName(req.into);
+      if (from === into) throw invalid('A foundry cannot be merged into itself.');
+      foundryMerges.set(from.toLowerCase(), [from, into]);
+      return foundryList();
+    },
+    unmergeFoundry: async (req) => {
+      if (!foundryMerges.delete(req.name.trim().toLowerCase()))
+        throw {
+          code: 'notFound' as const,
+          message: `merged foundry ${req.name} was not found.`,
+          detail: null,
+        };
+      return foundryList();
+    },
     listGlyphTraits: async () => {
       if (options.library !== 'wall') return structuredClone(mockGlyphTraits);
       const families = [...mockWall().classes.keys()];

@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use fm_api::export::{SpecimenFormat, WebFormat};
 use fm_api::library::{FontMatch, ResolveFontRequest};
-use fm_api::search::{Supports, TraitFilter};
+use fm_api::search::{MergeFoundriesRequest, Supports, TraitFilter, UnmergeFoundryRequest};
 use fm_api::{Api, ApiError, ErrorCode};
 
 pub use commands::{Doctor, PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
@@ -86,10 +86,34 @@ pub enum Command {
         /// traits` lists the traits. A font that lacks the letter is left out.
         #[arg(long = "trait", value_name = "TRAIT")]
         glyph_trait: Vec<TraitFilter>,
+        /// Only fonts of this foundry (repeat for any of several), by the
+        /// name `fm foundries` lists; "Unknown foundry" names the fonts
+        /// with none.
+        #[arg(long, value_name = "FOUNDRY")]
+        foundry: Vec<String>,
     },
     /// List the glyph traits a search can ask for, with how many fonts of
     /// the library have each value.
     Traits,
+    /// List the foundries under their normalised names, with how many
+    /// families each has and the names the fonts write; or merge one
+    /// foundry into another, or undo a merge.
+    Foundries {
+        /// Merge this foundry into the one `--into` names.
+        #[arg(
+            long,
+            value_name = "FOUNDRY",
+            requires = "into",
+            conflicts_with = "unmerge"
+        )]
+        merge: Option<String>,
+        /// The foundry `--merge` merges into.
+        #[arg(long, value_name = "FOUNDRY", requires = "merge")]
+        into: Option<String>,
+        /// Undo the merge of this foundry.
+        #[arg(long, value_name = "FOUNDRY")]
+        unmerge: Option<String>,
+    },
     /// Show a face: names, styles, axes, features, scripts and license.
     Info {
         /// A face id or a font name.
@@ -330,12 +354,14 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
             feature,
             variable,
             glyph_trait,
+            foundry,
         } => {
             let flags = SearchFlags {
                 supports: supports.clone(),
                 features: feature.clone(),
                 variable: *variable,
                 traits: glyph_trait.clone(),
+                foundries: foundry.clone(),
             };
             output.print(commands::search(api, query, &flags), |h, o| {
                 output::hits(h, o)
@@ -366,6 +392,23 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
             )
         }
         Command::Traits => output.print(api.list_glyph_traits(), |t, o| output::traits(t, o)),
+        Command::Foundries {
+            merge,
+            into,
+            unmerge,
+        } => {
+            let listed = match (merge, into, unmerge) {
+                (Some(from), Some(into), _) => api.merge_foundries(MergeFoundriesRequest {
+                    from: from.clone(),
+                    into: into.clone(),
+                }),
+                (_, _, Some(name)) => {
+                    api.unmerge_foundry(UnmergeFoundryRequest { name: name.clone() })
+                }
+                _ => api.list_foundries(),
+            };
+            output.print(listed, |f, o| output::foundries(f, o))
+        }
         Command::Similar { font, limit } => output
             .print(commands::similar(api, font, *limit), |s, o| {
                 output::similar(s, o)

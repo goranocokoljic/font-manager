@@ -688,6 +688,18 @@ CREATE TABLE glyph_descriptor (
 CREATE INDEX glyph_descriptor_face ON glyph_descriptor (face_id);
 ";
 
+/// Foundry merges (E50.11, `index/search/foundries.rs`): one row per
+/// foundry a user merged into another, keyed by the merged name's key (see
+/// `crate::foundries::group_key`), with both names as the user gave them.
+/// Keyed by name, not by face, so a rescan keeps it.
+const V25: &str = r"
+CREATE TABLE foundry_merge (
+    from_key   TEXT NOT NULL PRIMARY KEY,
+    from_name  TEXT NOT NULL,
+    into_name  TEXT NOT NULL
+) WITHOUT ROWID;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -695,7 +707,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
-    V22, V23, V24,
+    V22, V23, V24, V25,
 ];
 
 /// The schema version this build writes.
@@ -723,6 +735,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_tag",
     "family_meta",
     "font_file",
+    "foundry_merge",
     "glyph_descriptor",
     "glyph_trait_stamp",
     "glyph_traits",

@@ -78,10 +78,10 @@ use fm_api::preview::{
     PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters, GlyphTraitInfo,
-    ImageMatchRequest, LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion,
-    SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarGlyphFace,
-    SimilarGlyphRequest, SimilarRequest, Supports,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters, FoundryInfo,
+    GlyphTraitInfo, ImageMatchRequest, LanguageHint, LanguagePreset, MergeFoundriesRequest,
+    PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace,
+    SimilarGlyphFace, SimilarGlyphRequest, SimilarRequest, Supports, UnmergeFoundryRequest,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
@@ -1103,6 +1103,49 @@ impl SearchService for CoreApi {
     fn list_glyph_traits(&self) -> ApiResult<Vec<GlyphTraitInfo>> {
         Ok(self.lock().list_glyph_traits()?)
     }
+
+    fn list_foundries(&self) -> ApiResult<Vec<FoundryInfo>> {
+        Ok(self.lock().list_foundries()?)
+    }
+
+    /// The faces of `from` now list under `into`: one
+    /// [`Event::LibraryChanged`] names them as updated.
+    fn merge_foundries(&self, req: MergeFoundriesRequest) -> ApiResult<Vec<FoundryInfo>> {
+        let (list, updated) = {
+            let mut index = self.lock();
+            let updated = index.foundry_faces(&req.from)?;
+            (index.merge_foundries(&req)?, updated)
+        };
+        self.foundries_changed(updated);
+        Ok(list)
+    }
+
+    /// The faces of `name` list under it again: one
+    /// [`Event::LibraryChanged`] names them as updated.
+    fn unmerge_foundry(&self, req: UnmergeFoundryRequest) -> ApiResult<Vec<FoundryInfo>> {
+        let (list, updated) = {
+            let mut index = self.lock();
+            let list = index.unmerge_foundry(&req)?;
+            (list, index.foundry_faces(&req.name)?)
+        };
+        self.foundries_changed(updated);
+        Ok(list)
+    }
+}
+
+impl CoreApi {
+    /// Tells the subscribers that these faces list under another foundry.
+    fn foundries_changed(&self, mut updated: Vec<FaceId>) {
+        updated.sort();
+        if !updated.is_empty() {
+            self.send(Event::LibraryChanged {
+                source: None,
+                added: Vec::new(),
+                removed: Vec::new(),
+                updated,
+            });
+        }
+    }
 }
 
 impl PreviewService for CoreApi {
@@ -1625,6 +1668,7 @@ impl WorkflowService for CoreApi {
                 limit: u32::MAX,
             },
             like_glyph: None,
+            foundries: None,
         })?;
         let mut picks = Vec::new();
         for hit in found.families {

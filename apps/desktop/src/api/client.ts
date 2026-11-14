@@ -72,6 +72,9 @@ import type {
   KeepCopyRequest,
   LanguageHint,
   GlyphTraitInfo,
+  FoundryInfo,
+  MergeFoundriesRequest,
+  UnmergeFoundryRequest,
   LanguagePreset,
   DetectLanguagesRequest,
   DuplicateLayoutRequest,
@@ -193,6 +196,12 @@ export interface FmClient {
   suggestPairings(req: PairingRequest): Promise<PairingSuggestion[]>;
   /** The glyph trait catalog, each value with its face and family counts in the library (E49.5). */
   listGlyphTraits(): Promise<GlyphTraitInfo[]>;
+  /** The library's foundries under their normalised names, A to Z, the unknown one last (E50.11). */
+  listFoundries(): Promise<FoundryInfo[]>;
+  /** Merges one foundry into another; the foundries again (E50.11). */
+  mergeFoundries(req: MergeFoundriesRequest): Promise<FoundryInfo[]>;
+  /** Undoes the merge of a foundry; the foundries again (E50.11). */
+  unmergeFoundry(req: UnmergeFoundryRequest): Promise<FoundryInfo[]>;
   /** Every collection, parents before children, siblings in the user's order. */
   listCollections(): Promise<Collection[]>;
   /** Creates a collection; with `rules`, a smart one. */
@@ -443,6 +452,9 @@ export const tauriClient: FmClient = {
   findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
   suggestPairings: (req) => invoke<PairingSuggestion[]>('suggest_pairings', { req }),
   listGlyphTraits: () => invoke<GlyphTraitInfo[]>('list_glyph_traits'),
+  listFoundries: () => invoke<FoundryInfo[]>('list_foundries'),
+  mergeFoundries: (req) => invoke<FoundryInfo[]>('merge_foundries', { req }),
+  unmergeFoundry: (req) => invoke<FoundryInfo[]>('unmerge_foundry', { req }),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
   renameCollection: (req) => invoke<Collection>('rename_collection', { req }),

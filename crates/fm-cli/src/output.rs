@@ -12,7 +12,7 @@ use fm_api::common::Health;
 use fm_api::export::{ExportWebResponse, SpecimenResponse};
 use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
 use fm_api::organization::{ImportSetResponse, SetExport};
-use fm_api::search::{CoverageReport, FamilyHit, GlyphTraitInfo, SimilarFace};
+use fm_api::search::{CoverageReport, FamilyHit, FoundryInfo, GlyphTraitInfo, SimilarFace};
 use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
@@ -355,6 +355,24 @@ pub fn traits(traits: &[GlyphTraitInfo], out: &mut dyn Write) -> io::Result<()> 
     }
     writeln!(out, "{table}")?;
     writeln!(out, "{} traits", traits.len())
+}
+
+/// `fm foundries`: one row per foundry, the unknown foundry last, as listed.
+pub fn foundries(foundries: &[FoundryInfo], out: &mut dyn Write) -> io::Result<()> {
+    let mut table = Table::new();
+    table
+        .load_preset(presets::NOTHING)
+        .set_header(["FOUNDRY", "FAMILIES", "AS WRITTEN", "MERGED"]);
+    for f in foundries {
+        table.add_row([
+            f.name.clone(),
+            f.families.to_string(),
+            f.raw_names.join("; "),
+            f.merged.join("; "),
+        ]);
+    }
+    writeln!(out, "{table}")?;
+    writeln!(out, "{} foundries", foundries.len())
 }
 
 /// `fm info`: names, styles, axes, features, scripts and license bits.

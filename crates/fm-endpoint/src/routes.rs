@@ -107,6 +107,9 @@ routes! {
     find_similar_glyph(req),
     suggest_pairings(req),
     list_glyph_traits(),
+    list_foundries(),
+    merge_foundries(req),
+    unmerge_foundry(req),
     // preview
     render_preview(req),
     compare_preview(req),

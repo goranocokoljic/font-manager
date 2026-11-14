@@ -458,6 +458,7 @@ impl Index {
             },
             rule: None,
             like_glyph: None,
+            foundries: None,
         })?;
         let families = found
             .families

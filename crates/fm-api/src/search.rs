@@ -140,6 +140,55 @@ pub struct SearchRequest {
     /// unknown or does not draw the character is `NotFound`.
     #[serde(default)]
     pub like_glyph: Option<GlyphReference>,
+    /// Families of any of these foundries (E50.11), by the canonical names
+    /// `list_foundries` gives, compared without case or punctuation;
+    /// [`UNKNOWN_FOUNDRY`] names the faces with no foundry. Like the glyph
+    /// traits, a face outside them is no result and counts under no filter
+    /// value. `None` or an empty list: every foundry.
+    #[serde(default)]
+    pub foundries: Option<Vec<String>>,
+}
+
+/// The name `list_foundries` gives the faces with no foundry (E50.11); a
+/// search names them by it too.
+pub const UNKNOWN_FOUNDRY: &str = "Unknown foundry";
+
+/// One foundry of the library, under its normalised name (E50.11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundryInfo {
+    /// The canonical name (`Google`), or [`UNKNOWN_FOUNDRY`].
+    pub name: String,
+    /// Family groups with a searchable face of this foundry.
+    pub families: u32,
+    /// The names as the fonts write them that fold into this one (`Google
+    /// LLC`, `The Google Font Team`), A to Z; empty for the unknown foundry.
+    pub raw_names: Vec<String>,
+    /// The canonical names a user merged into this one, A to Z
+    /// (`merge_foundries`); each can be split off again (`unmerge_foundry`).
+    pub merged: Vec<String>,
+    /// The faces with no foundry; listed last.
+    pub unknown: bool,
+}
+
+/// Merge one foundry into another (E50.11): from now on, the faces of
+/// `from` list and filter under `into`. Stored in the library, so it
+/// survives a rescan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeFoundriesRequest {
+    /// The canonical name merged away, as `list_foundries` gives it.
+    pub from: String,
+    /// The canonical name it becomes, as `list_foundries` gives it.
+    pub into: String,
+}
+
+/// Undo a merge (E50.11): the foundry is listed under its own name again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UnmergeFoundryRequest {
+    /// The canonical name that was merged away, as in [`FoundryInfo::merged`].
+    pub name: String,
 }
 
 /// One glyph of one face: the reference of a likeness sort (E49.9).
@@ -759,4 +808,15 @@ pub trait SearchService {
     /// The glyph trait catalog, in catalog order, each value with how many
     /// searchable faces and family groups have it (E49.5).
     fn list_glyph_traits(&self) -> ApiResult<Vec<GlyphTraitInfo>>;
+    /// The foundries of the library under their normalised names (E50.11),
+    /// A to Z, each with its family count and the names it folds; the faces
+    /// with no foundry come last as [`UNKNOWN_FOUNDRY`].
+    fn list_foundries(&self) -> ApiResult<Vec<FoundryInfo>>;
+    /// Merges one foundry into another and lists the foundries again. An
+    /// unknown name is `NotFound`; the same name twice, the unknown
+    /// foundry, or a merge that leads back to `from` is `InvalidRequest`.
+    fn merge_foundries(&self, req: MergeFoundriesRequest) -> ApiResult<Vec<FoundryInfo>>;
+    /// Undoes the merge of a foundry and lists the foundries again; a name
+    /// that is not merged is `NotFound`.
+    fn unmerge_foundry(&self, req: UnmergeFoundryRequest) -> ApiResult<Vec<FoundryInfo>>;
 }

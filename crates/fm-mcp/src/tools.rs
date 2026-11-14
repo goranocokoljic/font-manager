@@ -995,6 +995,7 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                     offset: a.offset,
                     limit: a.limit.unwrap_or(DEFAULT_SEARCH_LIMIT),
                 },
+                foundries: None,
                 like_glyph: a.like_glyph.map(|g| GlyphReference {
                     face: FaceId(g.face),
                     code_point: g.code_point,

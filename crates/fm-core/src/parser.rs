@@ -96,6 +96,9 @@ pub struct ParsedFace {
     pub designer: Option<String>,
     /// Copyright notice (name ID 0).
     pub copyright: Option<String>,
+    /// Trademark notice (name ID 7). Absent from faces stored before E50.11.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trademark: Option<String>,
     /// License description (name ID 13).
     pub license: Option<String>,
     /// License URL (name ID 14).
@@ -178,6 +181,7 @@ impl ParsedFace {
             vendor_id: None,
             designer: None,
             copyright: None,
+            trademark: None,
             license: None,
             license_url: None,
             weight: None,
@@ -469,6 +473,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         face.foundry = string(StringId::MANUFACTURER);
         face.designer = string(StringId::DESIGNER);
         face.copyright = string(StringId::COPYRIGHT_NOTICE);
+        face.trademark = string(StringId::TRADEMARK);
         face.license = string(StringId::LICENSE_DESCRIPTION);
         face.license_url = string(StringId::LICENSE_URL);
         face.description = string(StringId::DESCRIPTION);
