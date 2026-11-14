@@ -1145,6 +1145,37 @@ pub struct GlyphDetail {
     /// glyph id is 0 and the rest is empty then. Malformed GSUB lookups only
     /// empty the feature lists.
     pub health: Health,
+    /// The left side bearing in font units at the default instance (E50.8):
+    /// `bounds.x_min`, or the `hmtx` bearing of a glyph with no outline.
+    /// Absent when the font has no horizontal metrics or the outline cannot
+    /// be read.
+    #[serde(default)]
+    pub left_side_bearing: Option<i32>,
+    /// The right side bearing in font units at the default instance:
+    /// the advance minus `bounds.x_max`, or minus the left side bearing of a
+    /// glyph with no outline. Absent as the left side bearing is.
+    #[serde(default)]
+    pub right_side_bearing: Option<i32>,
+    /// The ink box of the outline in font units at the default instance;
+    /// absent for a glyph with no outline (a space) or one that cannot be
+    /// read.
+    #[serde(default)]
+    pub bounds: Option<GlyphBounds>,
+}
+
+/// The ink box of a glyph's outline in font units (E50.8): the tight box of
+/// its curves, rounded outwards to whole units. Font y grows up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphBounds {
+    /// Left edge.
+    pub x_min: i32,
+    /// Bottom edge.
+    pub y_min: i32,
+    /// Right edge.
+    pub x_max: i32,
+    /// Top edge.
+    pub y_max: i32,
 }
 
 /// A `<font>` argument to look up (E26.1): a face id or a name.

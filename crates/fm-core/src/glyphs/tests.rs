@@ -418,6 +418,11 @@ fn a_broken_font_is_a_broken_detail_not_a_panic() {
     ] {
         let d = detail(&data, 'A' as u32);
         assert!(matches!(d.health, Health::Broken(_)), "{:?}", d.health);
+        assert_eq!(
+            (d.left_side_bearing, d.right_side_bearing, d.bounds),
+            (None, None, None),
+            "a broken font has no ink metrics"
+        );
         assert_eq!(d.glyph_id, 0);
         assert!(d.produced_by.is_empty() && d.replaced_by.is_empty());
     }
@@ -437,4 +442,105 @@ fn every_fixture_has_a_detail_without_a_panic() {
             }
         }
     }
+}
+
+fn bounds(x_min: i32, y_min: i32, x_max: i32, y_max: i32) -> Option<GlyphBounds> {
+    Some(GlyphBounds {
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    })
+}
+
+#[test]
+fn a_truetype_glyph_has_the_bearings_and_box_of_its_outline() {
+    let data = read(ROBOTO_SLAB);
+    let h = detail(&data, 'H' as u32);
+    assert_eq!(h.advance_width, Some(1606));
+    assert_eq!(h.bounds, bounds(48, 0, 1558, 1456));
+    assert_eq!(h.left_side_bearing, Some(48));
+    assert_eq!(h.right_side_bearing, Some(1606 - 1558));
+    // The glyf header box and the hmtx bearing agree for a glyph whose
+    // extremes are on-curve points.
+    let font = FontRef::new(&data).expect("font");
+    let gid = font.charmap().map('H').expect("mapped");
+    let metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
+    let header = metrics.bounds(gid).expect("glyf header box");
+    assert_eq!(
+        [header.x_min, header.y_min, header.x_max, header.y_max],
+        [48.0, 0.0, 1558.0, 1456.0]
+    );
+    assert_eq!(metrics.left_side_bearing(gid), Some(48.0));
+    // A round glyph: the box of its curves, below the baseline.
+    let o = detail(&data, 'o' as u32);
+    assert_eq!(o.bounds, bounds(64, -21, 1100, 1102));
+    assert_eq!(
+        (o.left_side_bearing, o.right_side_bearing),
+        (Some(64), Some(64))
+    );
+}
+
+#[test]
+fn a_cff_glyph_has_the_bearings_and_box_of_its_outline() {
+    let data = read(NUNITO_OTF);
+    let font = FontRef::new(&data).expect("font");
+    assert!(font.cff().is_ok(), "a CFF fixture");
+    let o = detail(&data, 'o' as u32);
+    assert_eq!(o.advance_width, Some(538));
+    assert_eq!(o.bounds, bounds(51, -8, 487, 492));
+    assert_eq!(
+        (o.left_side_bearing, o.right_side_bearing),
+        (Some(51), Some(51))
+    );
+    let gid = font.charmap().map('o').expect("mapped");
+    let hmtx = font.hmtx().expect("hmtx").side_bearing(gid);
+    assert_eq!(
+        hmtx,
+        Some(51),
+        "the hmtx bearing of a CFF glyph is its x_min"
+    );
+    let h = detail(&data, 'H' as u32);
+    assert_eq!(h.bounds, bounds(60, -6, 726, 711));
+    assert_eq!(
+        (h.left_side_bearing, h.right_side_bearing),
+        (Some(60), Some(25))
+    );
+}
+
+#[test]
+fn a_variable_glyph_has_the_box_of_its_default_instance() {
+    let h = detail(&read(EPILOGUE_VARIABLE), 'H' as u32);
+    assert_eq!(h.bounds, bounds(141, 0, 1142, 1475));
+    assert_eq!(
+        (h.left_side_bearing, h.right_side_bearing),
+        (Some(141), Some(141))
+    );
+    let a = detail(&read(WOFF2), 'A' as u32);
+    assert_eq!(a.bounds, bounds(50, 0, 550, 730));
+}
+
+#[test]
+fn a_space_has_bearings_and_no_box() {
+    for (font, advance) in [(ROBOTO_SLAB, 500), (NUNITO_OTF, 246)] {
+        let space = detail(&read(font), ' ' as u32);
+        assert_eq!(space.health, Health::Ok, "{font}");
+        assert_eq!(space.advance_width, Some(advance), "{font}");
+        assert_eq!(space.bounds, None, "{font}");
+        assert_eq!(space.left_side_bearing, Some(0), "{font}");
+        assert_eq!(space.right_side_bearing, Some(advance as i32), "{font}");
+    }
+}
+
+#[test]
+fn ink_is_absent_when_the_outline_cannot_be_read() {
+    let data = read(ROBOTO_SLAB);
+    let font = FontRef::new(&data).expect("font");
+    let past = GlyphId::new(u32::from(font.maxp().expect("maxp").num_glyphs()) + 10);
+    let metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
+    let ink = ink_metrics(&font, Some(&metrics), past);
+    assert_eq!(
+        (ink.left_side_bearing, ink.right_side_bearing, ink.bounds),
+        (None, None, None)
+    );
 }

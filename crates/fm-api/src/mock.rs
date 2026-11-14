@@ -45,12 +45,12 @@ use crate::layout::{
 use crate::library::{
     AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
     DuplicateKind, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary,
-    FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphDetail,
-    GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest,
-    LicenseInfo, LicensePermissions, LicensePermissionsSource, LicenseType, ListFamiliesRequest,
-    OpenLicense, Platform, Problem, ProblemKind, Resolution, ResolveFontRequest,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
-    SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphBounds,
+    GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode,
+    KeepCopyRequest, LicenseInfo, LicensePermissions, LicensePermissionsSource, LicenseType,
+    ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
+    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
+    SidecarConflict, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
@@ -2079,14 +2079,28 @@ impl LibraryService for MockApi {
             .ok_or_else(|| ApiError::not_found(format!("Character U+{:04X}", req.code_point)))?;
         let cp = c as u32;
         let features = |tags: &[&str]| tags.iter().map(|t| mock_feature(t)).collect();
+        let advance = if cp >= 0x2E80 {
+            1000
+        } else {
+            500 + cp % 5 * 50
+        };
+        // A space has bearings and no ink; the rest is inked 40 units in
+        // from both sides, from the baseline to the cap height.
+        let blank = c.is_whitespace();
+        let ink = advance as i32 - 40;
+        let lsb = if blank { 0 } else { 40 };
         Ok(GlyphDetail {
             code_point: cp,
             glyph_id,
             name: Some(mock_glyph_name(c)),
-            advance_width: Some(if cp >= 0x2E80 {
-                1000
-            } else {
-                500 + cp % 5 * 50
+            advance_width: Some(advance),
+            left_side_bearing: Some(lsb),
+            right_side_bearing: Some(if blank { advance as i32 } else { 40 }),
+            bounds: (!blank).then_some(GlyphBounds {
+                x_min: 40,
+                y_min: 0,
+                x_max: ink,
+                y_max: 700,
             }),
             produced_by: match c {
                 '\u{FB01}' | '\u{FB02}' => features(&["liga"]),
