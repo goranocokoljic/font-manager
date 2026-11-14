@@ -462,3 +462,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E49.10 #550] apps/desktop/src/stores/preview.ts:279 — `applyPreset` exists, but `findWithTrait` writes `{ preset, sample }` by hand, bypassing `PRESET_SAMPLE`.
 - [E49.9 #552] apps/desktop/src/components/WallCountLine.vue:178 — sort changes from the count line's menu are not announced: the `.sort` part sits outside the status region.
 - [E49.9 #552] apps/desktop/e2e/dynamic-previews.spec.ts:24 — flaky under parallel load (fails 3/3 locally with default workers on main, passes with --workers 1); failed the Windows CI job of PR #567 with selection.spec.ts:198 (transition 0s).
+
+## 2026-11-14
+
+- [E50.2 #573] apps/desktop/src/views/HomeView.vue:665 — the toolbar also holds the sidebar toggle and the preview size slider, which are not in criterion 1's list nor on board 9 (constant across modes).
