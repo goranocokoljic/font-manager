@@ -290,6 +290,7 @@ fn search_flags_become_the_request_filters() {
         features: feature,
         variable,
         traits: Vec::new(),
+        foundries: Vec::new(),
     };
     assert_eq!(
         flags.filters(),
@@ -1196,4 +1197,106 @@ fn traits_prints_the_catalog_with_counts() {
     assert!(out.contains("round (roundness>=0.95)"), "{out}");
     assert!(out.contains("low accuracy"), "R.leg is disabled: {out}");
     assert!(out.contains("2 traits"), "{out}");
+}
+
+/// E50.11 criterion 3: `--foundry` (repeated) reaches the request as
+/// `foundries`, and the search keeps the families of any of them.
+#[test]
+fn foundry_flags_become_the_request_foundries() {
+    let cli = Cli::try_parse_from(["fm", "search", "--foundry", "Adobe", "--foundry", "rsms"])
+        .expect("valid");
+    let fm_cli::Command::Search { foundry, .. } = cli.command else {
+        panic!("a search");
+    };
+    assert_eq!(foundry, ["Adobe", "rsms"]);
+
+    let (exit, out, _) = fm(&["--json", "search", "--foundry", "adobe"]);
+    assert_eq!(exit, Exit::Success);
+    let names: Vec<String> = hits(&out).into_iter().map(|h| h.family.name).collect();
+    assert_eq!(names, ["Source Serif 4"]);
+    let (exit, out, _) = fm(&[
+        "--json",
+        "search",
+        "--foundry",
+        "Adobe",
+        "--foundry",
+        "rsms",
+    ]);
+    assert_eq!(exit, Exit::Success);
+    let mut names: Vec<String> = hits(&out).into_iter().map(|h| h.family.name).collect();
+    names.sort();
+    assert_eq!(names, ["Inter", "Source Serif 4"]);
+    // Without the flag, every foundry.
+    let (_, out, _) = fm(&["--json", "search"]);
+    assert_eq!(hits(&out).len(), 4);
+}
+
+/// E50.11 criterion 3: `fm foundries` prints the list (`--json`: the API's
+/// answer); `--merge … --into …` merges and `--unmerge` undoes it.
+#[test]
+fn foundries_lists_merges_and_unmerges() {
+    let api = MockApi::new();
+    let direct = SearchService::list_foundries(&api).expect("foundries");
+    let (exit, out, _) = fm_on(&api, &["--json", "foundries"]);
+    assert_eq!(exit, Exit::Success);
+    let printed: Vec<fm_api::search::FoundryInfo> =
+        serde_json::from_value(json(&out)).expect("foundries");
+    assert_eq!(printed, direct);
+
+    let (exit, out, _) = fm_on(&api, &["foundries"]);
+    assert_eq!(exit, Exit::Success);
+    for header in ["FOUNDRY", "FAMILIES", "AS WRITTEN", "MERGED"] {
+        assert!(out.contains(header), "{out}");
+    }
+    assert!(out.contains("JetBrains"), "{out}");
+    assert!(out.contains("4 foundries"), "{out}");
+
+    let (exit, out, _) = fm_on(
+        &api,
+        &["--json", "foundries", "--merge", "rsms", "--into", "Adobe"],
+    );
+    assert_eq!(exit, Exit::Success);
+    let merged: Vec<fm_api::search::FoundryInfo> =
+        serde_json::from_value(json(&out)).expect("foundries");
+    let adobe = merged.iter().find(|f| f.name == "Adobe").expect("Adobe");
+    assert_eq!(adobe.merged, ["rsms"]);
+    assert_eq!(adobe.families, 2);
+    assert!(merged.iter().all(|f| f.name != "rsms"));
+    assert!(api.mutations().contains(&"merge_foundries"));
+
+    let (exit, _, err) = fm_on(
+        &api,
+        &[
+            "--json",
+            "foundries",
+            "--merge",
+            "Nobody",
+            "--into",
+            "Adobe",
+        ],
+    );
+    assert_eq!(exit, Exit::NotFound, "{err}");
+
+    let (exit, out, _) = fm_on(&api, &["--json", "foundries", "--unmerge", "rsms"]);
+    assert_eq!(exit, Exit::Success);
+    let back: Vec<fm_api::search::FoundryInfo> =
+        serde_json::from_value(json(&out)).expect("foundries");
+    assert_eq!(back, direct);
+
+    // `--merge` needs `--into`, and `--unmerge` goes alone.
+    assert!(Cli::try_parse_from(["fm", "foundries", "--merge", "rsms"]).is_err());
+    assert!(Cli::try_parse_from(["fm", "foundries", "--into", "Adobe"]).is_err());
+    assert!(
+        Cli::try_parse_from([
+            "fm",
+            "foundries",
+            "--merge",
+            "rsms",
+            "--into",
+            "Adobe",
+            "--unmerge",
+            "rsms"
+        ])
+        .is_err()
+    );
 }

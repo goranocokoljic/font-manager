@@ -77,6 +77,9 @@ service!(SearchService {
     find_similar_glyph(req: SimilarGlyphRequest) -> Vec<SimilarGlyphFace>;
     suggest_pairings(req: PairingRequest) -> Vec<PairingSuggestion>;
     list_glyph_traits() -> Vec<GlyphTraitInfo>;
+    list_foundries() -> Vec<FoundryInfo>;
+    merge_foundries(req: MergeFoundriesRequest) -> Vec<FoundryInfo>;
+    unmerge_foundry(req: UnmergeFoundryRequest) -> Vec<FoundryInfo>;
 });
 
 service!(PreviewService {

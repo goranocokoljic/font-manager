@@ -74,6 +74,7 @@ use crate::search::{
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarGlyphFace,
     SimilarGlyphRequest, SimilarRequest, Supports, WeightRange, WidthRange,
 };
+use crate::search::{FoundryInfo, MergeFoundriesRequest, UNKNOWN_FOUNDRY, UnmergeFoundryRequest};
 use crate::search::{
     GlyphTraitInfo, GlyphTraitKind, GlyphTraitMeasure, GlyphTraitThreshold, GlyphTraitValue,
 };
@@ -589,6 +590,9 @@ struct State {
     catalog_cache: BTreeMap<CatalogId, (String, Vec<CatalogFamily>)>,
     /// The families "downloaded" (E22.3), oldest first.
     catalog_downloads: Vec<CatalogDownload>,
+    /// Foundry merges (E50.11): the name merged away, lowercased, and the
+    /// two names as given.
+    foundry_merges: BTreeMap<String, (String, String)>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -1038,6 +1042,7 @@ impl State {
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
             catalog_cache: BTreeMap::new(),
+            foundry_merges: BTreeMap::new(),
             catalog_downloads: Vec::new(),
             next_id: 100,
             subscribers: Vec::new(),
@@ -2519,9 +2524,94 @@ fn mock_glyph_traits() -> Vec<GlyphTraitInfo> {
     ]
 }
 
+/// The mock's foundries (E50.11): each family's foundry as written, names
+/// equal without case folded, merges applied; no alias table.
+impl State {
+    /// The foundry a family lists under, merges followed.
+    fn foundry_of(&self, raw: &str) -> String {
+        let mut name = raw.to_owned();
+        for _ in 0..=self.foundry_merges.len() {
+            match self.foundry_merges.get(&name.to_lowercase()) {
+                Some((_, into)) => name.clone_from(into),
+                None => break,
+            }
+        }
+        name
+    }
+
+    fn foundries(&self) -> Vec<FoundryInfo> {
+        let mut by: BTreeMap<String, FoundryInfo> = BTreeMap::new();
+        for fam in &self.families {
+            let name = self.foundry_of(fam.foundry);
+            let info = by
+                .entry(name.to_lowercase())
+                .or_insert_with(|| FoundryInfo {
+                    name: name.clone(),
+                    families: 0,
+                    raw_names: Vec::new(),
+                    merged: Vec::new(),
+                    unknown: false,
+                });
+            info.families += 1;
+            if !info.raw_names.iter().any(|r| r == fam.foundry) {
+                info.raw_names.push(fam.foundry.to_owned());
+                info.raw_names.sort();
+            }
+        }
+        for (from, into) in self.foundry_merges.values() {
+            if let Some(info) = by.get_mut(&self.foundry_of(into).to_lowercase()) {
+                info.merged.push(from.clone());
+                info.merged.sort();
+            }
+        }
+        by.into_values().collect()
+    }
+}
+
 impl SearchService for MockApi {
     fn list_glyph_traits(&self) -> ApiResult<Vec<GlyphTraitInfo>> {
         Ok(mock_glyph_traits())
+    }
+
+    /// Every mock family has a foundry, so the unknown foundry is not listed.
+    fn list_foundries(&self) -> ApiResult<Vec<FoundryInfo>> {
+        Ok(self.state().foundries())
+    }
+
+    fn merge_foundries(&self, req: MergeFoundriesRequest) -> ApiResult<Vec<FoundryInfo>> {
+        let mut st = self.state();
+        st.mutations.push("merge_foundries");
+        let listed = st.foundries();
+        let find = |name: &str| {
+            listed
+                .iter()
+                .find(|f| f.name.eq_ignore_ascii_case(name.trim()))
+                .map(|f| f.name.clone())
+                .ok_or_else(|| ApiError::not_found(format!("foundry {name}")))
+        };
+        let unknown = |name: &str| name.trim().eq_ignore_ascii_case(UNKNOWN_FOUNDRY);
+        if unknown(&req.from) || unknown(&req.into) {
+            return Err(ApiError::invalid("The unknown foundry cannot be merged."));
+        }
+        let (from, into) = (find(&req.from)?, find(&req.into)?);
+        if from == into {
+            return Err(ApiError::invalid("A foundry cannot be merged into itself."));
+        }
+        st.foundry_merges.insert(from.to_lowercase(), (from, into));
+        Ok(st.foundries())
+    }
+
+    fn unmerge_foundry(&self, req: UnmergeFoundryRequest) -> ApiResult<Vec<FoundryInfo>> {
+        let mut st = self.state();
+        st.mutations.push("unmerge_foundry");
+        if st
+            .foundry_merges
+            .remove(&req.name.trim().to_lowercase())
+            .is_none()
+        {
+            return Err(ApiError::not_found(format!("merged foundry {}", req.name)));
+        }
+        Ok(st.foundries())
     }
 
     fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -2548,6 +2638,14 @@ impl SearchService for MockApi {
         }
         if !traits.is_empty() {
             hits.clear();
+        }
+        // Families of the foundries asked for (E50.11); every mock family
+        // has a foundry, so the unknown foundry finds none.
+        if let Some(wanted) = req.foundries.as_ref().filter(|w| !w.is_empty()) {
+            hits.retain(|hit| {
+                let name = st.foundry_of(hit.family.foundry.as_deref().unwrap_or_default());
+                wanted.iter().any(|w| w.trim().eq_ignore_ascii_case(&name))
+            });
         }
         if let Some(reference) = req.like_glyph {
             // The stand-in distance of `find_similar_glyph`, the reference

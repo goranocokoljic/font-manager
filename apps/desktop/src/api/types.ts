@@ -1821,6 +1821,26 @@ export type FontsNeededResponse = {
 	fetched?: FetchedFont[],
 };
 
+/**  One foundry of the library, under its normalised name (E50.11). */
+export type FoundryInfo = {
+	/**  The canonical name (`Google`), or [`UNKNOWN_FOUNDRY`]. */
+	name: string,
+	/**  Family groups with a searchable face of this foundry. */
+	families: number,
+	/**
+	 *  The names as the fonts write them that fold into this one (`Google
+	 *  LLC`, `The Google Font Team`), A to Z; empty for the unknown foundry.
+	 */
+	rawNames: string[],
+	/**
+	 *  The canonical names a user merged into this one, A to Z
+	 *  (`merge_foundries`); each can be split off again (`unmerge_foundry`).
+	 */
+	merged: string[],
+	/**  The faces with no foundry; listed last. */
+	unknown: boolean,
+};
+
 /**  A front-end framework a snippet is written for (E20.5). */
 export type Framework = 
 /**  A `theme.extend.fontFamily` entry for `tailwind.config.js`. */
@@ -2649,6 +2669,18 @@ export type McpUpdate = {
 	enabled: boolean,
 };
 
+/**
+ *  Merge one foundry into another (E50.11): from now on, the faces of
+ *  `from` list and filter under `into`. Stored in the library, so it
+ *  survives a rescan.
+ */
+export type MergeFoundriesRequest = {
+	/**  The canonical name merged away, as `list_foundries` gives it. */
+	from: string,
+	/**  The canonical name it becomes, as `list_foundries` gives it. */
+	into: string,
+};
+
 /**  Vertical metrics in font units. */
 export type Metrics = {
 	/**  Units per em. */
@@ -3301,6 +3333,14 @@ export type SearchRequest = {
 	 *  unknown or does not draw the character is `NotFound`.
 	 */
 	likeGlyph?: GlyphReference | null,
+	/**
+	 *  Families of any of these foundries (E50.11), by the canonical names
+	 *  `list_foundries` gives, compared without case or punctuation;
+	 *  [`UNKNOWN_FOUNDRY`] names the faces with no foundry. Like the glyph
+	 *  traits, a face outside them is no result and counts under no filter
+	 *  value. `None` or an empty list: every foundry.
+	 */
+	foundries?: string[] | null,
 };
 
 /**  Search results grouped by family. */
@@ -3893,6 +3933,12 @@ export type TrashMoveStatus =
 "skipped" | 
 /**  The move or the undo failed (`message` says why). */
 "failed";
+
+/**  Undo a merge (E50.11): the foundry is listed under its own name again. */
+export type UnmergeFoundryRequest = {
+	/**  The canonical name that was merged away, as in [`FoundryInfo::merged`]. */
+	name: string,
+};
 
 /**  Detach tags from faces. */
 export type UntagFacesRequest = {

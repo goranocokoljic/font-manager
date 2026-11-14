@@ -1,0 +1,125 @@
+{
+  "$schema": "./foundries.schema.json",
+  "suffixes": [
+    "ab",
+    "ag",
+    "bv",
+    "co",
+    "company",
+    "corp",
+    "corporation",
+    "gmbh",
+    "inc",
+    "incorporated",
+    "kg",
+    "limited",
+    "llc",
+    "ltd",
+    "oy",
+    "plc",
+    "pty",
+    "sa",
+    "sarl",
+    "srl"
+  ],
+  "ignore": [
+    "*project authors",
+    "*project developers",
+    "all rights reserved",
+    "none",
+    "the authors",
+    "unknown"
+  ],
+  "patterns": [
+    "{*} is a registered trademark of {name}",
+    "{*} are registered trademarks of {name}",
+    "{*} is a trademark of {name}",
+    "{*} are trademarks of {name}",
+    "copyright (c) {years} by {name}",
+    "copyright (c) {years} {name}",
+    "copyright © {years} by {name}",
+    "copyright © {years} {name}",
+    "copyright {years} by {name}",
+    "copyright {years} {name}",
+    "© {years} by {name}",
+    "© {years} {name}",
+    "(c) {years} by {name}",
+    "(c) {years} {name}"
+  ],
+  "nameStops": [" (", " <", " http", " www.", "\n"],
+  "noticeStops": [",", ";", ". ", " with reserved", " all rights", " and contributors"],
+  "foundries": [
+    {
+      "name": "Adobe",
+      "aliases": ["Adobe Inc.", "Adobe Systems", "Adobe Systems Incorporated", "Adobe Systems Inc."]
+    },
+    {
+      "name": "Apple",
+      "aliases": ["Apple Inc.", "Apple Computer", "Apple Computer, Inc."]
+    },
+    {
+      "name": "Bitstream",
+      "aliases": ["Bitstream Inc.", "Bitstream Inc"]
+    },
+    {
+      "name": "Cadson Demak",
+      "aliases": ["Cadson Demak Co.,Ltd.", "Cadson Demak Co., Ltd."]
+    },
+    {
+      "name": "Dalton Maag",
+      "aliases": ["Dalton Maag Ltd", "Dalton Maag Ltd."]
+    },
+    {
+      "name": "Etcetera Type Co",
+      "aliases": ["Etcetera Type Company", "Etcetera Type"]
+    },
+    {
+      "name": "Font Diner",
+      "aliases": ["Font Diner, Inc", "Font Diner, Inc DBA Sideshow", "Sideshow"]
+    },
+    {
+      "name": "GitHub",
+      "aliases": ["GitHub, Inc.", "GitHub, Inc., Subsidiary of Microsoft Corporation"]
+    },
+    {
+      "name": "Google",
+      "aliases": ["Google Fonts", "The Google Font Team", "Google Inc.", "Google LLC", "Google Corporation"]
+    },
+    {
+      "name": "Impallari Type",
+      "aliases": ["Pablo Impallari", "Impallari"]
+    },
+    {
+      "name": "Indian Type Foundry",
+      "aliases": ["ITF"]
+    },
+    {
+      "name": "ITC",
+      "aliases": ["International Typeface Corporation"]
+    },
+    {
+      "name": "Linotype",
+      "aliases": ["Linotype GmbH", "Linotype AG", "Linotype Library GmbH", "Linotype-Hell AG"]
+    },
+    {
+      "name": "Microsoft",
+      "aliases": ["Microsoft Corporation", "Microsoft Corp."]
+    },
+    {
+      "name": "Monotype",
+      "aliases": ["Monotype Imaging", "Monotype Imaging Inc.", "Monotype Corporation", "Monotype Typography"]
+    },
+    {
+      "name": "Omnibus-Type",
+      "aliases": ["Omnibus Type", "Omnibus-Type Team"]
+    },
+    {
+      "name": "Sorkin Type",
+      "aliases": ["Sorkin Type Co"]
+    },
+    {
+      "name": "URW Type Foundry",
+      "aliases": ["URW++", "URW++ Design & Development", "URW++ Design and Development GmbH", "URW"]
+    }
+  ]
+}

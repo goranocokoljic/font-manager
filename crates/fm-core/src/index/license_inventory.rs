@@ -47,6 +47,7 @@ impl Index {
             },
             rule: None,
             like_glyph: None,
+            foundries: None,
         })?;
         let mut rows = Vec::with_capacity(found.families.len());
         for hit in found.families {

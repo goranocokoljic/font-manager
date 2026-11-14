@@ -3968,3 +3968,86 @@ fn search_sorts_by_a_reference_glyph() {
         ErrorCode::NotFound
     );
 }
+
+/// E50.11: the mock lists its foundries A to Z, filters a search by them,
+/// and merges and unmerges as the contract says.
+#[test]
+fn mock_foundries_list_filter_and_merge() {
+    use fm_api::search::{
+        FoundryInfo, MergeFoundriesRequest, SearchRequest, UnmergeFoundryRequest,
+    };
+    let api = api();
+    let list = api.list_foundries().unwrap();
+    let names: Vec<(&str, u32)> = list.iter().map(|f| (f.name.as_str(), f.families)).collect();
+    assert_eq!(
+        names,
+        [
+            ("Adobe", 1),
+            ("JetBrains", 1),
+            ("Old Foundry", 1),
+            ("rsms", 1)
+        ]
+    );
+    assert!(list.iter().all(|f| !f.unknown && f.merged.is_empty()));
+    let found = |names: &[&str]| -> Vec<String> {
+        let mut out: Vec<String> = api
+            .search(SearchRequest {
+                foundries: Some(names.iter().map(|n| (*n).to_owned()).collect()),
+                ..SearchRequest::default()
+            })
+            .unwrap()
+            .families
+            .into_iter()
+            .map(|h| h.family.name)
+            .collect();
+        out.sort();
+        out
+    };
+    assert_eq!(found(&["adobe"]), ["Source Serif 4"]);
+    assert_eq!(found(&["Adobe", "RSMS"]), ["Inter", "Source Serif 4"]);
+    assert!(found(&["Unknown foundry"]).is_empty());
+    assert_eq!(found(&[]).len(), 4);
+
+    let merge = |from: &str, into: &str| {
+        api.merge_foundries(MergeFoundriesRequest {
+            from: from.into(),
+            into: into.into(),
+        })
+    };
+    let merged: Vec<FoundryInfo> = merge("rsms", "Adobe").unwrap();
+    let adobe = &merged[0];
+    assert_eq!((adobe.name.as_str(), adobe.families), ("Adobe", 2));
+    assert_eq!(adobe.merged, ["rsms"]);
+    assert_eq!(adobe.raw_names, ["Adobe", "rsms"]);
+    assert_eq!(found(&["Adobe"]), ["Inter", "Source Serif 4"]);
+    assert_eq!(
+        merge("Nobody", "Adobe").unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        merge("rsms", "Adobe").unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        merge("Adobe", "adobe").unwrap_err().code,
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        merge("Unknown foundry", "Adobe").unwrap_err().code,
+        ErrorCode::InvalidRequest
+    );
+    let back = api
+        .unmerge_foundry(UnmergeFoundryRequest {
+            name: "rsms".into(),
+        })
+        .unwrap();
+    assert_eq!(back, list);
+    assert_eq!(
+        api.unmerge_foundry(UnmergeFoundryRequest {
+            name: "rsms".into()
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::NotFound
+    );
+}

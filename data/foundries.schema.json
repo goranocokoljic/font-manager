@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/foundries.schema.json",
+  "title": "Font Manager foundry names",
+  "description": "How the raw foundry strings of a font's name table (manufacturer, trademark, copyright, designer) fold into one canonical foundry name. Names compare as keys: lower case, every run of characters that are not letters or digits made one space, the legal suffixes at the end dropped. foundries.json follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "suffixes", "ignore", "patterns", "nameStops", "noticeStops", "foundries"],
+  "properties": {
+    "$schema": { "const": "./foundries.schema.json" },
+    "suffixes": {
+      "description": "Legal-form words dropped from the end of a key (Inc, LLC, Ltd), as keys. Sorted, unique.",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[\\p{Ll}\\p{N}]+$" }
+    },
+    "ignore": {
+      "description": "Keys that name no foundry ('the authors'); a leading * matches any start ('*project authors'). Sorted, unique.",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^\\*?[\\p{Ll}\\p{N}]+( [\\p{Ll}\\p{N}]+)*$" }
+    },
+    "patterns": {
+      "description": "Notices a foundry name is read from (name ID 7 then name ID 0), tried in order. Text matches without case, a space matches any run of white space or none, {years} one or more years (2011, 2015-2022, 2011, 2012), {*} any text, {name} the foundry name up to the first stop. Each pattern has exactly one {name}, at its end.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[^{}]*(\\{(years|\\*)\\}[^{}]*)*\\{name\\}$" }
+    },
+    "nameStops": {
+      "description": "Where every foundry name ends: the text from the first stop on is dropped ('Cyreal (www.cyreal.org)').",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "noticeStops": {
+      "description": "Where a name read from a notice ends as well ('Typomondo, with Reserved Font Name').",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "foundries": {
+      "description": "Canonical foundries. Sorted by name without case; no key (of a name or an alias) belongs to two foundries.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/foundry" }
+    }
+  },
+  "$defs": {
+    "foundry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "aliases"],
+      "properties": {
+        "name": {
+          "description": "The canonical name, as the app shows it.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\S(.*\\S)?$"
+        },
+        "aliases": {
+          "description": "Raw names that fold into it, as fonts write them.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "pattern": "^\\S(.*\\S)?$" }
+        }
+      }
+    }
+  }
+}

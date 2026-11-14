@@ -81,7 +81,8 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
        CASE WHEN json_valid(face.metrics)
             THEN CAST(json_extract(face.metrics, '$.xHeight') AS REAL)
                  / nullif(json_extract(face.metrics, '$.unitsPerEm'), 0) END,
-       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.copyright') END
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.copyright') END,
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.trademark') END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -111,6 +112,8 @@ pub(super) struct SearchCache {
     /// The glyph descriptors (E49.8) by code point: read on the first
     /// similar-glyph query of that character after the database changed.
     glyphs: glyph_similar::GlyphCache,
+    /// The library's foundries, merges applied (E50.11).
+    foundries: crate::foundries::Table,
 }
 
 /// One searchable face.
@@ -147,6 +150,9 @@ struct Row {
     x_height: Option<f32>,
     /// The earliest year in its copyright (E42.13).
     year: Option<u16>,
+    /// Its foundry, a slot of [`SearchCache::foundries`] (E50.11); `None`:
+    /// its names state none.
+    foundry: Option<u32>,
 }
 
 impl Index {
@@ -179,6 +185,11 @@ impl Index {
             .map(|list| list.into_iter().collect());
         let cache = self.search_cache.borrow();
         let rows = cache.rows.as_slice();
+        let foundries = req
+            .foundries
+            .as_deref()
+            .filter(|names| !names.is_empty())
+            .map(|names| foundries::Wanted::new(&cache.foundries, names));
         let fts = query
             .fts_match()
             .map(|expr| self.fts_candidates(&expr))
@@ -217,6 +228,10 @@ impl Index {
                         .as_ref()
                         .is_some_and(|faces| !faces.contains(&row.id))
                     {
+                        return None;
+                    }
+                    // And a face of another foundry (E50.11).
+                    if foundries.as_ref().is_some_and(|f| !f.holds(row.foundry)) {
                         return None;
                     }
                     let mut failed = failed(&req.filters, &row.text, &row.facts)
@@ -469,7 +484,11 @@ impl Index {
             return Ok(());
         }
         let mut slots = Slots::default();
-        let rows = self.visible_faces(&mut slots)?;
+        let (mut rows, found) = self.visible_faces(&mut slots)?;
+        let (foundries, of_face) = crate::foundries::Table::build(&found, &self.foundry_merges()?);
+        for (row, slot) in rows.iter_mut().zip(of_face) {
+            row.foundry = slot;
+        }
         let tag_names = self.tag_names()?;
         let family_notes = self.all_family_notes()?;
         *self.search_cache.borrow_mut() = SearchCache {
@@ -481,11 +500,16 @@ impl Index {
             profiles: None,
             detections: None,
             glyphs: glyph_similar::GlyphCache::default(),
+            foundries,
         };
         Ok(())
     }
 
-    fn visible_faces(&self, slots: &mut Slots) -> FmResult<Vec<Row>> {
+    /// The searchable rows, and the foundry each one's names state.
+    fn visible_faces(
+        &self,
+        slots: &mut Slots,
+    ) -> FmResult<(Vec<Row>, Vec<Option<crate::foundries::Identified>>)> {
         let mut tags = self.pairs("SELECT face_id, tag_id FROM face_tag", TagId)?;
         let mut collections = self.pairs(
             "SELECT face_id, collection_id FROM collection_face",
@@ -497,6 +521,7 @@ impl Index {
             .map_err(|e| db_error(&e))?;
         let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
         let mut out = Vec::new();
+        let mut found = Vec::new();
         let mut slants = Names::new(name_of::<Slant>);
         let mut modes = Names::new(name_of::<ActivationMode>);
         let mut formats = Names::new(|f| format_from_sql(f).ok().flatten());
@@ -555,6 +580,14 @@ impl Index {
                 embedding: license::embedding(row.get(29).map_err(|e| db_error(&e))?),
                 open_license,
             };
+            // Not text (a damaged row): stated by none, like a missing one.
+            let notice = |i: usize| row.get_ref(i).ok().and_then(|v| v.as_str().ok());
+            found.push(crate::foundries::identify(&crate::foundries::FaceNames {
+                manufacturer: fields[FOUNDRY],
+                trademark: notice(34),
+                copyright: notice(33),
+                designer: fields[DESIGNER],
+            }));
             let face_text = FaceText::new(
                 fields,
                 row.get(8).map_err(|e| db_error(&e))?,
@@ -602,9 +635,10 @@ impl Index {
                     .ok()
                     .and_then(|v| v.as_str().ok())
                     .and_then(crate::pairing::role::copyright_year),
+                foundry: None,
             });
         }
-        Ok(out)
+        Ok((out, found))
     }
 
     /// Every tag's name by id.
@@ -805,6 +839,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(serde_json::Value::String(name.to_owned())).ok()
 }
 
+mod foundries;
 pub(crate) mod glyph_similar;
 mod pairing;
 mod similar;

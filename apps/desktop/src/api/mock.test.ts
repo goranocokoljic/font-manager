@@ -522,3 +522,37 @@ describe('MockApi glyph metrics (E50.8)', () => {
     expect(space.rightSideBearing).toBe(space.advanceWidth);
   });
 });
+
+describe('foundries (E50.11)', () => {
+  it('lists, filters, merges and unmerges as the Rust mock', async () => {
+    const client = createMockClient();
+    const list = await client.listFoundries();
+    expect(list.length).toBeGreaterThan(1);
+    expect(list.every((f) => f.families > 0)).toBe(true);
+    const names = list.filter((f) => !f.unknown).map((f) => f.name.toLowerCase());
+    expect(names).toEqual([...names].sort());
+    const [first, second] = list.filter((f) => !f.unknown);
+    const found = await client.search({ foundries: [first!.name.toUpperCase()] });
+    expect(found.total).toBe(first!.families);
+    expect(found.families.every((h) => h.family.foundry === first!.rawNames[0])).toBe(true);
+
+    const merged = await client.mergeFoundries({ from: first!.name, into: second!.name });
+    expect(merged.some((f) => f.name === first!.name)).toBe(false);
+    const into = merged.find((f) => f.name === second!.name)!;
+    expect(into.merged).toEqual([first!.name]);
+    expect(into.families).toBe(first!.families + second!.families);
+    await expect(
+      client.mergeFoundries({ from: 'Nobody', into: second!.name }),
+    ).rejects.toMatchObject({
+      code: 'notFound',
+    });
+    await expect(
+      client.mergeFoundries({ from: second!.name, into: second!.name.toLowerCase() }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+
+    expect(await client.unmergeFoundry({ name: first!.name })).toEqual(list);
+    await expect(client.unmergeFoundry({ name: first!.name })).rejects.toMatchObject({
+      code: 'notFound',
+    });
+  });
+});

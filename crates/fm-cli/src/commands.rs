@@ -206,6 +206,8 @@ pub struct SearchFlags {
     pub variable: bool,
     /// `--trait`: glyph traits, every one required (E49.5).
     pub traits: Vec<TraitFilter>,
+    /// `--foundry`: foundries, any one of them (E50.11).
+    pub foundries: Vec<String>,
 }
 
 impl SearchFlags {
@@ -237,6 +239,7 @@ pub fn search(api: &dyn Api, query: &str, flags: &SearchFlags) -> Result<Vec<Fam
                 limit: PAGE,
             },
             like_glyph: None,
+            foundries: (!flags.foundries.is_empty()).then(|| flags.foundries.clone()),
         })?;
         let last = page.families.is_empty();
         hits.extend(page.families);

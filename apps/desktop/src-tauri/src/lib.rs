@@ -44,9 +44,10 @@ use fm_api::preview::{
     SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, GlyphTraitInfo,
-    LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion, SearchRequest, SearchResponse,
-    SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, FoundryInfo,
+    GlyphTraitInfo, LanguageHint, LanguagePreset, MergeFoundriesRequest, PairingRequest,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
+    UnmergeFoundryRequest,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
@@ -943,6 +944,30 @@ async fn list_glyph_traits(state: State<'_, AppState>) -> ApiResult<Vec<GlyphTra
     call(&state, |api| api.list_glyph_traits()).await
 }
 
+/// The library's foundries under their normalised names (E50.11).
+#[tauri::command]
+async fn list_foundries(state: State<'_, AppState>) -> ApiResult<Vec<FoundryInfo>> {
+    call(&state, |api| api.list_foundries()).await
+}
+
+/// Merges one foundry into another (E50.11).
+#[tauri::command]
+async fn merge_foundries(
+    state: State<'_, AppState>,
+    req: MergeFoundriesRequest,
+) -> ApiResult<Vec<FoundryInfo>> {
+    call(&state, move |api| api.merge_foundries(req)).await
+}
+
+/// Undoes a foundry merge (E50.11).
+#[tauri::command]
+async fn unmerge_foundry(
+    state: State<'_, AppState>,
+    req: UnmergeFoundryRequest,
+) -> ApiResult<Vec<FoundryInfo>> {
+    call(&state, move |api| api.unmerge_foundry(req)).await
+}
+
 /// How well one face covers some languages or text, for the glyph compare overlay.
 #[tauri::command]
 async fn check_coverage(
@@ -1492,6 +1517,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             find_similar,
             suggest_pairings,
             list_glyph_traits,
+            list_foundries,
+            merge_foundries,
+            unmerge_foundry,
             check_coverage,
             face_coverage,
             list_languages,

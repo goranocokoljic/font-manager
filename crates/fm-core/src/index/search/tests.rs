@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use fm_api::common::{Classification, Embedding, Health, Page};
 use fm_api::library::{FamilyOrder, FamilySortKey, SourceKind};
-use fm_api::search::{FilterCount, FilterCounts, Filters, Supports, WeightRange, WidthRange};
+use fm_api::search::{
+    FilterCount, FilterCounts, Filters, FoundryInfo, Supports, WeightRange, WidthRange,
+};
 use fm_api::{ErrorCode, SourceId};
 use rusqlite::Connection;
 
@@ -1199,6 +1201,30 @@ fn time_queries(index: &Index, label: &str) {
             "{label}: {query:?} {filters:?} took {elapsed:?}"
         );
     }
+    // E50.11 criterion 4: filtering by foundry.
+    for (query, foundries) in [
+        ("", vec!["Type Co"]),
+        ("sans", vec!["Foundry A", "Type Co"]),
+        ("bold", vec!["Unknown foundry"]),
+    ] {
+        let req = SearchRequest {
+            query: query.to_owned(),
+            foundries: Some(foundries.iter().map(|f| (*f).to_owned()).collect()),
+            ..SearchRequest::default()
+        };
+        index.search(&req).expect("search");
+        let start = Instant::now();
+        let res = index.search(&req).expect("search");
+        let elapsed = start.elapsed();
+        eprintln!(
+            "{label}: {query:?} foundries {foundries:?} -> {} families in {elapsed:?}",
+            res.total
+        );
+        assert!(
+            elapsed < BUDGET,
+            "{label}: {query:?} foundries {foundries:?} took {elapsed:?}"
+        );
+    }
 }
 
 /// Twenty smart collections over every rule shape: AND/OR, nested groups,
@@ -2006,4 +2032,225 @@ fn foundry_counts_list_each_foundry_a_to_z() {
         .map(|c| (c.value, c.count))
         .collect();
     assert_eq!(only, [("Linotype".to_owned(), 1)]);
+}
+
+/// The search's foundry filter, by canonical names.
+fn by_foundry(index: &Index, query: &str, foundries: &[&str]) -> Vec<String> {
+    let res = index
+        .search(&SearchRequest {
+            query: query.to_owned(),
+            foundries: Some(foundries.iter().map(|f| (*f).to_owned()).collect()),
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    let mut out: Vec<String> = res.families.into_iter().map(|h| h.family.name).collect();
+    out.sort();
+    out
+}
+
+/// [`library`], plus Lobster (`Google LLC`), Nosifer (no manufacturer, a
+/// Typomondo copyright) and Gelasio (no manufacturer, a Google trademark).
+fn foundry_library() -> Vec<IndexedFile> {
+    let mut files = library();
+    files.push(single(
+        &f("Lobster", "Regular", 400, 5, false),
+        Some("Google LLC"),
+        None,
+    ));
+    let mut nosifer = single(&f("Nosifer", "Regular", 400, 5, false), None, None);
+    nosifer.parsed.faces[0].copyright =
+        Some("Copyright (c) 2011, Typomondo, with Reserved Font Name \"Nosifer\"".into());
+    files.push(nosifer);
+    let mut gelasio = single(&f("Gelasio", "Regular", 400, 5, false), None, None);
+    gelasio.parsed.faces[0].trademark =
+        Some("Gelasio is a trademark of The Google Font Team.".into());
+    gelasio.parsed.faces[0].copyright =
+        Some("Copyright 2022 The Gelasio Project Authors (https://github.com/x)".into());
+    files.push(gelasio);
+    files
+}
+
+fn listed_foundries(list: &[FoundryInfo]) -> Vec<(&str, u32)> {
+    list.iter().map(|f| (f.name.as_str(), f.families)).collect()
+}
+
+#[test]
+fn list_foundries_folds_the_names_and_lists_the_unknown_foundry_last() {
+    let (index, _) = indexed(&foundry_library());
+    let list = index.list_foundries().expect("foundries");
+    assert_eq!(
+        listed_foundries(&list),
+        [
+            ("Adobe", 1),
+            ("Google", 4),
+            ("Linotype", 1),
+            ("Rasmus", 1),
+            ("Typomondo", 1),
+            (fm_api::search::UNKNOWN_FOUNDRY, 1),
+        ]
+    );
+    let google = &list[1];
+    assert_eq!(
+        google.raw_names,
+        ["Google", "Google LLC", "The Google Font Team"]
+    );
+    assert!(google.merged.is_empty());
+    assert!(!google.unknown);
+    let unknown = list.last().expect("unknown");
+    assert!(unknown.unknown);
+    assert!(unknown.raw_names.is_empty());
+    // A library where every face states a foundry lists no unknown one.
+    let (named, _) = indexed(&[single(
+        &f("Lobster", "Regular", 400, 5, false),
+        Some("Google"),
+        None,
+    )]);
+    let list = named.list_foundries().expect("foundries");
+    assert_eq!(listed_foundries(&list), [("Google", 1)]);
+}
+
+#[test]
+fn the_foundry_filter_finds_the_families_of_any_foundry_named() {
+    let (index, _) = indexed(&foundry_library());
+    let google = ["Gelasio", "Lobster", "Roboto", "Roboto Condensed"];
+    assert_eq!(by_foundry(&index, "", &["Google"]), google);
+    // Names compare as keys, and an alias finds its canonical foundry.
+    assert_eq!(by_foundry(&index, "", &["google"]), google);
+    assert_eq!(by_foundry(&index, "", &["Google Fonts"]), google);
+    assert_eq!(
+        by_foundry(&index, "", &["Linotype", "Adobe"]),
+        ["Helvetica Neue", "Source Sans"]
+    );
+    assert_eq!(
+        by_foundry(&index, "", &["Unknown foundry"]),
+        ["Black Ops One"]
+    );
+    assert_eq!(by_foundry(&index, "", &["Typomondo"]), ["Nosifer"]);
+    assert!(by_foundry(&index, "", &["Nobody"]).is_empty());
+    // It combines with the text.
+    assert_eq!(
+        by_foundry(&index, "condensed", &["Google"]),
+        ["Roboto Condensed"]
+    );
+    // An empty list filters nothing out.
+    assert_eq!(by_foundry(&index, "", &[]).len(), 9);
+    // A face of another foundry counts under no filter value.
+    let res = index
+        .search(&SearchRequest {
+            foundries: Some(vec!["Linotype".into()]),
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    let counted: Vec<&str> = res
+        .counts
+        .as_ref()
+        .expect("counts")
+        .foundry
+        .iter()
+        .map(|c| c.value.as_str())
+        .collect();
+    assert_eq!(counted, ["Linotype"]);
+}
+
+#[test]
+fn a_merge_survives_a_rescan_and_can_be_undone() {
+    use fm_api::search::{MergeFoundriesRequest, UnmergeFoundryRequest};
+    let dir = TempDir::new("foundry-merge");
+    let path = dir.path().join(INDEX_FILE);
+    let mut index = Index::open(&path).expect("open").index;
+    let source = index
+        .add_source("/fonts", SourceKind::Watched)
+        .expect("source")
+        .id;
+    index
+        .persist_files(source, &foundry_library())
+        .expect("persist");
+    let merge = |from: &str, into: &str| MergeFoundriesRequest {
+        from: from.into(),
+        into: into.into(),
+    };
+    let list = index
+        .merge_foundries(&merge("linotype", "Adobe"))
+        .expect("merge");
+    assert_eq!(
+        listed_foundries(&list),
+        [
+            ("Adobe", 2),
+            ("Google", 4),
+            ("Rasmus", 1),
+            ("Typomondo", 1),
+            (fm_api::search::UNKNOWN_FOUNDRY, 1),
+        ]
+    );
+    assert_eq!(list[0].merged, ["Linotype"]);
+    assert_eq!(list[0].raw_names, ["Adobe", "Linotype"]);
+    assert_eq!(
+        by_foundry(&index, "", &["Adobe"]),
+        ["Helvetica Neue", "Source Sans"]
+    );
+    // The merged name finds the foundry it became.
+    assert_eq!(
+        by_foundry(&index, "", &["Linotype"]),
+        ["Helvetica Neue", "Source Sans"]
+    );
+
+    // A rescan rewrites the faces; the merge is kept, also after a reopen.
+    let mut again = foundry_library();
+    for file in &mut again {
+        file.hash = FileHash::from([9; 32]);
+    }
+    index.persist_files(source, &again).expect("rescan");
+    drop(index);
+    let mut index = Index::open(&path).expect("reopen").index;
+    let list = index.list_foundries().expect("foundries");
+    assert_eq!(list[0].name, "Adobe");
+    assert_eq!(list[0].families, 2);
+    assert_eq!(list[0].merged, ["Linotype"]);
+
+    // What a merge refuses.
+    let code = |r: FmResult<Vec<FoundryInfo>>| r.expect_err("refused").code();
+    assert_eq!(
+        code(index.merge_foundries(&merge("Nobody", "Adobe"))),
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        code(index.merge_foundries(&merge("Adobe", "Nobody"))),
+        ErrorCode::NotFound
+    );
+    // Merged away, Linotype is not listed: merging Adobe back into it is not found.
+    assert_eq!(
+        code(index.merge_foundries(&merge("Adobe", "Linotype"))),
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        code(index.merge_foundries(&merge("Google", "GOOGLE"))),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        code(index.merge_foundries(&merge("Unknown foundry", "Adobe"))),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        code(index.merge_foundries(&merge("Adobe", "Unknown foundry"))),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        code(index.unmerge_foundry(&UnmergeFoundryRequest {
+            name: "Adobe".into()
+        })),
+        ErrorCode::NotFound
+    );
+
+    // Undone, Linotype is listed on its own again.
+    let list = index
+        .unmerge_foundry(&UnmergeFoundryRequest {
+            name: "LINOTYPE".into(),
+        })
+        .expect("unmerge");
+    assert_eq!(
+        listed_foundries(&list)[..3],
+        [("Adobe", 1), ("Google", 4), ("Linotype", 1)]
+    );
+    assert!(list[0].merged.is_empty());
+    assert_eq!(by_foundry(&index, "", &["Adobe"]), ["Source Sans"]);
 }
