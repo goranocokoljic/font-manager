@@ -3,7 +3,7 @@
 // up or down, by keyboard as well as by pointer (header drag is the shortcut;
 // this is its single-pointer, keyboard-operable alternative).
 import { computed, nextTick, ref, useId } from 'vue';
-import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import { columnById, type ColumnId } from '../list/columns';
 import { FmSlide } from '../motion';
 import { t } from '../i18n';
@@ -14,7 +14,7 @@ const props = defineProps<{ view: string }>();
 const views = useViewsStore();
 const uid = useId();
 const open = ref(false);
-const button = ref<InstanceType<typeof UiButton> | null>(null);
+const button = ref<InstanceType<typeof UiIconButton> | null>(null);
 const panel = ref<HTMLElement | null>(null);
 
 const config = computed(() => views.tableFor(props.view));
@@ -60,9 +60,15 @@ function onFocusOut(e: FocusEvent): void {
 
 <template>
   <div class="menu" @keydown.esc.stop="close">
-    <UiButton ref="button" :aria-expanded="open" :aria-controls="`${uid}-panel`" @click="toggle">
-      {{ t('table.columnsMenu.button') }}
-    </UiButton>
+    <!-- A ⋯ at the end of the table's header row (E50.2); its name stays "Columns". -->
+    <UiIconButton
+      ref="button"
+      icon="more"
+      :label="t('table.columnsMenu.button')"
+      :aria-expanded="open"
+      :aria-controls="`${uid}-panel`"
+      @click="toggle"
+    />
     <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
       <div
         v-if="open"

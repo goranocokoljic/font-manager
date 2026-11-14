@@ -82,7 +82,7 @@ test('grid cards and table rows show the same dot', async ({ page }) => {
   await page.keyboard.press('a');
   await expect(dot(page, 'Sample 2')).toHaveAttribute('data-activation', 'active');
 
-  await page.keyboard.press('3');
+  await page.keyboard.press('1');
   const grid = page.getByRole('listbox', { name: 'Font grid' });
   const card = grid.getByRole('option', { name: /^Sample 2,/ });
   await expect(card.locator('[data-activation]')).toHaveAttribute('data-activation', 'active');
@@ -90,7 +90,7 @@ test('grid cards and table rows show the same dot', async ({ page }) => {
     grid.getByRole('option', { name: /^Sample 1,/ }).locator('[data-activation]'),
   ).toHaveAttribute('data-activation', 'inactive');
 
-  await page.keyboard.press('2');
+  await page.keyboard.press('3');
   const table = page.getByRole('treegrid', { name: 'Font table' });
   await expect(
     table.getByRole('row', { name: /^Sample 2,/ }).locator('[data-activation]'),

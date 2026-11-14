@@ -5,8 +5,9 @@
 // virtualization (`list/virtual.ts`: fixed-height rows keyed by slot).
 //
 // Headers sort (ascending, descending, default) and can be dragged to reorder;
-// the Columns menu (TableColumnsMenu) hides and moves them by keyboard. The
-// order of the families comes from the API (`ListFamiliesRequest.order`).
+// the Columns menu (TableColumnsMenu, a ⋯ at the end of the header row) hides and
+// moves them by keyboard. The order of the families comes from the API
+// (`ListFamiliesRequest.order`).
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
@@ -41,6 +42,7 @@ import { useViewsStore } from '../stores/views';
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import CompareToggle from './CompareToggle.vue';
+import TableColumnsMenu from './TableColumnsMenu.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -74,16 +76,21 @@ const rowPx = computed(() => tableRowHeight(settings.density));
 
 const config = computed(() => views.tableFor(props.view));
 const columns = computed(() => visibleColumns(config.value));
-const gridTemplate = computed(() =>
-  columns.value
-    .map((c) => (c.id === 'name' ? `minmax(${c.width}px, 1fr)` : `${c.width}px`))
-    .join(' '),
+/** The empty last track of every row: the Columns menu's ⋯ sits over it in the header. */
+const MENU_TRACK = 32;
+const gridTemplate = computed(
+  () =>
+    columns.value
+      .map((c) => (c.id === 'name' ? `minmax(${c.width}px, 1fr)` : `${c.width}px`))
+      .join(' ') + ` ${MENU_TRACK}px`,
 );
-const minWidth = computed(() => columns.value.reduce((n, c) => n + c.width, 0));
+const minWidth = computed(() => columns.value.reduce((n, c) => n + c.width, MENU_TRACK));
 
 const viewport = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
 const height = ref(FALLBACK_HEIGHT);
+/** The vertical scrollbar's width: the ⋯ stays clear of it. */
+const gutter = ref(0);
 let observer: ResizeObserver | undefined;
 
 function measure(): void {
@@ -91,6 +98,7 @@ function measure(): void {
   if (!el) return;
   scrollTop.value = el.scrollTop;
   if (el.clientHeight > 0) height.value = el.clientHeight;
+  gutter.value = Math.max(0, el.offsetWidth - el.clientWidth);
 }
 
 const anchor = useScrollAnchor(viewport, () => rowPx.value);
@@ -329,169 +337,200 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
 </script>
 
 <template>
-  <div
-    ref="viewport"
-    class="viewport"
-    role="treegrid"
-    tabindex="0"
-    :aria-label="t('table.label')"
-    aria-multiselectable="true"
-    :aria-rowcount="count + 1"
-    :aria-colcount="columns.length"
-    :aria-activedescendant="activeId"
-    @scroll="onScroll"
-    @keydown="onKeyDown"
-  >
-    <div class="grid" :style="{ minWidth: `${minWidth}px` }">
-      <div
-        class="header"
-        role="row"
-        aria-rowindex="1"
-        :style="{ gridTemplateColumns: gridTemplate, height: `${rowPx}px` }"
-      >
+  <div class="table">
+    <div
+      ref="viewport"
+      class="viewport"
+      role="treegrid"
+      tabindex="0"
+      :aria-label="t('table.label')"
+      aria-multiselectable="true"
+      :aria-rowcount="count + 1"
+      :aria-colcount="columns.length"
+      :aria-activedescendant="activeId"
+      @scroll="onScroll"
+      @keydown="onKeyDown"
+    >
+      <div class="grid" :style="{ minWidth: `${minWidth}px` }">
         <div
-          v-for="(col, c) in columns"
-          :key="col.id"
-          class="th"
-          :class="{
-            dragging: dragging === col.id,
-            'drop-target': dropTarget === col.id,
-            [`col-${col.id}`]: true,
-          }"
-          role="columnheader"
-          :aria-colindex="c + 1"
-          :aria-sort="col.sortKey ? ariaSort(config, col.id) : undefined"
-          :data-column="col.id"
-          draggable="true"
-          @dragstart="onDragStart(col, $event)"
-          @dragover="onDragOver(col, $event)"
-          @dragleave="dropTarget = dropTarget === col.id ? null : dropTarget"
-          @drop="onDrop(col, $event)"
-          @dragend="onDragEnd"
-        >
-          <span v-if="!col.sortKey" class="sort">{{ col.label }}</span>
-          <button
-            v-else
-            type="button"
-            class="sort"
-            :title="t('table.sortBy', { column: col.label })"
-            @click="views.sortBy(view, col.id)"
-          >
-            <span :class="{ 'sr-only': col.id === 'activation' }">{{ col.label }}</span>
-            <ActivationDot v-if="col.id === 'activation'" state="inactive" />
-            <span class="arrow" aria-hidden="true">{{ SORT_ARROW[ariaSort(config, col.id)] }}</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="spacer" role="none" :style="{ height: `${count * rowPx}px` }">
-        <div
-          v-for="item in visible"
-          :id="item.id"
-          :key="item.slot"
-          class="tr"
-          :class="{
-            face: item.row.kind === 'face',
-            selected: list.isSelected(item.row.key),
-            origin: fontDrag.isOrigin(item.row.key),
-            cursor: item.id === activeId,
-          }"
+          class="header"
           role="row"
-          :data-key="item.row.key"
-          :aria-rowindex="item.index + 2"
-          :aria-level="item.row.kind === 'face' ? 2 : 1"
-          :aria-expanded="
-            item.row.kind === 'family' && !item.row.single ? item.row.expanded : undefined
-          "
-          :aria-selected="list.isSelected(item.row.key)"
-          :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
-          :aria-posinset="item.row.position"
-          :aria-label="rowLabel(item.row)"
-          :style="{
-            gridTemplateColumns: gridTemplate,
-            height: `${rowPx}px`,
-            transform: `translateY(${item.index * rowPx}px)`,
-          }"
-          draggable="true"
-          @click="onRowClick(item.row, $event)"
-          @pointerdown="fontSwitch.prime(item.row)"
-          @dragstart="onRowDrag(item.row, $event)"
+          aria-rowindex="1"
+          :style="{ gridTemplateColumns: gridTemplate, height: `${rowPx}px` }"
         >
           <div
             v-for="(col, c) in columns"
             :key="col.id"
-            class="td"
-            :class="`col-${col.id}`"
-            role="gridcell"
+            class="th"
+            :class="{
+              dragging: dragging === col.id,
+              'drop-target': dropTarget === col.id,
+              [`col-${col.id}`]: true,
+            }"
+            role="columnheader"
             :aria-colindex="c + 1"
+            :aria-sort="col.sortKey ? ariaSort(config, col.id) : undefined"
             :data-column="col.id"
+            draggable="true"
+            @dragstart="onDragStart(col, $event)"
+            @dragover="onDragOver(col, $event)"
+            @dragleave="dropTarget = dropTarget === col.id ? null : dropTarget"
+            @drop="onDrop(col, $event)"
+            @dragend="onDragEnd"
           >
-            <template v-if="col.id === 'activation'">
-              <ActivationDot :state="rowActivation(item.row)" still />
-              <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
-            </template>
-            <template v-else-if="col.id === 'name'">
-              <span
-                v-if="item.row.kind === 'family'"
-                class="twisty fm-directional"
-                aria-hidden="true"
-                @click.stop="onToggle(item.row)"
-                ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
-              /></span>
-              <bdi class="text" data-family-name :title="cellOf(item.row, col.id).text">{{
+            <span v-if="!col.sortKey" class="sort">{{ col.label }}</span>
+            <button
+              v-else
+              type="button"
+              class="sort"
+              :title="t('table.sortBy', { column: col.label })"
+              @click="views.sortBy(view, col.id)"
+            >
+              <span :class="{ 'sr-only': col.id === 'activation' }">{{ col.label }}</span>
+              <ActivationDot v-if="col.id === 'activation'" state="inactive" />
+              <span class="arrow" aria-hidden="true">{{
+                SORT_ARROW[ariaSort(config, col.id)]
+              }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="spacer" role="none" :style="{ height: `${count * rowPx}px` }">
+          <div
+            v-for="item in visible"
+            :id="item.id"
+            :key="item.slot"
+            class="tr"
+            :class="{
+              face: item.row.kind === 'face',
+              selected: list.isSelected(item.row.key),
+              origin: fontDrag.isOrigin(item.row.key),
+              cursor: item.id === activeId,
+            }"
+            role="row"
+            :data-key="item.row.key"
+            :aria-rowindex="item.index + 2"
+            :aria-level="item.row.kind === 'face' ? 2 : 1"
+            :aria-expanded="
+              item.row.kind === 'family' && !item.row.single ? item.row.expanded : undefined
+            "
+            :aria-selected="list.isSelected(item.row.key)"
+            :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
+            :aria-posinset="item.row.position"
+            :aria-label="rowLabel(item.row)"
+            :style="{
+              gridTemplateColumns: gridTemplate,
+              height: `${rowPx}px`,
+              transform: `translateY(${item.index * rowPx}px)`,
+            }"
+            draggable="true"
+            @click="onRowClick(item.row, $event)"
+            @pointerdown="fontSwitch.prime(item.row)"
+            @dragstart="onRowDrag(item.row, $event)"
+          >
+            <div
+              v-for="(col, c) in columns"
+              :key="col.id"
+              class="td"
+              :class="`col-${col.id}`"
+              role="gridcell"
+              :aria-colindex="c + 1"
+              :data-column="col.id"
+            >
+              <template v-if="col.id === 'activation'">
+                <ActivationDot :state="rowActivation(item.row)" still />
+                <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
+              </template>
+              <template v-else-if="col.id === 'name'">
+                <span
+                  v-if="item.row.kind === 'family'"
+                  class="twisty fm-directional"
+                  aria-hidden="true"
+                  @click.stop="onToggle(item.row)"
+                  ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
+                /></span>
+                <bdi class="text" data-family-name :title="cellOf(item.row, col.id).text">{{
+                  cellOf(item.row, col.id).text
+                }}</bdi>
+                <CompareToggle
+                  v-if="rowFace(item.row)"
+                  class="row-compare"
+                  data-testid="row-compare"
+                  tabindex="-1"
+                  :face="rowFace(item.row)!"
+                  :scope="item.row.kind === 'family' ? 'family' : 'face'"
+                  @toggle="viewport?.focus({ preventScroll: true })"
+                />
+              </template>
+              <template v-else-if="isWeightLine(col.id)">
+                <span class="line" aria-hidden="true">
+                  <span
+                    v-if="cellOf(item.row, col.id).span"
+                    class="span"
+                    :style="{
+                      insetInlineStart: `${cellOf(item.row, col.id).span!.left}%`,
+                      width: `${cellOf(item.row, col.id).span!.width}%`,
+                    }"
+                  />
+                  <span
+                    v-for="(d, k) in cellOf(item.row, col.id).dots"
+                    :key="k"
+                    class="mark"
+                    :class="{ italic: d.italic }"
+                    :style="{ insetInlineStart: `${d.left}%` }"
+                  />
+                </span>
+                <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
+              </template>
+              <template v-else-if="cellOf(item.row, col.id).badges">
+                <UiBadge
+                  v-for="b in cellOf(item.row, col.id).badges"
+                  :key="b"
+                  class="badge"
+                  :class="{ good: b === openLicenseBadge() }"
+                  :title="
+                    b === openLicenseBadge() ? cellOf(item.row, col.id).openLicense : undefined
+                  "
+                  >{{ b }}</UiBadge
+                >
+              </template>
+              <bdi v-else class="text" :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
               }}</bdi>
-              <CompareToggle
-                v-if="rowFace(item.row)"
-                class="row-compare"
-                data-testid="row-compare"
-                tabindex="-1"
-                :face="rowFace(item.row)!"
-                :scope="item.row.kind === 'family' ? 'family' : 'face'"
-                @toggle="viewport?.focus({ preventScroll: true })"
-              />
-            </template>
-            <template v-else-if="isWeightLine(col.id)">
-              <span class="line" aria-hidden="true">
-                <span
-                  v-if="cellOf(item.row, col.id).span"
-                  class="span"
-                  :style="{
-                    insetInlineStart: `${cellOf(item.row, col.id).span!.left}%`,
-                    width: `${cellOf(item.row, col.id).span!.width}%`,
-                  }"
-                />
-                <span
-                  v-for="(d, k) in cellOf(item.row, col.id).dots"
-                  :key="k"
-                  class="mark"
-                  :class="{ italic: d.italic }"
-                  :style="{ insetInlineStart: `${d.left}%` }"
-                />
-              </span>
-              <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
-            </template>
-            <template v-else-if="cellOf(item.row, col.id).badges">
-              <UiBadge
-                v-for="b in cellOf(item.row, col.id).badges"
-                :key="b"
-                class="badge"
-                :class="{ good: b === openLicenseBadge() }"
-                :title="b === openLicenseBadge() ? cellOf(item.row, col.id).openLicense : undefined"
-                >{{ b }}</UiBadge
-              >
-            </template>
-            <bdi v-else class="text" :title="cellOf(item.row, col.id).text">{{
-              cellOf(item.row, col.id).text
-            }}</bdi>
+            </div>
           </div>
         </div>
       </div>
     </div>
+    <!-- Outside the treegrid (its rows hold cells only), over the header row's empty last
+       track: the Columns menu at the end of the header row (E50.2). -->
+    <TableColumnsMenu
+      class="columns"
+      data-testid="table-columns"
+      :view="view"
+      :style="{ insetInlineEnd: `${gutter}px`, height: `${rowPx - 1}px` }"
+    />
   </div>
 </template>
 
 <style scoped>
+.table {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.table > .columns {
+  position: absolute;
+  z-index: var(--fm-z-sticky);
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  background-color: var(--fm-bg);
+}
 .viewport {
   flex: 1;
   min-height: 0;

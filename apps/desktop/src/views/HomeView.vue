@@ -39,7 +39,6 @@ import SearchBox from '../components/SearchBox.vue';
 import SelectionBar from '../components/SelectionBar.vue';
 import SimilarPanel from '../components/SimilarPanel.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
-import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import SmartRuleEditor from '../components/SmartRuleEditor.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
@@ -144,7 +143,8 @@ function pinLeaving(el: Element): void {
   e.inert = true;
 }
 // The label of each is `home.modes.<mode>`.
-const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall', 'layout'];
+// The order of the toolbar's view switch (E50.2, board 9): Wall · Lines · Table · Waterfall · Layout.
+const MODES: readonly ViewMode[] = ['grid', 'list', 'table', 'waterfall', 'layout'];
 const modeOptions = computed(() =>
   MODES.map((m) => ({ value: m, label: t(`home.modes.${m}`), icon: m })),
 );
@@ -648,16 +648,8 @@ async function openFace(face: FaceId): Promise<void> {
             slide
             @update:model-value="views.setMode(ALL_FONTS_VIEW, $event)"
           />
-          <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
-          <label v-if="mode === 'layout'" class="preset">
-            {{ t('home.preset') }}
-            <UiSelect
-              :model-value="layoutId"
-              :options="presetOptions"
-              @update:model-value="views.setLayout(ALL_FONTS_VIEW, $event)"
-            />
-          </label>
-          <!-- After the controls of the view mode, so Tab from the modes reaches those first. -->
+          <!-- The toolbar never changes shape (E50.2): the same controls in every view mode.
+               A control of one view lives inside that view (Columns, the layout preset). -->
           <UiIconButton
             icon="density"
             :label="t('home.compactRows')"
@@ -705,6 +697,14 @@ async function openFace(face: FaceId): Promise<void> {
             </div>
             <div v-else-if="mode === 'layout'" key="layout" class="pane">
               <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
+                <label class="preset">
+                  {{ t('home.preset') }}
+                  <UiSelect
+                    :model-value="layoutId"
+                    :options="presetOptions"
+                    @update:model-value="views.setLayout(ALL_FONTS_VIEW, $event)"
+                  />
+                </label>
                 <UiButton
                   class="studio"
                   :disabled="!canOpenStudio"
@@ -837,7 +837,7 @@ async function openFace(face: FaceId): Promise<void> {
   text-decoration: underline;
 }
 .toolbar {
-  /* A stacking level of its own, above the view below: the Columns menu opens over it. */
+  /* A stacking level of its own, above the view below: the filter popover opens over it. */
   position: relative;
   z-index: 1;
   container-type: inline-size;

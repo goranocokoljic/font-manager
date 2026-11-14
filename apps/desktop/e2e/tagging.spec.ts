@@ -175,7 +175,7 @@ test('the Tags group counts each tag; a list or table drop tags every dragged fo
   await expect(sidebarTag(page, 'Display').getByLabel('8 fonts', { exact: true })).toBeVisible();
 
   // Two selected family rows from the table.
-  await page.keyboard.press('2');
+  await page.keyboard.press('3');
   const grid = page.getByRole('treegrid', { name: 'Font table' });
   await expect(grid).toBeVisible();
   const row = (name: string) => grid.getByRole('row', { name: new RegExp(`^${name},`) });
