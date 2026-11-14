@@ -36,7 +36,9 @@ const modeButton = (page: Page, name: string) =>
   page.getByRole('group', { name: 'View mode' }).getByRole('button', { name, exact: true });
 const presetPicker = (page: Page) => page.getByRole('combobox', { name: 'Preset' });
 const openButton = (page: Page) =>
-  page.getByRole('button', { name: 'Open in Pairing Studio', exact: true });
+  page.getByRole('button', { name: 'Open in Studio', exact: true });
+/** The face the Layout pane shows, named in its head (E50.3). */
+const shownFace = (page: Page) => page.getByTestId('layout-face');
 const studio = (page: Page) => page.getByRole('region', { name: /^Pairing Studio: / });
 const bar = (page: Page) => page.getByTestId('studio-toolbar');
 const barButton = (page: Page, name: string) =>
@@ -66,7 +68,8 @@ test('Layout mode opens the layout and face in Pairing Studio; Back returns to t
   await mono.click();
   await modeButton(page, 'Layout').click();
   await selectOption(presetPicker(page), 'columns');
-  await expect(layout(page, 'Columns')).toContainText('JetBrains Mono');
+  await expect(layout(page, 'Columns')).toBeVisible();
+  await expect(shownFace(page)).toContainText('JetBrains Mono');
   // In Layout mode with a face shown, the button is there.
   await expect(openButton(page)).toBeEnabled();
   const libraryUrl = page.url();
@@ -103,7 +106,8 @@ test('Layout mode opens the layout and face in Pairing Studio; Back returns to t
   expect(page.url()).toBe(libraryUrl);
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
   await expect(presetPicker(page)).toHaveAttribute('data-value', 'columns');
-  await expect(layout(page, 'Columns')).toContainText('JetBrains Mono');
+  await expect(layout(page, 'Columns')).toBeVisible();
+  await expect(shownFace(page)).toContainText('JetBrains Mono');
   await modeButton(page, 'List').click();
   await expect(openButton(page)).toHaveCount(0);
   await expect(tree.getByRole('treeitem', { name: /^JetBrains Mono/ })).toHaveAttribute(

@@ -3,6 +3,10 @@ import { ref, watch } from 'vue';
 
 /** Width bounds of the resizable sidebar, in CSS px. */
 export const SIDEBAR = { min: 180, max: 400, initial: 232 } as const;
+/** Width bounds of the list in the Layout mode's split (E50.3), in CSS px. */
+export const SPLIT_LIST = { min: 400, max: 760, initial: 560 } as const;
+/** Below this window width the split shows the pane only; a Fonts button slides the list over. */
+export const SPLIT_COLLAPSE_PX = 1100;
 
 /** The localStorage key of the saved layout (a view preference). */
 export const LAYOUT_STORAGE_KEY = 'fm.layout.v1';
@@ -10,6 +14,7 @@ export const LAYOUT_STORAGE_KEY = 'fm.layout.v1';
 interface SavedLayout {
   sidebarWidth: number;
   sidebarOpen: boolean;
+  splitListWidth: number;
 }
 
 /** Rounds `value` and keeps it inside `bounds`; anything not a finite number gives `initial`. */
@@ -29,6 +34,7 @@ function readSaved(storage: Storage | undefined): SavedLayout {
   return {
     sidebarWidth: clampWidth(raw.sidebarWidth, SIDEBAR),
     sidebarOpen: typeof raw.sidebarOpen === 'boolean' ? raw.sidebarOpen : true,
+    splitListWidth: clampWidth(raw.splitListWidth, SPLIT_LIST),
   };
 }
 
@@ -40,26 +46,35 @@ function browserStorage(): Storage | undefined {
   }
 }
 
-/** The sidebar's width and visibility in the main window, saved as a view preference. */
+/**
+ * The sidebar's width and visibility in the main window, and the width of the list in the
+ * Layout mode's split, saved as a view preference.
+ */
 export const useLayoutStore = defineStore('layout', () => {
   const storage = browserStorage();
   const saved = readSaved(storage);
 
   const sidebarWidth = ref(saved.sidebarWidth);
   const sidebarOpen = ref(saved.sidebarOpen);
+  const splitListWidth = ref(saved.splitListWidth);
 
   function setSidebarWidth(px: number): void {
     sidebarWidth.value = clampWidth(px, SIDEBAR);
+  }
+
+  function setSplitListWidth(px: number): void {
+    splitListWidth.value = clampWidth(px, SPLIT_LIST);
   }
 
   function toggleSidebar(): void {
     sidebarOpen.value = !sidebarOpen.value;
   }
 
-  watch([sidebarWidth, sidebarOpen], () => {
+  watch([sidebarWidth, sidebarOpen, splitListWidth], () => {
     const value: SavedLayout = {
       sidebarWidth: sidebarWidth.value,
       sidebarOpen: sidebarOpen.value,
+      splitListWidth: splitListWidth.value,
     };
     try {
       storage?.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(value));
@@ -71,7 +86,9 @@ export const useLayoutStore = defineStore('layout', () => {
   return {
     sidebarWidth,
     sidebarOpen,
+    splitListWidth,
     setSidebarWidth,
+    setSplitListWidth,
     toggleSidebar,
   };
 });

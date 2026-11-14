@@ -13,6 +13,7 @@ import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
 import FontLayout from '../components/FontLayout.vue';
 import LayoutActions from '../components/LayoutActions.vue';
+import LayoutSplit from '../components/LayoutSplit.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
@@ -149,8 +150,9 @@ const modeOptions = computed(() =>
   MODES.map((m) => ({ value: m, label: t(`home.modes.${m}`), icon: m })),
 );
 
-// The layout mode sets the selected face (else the list cursor's, else the first
-// family's) in the picked layout file, with the editor's unsaved changes.
+// The layout mode is a split (E50.3): the list, and beside it the list cursor's face (else the
+// selected one, else the first family's) set in the picked layout file, with the editor's
+// unsaved changes. A new face keeps the layout, its width and the edited text.
 const layoutId = computed(() => views.layoutFor(ALL_FONTS_VIEW));
 const shownLayout = computed(() => textLayouts.draft);
 // Before the list arrives the picker offers the presets, so the pick shows at once.
@@ -171,8 +173,8 @@ const presetOptions = computed(() =>
 const layoutFace = computed(() => {
   const first = fontList.families[0];
   return (
-    selection.detail?.face ??
     fontList.cursorFace ??
+    selection.detail?.face ??
     (first ? fontList.previewFace(first.id) : undefined) ??
     null
   );
@@ -209,6 +211,16 @@ watch(
   { immediate: true },
 );
 
+/** The pane's width: the locked width the core set, else it follows the window. */
+const widthLabel = computed(() =>
+  textLayouts.widthLocked && textLayouts.width !== null
+    ? t('home.split.widthPx', { width: String(Math.round(textLayouts.width)) })
+    : t('home.split.widthAuto'),
+);
+// The pane's previous and next buttons move the list's cursor, as the arrow keys do.
+const canPrev = computed(() => fontList.cursorIndex > 0);
+const canNext = computed(() => fontList.cursorIndex < fontList.rows.length - 1);
+
 function showPreset(p: LayoutPreset): void {
   views.setPreset(ALL_FONTS_VIEW, p);
   views.setMode(ALL_FONTS_VIEW, 'layout');
@@ -235,7 +247,7 @@ onMounted(() => {
 });
 
 // The family page (E42.1, E41.5): Enter, a click on a name, O, the palette or a double-click on
-// a row or card, in any view. The Layout mode has no rows; it opens the family it shows.
+// a row or card, in any view. The Layout mode opens the family its pane shows.
 const familyNav = useFamilyNavigation();
 const familyPage = useFamilyPageStore();
 const openableFamily = computed(() => {
@@ -361,7 +373,7 @@ useActions([
     enabled: () => openableFamily.value !== null,
     run: () => {
       const cursor = fontList.cursorRow;
-      if (mode.value !== 'layout' && cursor) return openRow(cursor);
+      if (cursor) return openRow(cursor);
       return openableFamily.value !== null ? familyNav.open(openableFamily.value) : undefined;
     },
   },
@@ -548,14 +560,14 @@ function showFace(face: FaceId): void {
 
 const browse = ref<HTMLElement | null>(null);
 
-// The Layout view scrolls by itself, without the rows' anchor: its place goes to the store's
-// held scroll as it leaves for a family page (E42.1). It has no lines, so 0 keeps it apart
-// from a view's place. The place comes back on mount and again once the font has set the
-// text's height, which can be too short for it before that.
+// The Layout pane scrolls by itself, without the rows' anchor: its place is kept as a layout
+// place of its own (the split's list keeps the held scroll, E50.3) as it leaves for a family
+// page (E42.1). It has no lines, so 0 keeps it apart from a view's place. The place comes back
+// on mount and again once the font has set the text's height, which can be too short before.
 const LAYOUT_LINE = 0;
+const LAYOUT_PANE = 'layout-pane';
 const layoutViewport = () => browse.value?.querySelector<HTMLElement>('.layout') ?? null;
-let layoutTop = fontList.heldScrollTop(LAYOUT_LINE, LAYOUT_LINE);
-if (layoutTop !== null) fontList.dropHeldScroll();
+let layoutTop = fontList.layoutScrollTop(LAYOUT_PANE, LAYOUT_LINE, LAYOUT_LINE);
 
 function restoreLayoutScroll(): void {
   const el = layoutViewport();
@@ -568,17 +580,14 @@ function layoutSettled(): void {
 onMounted(restoreLayoutScroll);
 onBeforeUnmount(() => {
   const el = layoutViewport();
-  if (el) fontList.viewLeft(el.scrollTop, LAYOUT_LINE, LAYOUT_LINE);
+  if (el) fontList.layoutLeft(LAYOUT_PANE, el.scrollTop, LAYOUT_LINE, LAYOUT_LINE);
 });
 
-// The selection bar (E44.1) rises on the first selection, over the views with rows.
+// The selection bar (E44.1) rises on the first selection, over every view (the Layout split has
+// the list's rows too, E50.3).
 const showSelectionBar = computed(
   () =>
-    fontList.selectedCount > 0 &&
-    fontList.families.length > 0 &&
-    mode.value !== 'layout' &&
-    !quick.open &&
-    !catalogs.current,
+    fontList.selectedCount > 0 && fontList.families.length > 0 && !quick.open && !catalogs.current,
 );
 
 /** Escape in the search box or the preview field: back to the font list the keys drive. */
@@ -695,8 +704,20 @@ async function openFace(face: FaceId): Promise<void> {
               <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
               <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openRow" />
             </div>
-            <div v-else-if="mode === 'layout'" key="layout" class="pane">
-              <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
+            <!-- The Layout mode is a split (E50.3): the same list as Lines, the pane beside it. -->
+            <LayoutSplit v-else-if="mode === 'layout'" key="layout">
+              <template #list>
+                <FontList
+                  :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+                  @cursor-face="showFace"
+                  @open="openRow"
+                />
+              </template>
+              <template #head>
+                <p v-if="layoutFace" class="face" data-testid="layout-face">
+                  <span class="face-name">{{ layoutFace.familyName }}</span>
+                  <span class="face-style">{{ layoutFace.style }} · {{ layoutFace.weight }}</span>
+                </p>
                 <label class="preset">
                   {{ t('home.preset') }}
                   <UiSelect
@@ -705,6 +726,23 @@ async function openFace(face: FaceId): Promise<void> {
                     @update:model-value="views.setLayout(ALL_FONTS_VIEW, $event)"
                   />
                 </label>
+                <p class="width" data-testid="layout-width">
+                  {{ t('home.split.width') }} <span class="width-value">{{ widthLabel }}</span>
+                </p>
+                <span class="steps">
+                  <UiIconButton
+                    icon="chevronUp"
+                    :label="t('home.split.prev')"
+                    :disabled="!canPrev"
+                    @click="fontList.moveBy(-1)"
+                  />
+                  <UiIconButton
+                    icon="chevronDown"
+                    :label="t('home.split.next')"
+                    :disabled="!canNext"
+                    @click="fontList.moveBy(1)"
+                  />
+                </span>
                 <UiButton
                   class="studio"
                   :disabled="!canOpenStudio"
@@ -713,11 +751,14 @@ async function openFace(face: FaceId): Promise<void> {
                 >
                   {{ t('home.openStudio') }}
                 </UiButton>
-              </LayoutActions>
+              </template>
+              <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
               <FontLayout
                 :layout="shownLayout"
                 :face="layoutFace"
                 editable
+                fade-face
+                unnamed
                 :bounds="textLayouts.bounds"
                 :set-props="textLayouts.setBlockProps"
                 :width="textLayouts.width"
@@ -725,7 +766,7 @@ async function openFace(face: FaceId): Promise<void> {
                 @edit-text="textLayouts.setBlockText"
                 @settled="layoutSettled"
               />
-            </div>
+            </LayoutSplit>
             <FontGrid
               v-else-if="mode === 'grid'"
               :key="wallRows ? 'grid-rows' : 'grid-wall'"
@@ -821,8 +862,8 @@ async function openFace(face: FaceId): Promise<void> {
   flex-direction: column;
   min-height: 0;
 }
-/* The table and the layout mode have two parts each: one box, so the fade has one child. It
-   lays them out as the browse column does. */
+/* The table has two parts: one box, so the fade has one child. It lays them out as the browse
+   column does. */
 .pane {
   display: flex;
   flex: 1;
@@ -870,9 +911,33 @@ async function openFace(face: FaceId): Promise<void> {
   font-weight: 600;
   white-space: nowrap;
 }
-/* In the layout file bar: at its own end. */
+/* The Layout pane's head (E50.3): the face, the preset, the width, prev/next, then the Studio
+   at its own end. */
 .studio {
   margin-inline-start: auto;
+}
+.face,
+.width {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fm-space-2);
+  margin: 0;
+  white-space: nowrap;
+}
+.face-name {
+  font-weight: 600;
+}
+.face-style,
+.width {
+  color: var(--fm-muted);
+}
+.width-value {
+  color: var(--fm-fg);
+  font-variant-numeric: tabular-nums;
+}
+.steps {
+  display: inline-flex;
+  gap: var(--fm-space-1);
 }
 .pins {
   font-size: var(--fm-text-xs);

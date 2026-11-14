@@ -1,0 +1,19 @@
+{
+  "id": "an-overlay-must-not-cover-the-button-that-toggles-it-and-the",
+  "title": "An overlay must not cover the button that toggles it, and the content it covers must be inert",
+  "category": "accessibility",
+  "rule": "When a button slides a panel, drawer or list in over other content (a narrow-window overlay, a slide-over), keep the toggle button outside the covered area (anchor the overlay below or beside the bar that holds the button, or give the bar a higher stacking level), and make the covered content `inert` while the overlay is open so Tab and clicks cannot reach controls hidden under it. Closing only by Escape is not enough for a mouse user. Test it with a Playwright step that opens the overlay, checks its box does not overlap the toggle, checks the covered region is inert and Tab skips it, and closes it again with a click on the same button.",
+  "rationale": "E50.3 (#574): below 1100 px the slid-in font list was absolutely positioned over the whole pane, including the pane head with its own Fonts toggle, so a mouse user could not close it and Tab moved focus onto hidden pane-head controls.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    574
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-11-14T22:44:53.791Z",
+  "last_seen": "2026-11-14T22:44:53.791Z"
+}

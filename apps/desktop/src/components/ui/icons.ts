@@ -41,6 +41,9 @@ export const ICONS = {
     '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c-2 2-2 9 0 11M8 2.5c2 2 2 9 0 11"/>',
   chevron: '<path d="M6 3.5l4.5 4.5L6 12.5"/>',
   chevronBack: '<path d="M10 3.5L5.5 8l4.5 4.5"/>',
+  // The Layout pane's previous and next font (E50.3): up and down the list.
+  chevronUp: '<path d="M3.5 10L8 5.5l4.5 4.5"/>',
+  chevronDown: '<path d="M3.5 6L8 10.5 12.5 6"/>',
   arrowLeft: '<path d="M13 8H3M7 4L3 8l4 4"/>',
   arrowRight: '<path d="M3 8h10M9 4l4 4-4 4"/>',
   folderPlus:

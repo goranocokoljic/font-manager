@@ -466,3 +466,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-14
 
 - [E50.2 #573] apps/desktop/src/views/HomeView.vue:665 — the toolbar also holds the sidebar toggle and the preview size slider, which are not in criterion 1's list nor on board 9 (constant across modes).
+- [E50.3 #574] apps/desktop/src/stores/themes.ts:25 — themes.ts, useReducedMotion.ts and LayoutSplit.vue each wire their own `matchMedia` listener; there is no general `useMediaQuery` composable.
+- [E50.3 #574] apps/desktop/src/views/HomeView.vue:183 — `layoutFamily` ignores `selection.detail`, so for a URL face the list could not reveal (filtered out), Open in Layout mode goes to `families[0]` instead of the face the pane shows.
