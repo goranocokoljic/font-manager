@@ -11,7 +11,8 @@
 //!   spells the code point (`uni0416`, `u1F600`) and by glyph name (`Zhe-cy`,
 //!   case-insensitive, a part of the name is enough).
 //! - **Detail** of one character ([`glyph_detail`], E11.2): its advance
-//!   width and the GSUB features that produce or replace its glyph.
+//!   width and the GSUB features that produce or replace its glyph; its side
+//!   bearings and ink box from the outline at the default instance (E50.8).
 //! - **Malformed data** is never a panic and never an error: a face whose
 //!   header, `cmap`, `maxp` or `post` cannot be read is a page with
 //!   [`Health::Broken`] and no characters. A file that cannot be read at all
@@ -21,9 +22,10 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use fm_api::common::{FontFormat, Health, Page};
-use fm_api::library::{GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphsRequest};
+use fm_api::library::{GlyphBlock, GlyphBounds, GlyphDetail, GlyphInfo, GlyphPage, GlyphsRequest};
 use read_fonts::{FileRef, FontRef, ReadError, TableProvider};
 use skrifa::instance::{LocationRef, Size};
+use skrifa::metrics::GlyphMetrics;
 use skrifa::{GlyphId, GlyphNames, MetadataProvider};
 
 use crate::blocks::{self, BlockTable};
@@ -117,6 +119,9 @@ pub fn glyph_detail(data: &[u8], collection_index: u32, code_point: u32) -> FmRe
         produced_by: Vec::new(),
         replaced_by: Vec::new(),
         health: Health::Broken(reason),
+        left_side_bearing: None,
+        right_side_bearing: None,
+        bounds: None,
     };
     let sfnt = match sfnt(data) {
         Ok(sfnt) => sfnt,
@@ -133,11 +138,19 @@ pub fn glyph_detail(data: &[u8], collection_index: u32, code_point: u32) -> FmRe
         .filter(|&gid| draws(gid, num_glyphs))
         .ok_or_else(|| FmError::not_found(format_args!("Character U+{code_point:04X}")))?;
     // skrifa reads a missing hmtx as zero advances; that is no advance.
-    let advance_width = font.hmtx().ok().and_then(|_| {
-        font.glyph_metrics(Size::unscaled(), LocationRef::default())
-            .advance_width(gid)
-            .map(|w| w.max(0.0).round() as u32)
-    });
+    let metrics = font
+        .hmtx()
+        .ok()
+        .map(|_| font.glyph_metrics(Size::unscaled(), LocationRef::default()));
+    let advance_width = metrics
+        .as_ref()
+        .and_then(|m| m.advance_width(gid))
+        .map(|w| w.max(0.0).round() as u32);
+    let InkMetrics {
+        left_side_bearing,
+        right_side_bearing,
+        bounds,
+    } = ink_metrics(&font, metrics.as_ref(), gid);
     let GlyphFeatures {
         produced_by,
         replaced_by,
@@ -150,7 +163,61 @@ pub fn glyph_detail(data: &[u8], collection_index: u32, code_point: u32) -> FmRe
         produced_by,
         replaced_by,
         health: Health::Ok,
+        left_side_bearing,
+        right_side_bearing,
+        bounds,
     })
+}
+
+/// The side bearings and the ink box of a glyph (E50.8).
+#[derive(Default)]
+struct InkMetrics {
+    left_side_bearing: Option<i32>,
+    right_side_bearing: Option<i32>,
+    bounds: Option<GlyphBounds>,
+}
+
+/// The ink box of glyph `gid` from its outline ([`geometry::glyph_bbox`]),
+/// rounded outwards, and the side bearings from it and the advance of
+/// `metrics` (none without `hmtx`). A glyph with no outline (a space) has
+/// the `hmtx` bearings and no box; an outline that cannot be read has
+/// neither.
+fn ink_metrics(font: &FontRef<'_>, metrics: Option<&GlyphMetrics<'_>>, gid: GlyphId) -> InkMetrics {
+    let Ok(bbox) = geometry::glyph_bbox(font, gid) else {
+        return InkMetrics::default();
+    };
+    let bounds = bbox.map(|b| GlyphBounds {
+        x_min: units(b.x_min.floor()),
+        y_min: units(b.y_min.floor()),
+        x_max: units(b.x_max.ceil()),
+        y_max: units(b.y_max.ceil()),
+    });
+    let Some(advance) = metrics.and_then(|m| m.advance_width(gid)) else {
+        return InkMetrics {
+            bounds,
+            ..InkMetrics::default()
+        };
+    };
+    let advance = units(f64::from(advance).round());
+    let (lsb, rsb) = match bounds {
+        Some(b) => (b.x_min, advance.saturating_sub(b.x_max)),
+        None => {
+            let lsb = metrics
+                .and_then(|m| m.left_side_bearing(gid))
+                .map_or(0, |l| units(f64::from(l).round()));
+            (lsb, advance.saturating_sub(lsb))
+        }
+    };
+    InkMetrics {
+        left_side_bearing: Some(lsb),
+        right_side_bearing: Some(rsb),
+        bounds,
+    }
+}
+
+/// A whole number of font units as `i32`, clamped.
+fn units(v: f64) -> i32 {
+    v.clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
 fn broken(table: &BlockTable, reason: String) -> GlyphPage {

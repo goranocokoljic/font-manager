@@ -910,6 +910,26 @@ impl<'a> Face<'a> {
     }
 }
 
+/// The tight box of the outline of glyph `gid` of `font` (E50.8), drawn
+/// unhinted in font units at the default instance from `glyf`, `CFF` or
+/// `CFF2`. `Ok(None)` for a glyph with no outline (a space); `Err` when the
+/// font has no outline for it or the outline cannot be drawn.
+pub(crate) fn glyph_bbox(font: &FontRef<'_>, gid: skrifa::GlyphId) -> Result<Option<BBox>, ()> {
+    let glyph = font.outline_glyphs().get(gid).ok_or(())?;
+    let mut pen = Collector::default();
+    glyph
+        .draw(
+            DrawSettings::unhinted(Size::unscaled(), LocationRef::default()),
+            &mut pen,
+        )
+        .map_err(|_| ())?;
+    let contours = pen.finish().ok_or(())?;
+    Ok(contours
+        .iter()
+        .filter_map(Contour::bbox)
+        .reduce(BBox::union))
+}
+
 /// The TrueType or OpenType data of a font file: WOFF and WOFF2
 /// decompressed, anything else as it is. `None` when web font data cannot
 /// be decompressed. Decompress once to read many faces or glyphs of a web

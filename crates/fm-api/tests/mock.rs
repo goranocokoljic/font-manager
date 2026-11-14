@@ -2009,6 +2009,11 @@ fn the_glyph_detail_matches_the_glyph_map_and_names_features() {
         .unwrap();
     assert_eq!((a.glyph_id, a.name.clone()), (listed.glyph_id, listed.name));
     assert!(a.advance_width.is_some());
+    // E50.8: the ink box sits inside the advance, the bearings around it.
+    let b = a.bounds.expect("an inked glyph has a box");
+    let advance = a.advance_width.unwrap() as i32;
+    assert_eq!(a.left_side_bearing, Some(b.x_min));
+    assert_eq!(a.right_side_bearing, Some(advance - b.x_max));
     let tags: Vec<_> = a.replaced_by.iter().map(|f| f.tag.as_str()).collect();
     assert_eq!(tags, ["smcp", "ss01"]);
     assert!(a.replaced_by.iter().all(|f| f.name.is_some()));
