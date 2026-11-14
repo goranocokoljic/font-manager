@@ -507,3 +507,18 @@ describe('glyph traits (E49.5)', () => {
     expect(byTrait.total).toBe(0);
   });
 });
+
+describe('MockApi glyph metrics (E50.8)', () => {
+  it('gives an inked glyph a box inside its advance and a space bearings only', async () => {
+    const client = createMockClient();
+    const a = await client.getGlyph({ face: 1, codePoint: 'a'.codePointAt(0)! });
+    expect(a.bounds).toBeTruthy();
+    expect(a.leftSideBearing).toBe(a.bounds!.xMin);
+    expect(a.rightSideBearing).toBe(a.advanceWidth! - a.bounds!.xMax);
+    // Face 1 is Latin, which maps the space (U+0020).
+    const space = await client.getGlyph({ face: 1, codePoint: 0x20 });
+    expect(space.bounds).toBeNull();
+    expect(space.leftSideBearing).toBe(0);
+    expect(space.rightSideBearing).toBe(space.advanceWidth);
+  });
+});
