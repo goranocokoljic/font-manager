@@ -1861,6 +1861,21 @@ export type GlyphBlock = {
 	count: number,
 };
 
+/**
+ *  The ink box of a glyph's outline in font units (E50.8): the tight box of
+ *  its curves, rounded outwards to whole units. Font y grows up.
+ */
+export type GlyphBounds = {
+	/**  Left edge. */
+	xMin: number,
+	/**  Bottom edge. */
+	yMin: number,
+	/**  Right edge. */
+	xMax: number,
+	/**  Top edge. */
+	yMax: number,
+};
+
 /**  The detail of one mapped character of a face. */
 export type GlyphDetail = {
 	/**  The Unicode code point. */
@@ -1893,6 +1908,25 @@ export type GlyphDetail = {
 	 *  empty the feature lists.
 	 */
 	health: Health,
+	/**
+	 *  The left side bearing in font units at the default instance (E50.8):
+	 *  `bounds.x_min`, or the `hmtx` bearing of a glyph with no outline.
+	 *  Absent when the font has no horizontal metrics or the outline cannot
+	 *  be read.
+	 */
+	leftSideBearing?: number | null,
+	/**
+	 *  The right side bearing in font units at the default instance:
+	 *  the advance minus `bounds.x_max`, or minus the left side bearing of a
+	 *  glyph with no outline. Absent as the left side bearing is.
+	 */
+	rightSideBearing?: number | null,
+	/**
+	 *  The ink box of the outline in font units at the default instance;
+	 *  absent for a glyph with no outline (a space) or one that cannot be
+	 *  read.
+	 */
+	bounds?: GlyphBounds | null,
 };
 
 /**  One mapped character of a face. */

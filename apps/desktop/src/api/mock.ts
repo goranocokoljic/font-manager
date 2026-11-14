@@ -863,11 +863,18 @@ export function mockGlyphDetail(f: FaceDetail, req: GlyphRequest, cjk: boolean):
     };
   const c = String.fromCodePoint(req.codePoint);
   const cp = req.codePoint;
+  const advance = cp >= 0x2e80 ? 1000 : 500 + (cp % 5) * 50;
+  // As the Rust mock: a space has bearings and no ink; the rest is inked
+  // 40 units in from both sides, from the baseline to the cap height.
+  const blank = /\s/u.test(c);
   return {
     codePoint: cp,
     glyphId: index + 1,
     name: mockGlyphName(c),
-    advanceWidth: cp >= 0x2e80 ? 1000 : 500 + (cp % 5) * 50,
+    advanceWidth: advance,
+    leftSideBearing: blank ? 0 : 40,
+    rightSideBearing: blank ? advance : 40,
+    bounds: blank ? null : { xMin: 40, yMin: 0, xMax: advance - 40, yMax: 700 },
     producedBy: c === 'ﬁ' || c === 'ﬂ' ? [mockFeature('liga')] : [],
     replacedBy: /[a-z]/.test(c)
       ? [mockFeature('smcp'), mockFeature('ss01')]
