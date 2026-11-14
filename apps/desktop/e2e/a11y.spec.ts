@@ -631,11 +631,11 @@ test('every action of the keyboard model works without a mouse', async ({ page }
   // 1–5: the view modes, in the toolbar's order.
   const modes = page.getByRole('group', { name: 'View mode' });
   for (const [key, mode] of [
-    ['2', 'Table'],
-    ['3', 'Grid'],
+    ['3', 'Table'],
+    ['1', 'Grid'],
     ['4', 'Waterfall'],
     ['5', 'Layout'],
-    ['1', 'List'],
+    ['2', 'List'],
   ] as const) {
     await page.keyboard.press(key);
     await expect(modes.getByRole('button', { name: mode })).toHaveAttribute('aria-pressed', 'true');

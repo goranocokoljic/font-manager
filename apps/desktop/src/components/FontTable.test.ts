@@ -290,6 +290,23 @@ describe('FontTable', () => {
 });
 
 describe('TableColumnsMenu', () => {
+  it('is a ⋯ at the end of the table header row, outside the treegrid (E50.2)', async () => {
+    const t = await tableOf();
+    const menu = t.get('[data-testid="table-columns"]');
+    const button = menu.get('button');
+    expect(button.attributes('aria-label')).toBe('Columns');
+    expect(button.text()).toBe('');
+    // Not a cell of the grid: the treegrid's rows hold its columns only.
+    expect(t.get('[role="treegrid"]').element.contains(menu.element)).toBe(false);
+    expect(headers(t)).not.toContain('Columns');
+    // Every row ends in the same empty track the ⋯ sits over, so the columns stay aligned.
+    const head = t.get('.header').attributes('style');
+    const row = rows(t)[0]!.attributes('style');
+    expect(head).toMatch(/32px;/);
+    expect(row).toContain(head!.match(/grid-template-columns: ([^;]+);/)![1]);
+    expect(menu.attributes('style')).toMatch(/height: \d+px/);
+  });
+
   it('hides, shows and moves columns by keyboard-operable controls', async () => {
     const t = await tableOf();
     const menu = mount(TableColumnsMenu, {
