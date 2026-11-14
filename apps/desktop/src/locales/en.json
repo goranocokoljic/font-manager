@@ -357,8 +357,20 @@
       "layout": "Layout"
     },
     "preset": "Preset",
-    "openStudio": "Open in Pairing Studio",
+    "openStudio": "Open in Studio",
     "openStudioTitle": "Open this layout with the shown font in its own panel",
+    "split": {
+      "list": "Fonts beside the layout",
+      "resize": "Resize the font list",
+      "pane": "Layout pane",
+      "fonts": "Fonts",
+      "fontsTitle": "Show the font list over the layout",
+      "prev": "Previous font",
+      "next": "Next font",
+      "width": "Width",
+      "widthPx": "{width} px",
+      "widthAuto": "Window"
+    },
     "unreadable": "{name} (cannot be read)",
     "density": {
       "comfortable": "Comfortable",

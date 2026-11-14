@@ -459,6 +459,78 @@ describe('FontLayout block properties (E12.3)', () => {
     });
   });
 
+  it('crossfades the page at the fast token when the face changes, with fadeFace (E50.3)', async () => {
+    document.documentElement.style.setProperty('--fm-motion-fast', '120ms');
+    const ghosts = () => document.querySelectorAll('.layout > .fm-crossfade[aria-hidden="true"]');
+    try {
+      const w = mount(FontLayout, {
+        props: { layout: preset('book'), face: inter, fadeFace: true },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      expect(ghosts()).toHaveLength(0);
+      await w.setProps({ face: mono });
+      await flushPromises();
+      // The copy of the old page lies over the new one and fades out at 120 ms.
+      expect(ghosts()).toHaveLength(1);
+      const ghost = ghosts()[0] as HTMLElement;
+      expect(ghost.classList.contains('fm-crossfade-hidden')).toBe(true);
+      expect(ghost.style.getPropertyValue('--fm-transition-time')).toBe('var(--fm-motion-fast)');
+      expect(ghost.querySelector('.block')!.getAttribute('style')).toContain(`fm-face-${inter.id}`);
+      expect(style(w, 0).fontFamily).toContain(`fm-face-${mono.id}`);
+      // The copy is not the page: one page, and its blocks are the new face's.
+      expect(w.findAll('[data-testid="layout-page"]')).toHaveLength(1);
+      expect(w.get('.layout').attributes('data-family')).toBe(String(mono.family));
+      w.unmount();
+    } finally {
+      document.documentElement.style.removeProperty('--fm-motion-fast');
+    }
+  });
+
+  it('with unnamed, leaves the face name to the parent and keeps its help and lock (E50.3)', async () => {
+    const named = await show('book');
+    expect(named.get('.head').text()).toContain(inter.familyName);
+    named.unmount();
+    const w = mount(FontLayout, {
+      props: {
+        layout: preset('book'),
+        face: inter,
+        unnamed: true,
+        bounds: MOCK_LAYOUT_BOUNDS,
+        setProps: async () => null,
+        setWidthLock: async () => undefined,
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(w.find('.head .name').exists()).toBe(false);
+    expect(w.find('.head .style').exists()).toBe(false);
+    expect(w.find('[data-testid="layout-width-lock"]').exists()).toBe(true);
+    expect(w.find('.head button[aria-controls]').exists()).toBe(true);
+    w.unmount();
+  });
+
+  it('cuts to a new face without fadeFace, and on a layout change', async () => {
+    document.documentElement.style.setProperty('--fm-motion-fast', '120ms');
+    const ghosts = () => document.querySelectorAll('.layout > .fm-crossfade[aria-hidden="true"]');
+    try {
+      const w = mount(FontLayout, {
+        props: { layout: preset('book'), face: inter },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      await w.setProps({ face: mono });
+      await flushPromises();
+      expect(ghosts()).toHaveLength(0);
+      await w.setProps({ fadeFace: true, layout: preset('quote') });
+      await flushPromises();
+      expect(ghosts()).toHaveLength(0);
+      w.unmount();
+    } finally {
+      document.documentElement.style.removeProperty('--fm-motion-fast');
+    }
+  });
+
   it('crossfades a block whose fade count goes up, from its old face to the new one (E45.3)', async () => {
     document.documentElement.style.setProperty('--fm-motion-move', '200ms');
     const ghosts = () => document.querySelectorAll('.cell > .fm-crossfade[aria-hidden="true"]');

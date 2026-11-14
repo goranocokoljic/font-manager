@@ -357,8 +357,20 @@
       "layout": "Satzbild"
     },
     "preset": "Vorlage",
-    "openStudio": "Im Pairing Studio öffnen",
+    "openStudio": "Im Studio öffnen",
     "openStudioTitle": "Dieses Satzbild mit der gezeigten Schrift in einem eigenen Bereich öffnen",
+    "split": {
+      "list": "Schriften neben dem Satzbild",
+      "resize": "Breite der Schriftliste ändern",
+      "pane": "Satzbild-Bereich",
+      "fonts": "Schriften",
+      "fontsTitle": "Die Schriftliste über dem Satzbild zeigen",
+      "prev": "Vorige Schrift",
+      "next": "Nächste Schrift",
+      "width": "Breite",
+      "widthPx": "{width} px",
+      "widthAuto": "Fenster"
+    },
     "unreadable": "{name} (nicht lesbar)",
     "density": {
       "comfortable": "Bequem",

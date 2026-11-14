@@ -33,6 +33,11 @@
 //
 // With `fades` (the Studio's Shuffle, E45.3), a block whose count goes up crossfades from how it
 // looked to its new face (`crossfade`, opacity only, a cut under reduced motion).
+//
+// With `fadeFace` (the Layout split, E50.3), a change of `face` crossfades the page at
+// `--fm-motion-fast` (120 ms, MOTION.md): the copy of the old page is taken before the change and
+// fades once the new face has loaded, so the text never shows in the fallback font. Faces that
+// come quicker than they load (↓ held) keep the first copy and fade once, to the last face.
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch, watchEffect } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
@@ -74,6 +79,10 @@ const props = defineProps<{
   selected?: number | null;
   /** A count per block (E45.3): when a block's count goes up, its change crossfades. */
   fades?: readonly number[];
+  /** A new `face` crossfades the page at the fast token (the Layout split, E50.3). */
+  fadeFace?: boolean;
+  /** The parent's head names the face (the Layout split, E50.3): no name line of its own. */
+  unnamed?: boolean;
 }>();
 defineSlots<{
   /** Controls for one block, beside its size badge. */
@@ -92,15 +101,25 @@ const emit = defineEmits<{
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
+const page = ref<HTMLDivElement | null>(null);
+
 const loader = useFaceLoader();
 const state = ref<LoadState>('loading');
 let held: FaceId | null = null;
 
+/** The crossfade of a face change, waiting for the new face to load (`fadeFace`). */
+let facePlay: (() => void) | null = null;
+
 function settle(face: FaceId, result: LoadState): void {
   if (held !== face) return;
   state.value = result;
+  const play = facePlay;
+  facePlay = null;
   // After the render of the new state, when the text has its height.
-  void nextTick(() => emit('settled'));
+  void nextTick(() => {
+    play?.();
+    emit('settled');
+  });
 }
 
 function hold(face: FaceId | null): void {
@@ -117,7 +136,13 @@ function hold(face: FaceId | null): void {
 
 watch(
   () => props.face?.id ?? null,
-  (id) => hold(id),
+  (id, before) => {
+    // Before the render: the copy shows the old face. The first copy of a run is kept.
+    if (props.fadeFace && before != null && id !== null && page.value && !facePlay) {
+      facePlay = crossfade(page.value, 'fast');
+    }
+    hold(id);
+  },
   { immediate: true },
 );
 onBeforeUnmount(() => hold(null));
@@ -202,7 +227,6 @@ function sizeLabel(block: TextBlock): string {
 
 const blockLabel = (i: number) => t('blocks.label', { n: i + 1 });
 
-const page = ref<HTMLDivElement | null>(null);
 /** The page the layout is set on, if it has one. */
 const sheet = computed(() => props.layout?.page ?? null);
 /** The sheet at its real size: CSS pixels at 100 %. */
@@ -309,7 +333,7 @@ function blockFamily(i: number): string {
         :class="{ bare, locked: pageStyle !== undefined, 'with-tools': hasTools }"
         :style="pageStyle"
       >
-        <template v-if="!bare">
+        <template v-if="!bare && !unnamed">
           <span class="name">{{ face.familyName }}</span>
           <span class="style">{{ face.style }}</span>
         </template>
@@ -456,6 +480,8 @@ function blockFamily(i: number): string {
   position: relative;
 }
 .layout {
+  /* The containing block of a face crossfade's copy of the page (E50.3). */
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;

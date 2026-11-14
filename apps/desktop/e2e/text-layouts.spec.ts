@@ -28,6 +28,8 @@ const modeButton = (page: Page, name: string) =>
 const picker = (page: Page) => page.getByRole('combobox', { name: 'Preset' });
 const layout = (page: Page, name: string) => page.getByRole('region', { name: `${name} layout` });
 const blocks = (region: Locator) => region.getByTestId('layout-block');
+/** The face the Layout pane shows, named in its head (E50.3). */
+const shownFace = (page: Page) => page.getByTestId('layout-face');
 
 test('the layout mode shows the selected family; switching presets keeps it and the selection', async ({
   page,
@@ -43,7 +45,9 @@ test('the layout mode shows the selected family; switching presets keeps it and 
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
   const book = layout(page, 'Book');
   await expect(book).toBeVisible();
-  await expect(book).toContainText('JetBrains Mono');
+  await expect(book).toBeVisible();
+  // The pane's head names the face (E50.3).
+  await expect(shownFace(page)).toContainText('JetBrains Mono');
   await expect(blocks(book)).toHaveCount(2);
 
   for (const [value, name] of [
@@ -56,7 +60,7 @@ test('the layout mode shows the selected family; switching presets keeps it and 
     await selectOption(picker(page), value);
     const region = layout(page, name);
     await expect(region).toBeVisible();
-    await expect(region).toContainText('JetBrains Mono');
+    await expect(shownFace(page)).toContainText('JetBrains Mono');
     expect(page.url()).toBe(url);
   }
 
@@ -69,7 +73,8 @@ test('the layout mode shows the selected family; switching presets keeps it and 
   await page.reload();
   await modeButton(page, 'Layout').click();
   await expect(picker(page)).toHaveAttribute('data-value', 'waterfall');
-  await expect(layout(page, 'Waterfall')).toContainText('JetBrains Mono');
+  await expect(layout(page, 'Waterfall')).toBeVisible();
+  await expect(shownFace(page)).toContainText('JetBrains Mono');
 });
 
 test('blocks are live text in the loaded face: columns balance, clip hides, wrap wraps', async ({
@@ -139,13 +144,16 @@ test('the mode switch and the preset picker work from the keyboard and the palet
   await expect(layout(page, 'Book')).toBeVisible();
 
   // The toolbar never changes shape (E50.2): Tab goes from the mode buttons to the density
-  // toggle, and the labelled picker is in the layout pane's bar, reached by Tab from Studio.
+  // toggle, and the labelled picker is in the layout pane's head (E50.3). With no row under the
+  // cursor yet, Previous font is off, so Tab goes from the picker to Next font, then Studio.
   await modeButton(page, 'Layout').focus();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Compact rows' })).toBeFocused();
   await picker(page).focus();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Open in Pairing Studio' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Next font' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Open in Studio' })).toBeFocused();
 
   // Back to the list, then the palette picks a preset and switches to the layout mode.
   await page.getByRole('main').focus();
@@ -209,7 +217,7 @@ test('a start in the layout mode with nothing selected shows the first family', 
   await page.goto('/#/');
   const quote = layout(page, 'Quote');
   await expect(quote).toHaveAttribute('data-state', 'ready');
-  await expect(quote).toContainText('Inter');
+  await expect(shownFace(page)).toContainText('Inter');
   await expect(blocks(quote)).toHaveCount(2);
 });
 
@@ -450,7 +458,8 @@ const charsOnALine = (region: Locator, i: number) =>
 test('by default the layout is a readable width, centered, and a wider window does not widen it', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1400, height: 800 });
+  // The split's list takes 560 px (E50.3): a window that leaves the pane room for the measure.
+  await page.setViewportSize({ width: 1800, height: 800 });
   await open(page);
   await modeButton(page, 'Layout').click();
   const book = layout(page, 'Book');
@@ -468,7 +477,7 @@ test('by default the layout is a readable width, centered, and a wider window do
   const right = page1!.x + page1!.width - (cell!.x + cell!.width);
   expect(Math.abs(left - right)).toBeLessThanOrEqual(2);
 
-  await page.setViewportSize({ width: 1800, height: 800 });
+  await page.setViewportSize({ width: 2400, height: 800 });
   await expect
     .poll(() => book.getByTestId('layout-page').evaluate((e) => e.clientWidth))
     .toBeGreaterThan(1200);

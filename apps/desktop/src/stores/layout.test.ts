@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 import PaneDivider from '../components/PaneDivider.vue';
-import { LAYOUT_STORAGE_KEY, SIDEBAR, clampWidth, useLayoutStore } from './layout';
+import { LAYOUT_STORAGE_KEY, SIDEBAR, SPLIT_LIST, clampWidth, useLayoutStore } from './layout';
 
 function freshStore() {
   setActivePinia(createPinia());
@@ -53,6 +53,7 @@ describe('layout store', () => {
     expect(JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)!)).toEqual({
       sidebarWidth: 310,
       sidebarOpen: true,
+      splitListWidth: SPLIT_LIST.initial,
     });
   });
 
@@ -67,6 +68,29 @@ describe('layout store', () => {
     const layout = freshStore();
     expect(layout.sidebarWidth).toBe(SIDEBAR.initial);
     expect(layout.sidebarOpen).toBe(true);
+  });
+
+  it('starts the Layout split list at 560 px and keeps it between 400 and 760 px', () => {
+    const layout = freshStore();
+    expect(layout.splitListWidth).toBe(560);
+    layout.setSplitListWidth(100);
+    expect(layout.splitListWidth).toBe(400);
+    layout.setSplitListWidth(9000);
+    expect(layout.splitListWidth).toBe(760);
+    layout.setSplitListWidth(612.4);
+    expect(layout.splitListWidth).toBe(612);
+  });
+
+  it('remembers the split list width in a new session, and clamps a saved one', async () => {
+    const first = freshStore();
+    first.setSplitListWidth(640);
+    await nextTick();
+    expect(freshStore().splitListWidth).toBe(640);
+
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({ splitListWidth: 2000 }));
+    expect(freshStore().splitListWidth).toBe(760);
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({ splitListWidth: 'wide' }));
+    expect(freshStore().splitListWidth).toBe(560);
   });
 
   it('gives the initial width for anything not a finite number', () => {
