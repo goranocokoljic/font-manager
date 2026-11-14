@@ -132,19 +132,23 @@ test('the mode switch and the preset picker work from the keyboard and the palet
   page,
 }) => {
   await open(page);
-  // Key 5 is the layout mode (keys 1–5: list, table, grid, waterfall, layout).
+  // Key 5 is the layout mode (keys 1–5: grid, list, table, waterfall, layout).
   await page.getByRole('main').focus();
   await page.keyboard.press('5');
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
   await expect(layout(page, 'Book')).toBeVisible();
 
-  // Tab goes from the mode buttons to the labelled picker.
+  // The toolbar never changes shape (E50.2): Tab goes from the mode buttons to the density
+  // toggle, and the labelled picker is in the layout pane's bar, reached by Tab from Studio.
   await modeButton(page, 'Layout').focus();
   await page.keyboard.press('Tab');
-  await expect(picker(page)).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Compact rows' })).toBeFocused();
+  await picker(page).focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Open in Pairing Studio' })).toBeFocused();
 
   // Back to the list, then the palette picks a preset and switches to the layout mode.
-  await page.keyboard.press('Shift+Tab');
+  await page.getByRole('main').focus();
   await page.keyboard.press('ControlOrMeta+k');
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   await expect(
@@ -155,7 +159,7 @@ test('the mode switch and the preset picker work from the keyboard and the palet
       palette.getByRole('option').filter({ hasText: `Show the ${name} layout` }),
     ).toHaveCount(1);
   await page.keyboard.press('Escape');
-  await page.keyboard.press('1');
+  await page.keyboard.press('2');
   await expect(modeButton(page, 'List')).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('Show the Quote layout');
