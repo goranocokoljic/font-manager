@@ -520,6 +520,9 @@ describe('MockApi glyph metrics (E50.8)', () => {
     expect(space.bounds).toBeNull();
     expect(space.leftSideBearing).toBe(0);
     expect(space.rightSideBearing).toBe(space.advanceWidth);
+    // E50.9: the Unicode name, as the Rust mock gives it.
+    expect(a.unicodeName).toBe('LATIN SMALL LETTER A');
+    expect(space.unicodeName).toBeNull();
   });
 });
 

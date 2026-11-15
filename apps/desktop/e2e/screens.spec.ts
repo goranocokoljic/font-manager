@@ -25,7 +25,8 @@ const routes = (process.env.FM_SCREENS_ROUTES ?? '/')
 const tab = process.env.FM_SCREENS_TAB;
 // FM_SCREENS_GLYPH=U+0061 then searches the Characters section for it, opening its detail.
 const glyph = process.env.FM_SCREENS_GLYPH;
-// FM_SCREENS_COMPARE=JetBrains then opens "Compare with…" on that glyph and picks the first font found.
+// FM_SCREENS_COMPARE=JetBrains then opens "Compare with…" on that glyph, picks the first font found
+// and closes the overlay, so the glyph popover shows the comparison.
 const compareWith = process.env.FM_SCREENS_COMPARE;
 // FM_SCREENS_COVERAGE=Polish then opens that language in the Characters section's coverage list and scrolls to it.
 const coverageOf = process.env.FM_SCREENS_COVERAGE;
@@ -274,9 +275,10 @@ test.describe('@screens', () => {
               await page.waitForTimeout(400); // the old section fades out, the new one loads
               if (glyph) {
                 await page.getByRole('searchbox', { name: 'Search glyphs' }).fill(glyph);
-                await expect(page.getByRole('region', { name: 'Selected glyph' })).toBeVisible();
+                const detail = page.getByRole('dialog', { name: 'Selected glyph' });
+                await expect(detail).toBeVisible();
                 if (compareWith) {
-                  await page.getByRole('button', { name: 'Compare with…' }).click();
+                  await detail.getByRole('button', { name: 'Compare with…' }).click();
                   const dialog = page.getByRole('dialog');
                   await dialog
                     .getByRole('combobox', { name: 'Compare with font' })
@@ -286,6 +288,9 @@ test.describe('@screens', () => {
                   await expect(dialog.getByRole('list', { name: 'Legend' })).toContainText(
                     compareWith,
                   );
+                  // The overlay closes: the popover shows the comparison (E50.9).
+                  await page.keyboard.press('Escape');
+                  await expect(detail.getByTestId('glyph-metrics')).toBeVisible();
                 }
               }
               if (coverageOf) {

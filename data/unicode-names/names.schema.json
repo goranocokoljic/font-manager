@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/unicode-names/names.schema.json",
+  "title": "Font Manager Unicode character names",
+  "description": "The Name property of every named code point, copied from UnicodeData.txt of the Unicode Character Database. The glyph detail shows it (LATIN SMALL LETTER G).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "unicodeVersion", "source", "ranges", "names"],
+  "properties": {
+    "$schema": { "const": "./names.schema.json" },
+    "unicodeVersion": {
+      "description": "The Unicode version the names come from (17.0.0).",
+      "type": "string",
+      "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+    },
+    "source": {
+      "description": "The URL of the UnicodeData.txt file the names were copied from.",
+      "type": "string",
+      "pattern": "^https://www[.]unicode[.]org/"
+    },
+    "ranges": {
+      "description": "Ranges whose names are derived from the code point, sorted, not overlapping: a prefix and the code point in hex (CJK UNIFIED IDEOGRAPH-4E00), or the Hangul syllable rule of the Unicode Standard, section 3.12.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/range" }
+    },
+    "names": {
+      "description": "Code point in hex → name, for every other named code point. Controls, surrogates and private use have no name.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/codePoint" },
+      "additionalProperties": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9 -]*$" }
+    }
+  },
+  "$defs": {
+    "codePoint": {
+      "description": "A code point in upper-case hex, 4 to 6 digits, at most 10FFFF.",
+      "type": "string",
+      "pattern": "^[0-9A-F]{4,6}$"
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first", "last"],
+      "oneOf": [{ "required": ["prefix"] }, { "required": ["rule"] }],
+      "properties": {
+        "first": { "$ref": "#/$defs/codePoint" },
+        "last": { "$ref": "#/$defs/codePoint" },
+        "prefix": { "type": "string", "pattern": "^[A-Z][A-Z -]*-$" },
+        "rule": { "const": "hangul" }
+      }
+    }
+  }
+}

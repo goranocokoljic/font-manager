@@ -852,6 +852,27 @@ export function mockGlyphStyles(
   return { have, total };
 }
 
+const DIGIT_NAMES = [
+  'ZERO',
+  'ONE',
+  'TWO',
+  'THREE',
+  'FOUR',
+  'FIVE',
+  'SIX',
+  'SEVEN',
+  'EIGHT',
+  'NINE',
+];
+
+/** As the Rust mock: the Latin letters and figures carry their Unicode name, the rest none. */
+function mockUnicodeName(c: string): string | null {
+  if (/^[a-z]$/.test(c)) return `LATIN SMALL LETTER ${c.toUpperCase()}`;
+  if (/^[A-Z]$/.test(c)) return `LATIN CAPITAL LETTER ${c}`;
+  if (/^[0-9]$/.test(c)) return `DIGIT ${DIGIT_NAMES[Number(c)]}`;
+  return null;
+}
+
 export function mockGlyphDetail(f: FaceDetail, req: GlyphRequest, cjk: boolean): GlyphDetail {
   // Glyph ids as mockGlyphPage numbers them.
   const all = [...mockChars(f)].join('') + (cjk ? CJK : '');
@@ -883,6 +904,7 @@ export function mockGlyphDetail(f: FaceDetail, req: GlyphRequest, cjk: boolean):
         ? [mockFeature('onum')]
         : [],
     health: { kind: 'ok' },
+    unicodeName: mockUnicodeName(c),
   };
 }
 

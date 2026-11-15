@@ -9,17 +9,25 @@ beforeEach(() => {
 
 describe('the glyph grid setup', () => {
   it('defaults to 88 px cells with the grid on', () => {
-    expect(useGlyphGridStore().settingsFor('family.characters')).toEqual({ cell: 88, lines: true });
+    expect(useGlyphGridStore().settingsFor('family.characters')).toEqual({
+      cell: 88,
+      lines: true,
+      details: true,
+    });
   });
 
   it('remembers each view on its own, across a restart', () => {
     const store = useGlyphGridStore();
     store.update('family.characters', { cell: 48, lines: false });
-    expect(store.settingsFor('other')).toEqual({ cell: 88, lines: true });
+    expect(store.settingsFor('other')).toEqual({ cell: 88, lines: true, details: true });
     setActivePinia(createPinia());
     const again = useGlyphGridStore();
-    expect(again.settingsFor('family.characters')).toEqual({ cell: 48, lines: false });
-    expect(again.settingsFor('other')).toEqual({ cell: 88, lines: true });
+    expect(again.settingsFor('family.characters')).toEqual({
+      cell: 48,
+      lines: false,
+      details: true,
+    });
+    expect(again.settingsFor('other')).toEqual({ cell: 88, lines: true, details: true });
   });
 
   it('keeps a size in range', () => {
@@ -32,8 +40,14 @@ describe('the glyph grid setup', () => {
 
   it('repairs a damaged entry', () => {
     localStorage.setItem(GLYPH_GRID_STORAGE_KEY, '{"v":{"cell":"big","lines":3}');
-    expect(useGlyphGridStore().settingsFor('v')).toEqual({ cell: 88, lines: true });
-    expect(normalizeGlyphGrid({ cell: 'big', lines: 3 })).toEqual({ cell: 88, lines: true });
-    expect(normalizeGlyphGrid(null)).toEqual({ cell: 88, lines: true });
+    expect(useGlyphGridStore().settingsFor('v')).toEqual({ cell: 88, lines: true, details: true });
+    expect(normalizeGlyphGrid({ cell: 'big', lines: 3 })).toEqual({
+      cell: 88,
+      lines: true,
+      details: true,
+    });
+    expect(normalizeGlyphGrid(null)).toEqual({ cell: 88, lines: true, details: true });
+    expect(normalizeGlyphGrid({ details: 'no' }).details).toBe(true);
+    expect(normalizeGlyphGrid({ details: false }).details).toBe(false);
   });
 });

@@ -9,14 +9,21 @@
 // exist, and a CJK face with 30k+ characters scrolls like a Latin one.
 //
 // Keyboard (WAI-ARIA grid): the grid holds focus and points at the cursor cell with
-// aria-activedescendant; arrow keys move by cell and row and Home/End to the ends, and the detail
-// card follows. Enter or a click selects the cursor's glyph again after Escape closed the card.
-// Tab reaches the card; Escape closes it and returns to the grid. Below the grid, the coverage
-// list (GlyphCoverage): a block chosen there shows that block in the grid and focuses it.
-// Under the grid, the face's detected letter shapes (FamilyTraits, E49.10).
+// aria-activedescendant; arrow keys move by cell and row and Home/End to the ends.
+//
+// The glyph detail is a popover anchored to its cell (E50.9): a click or Enter opens it, and it
+// follows the cursor while open. Escape, a press outside it and its close button close it, and
+// focus goes back to the grid, on the cell. 'Details on click' (a view preference) turns that off:
+// a click then only selects the cell, and the detail is in the cell's context menu (right click,
+// Shift+F10 or the Menu key). While 'Compare with…' has a face, the popover adds that face's
+// metrics next to this one's and ghosts its glyph under this one; with no comparison no metric is
+// shown. Below the grid, the coverage list (GlyphCoverage): a block chosen there shows that block
+// in the grid and focuses it. Under the grid, the face's detected letter shapes (FamilyTraits,
+// E49.10).
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, watchEffect } from 'vue';
 import type { FaceDetail, FaceId, FeatureInfo, GlyphInfo } from '../api/types';
 import { glyphAlternates, type GlyphAlternate } from '../glyphs/alternates';
+import { glyphMetricRow } from '../glyphs/metrics';
 import {
   CELL,
   cellTemplate,
@@ -30,6 +37,7 @@ import {
   fitSpecimenSize,
   rowOf,
 } from '../glyphs/layout';
+import { useFaceLoader } from '../preview/faceLoader';
 import { metricsSpecimen, specimenRulers } from '../preview/metricsSpecimen';
 import { errorMessage, inlineKey, t } from '../i18n';
 import { windowRange } from '../list/virtual';
@@ -45,6 +53,8 @@ import FamilyTraits from './FamilyTraits.vue';
 import GlyphCoverage from './GlyphCoverage.vue';
 import UiChevron from './ui/UiChevron.vue';
 import UiIcon from './ui/UiIcon.vue';
+import UiIconButton from './ui/UiIconButton.vue';
+import UiPopover from './ui/UiPopover.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 import { useCopy } from './useCopy';
 import { likeThisLabel } from '../search/like';
@@ -73,6 +83,9 @@ const FALLBACK_HEIGHT = 384;
 const FALLBACK_WIDTH = 720;
 /** Room left between a revealed row and the edge of the window. */
 const REVEAL_MARGIN = 8;
+/** The popover's width and its distance from its cell, in CSS px. */
+const POPOVER_WIDTH = 360;
+const POPOVER_GAP = 8;
 /** The view whose cell size and grid switch this section remembers. */
 const GRID_VIEW = 'family.characters';
 
@@ -148,6 +161,7 @@ onBeforeUnmount(detach);
 
 const cell = computed(() => gridSetup.settingsFor(GRID_VIEW).cell);
 const lines = computed(() => gridSetup.settingsFor(GRID_VIEW).lines);
+const detailsOnClick = computed(() => gridSetup.settingsFor(GRID_VIEW).details);
 const columns = computed(() => glyphColumns(width.value, cell.value));
 const rowHeight = computed(() => glyphRowHeight(width.value, columns.value));
 const rowCount = computed(() => glyphRowCount(glyphs.total, columns.value));
@@ -160,6 +174,11 @@ function slideCell(e: Event): void {
 }
 function toggleLines(): void {
   gridSetup.update(GRID_VIEW, { lines: !lines.value });
+}
+function toggleDetails(): void {
+  const on = !detailsOnClick.value;
+  gridSetup.update(GRID_VIEW, { details: on });
+  if (!on) popoverOpen.value = false;
 }
 
 // The specimen: the largest size up to 96 px at which the whole line fits its pane, measured in
@@ -266,16 +285,30 @@ async function reveal(i: number): Promise<void> {
   await nextTick();
 }
 
+/** The glyph popover is showing (anchored to the cursor cell). */
+const popoverOpen = ref(false);
+
 function choose(index: number): void {
   cursor.value = index;
   const g = glyphs.item(index);
   if (g) void glyphs.select(g);
 }
 
-/** Opens the compare overlay on the selected character. */
+/** Selects list index `index` and opens its popover. */
+function openDetail(index: number): void {
+  choose(index);
+  popoverOpen.value = true;
+}
+
+/** The character 'Compare with…' starts on: the selected one, else the cursor's or the first. */
+function compareCodePoint(): number | null {
+  return glyphs.selected?.codePoint ?? glyphs.item(Math.max(cursor.value, 0))?.codePoint ?? null;
+}
+
+/** Opens the compare overlay, to pick (or change) the face to compare with. */
 function openCompare(): void {
-  const g = glyphs.selected;
-  if (g && faceId.value !== null) void compare.start(faceId.value, g.codePoint);
+  const cp = compareCodePoint();
+  if (cp !== null && faceId.value !== null) void compare.start(faceId.value, cp);
 }
 
 /** Sorts the wall by the selected glyph of this face (E49.9). */
@@ -285,22 +318,30 @@ function findLike(): void {
   if (g && face) emit('findLike', { face: face.id, glyph: charOf(g), family: face.familyName });
 }
 
-/** Closes the glyph detail and puts focus back on the grid. */
+/** Closes the glyph popover and puts focus back on the grid, on the cell. */
 function closeDetail(): void {
-  void glyphs.select(null);
+  popoverOpen.value = false;
   grid.value?.focus({ preventScroll: true });
 }
 
 async function onKeyDown(e: KeyboardEvent): Promise<void> {
-  if (e.key === 'Escape' && glyphs.selected) {
+  if (e.key === 'Escape' && popoverOpen.value) {
     e.preventDefault();
     closeDetail();
+    return;
+  }
+  if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+    if (cursor.value >= 0) {
+      e.preventDefault();
+      openMenu(cursor.value);
+    }
     return;
   }
   if (e.key === 'Enter' || e.key === ' ') {
     if (cursor.value >= 0) {
       e.preventDefault();
-      choose(cursor.value);
+      if (detailsOnClick.value) openDetail(cursor.value);
+      else choose(cursor.value);
     }
     return;
   }
@@ -317,8 +358,134 @@ async function onKeyDown(e: KeyboardEvent): Promise<void> {
 }
 
 function onClick(index: number): void {
-  choose(index);
+  if (detailsOnClick.value) openDetail(index);
+  else choose(index);
   grid.value?.focus({ preventScroll: true });
+}
+
+// The popover sits beside its cell, on the inline-end side when there is room, else on the other
+// side, within the section; its top is the cell's top. Only where it is drawn is computed here.
+const mapEl = ref<HTMLElement | null>(null);
+const popover = ref<HTMLElement | null>(null);
+const popoverPos = ref<{ left: number; top: number; width: number }>({
+  left: 0,
+  top: 0,
+  width: POPOVER_WIDTH,
+});
+function placePopover(): void {
+  const map = mapEl.value;
+  const cellEl = cursor.value >= 0 ? document.getElementById(cellId(cursor.value)) : null;
+  if (!map || !cellEl) return;
+  const m = map.getBoundingClientRect();
+  const c = cellEl.getBoundingClientRect();
+  const w = Math.min(POPOVER_WIDTH, m.width || POPOVER_WIDTH);
+  const rtl = getComputedStyle(map).direction === 'rtl';
+  const after = rtl ? c.left - m.left - POPOVER_GAP - w : c.right - m.left + POPOVER_GAP;
+  const before = rtl ? c.right - m.left + POPOVER_GAP : c.left - m.left - POPOVER_GAP - w;
+  const fits = (x: number) => x >= 0 && x + w <= m.width;
+  const left = fits(after)
+    ? after
+    : fits(before)
+      ? before
+      : Math.max(0, Math.min(c.left - m.left, m.width - w));
+  popoverPos.value = { left, top: c.top - m.top, width: w };
+}
+const popoverStyle = computed(() => ({
+  left: px(popoverPos.value.left),
+  top: px(popoverPos.value.top),
+  width: px(popoverPos.value.width),
+}));
+watch(
+  [popoverOpen, cursor, width, cell],
+  async ([open]) => {
+    if (!open) return;
+    await nextTick();
+    placePopover();
+  },
+  { flush: 'post' },
+);
+
+// A press outside the popover closes it: on a cell it moves to that cell instead (the click does),
+// inside the context menu or a dialog (the compare overlay) it stays. Focus goes back to the grid
+// unless the press lands on a control, which takes the focus itself.
+function onOutsidePress(e: PointerEvent): void {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  if (popover.value?.contains(target)) return;
+  if (target.closest('[role="gridcell"]') && grid.value?.contains(target)) return;
+  // The compare overlay and the context menu (and any other dialog or layer) work with it open.
+  if (target.closest('[role="dialog"], [data-ui-popover]')) return;
+  popoverOpen.value = false;
+  // After the press has moved the focus (or not): a press on nothing focusable leaves it on the
+  // grid, on the cell.
+  setTimeout(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body) grid.value?.focus({ preventScroll: true });
+  });
+}
+watch(popoverOpen, (open) => {
+  if (open) document.addEventListener('pointerdown', onOutsidePress, true);
+  else document.removeEventListener('pointerdown', onOutsidePress, true);
+});
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutsidePress, true));
+
+// The context menu of a cell: the detail (the way to it with 'Details on click' off), copy,
+// 'fonts with a … like this' and compare.
+const menuIndex = ref<number | null>(null);
+const menuAnchor = ref<HTMLElement | null>(null);
+const menuEl = ref<HTMLElement | null>(null);
+const menuGlyph = computed(() => (menuIndex.value === null ? null : glyphs.item(menuIndex.value)));
+function openMenu(index: number, e?: MouseEvent): void {
+  const g = glyphs.item(index);
+  if (!g) return;
+  cursor.value = index;
+  void glyphs.select(g);
+  menuAnchor.value =
+    (e?.currentTarget as HTMLElement | undefined) ?? document.getElementById(cellId(index));
+  menuIndex.value = index;
+}
+function closeMenu(focusGrid = true): void {
+  menuIndex.value = null;
+  if (focusGrid) grid.value?.focus({ preventScroll: true });
+}
+function focusMenu(): void {
+  menuEl.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+}
+function onMenuKey(e: KeyboardEvent): void {
+  e.stopPropagation();
+  if (e.key === 'Escape' || e.key === 'Tab') {
+    e.preventDefault();
+    closeMenu();
+    return;
+  }
+  const items = [...(menuEl.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  let to: number | null = null;
+  if (e.key === 'ArrowDown') to = (at + 1) % items.length;
+  else if (e.key === 'ArrowUp') to = (at - 1 + items.length) % items.length;
+  else if (e.key === 'Home') to = 0;
+  else if (e.key === 'End') to = items.length - 1;
+  if (to === null) return;
+  e.preventDefault();
+  items[to]?.focus();
+}
+function menuDetails(): void {
+  const i = menuIndex.value;
+  closeMenu();
+  if (i !== null) openDetail(i);
+}
+function menuCopy(): void {
+  const g = menuGlyph.value;
+  closeMenu();
+  if (g) void copy(charOf(g));
+}
+function menuLike(): void {
+  closeMenu();
+  findLike();
+}
+function menuCompare(): void {
+  closeMenu(false);
+  openCompare();
 }
 
 // A new list (a search, a block, a face): the top of the grid, or the glyph a search selected.
@@ -338,6 +505,10 @@ watch(
     if (i >= 0) {
       cursor.value = i;
       await reveal(i);
+      // A search that finds a character shows its detail, as a click would.
+      if (detailsOnClick.value) popoverOpen.value = true;
+    } else {
+      popoverOpen.value = false;
     }
   },
 );
@@ -398,30 +569,84 @@ const alternateLabel = (a: GlyphAlternate) =>
   a.value === undefined ? a.name : `${a.name} ${a.value}`;
 
 const moreOpen = ref(false);
-const advance = computed(() => {
-  const d = selDetail.value;
-  if (!d) return glyphs.detailError ? t('glyphs.advanceUnknown') : t('glyphs.advanceLoading');
-  return d.advanceWidth === null ? t('glyphs.none') : t('glyphs.units', { count: d.advanceWidth });
-});
-/** The feature lists of the detail, each with its heading and empty text. */
-const featureLists = computed(() => {
+/** The features that produce or replace the glyph, as chips: each tag once. */
+const featureChips = computed(() => {
   const d = selDetail.value;
   if (!d) return [];
-  return [
-    {
-      id: 'fm-glyph-produced',
-      title: t('glyphs.producedBy'),
-      empty: t('glyphs.producedByNone'),
-      items: d.producedBy,
-    },
-    {
-      id: 'fm-glyph-replaced',
-      title: t('glyphs.replacedBy'),
-      empty: t('glyphs.replacedByNone'),
-      items: d.replacedBy,
-    },
-  ];
+  const seen = new Set<string>();
+  return [...d.producedBy, ...d.replacedBy].filter((f) => !seen.has(f.tag) && seen.add(f.tag));
 });
+/** "LATIN SMALL LETTER G · glyph g": what Unicode and the font call the character. */
+const namesLine = computed(() => {
+  const g = sel.value;
+  if (!g) return '';
+  const parts = [
+    selDetail.value?.unicodeName,
+    g.name ? t('glyphs.glyphNamed', { name: g.name }) : null,
+  ];
+  return parts.filter(Boolean).join(' · ');
+});
+
+// The comparison (E50.9): the compared face's glyph, its metrics beside this face's, and its
+// font for the ghost under the glyph.
+const comparedFamily = computed(() => compare.other?.face.familyName ?? '');
+// The overlay gives focus back to what opened it; a pick swaps 'Compare with…' for 'change', so
+// when that button is gone the focus goes to its successor (in the popover, else the chip).
+watch(
+  () => compare.open,
+  async (open) => {
+    if (open) return;
+    await nextTick();
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const to =
+      popover.value?.querySelector<HTMLElement>('[data-compare-entry]') ??
+      mapEl.value?.querySelector<HTMLElement>('.controls [data-compare-entry]');
+    to?.focus();
+  },
+);
+watch(
+  [() => sel.value?.codePoint ?? null, () => compare.other?.face.id ?? null],
+  ([cp]) => {
+    if (compare.active) void compare.loadOtherGlyph(cp);
+  },
+  { immediate: true },
+);
+const metricRow = computed(() =>
+  compare.active
+    ? glyphMetricRow(
+        { glyph: selDetail.value, metrics: props.detail?.metrics },
+        { glyph: compare.otherGlyph, metrics: compare.other?.metrics },
+      )
+    : [],
+);
+const metricText = (v: number | null) => (v === null ? t('glyphs.metricNone') : String(v));
+const loader = useFaceLoader();
+const ghostFamily = ref<string | null>(null);
+let ghostHeld: FaceId | null = null;
+function holdGhost(id: FaceId | null): void {
+  if (ghostHeld === id) return;
+  if (ghostHeld !== null) loader.release(ghostHeld);
+  ghostHeld = id;
+  ghostFamily.value = null;
+  if (id === null) return;
+  loader.acquire(id).then(
+    (name) => {
+      if (ghostHeld === id) ghostFamily.value = name;
+    },
+    () => undefined,
+  );
+}
+watch(
+  () => (popoverOpen.value && compare.active ? (compare.other?.face.id ?? null) : null),
+  holdGhost,
+  { immediate: true },
+);
+onBeforeUnmount(() => holdGhost(null));
+/** The ghost draws only where the compared face has the character. */
+const ghostShown = computed(
+  () => ghostFamily.value !== null && compare.otherGlyph?.codePoint === sel.value?.codePoint,
+);
 const featureName = (f: FeatureInfo) => f.name ?? t('glyphs.unregisteredFeature');
 const broken = computed(() => (glyphs.health.kind === 'broken' ? glyphs.health.reason : null));
 const noResults = computed(
@@ -432,7 +657,7 @@ const noResults = computed(
 <template>
   <p v-if="!detail" class="placeholder">{{ t('glyphs.noFace') }}</p>
   <div v-else class="characters" data-testid="family-characters">
-    <div class="map">
+    <div ref="mapEl" class="map">
       <div class="controls">
         <span class="search">
           <UiIcon name="search" class="search-icon" />
@@ -473,6 +698,38 @@ const noResults = computed(
             />
             <span class="large" aria-hidden="true">{{ t('preview.sizeGlyph') }}</span>
           </span>
+          <span v-if="compare.active" class="compare-chip on" data-testid="glyph-compare-chip">
+            <button
+              type="button"
+              class="compare-open"
+              data-compare-entry
+              aria-haspopup="dialog"
+              :aria-label="t('glyphs.compareChange', { family: comparedFamily })"
+              @click="openCompare"
+            >
+              {{ t('glyphs.compareOn', { family: comparedFamily }) }}
+            </button>
+            <UiIconButton
+              icon="close"
+              size="sm"
+              data-testid="glyph-compare-stop"
+              :label="t('glyphs.compareStop', { family: comparedFamily })"
+              @click="compare.stop()"
+            />
+          </span>
+          <button
+            v-else
+            type="button"
+            class="compare-chip"
+            data-testid="glyph-compare-chip"
+            data-compare-entry
+            aria-haspopup="dialog"
+            :title="t('glyphs.compareHint')"
+            @click="openCompare"
+          >
+            {{ t('glyphs.compareWith') }}
+            <UiIcon name="plus" />
+          </button>
           <span class="switch">
             <span id="fm-glyph-lines" aria-hidden="true">{{ t('glyphs.gridLines') }}</span>
             <UiSwitch
@@ -480,6 +737,15 @@ const noResults = computed(
               aria-labelledby="fm-glyph-lines"
               data-testid="glyph-grid-lines"
               @click="toggleLines"
+            />
+          </span>
+          <span class="switch">
+            <span id="fm-glyph-details" aria-hidden="true">{{ t('glyphs.detailsOnClick') }}</span>
+            <UiSwitch
+              :checked="detailsOnClick"
+              aria-labelledby="fm-glyph-details"
+              data-testid="glyph-details-on-click"
+              @click="toggleDetails"
             />
           </span>
         </span>
@@ -559,9 +825,11 @@ const noResults = computed(
               :class="{ cursor: c.index === cursor }"
               :aria-label="cellLabel(c.glyph, c.index)"
               :aria-selected="!!c.glyph && sel?.codePoint === c.glyph.codePoint"
+              :aria-haspopup="detailsOnClick ? 'dialog' : undefined"
               :title="cellLabel(c.glyph, c.index)"
               :data-code-point="c.glyph?.codePoint"
               @click="onClick(c.index)"
+              @contextmenu.prevent="openMenu(c.index, $event)"
             >
               <span
                 v-if="c.glyph"
@@ -578,132 +846,245 @@ const noResults = computed(
           </div>
         </div>
       </div>
+      <section
+        v-if="sel && popoverOpen"
+        ref="popover"
+        class="popover"
+        role="dialog"
+        data-testid="glyph-card"
+        :aria-label="t('glyphs.selected')"
+        :style="popoverStyle"
+        @keydown.esc.stop.prevent="closeDetail"
+      >
+        <UiIconButton
+          class="popover-close"
+          icon="close"
+          size="sm"
+          data-testid="glyph-popover-close"
+          :label="t('glyphs.closeDetails')"
+          @click="closeDetail"
+        />
+        <div class="popover-head">
+          <div class="paper" aria-hidden="true">
+            <span
+              v-if="compare.active && ghostShown"
+              class="ghost"
+              data-testid="glyph-ghost"
+              :style="{ fontFamily: `'${ghostFamily}'` }"
+              >{{ charOf(sel) }}</span
+            >
+            <span
+              class="big"
+              data-testid="glyph-big"
+              :class="{ loading: !faceStyle }"
+              :style="faceStyle"
+              >{{ charOf(sel) }}</span
+            >
+          </div>
+          <div class="ident">
+            <p class="ident-line">
+              <span class="ident-char" :class="{ loading: !faceStyle }" :style="faceStyle">{{
+                charOf(sel)
+              }}</span>
+              <span class="mono" data-testid="glyph-code">{{ codePointLabel(sel.codePoint) }}</span>
+            </p>
+            <p class="muted names" data-testid="glyph-names">{{ namesLine }}</p>
+            <ul
+              v-if="featureChips.length"
+              class="feature-chips"
+              :aria-label="t('glyphs.features')"
+              data-testid="glyph-features"
+            >
+              <li
+                v-for="f in featureChips"
+                :key="f.tag"
+                class="feature-chip"
+                :title="featureName(f)"
+              >
+                <CopyValue :value="f.tag" :label="t('glyphs.featureTag')" />
+              </li>
+            </ul>
+          </div>
+        </div>
+        <p v-if="glyphs.detailError" class="muted" role="alert">
+          {{ errorMessage(glyphs.detailError) }}
+        </p>
+        <p v-else-if="detailBroken" class="muted" role="status">
+          {{ t('glyphs.detailBroken', { reason: detailBroken }) }}
+        </p>
+        <p class="compare-line">
+          <UiIcon name="compare" />
+          <template v-if="compare.active">
+            <span>{{ t('glyphs.comparing') }}</span>
+            <strong>{{ comparedFamily }}</strong>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              class="link"
+              data-compare-entry
+              aria-haspopup="dialog"
+              :aria-label="t('glyphs.compareChange', { family: comparedFamily })"
+              @click="openCompare"
+            >
+              {{ t('glyphs.change') }}
+            </button>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              class="link muted"
+              :aria-label="t('glyphs.compareStop', { family: comparedFamily })"
+              @click="compare.stop()"
+            >
+              {{ t('glyphs.stop') }}
+            </button>
+          </template>
+          <template v-else>
+            <button
+              type="button"
+              class="link"
+              data-compare-entry
+              aria-haspopup="dialog"
+              :title="t('glyphs.compareHint')"
+              @click="openCompare"
+            >
+              {{ t('glyphs.compareWith') }}
+            </button>
+            <span class="muted">{{ t('glyphs.compareInvite') }}</span>
+          </template>
+        </p>
+        <div v-if="compare.active" class="metrics" data-testid="glyph-metrics">
+          <p class="metrics-head">
+            <span class="metrics-title">{{ t('glyphs.metricsTitle') }}</span>
+            <span class="muted"
+              >{{ detail.face.familyName }} · <span class="accent">{{ comparedFamily }}</span></span
+            >
+          </p>
+          <dl class="metrics-row">
+            <div v-for="m in metricRow" :key="m.id" class="metric" :data-metric="m.id">
+              <dt>{{ t(`glyphs.metric.${m.id}`) }}</dt>
+              <dd
+                :aria-label="
+                  t('glyphs.metricValues', {
+                    first: detail.face.familyName,
+                    mine: metricText(m.mine),
+                    second: comparedFamily,
+                    theirs: metricText(m.theirs),
+                  })
+                "
+              >
+                <span class="mine">{{ metricText(m.mine) }}</span>
+                <span class="theirs accent">{{ metricText(m.theirs) }}</span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <button
+          type="button"
+          class="more fm-directional"
+          aria-controls="fm-glyph-more"
+          :aria-expanded="moreOpen"
+          @click="moreOpen = !moreOpen"
+        >
+          <UiChevron :open="moreOpen" />
+          {{ t('glyphs.moreDetails') }}
+        </button>
+        <div v-if="moreOpen" id="fm-glyph-more" class="more-body">
+          <dl class="facts">
+            <dt id="fm-glyph-styles">{{ t('glyphs.inStyles') }}</dt>
+            <dd aria-labelledby="fm-glyph-styles">{{ stylesText }}</dd>
+            <dt id="fm-glyph-alternates">{{ t('glyphs.alternates') }}</dt>
+            <dd>
+              <ul v-if="alternates.length" class="alternates" aria-labelledby="fm-glyph-alternates">
+                <li
+                  v-for="a in alternates"
+                  :key="a.key"
+                  class="alternate"
+                  :title="alternateLabel(a)"
+                  data-testid="glyph-alternate"
+                >
+                  <span
+                    class="alternate-char"
+                    :class="{ loading: !faceStyle }"
+                    :style="alternateStyle(a)"
+                    aria-hidden="true"
+                    >{{ charOf(sel) }}</span
+                  >
+                  <span class="sr-only">{{ alternateLabel(a) }}</span>
+                </li>
+              </ul>
+              <span v-else class="muted">{{ t('glyphs.none') }}</span>
+            </dd>
+            <dt id="fm-glyph-id">{{ t('glyphs.glyphId') }}</dt>
+            <dd aria-labelledby="fm-glyph-id">{{ sel.glyphId }}</dd>
+            <dt id="fm-glyph-block">{{ t('glyphs.block') }}</dt>
+            <dd aria-labelledby="fm-glyph-block">{{ sel.block }}</dd>
+          </dl>
+          <div class="actions">
+            <button type="button" class="action" @click="copy(charOf(sel))">
+              {{ t('glyphs.copyGlyph') }}
+            </button>
+            <button type="button" class="action" data-testid="glyph-like" @click="findLike">
+              {{ likeThisLabel(charOf(sel)) }}
+            </button>
+            <span class="muted copied" role="status">
+              <template v-if="copyStatus === 'copied'">{{ t('common.copied') }}</template>
+              <template v-else-if="copyStatus === 'failed'">{{ t('copy.failed') }}</template>
+            </span>
+          </div>
+        </div>
+      </section>
       <FamilyTraits :traits="detail.glyphTraits ?? []" @find="emit('findTrait', $event)" />
       <GlyphCoverage @block="showBlock" />
       <p v-if="glyphs.unicodeVersion" class="muted note">
         {{ t('glyphs.unicodeVersion', { version: glyphs.unicodeVersion }) }}
       </p>
     </div>
-    <section
-      v-if="sel"
-      class="card"
-      data-testid="glyph-card"
-      :aria-label="t('glyphs.selected')"
-      @keydown.esc.stop.prevent="closeDetail"
+    <UiPopover
+      :open="menuGlyph !== null"
+      :anchor="menuAnchor"
+      @close="closeMenu(false)"
+      @placed="focusMenu"
     >
-      <p
-        class="big"
-        data-testid="glyph-big"
-        :class="{ loading: !faceStyle }"
-        :style="faceStyle"
-        aria-hidden="true"
+      <div
+        v-if="menuGlyph"
+        ref="menuEl"
+        class="menu"
+        role="menu"
+        data-testid="glyph-menu"
+        :aria-label="t('glyphs.menu', { codePoint: codePointLabel(menuGlyph.codePoint) })"
+        @keydown="onMenuKey"
       >
-        {{ charOf(sel) }}
-      </p>
-      <dl>
-        <dt id="fm-glyph-name">{{ t('glyphs.glyphName') }}</dt>
-        <dd aria-labelledby="fm-glyph-name">{{ sel.name ?? t('glyphs.none') }}</dd>
-        <dt id="fm-glyph-cp">{{ t('glyphs.codePoint') }}</dt>
-        <dd class="mono" aria-labelledby="fm-glyph-cp">{{ codePointLabel(sel.codePoint) }}</dd>
-        <dt id="fm-glyph-styles">{{ t('glyphs.inStyles') }}</dt>
-        <dd aria-labelledby="fm-glyph-styles">{{ stylesText }}</dd>
-        <dt id="fm-glyph-alternates">{{ t('glyphs.alternates') }}</dt>
-        <dd>
-          <ul v-if="alternates.length" class="alternates" aria-labelledby="fm-glyph-alternates">
-            <li
-              v-for="a in alternates"
-              :key="a.key"
-              class="alternate"
-              :title="alternateLabel(a)"
-              data-testid="glyph-alternate"
-            >
-              <span
-                class="alternate-char"
-                :class="{ loading: !faceStyle }"
-                :style="alternateStyle(a)"
-                aria-hidden="true"
-                >{{ charOf(sel) }}</span
-              >
-              <span class="sr-only">{{ alternateLabel(a) }}</span>
-            </li>
-          </ul>
-          <span v-else class="muted">{{ t('glyphs.none') }}</span>
-        </dd>
-      </dl>
-      <div class="actions">
-        <button type="button" class="action" @click="copy(charOf(sel))">
+        <button type="button" role="menuitem" tabindex="-1" @click="menuDetails">
+          {{ t('glyphs.menuDetails') }}
+        </button>
+        <button type="button" role="menuitem" tabindex="-1" @click="menuCopy">
           {{ t('glyphs.copyGlyph') }}
+        </button>
+        <button type="button" role="menuitem" tabindex="-1" @click="menuLike">
+          {{ likeThisLabel(charOf(menuGlyph)) }}
         </button>
         <button
           type="button"
-          class="action"
+          role="menuitem"
+          tabindex="-1"
           aria-haspopup="dialog"
-          :title="t('glyphs.compareHint')"
-          @click="openCompare"
+          @click="menuCompare"
         >
           {{ t('glyphs.compareWith') }}
         </button>
-        <button type="button" class="action" data-testid="glyph-like" @click="findLike">
-          {{ likeThisLabel(charOf(sel)) }}
-        </button>
-        <span class="muted copied" role="status">
-          <template v-if="copyStatus === 'copied'">{{ t('common.copied') }}</template>
-          <template v-else-if="copyStatus === 'failed'">{{ t('copy.failed') }}</template>
-        </span>
       </div>
-      <p v-if="glyphs.detailError" class="muted" role="alert">
-        {{ errorMessage(glyphs.detailError) }}
-      </p>
-      <p v-else-if="detailBroken" class="muted" role="status">
-        {{ t('glyphs.detailBroken', { reason: detailBroken }) }}
-      </p>
-      <button
-        type="button"
-        class="more fm-directional"
-        aria-controls="fm-glyph-more"
-        :aria-expanded="moreOpen"
-        @click="moreOpen = !moreOpen"
-      >
-        <UiChevron :open="moreOpen" />
-        {{ t('glyphs.moreDetails') }}
-      </button>
-      <div v-if="moreOpen" id="fm-glyph-more" class="more-body">
-        <dl>
-          <dt id="fm-glyph-id">{{ t('glyphs.glyphId') }}</dt>
-          <dd aria-labelledby="fm-glyph-id">{{ sel.glyphId }}</dd>
-          <dt id="fm-glyph-advance">{{ t('glyphs.advance') }}</dt>
-          <dd aria-labelledby="fm-glyph-advance">{{ advance }}</dd>
-          <dt id="fm-glyph-block">{{ t('glyphs.block') }}</dt>
-          <dd aria-labelledby="fm-glyph-block">{{ sel.block }}</dd>
-        </dl>
-        <div v-for="list in featureLists" :key="list.id" class="features">
-          <h3 :id="list.id">{{ list.title }}</h3>
-          <ul v-if="list.items.length" :aria-labelledby="list.id">
-            <li v-for="f in list.items" :key="f.tag">
-              <CopyValue :value="f.tag" :label="t('glyphs.featureTag')" />
-              <span class="muted">{{ featureName(f) }}</span>
-            </li>
-          </ul>
-          <p v-else class="muted">{{ list.empty }}</p>
-        </div>
-      </div>
-    </section>
-    <div v-else class="card empty" data-testid="glyph-card-empty">
-      <p class="muted">{{ t('glyphs.pickHint') }}</p>
-    </div>
+    </UiPopover>
     <GlyphCompare v-if="compare.open" />
   </div>
 </template>
 
 <style scoped>
-/* The card's column stays reserved, so selecting a glyph never moves the grid. */
+/* The grid takes the whole width; the glyph detail floats over it (E50.9). */
 .characters {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(280px, 36%, 340px);
-  align-items: start;
-  gap: var(--fm-space-5);
+  min-width: 0;
 }
 .map {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--fm-space-3);
@@ -905,52 +1286,205 @@ const noResults = computed(
   width: 0;
   vertical-align: baseline;
 }
-/* Sticks while the window is tall enough to show the card and the page above it. */
-.card {
+/* The compare chip of the control row: an outline, the accent while comparing. */
+.compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  height: 32px;
+  padding-inline: var(--fm-space-3) var(--fm-space-2);
+  border: 1px solid var(--fm-control-border);
+  border-radius: 999px;
+  background-color: var(--fm-bg);
+  color: var(--fm-fg);
+  font: inherit;
+  font-size: var(--fm-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.compare-chip.on {
+  border-color: var(--fm-accent);
+  cursor: default;
+}
+.compare-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.compare-chip:focus-visible,
+.compare-open:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+/* The glyph popover: 360 px, beside its cell (placePopover), over the grid. */
+.popover {
+  position: absolute;
+  z-index: var(--fm-z-popover);
   display: flex;
   flex-direction: column;
   gap: var(--fm-space-3);
   box-sizing: border-box;
-  min-width: 0;
   padding: var(--fm-space-4);
+  border: 1px solid var(--fm-border);
+  border-radius: var(--fm-radius-lg);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
+}
+.popover-close {
+  position: absolute;
+  inset-block-start: var(--fm-space-2);
+  inset-inline-end: var(--fm-space-2);
+}
+.popover-head {
+  display: flex;
+  gap: var(--fm-space-4);
+  align-items: center;
+  padding-inline-end: var(--fm-space-5);
+}
+/* The glyph on paper; the compared glyph ghosted under it on the same baseline. */
+.paper {
+  display: grid;
+  flex: none;
+  grid-template-areas: 'glyph';
+  align-items: baseline;
+  justify-items: center;
+  width: 120px;
+  height: 120px;
+  overflow: hidden;
   border-radius: var(--fm-radius-md);
   background-color: var(--fm-surface);
+  color: var(--fm-fg);
+  font-size: 92px;
+  line-height: 120px;
 }
-@media (min-height: 720px) {
-  .card {
-    position: sticky;
-    top: var(--fm-space-3);
-  }
+.paper > span {
+  grid-area: glyph;
 }
-.card.empty {
-  min-height: 200px;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+.ghost {
+  color: color-mix(in srgb, var(--fm-accent) 40%, transparent);
 }
 .big {
-  overflow: hidden;
-  margin: 0;
-  font-size: 160px;
-  line-height: 1.2;
-  text-align: center;
+  position: relative;
   white-space: nowrap;
+}
+.ident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-space-1);
+  min-width: 0;
+}
+.ident p {
+  margin: 0;
+}
+.ident-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fm-space-2);
+}
+.ident-char {
+  font-size: var(--fm-text-lg);
+}
+.names {
+  font-size: var(--fm-text-sm);
+  overflow-wrap: anywhere;
+}
+.feature-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fm-space-1);
+  margin: var(--fm-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.feature-chip {
+  padding: 2px var(--fm-space-2);
+  border-radius: 999px;
+  background-color: var(--fm-surface);
+  font-size: var(--fm-text-xs);
+}
+.compare-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fm-space-1);
+  margin: 0;
+  padding-block-start: var(--fm-space-3);
+  border-block-start: 1px solid var(--fm-border);
+  font-size: var(--fm-text-sm);
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fm-fg);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link.muted {
+  color: var(--fm-muted);
+}
+.link:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+/* The compared face's words in the accent's hue, mixed toward the text colour so they reach
+   4.5:1 (the accent alone is not a text colour), as the missing-glyph line does. */
+.accent {
+  color: color-mix(in srgb, var(--fm-accent) 65%, var(--fm-fg));
+}
+.metrics {
+  padding-block-start: var(--fm-space-3);
+  border-block-start: 1px solid var(--fm-border);
+}
+.metrics-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--fm-space-2);
+  margin: 0 0 var(--fm-space-2);
+  font-size: var(--fm-text-xs);
+}
+.metrics-title {
+  color: var(--fm-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--fm-space-2);
+  margin: 0;
+}
+.metric dt {
+  color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+}
+.metric dd {
+  display: flex;
+  gap: var(--fm-space-2);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 /* Never a fallback font: nothing shows until the face has loaded. */
 .loading {
   visibility: hidden;
 }
-dl {
+.facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--fm-space-1) var(--fm-space-3);
   margin: 0;
   font-size: var(--fm-text-sm);
 }
-dt {
+.facts dt {
   color: var(--fm-muted);
 }
-dd {
+.facts dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -1009,29 +1543,28 @@ dd {
   flex-direction: column;
   gap: var(--fm-space-2);
 }
-.features h3 {
-  margin: 0 0 2px;
-  font-size: var(--fm-text-sm);
-  font-weight: 600;
-}
-.features ul {
+.menu {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
-.features li {
-  display: flex;
-  gap: var(--fm-space-2);
-  align-items: baseline;
-}
-.features li :deep(.copy) {
-  font-family: var(--fm-font-mono);
-}
-.features p {
+.menu button {
+  display: block;
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--fm-space-2);
+  border: 0;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
+  color: var(--fm-fg);
+  font: inherit;
   font-size: var(--fm-text-sm);
+  text-align: start;
+  white-space: nowrap;
+}
+.menu button:hover,
+.menu button:focus-visible {
+  background-color: var(--fm-hover);
+  outline: none;
 }
 .note {
   font-size: var(--fm-text-xs);

@@ -21,6 +21,7 @@
 use std::borrow::Cow;
 use std::path::Path;
 
+use crate::unicode_names::unicode_name;
 use fm_api::common::{FontFormat, Health, Page};
 use fm_api::library::{GlyphBlock, GlyphBounds, GlyphDetail, GlyphInfo, GlyphPage, GlyphsRequest};
 use read_fonts::{FileRef, FontRef, ReadError, TableProvider};
@@ -122,6 +123,7 @@ pub fn glyph_detail(data: &[u8], collection_index: u32, code_point: u32) -> FmRe
         left_side_bearing: None,
         right_side_bearing: None,
         bounds: None,
+        unicode_name: unicode_name(code_point),
     };
     let sfnt = match sfnt(data) {
         Ok(sfnt) => sfnt,
@@ -166,6 +168,7 @@ pub fn glyph_detail(data: &[u8], collection_index: u32, code_point: u32) -> FmRe
         left_side_bearing,
         right_side_bearing,
         bounds,
+        unicode_name: unicode_name(code_point),
     })
 }
 

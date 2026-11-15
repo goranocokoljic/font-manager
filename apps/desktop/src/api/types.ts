@@ -1953,6 +1953,12 @@ export type GlyphDetail = {
 	 *  read.
 	 */
 	bounds?: GlyphBounds | null,
+	/**
+	 *  The Unicode name of the character (`LATIN SMALL LETTER G`, E50.9),
+	 *  from the Unicode Character Database; absent for a control, a
+	 *  surrogate, private use or a code point Unicode has not assigned.
+	 */
+	unicodeName?: string | null,
 };
 
 /**  One mapped character of a face. */

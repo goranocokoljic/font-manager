@@ -20,8 +20,8 @@ async function openDetail(page: Page) {
   );
   const panel = await openSection(page, 1, 'Characters');
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0416');
-  const detail = panel.getByRole('region', { name: 'Selected glyph' });
-  await expect(detail.getByLabel('Code', { exact: true })).toHaveText('U+0416');
+  const detail = panel.getByRole('dialog', { name: 'Selected glyph' });
+  await expect(detail.getByTestId('glyph-code')).toHaveText('U+0416');
   return detail.getByRole('button', { name: 'Compare with…' });
 }
 
@@ -85,9 +85,46 @@ test('keyboard only: pick a font by name, change the size, swap the font, close'
   }
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Compare with…' })).toBeFocused();
+  const detail = page.getByRole('dialog', { name: 'Selected glyph' });
+  // A face is picked, so the popover's 'Compare with…' became 'change': the focus is there.
+  await expect(
+    detail.getByRole('button', { name: 'Compare with Legacy Grotesk: change the font' }),
+  ).toBeFocused();
   // The glyph detail stays open.
-  await expect(page.getByRole('region', { name: 'Selected glyph' })).toBeVisible();
+  await expect(detail).toBeVisible();
+});
+
+test("while comparing, the popover shows both faces' metrics per 1000 em and the ghost; stop ends it", async ({
+  page,
+}) => {
+  const button = await openDetail(page);
+  const detail = page.getByRole('dialog', { name: 'Selected glyph' });
+  await expect(detail.getByTestId('glyph-metrics')).toHaveCount(0);
+  await button.click();
+  const dialog = page.getByRole('dialog', { name: 'Compare U+0416' });
+  await dialog.getByRole('combobox', { name: 'Compare with font' }).fill('JetBrains');
+  await expect(dialog.getByRole('option').first()).toContainText('JetBrains Mono');
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('list', { name: 'Legend' })).toContainText('JetBrains Mono');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  const metrics = detail.getByTestId('glyph-metrics');
+  await expect(metrics).toContainText('Metrics · per 1000 em');
+  await expect(metrics.getByLabel('Inter: 520, JetBrains Mono: 550')).toBeVisible();
+  // The compared face's value is in the accent, unlike this face's.
+  const colors = await metrics
+    .locator('[data-metric="xHeight"] dd > span')
+    .evaluateAll((els) => els.map((e) => getComputedStyle(e).color));
+  expect(colors[0]).not.toBe(colors[1]);
+  const ghost = detail.getByTestId('glyph-ghost');
+  await expect(ghost).toHaveText('Ж');
+  await expect(ghost).toHaveCSS('font-family', /fm-face-6/);
+  const chip = page.getByTestId('glyph-compare-chip');
+  await expect(chip).toContainText('Compare with JetBrains Mono');
+  await detail.getByRole('button', { name: 'Stop comparing with JetBrains Mono' }).click();
+  await expect(metrics).toHaveCount(0);
+  await expect(ghost).toHaveCount(0);
+  await expect(chip).toHaveText('Compare with…');
 });
 
 /** WCAG contrast ratio of the field's border against the page background. */

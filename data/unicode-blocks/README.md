@@ -26,4 +26,4 @@ count as assigned, as Unicode defines it.
    `node scripts/unicode-blocks-assigned.mjs <path to it>` to write `assigned`.
 5. Run `cargo nextest run -p fm-core blocks`.
 
-Character names come from no file here: the glyph map shows the font's glyph names.
+Character names come from `data/unicode-names/`.

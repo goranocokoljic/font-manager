@@ -97,6 +97,34 @@ describe('glyph compare store', () => {
     expect(s.other?.face.id).toBe(6);
   });
 
+  it("loads the compared face's glyph for the popover's metrics, and none for a glyph it lacks", async () => {
+    await useGlyphCompareStore().start(1, ZHE);
+    const s = await pick('JetBrains Mono');
+    expect(s.active).toBe(true);
+    await s.loadOtherGlyph(ZHE);
+    expect(s.otherGlyph).toMatchObject({ codePoint: ZHE });
+    expect(s.otherGlyph?.advanceWidth).toBeGreaterThan(0);
+    const lacks = await pick('Legacy Grotesk');
+    await lacks.loadOtherGlyph(ZHE);
+    expect(lacks.otherGlyph).toBeNull();
+  });
+
+  it('stop ends the comparison: no second face, no glyph, overlay closed', async () => {
+    await useGlyphCompareStore().start(1, ZHE);
+    const s = await pick('JetBrains Mono');
+    await s.loadOtherGlyph(ZHE);
+    s.stop();
+    expect([s.active, s.other, s.otherGlyph, s.coverage, s.open]).toEqual([
+      false,
+      null,
+      null,
+      null,
+      false,
+    ]);
+    await s.loadOtherGlyph(ZHE);
+    expect(s.otherGlyph).toBeNull();
+  });
+
   it('keeps the size in range', () => {
     const s = useGlyphCompareStore();
     expect(s.size).toBe(COMPARE_SIZE.initial);
