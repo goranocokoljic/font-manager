@@ -601,7 +601,8 @@
     },
     "styleSet": "Stilistischer Satz {n}",
     "charVariant": "Zeichenvariante {n}",
-    "moreFeatures": "Stilistische Sätze und Varianten"
+    "moreFeatures": "Stilistische Sätze und Varianten",
+    "foundry": "Schriftgießerei · {name}"
   },
   "shortcuts": {
     "label": "Tastenkürzel",
@@ -1341,6 +1342,26 @@
     "removed": "{tags} von {fonts} entfernt.",
     "addedRemoved": "{added} hinzugefügt und {removed} entfernt an {fonts}.",
     "dropped": "„{name}“ getaggt ({fonts})."
+  },
+  "foundries": {
+    "heading": "Schriftgießereien",
+    "count": {
+      "one": "{count} Schriftgießerei",
+      "other": "{count} Schriftgießereien"
+    },
+    "empty": "Noch keine Schriftgießereien",
+    "all": {
+      "one": "Alle {count} Schriftgießerei …",
+      "other": "Alle {count} Schriftgießereien …"
+    },
+    "searchLabel": "Schriftgießerei suchen",
+    "searchPlaceholder": "Schriftgießerei suchen",
+    "noMatch": "Keine Schriftgießerei passt",
+    "menuLabel": "Schriftgießerei {name}",
+    "merge": "Zusammenführen mit …",
+    "mergeLabel": "{name} zusammenführen mit …",
+    "merged": "„{from}“ mit „{into}“ zusammengeführt.",
+    "unmerged": "„{name}“ ist wieder eine eigene Schriftgießerei."
   },
   "tags": {
     "heading": "Tags",

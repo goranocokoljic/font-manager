@@ -58,6 +58,12 @@ export const useSearchStore = defineStore('search', () => {
    */
   const traits = shallowRef<TraitFilter[]>([]);
   /**
+   * The foundry every result must be of (E50.12), chosen in the sidebar's Foundries group, by
+   * the canonical name `listFoundries` gives; null for every foundry. Sent as
+   * `SearchRequest.foundries`; not a `Filters` field, so a smart collection does not take it.
+   */
+  const foundry = ref<string | null>(null);
+  /**
    * The likeness sort (E49.9): while set the API orders the results by how close each
    * family's drawing of the character is to the reference face's. It replaces the view's
    * sort without changing it, so removing it brings that sort back. Not a filter.
@@ -104,6 +110,7 @@ export const useSearchStore = defineStore('search', () => {
       query.value.trim() !== '' ||
       hasFilters(filters.value) ||
       traits.value.length > 0 ||
+      foundry.value !== null ||
       likeGlyph.value !== null ||
       hiding.value,
   );
@@ -111,6 +118,8 @@ export const useSearchStore = defineStore('search', () => {
   /** The trait filters of a request: left out when there are none. */
   const traitPart = (list: readonly TraitFilter[]) =>
     list.length ? { glyphTraits: [...list] } : {};
+  /** The foundry filter of a request: left out when there is none. */
+  const foundryPart = () => (foundry.value !== null ? { foundries: [foundry.value] } : {});
 
   /** The rule that keeps only the families rendering `text` completely. */
   const rendersText = (text: string): RuleGroup => ({
@@ -151,8 +160,14 @@ export const useSearchStore = defineStore('search', () => {
     const rule = hiding.value ? rendersText(coverText.value) : null;
     const chosenTraits = traits.value;
     const like = likeGlyph.value;
+    const byFoundry = foundryPart();
     const searching =
-      q !== '' || hasFilters(f) || chosenTraits.length > 0 || rule !== null || like !== null;
+      q !== '' ||
+      hasFilters(f) ||
+      chosenTraits.length > 0 ||
+      foundry.value !== null ||
+      rule !== null ||
+      like !== null;
     // A likeness sort decides the order itself.
     const order = like ? null : orderOf(q, f, searching);
     const client = useClient();
@@ -166,6 +181,7 @@ export const useSearchStore = defineStore('search', () => {
           query: q,
           filters: f,
           ...traitPart(chosenTraits),
+          ...byFoundry,
           ...(rule ? { rule } : {}),
           ...(order ? { order } : {}),
           ...(like ? { likeGlyph: { face: like.face, codePoint: like.codePoint } } : {}),
@@ -215,6 +231,7 @@ export const useSearchStore = defineStore('search', () => {
           query: q,
           filters: filters.value,
           ...traitPart(traits.value),
+          ...foundryPart(),
           ...(rule ? { rule } : {}),
           page: { offset: 0, limit: 1 },
         })
@@ -336,6 +353,7 @@ export const useSearchStore = defineStore('search', () => {
             query: q,
             filters: f,
             glyphTraits: [...others, { kind: 'value', traitId: info.id, value: v.id }],
+            ...foundryPart(),
             ...(rule ? { rule } : {}),
             page: { offset: 0, limit: 1 },
           })
@@ -358,17 +376,35 @@ export const useSearchStore = defineStore('search', () => {
     void run();
   }
 
+  /** Filters by `name` (E50.12), or by every foundry for `null`; searches at once. */
+  function setFoundry(name: string | null): void {
+    if (name === foundry.value) return;
+    foundry.value = name;
+    void run();
+  }
+
+  /** The foundry filter is `name` now: compared without case, as the API compares them. */
+  function isFoundry(name: string): boolean {
+    return foundry.value !== null && foundry.value.toLowerCase() === name.toLowerCase();
+  }
+
+  /** A click on a foundry: filters by it, or clears the filter when it is the chosen one. */
+  function toggleFoundry(name: string): void {
+    setFoundry(isFoundry(name) ? null : name);
+  }
+
   /** Replaces the chosen filters and searches at once (a chip click is not typing). */
   function setFilters(next: Filters): void {
     filters.value = next;
     void run();
   }
 
-  /** Clears the text and every filter, the glyph traits too. */
+  /** Clears the text and every filter, the glyph traits and the foundry too. */
   function clear(): void {
     text.value = '';
     query.value = '';
     traits.value = [];
+    foundry.value = null;
     setFilters({});
   }
 
@@ -398,6 +434,7 @@ export const useSearchStore = defineStore('search', () => {
     query,
     filters,
     traits,
+    foundry,
     likeGlyph,
     traitCatalog,
     hits,
@@ -418,6 +455,9 @@ export const useSearchStore = defineStore('search', () => {
     setFilters,
     setTraits,
     setLikeGlyph,
+    setFoundry,
+    isFoundry,
+    toggleFoundry,
     chooseTraitValue,
     countTraitValues,
     loadTraitCatalog,

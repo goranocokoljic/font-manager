@@ -12,9 +12,16 @@ function read(): Record<string, boolean> {
   }
 }
 
-/** A remembered folded flag for the group `id`. */
-export function useFolded(id: string): { folded: Ref<boolean>; toggle: () => void } {
-  const folded = ref(read()[id] === true);
+/**
+ * A remembered folded flag for the group `id`; `initial` is what a group the user never
+ * folded or unfolded starts as (E50.12: Foundries starts folded).
+ */
+export function useFolded(
+  id: string,
+  initial = false,
+): { folded: Ref<boolean>; toggle: () => void } {
+  const stored = read()[id];
+  const folded = ref(typeof stored === 'boolean' ? stored : initial);
   function toggle(): void {
     folded.value = !folded.value;
     try {

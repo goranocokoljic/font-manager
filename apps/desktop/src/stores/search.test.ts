@@ -450,3 +450,35 @@ describe('the likeness sort (E49.9)', () => {
     expect(requests.at(-1)!.likeGlyph).toEqual({ face: 1, codePoint: 82 });
   });
 });
+
+describe('the foundry filter (E50.12)', () => {
+  it('sends the chosen foundry, compares it without case, and a second click clears it', async () => {
+    const search = await setup(createMockClient({ library: 'wall' }));
+    search.toggleFoundry('Font Diner');
+    await flushPromises();
+    expect(requests.at(-1)!.foundries).toEqual(['Font Diner']);
+    expect(search.active).toBe(true);
+    expect(search.hits!.map((h) => h.family.foundry)).toEqual([
+      'Font Diner',
+      'Font Diner',
+      'Font Diner',
+    ]);
+    expect(search.isFoundry('font diner')).toBe(true);
+    expect(search.isFoundry('Omnibus-Type')).toBe(false);
+
+    search.toggleFoundry('FONT DINER');
+    await flushPromises();
+    expect(search.foundry).toBeNull();
+    expect(requests.at(-1)!.foundries).toBeUndefined();
+    expect(search.hits).toBeNull();
+  });
+
+  it('is cleared with every other filter', async () => {
+    const search = await setup(createMockClient({ library: 'wall' }));
+    search.setFoundry('Sorkin Type');
+    search.clear();
+    await flushPromises();
+    expect(search.foundry).toBeNull();
+    expect(requests.at(-1)!.foundries).toBeUndefined();
+  });
+});

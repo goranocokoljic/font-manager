@@ -601,7 +601,8 @@
     },
     "styleSet": "Stylistic set {n}",
     "charVariant": "Character variant {n}",
-    "moreFeatures": "Stylistic sets and variants"
+    "moreFeatures": "Stylistic sets and variants",
+    "foundry": "Foundry · {name}"
   },
   "shortcuts": {
     "label": "Keyboard shortcuts",
@@ -1341,6 +1342,26 @@
     "removed": "Removed {tags} on {fonts}.",
     "addedRemoved": "Added {added} and removed {removed} on {fonts}.",
     "dropped": "Tagged “{name}” ({fonts})."
+  },
+  "foundries": {
+    "heading": "Foundries",
+    "count": {
+      "one": "{count} foundry",
+      "other": "{count} foundries"
+    },
+    "empty": "No foundries yet",
+    "all": {
+      "one": "All {count} foundry…",
+      "other": "All {count} foundries…"
+    },
+    "searchLabel": "Find a foundry",
+    "searchPlaceholder": "Find a foundry",
+    "noMatch": "No foundry matches",
+    "menuLabel": "Foundry {name}",
+    "merge": "Merge into…",
+    "mergeLabel": "Merge {name} into…",
+    "merged": "Merged “{from}” into “{into}”.",
+    "unmerged": "“{name}” is its own foundry again."
   },
   "tags": {
     "heading": "Tags",

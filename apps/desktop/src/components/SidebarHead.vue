@@ -2,9 +2,17 @@
 // The heading of a sidebar group: 11 px uppercase. The label folds the group; the chevron
 // and the group's actions (icon buttons, the `actions` slot) appear on hover and focus.
 // The parent owns the body (`v-show` with `controls` as its id) and the folded state.
+// `count` (E50.12) shows at the end of the heading, a tabular number like the rows' counts;
+// `countLabel` is what a screen reader hears for it.
 import UiFoldButton from './ui/UiFoldButton.vue';
 
-defineProps<{ id: string; folded: boolean; controls: string }>();
+defineProps<{
+  id: string;
+  folded: boolean;
+  controls: string;
+  count?: string;
+  countLabel?: string;
+}>();
 defineEmits<{ toggle: [] }>();
 </script>
 
@@ -15,6 +23,10 @@ defineEmits<{ toggle: [] }>();
         <slot />
       </UiFoldButton>
     </h2>
+    <span v-if="count" class="head-count" data-testid="section-count"
+      ><span aria-hidden="true">{{ count }}</span
+      ><span v-if="countLabel" class="sr-only">{{ countLabel }}</span></span
+    >
     <span v-if="$slots.actions" class="head-actions" data-testid="section-actions">
       <slot name="actions" />
     </span>
@@ -53,6 +65,13 @@ defineEmits<{ toggle: [] }>();
 .side-head:hover .head-actions,
 .side-head:focus-within .head-actions {
   opacity: 1;
+}
+.head-count {
+  margin-inline-start: auto;
+  padding-inline-end: var(--fm-space-1);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+  font-variant-numeric: tabular-nums;
 }
 .head-actions {
   display: flex;
