@@ -404,6 +404,15 @@ describe('the accent in the style sheets', () => {
     expect(found).toEqual([]);
   });
 
+  // E50.9 (review A11Y-1): the glyph context menu marked focus with the 5 % hover tint only.
+  it("keeps the focus ring on the Characters cell menu's items", () => {
+    const source = SOURCES.find(([path]) => path === 'components/FamilyCharacters.vue')?.[1];
+    expect(source).toBeDefined();
+    const focus = rules(source!).filter((r) => /\.menu button:focus-visible/.test(r.selector));
+    expect(focus.length).toBeGreaterThan(0);
+    for (const r of focus) expect(r.body).not.toMatch(/outline:\s*(none|0)/);
+  });
+
   it('never draws an accent focus ring inside an accent fill', () => {
     const parts = (selector: string) => selector.split(',').map((s) => s.trim());
     const found = SOURCES.flatMap(([path, source]) => {

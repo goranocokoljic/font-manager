@@ -357,8 +357,11 @@ describe('the Characters section', () => {
     const grid = w.get('[role="grid"]');
     await w.get('[data-code-point="65"]').trigger('click');
     await flushPromises();
-    (document.body as HTMLElement).focus();
-    await card(w).get('[data-testid="glyph-popover-close"]').trigger('click');
+    // A real click focuses the button first; it then goes away with the popover.
+    const close = card(w).get('[data-testid="glyph-popover-close"]');
+    (close.element as HTMLElement).focus();
+    expect(document.activeElement).toBe(close.element);
+    await close.trigger('click');
     expect(hasCard(w)).toBe(false);
     expect(document.activeElement).toBe(grid.element);
     expect(grid.attributes('aria-activedescendant')).toBe(
@@ -745,17 +748,27 @@ describe('metrics only while comparing (E50.9)', () => {
     await w.get('[data-code-point="97"]').trigger('click');
     await flushPromises();
     expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(true);
-    await card(w)
+    // Keyboard use: the focused 'stop' goes away; focus goes to what replaced it.
+    const stop = card(w)
       .findAll('button')
-      .find((b) => b.text() === 'stop')!
-      .trigger('click');
+      .find((b) => b.text() === 'stop')!;
+    (stop.element as HTMLElement).focus();
+    await stop.trigger('click');
     await flushPromises();
     expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(false);
+    const entry = card(w)
+      .findAll('button')
+      .find((b) => b.text() === 'Compare with…')!;
+    expect(document.activeElement).toBe(entry.element);
     await compareWithMono();
     expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(true);
-    await w.get('[data-testid="glyph-compare-stop"]').trigger('click');
+    const x = w.get('[data-testid="glyph-compare-stop"]');
+    (x.element as HTMLElement).focus();
+    await x.trigger('click');
     await flushPromises();
     expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(false);
-    expect(w.get('[data-testid="glyph-compare-chip"]').text()).toBe('Compare with…');
+    const chip = w.get('[data-testid="glyph-compare-chip"]');
+    expect(chip.text()).toBe('Compare with…');
+    expect(document.activeElement).toBe(chip.element);
   });
 });

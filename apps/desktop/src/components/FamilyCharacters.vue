@@ -590,21 +590,32 @@ const namesLine = computed(() => {
 // The comparison (E50.9): the compared face's glyph, its metrics beside this face's, and its
 // font for the ghost under the glyph.
 const comparedFamily = computed(() => compare.other?.face.familyName ?? '');
+/**
+ * Puts focus on the compare entry ('Compare with…' or 'change') that replaced a button the
+ * comparison removed: in the popover, else in the control row. Only when focus was lost.
+ */
+async function refocusCompareEntry(prefer: 'popover' | 'chip' = 'popover'): Promise<void> {
+  await nextTick();
+  const active = document.activeElement;
+  if (active && active !== document.body) return;
+  const inPopover = popover.value?.querySelector<HTMLElement>('[data-compare-entry]');
+  const inChip = mapEl.value?.querySelector<HTMLElement>('.controls [data-compare-entry]');
+  const to = prefer === 'chip' ? (inChip ?? inPopover) : (inPopover ?? inChip);
+  to?.focus();
+}
 // The overlay gives focus back to what opened it; a pick swaps 'Compare with…' for 'change', so
-// when that button is gone the focus goes to its successor (in the popover, else the chip).
+// when that button is gone the focus goes to its successor.
 watch(
   () => compare.open,
-  async (open) => {
-    if (open) return;
-    await nextTick();
-    const active = document.activeElement;
-    if (active && active !== document.body) return;
-    const to =
-      popover.value?.querySelector<HTMLElement>('[data-compare-entry]') ??
-      mapEl.value?.querySelector<HTMLElement>('.controls [data-compare-entry]');
-    to?.focus();
+  (open) => {
+    if (!open) void refocusCompareEntry();
   },
 );
+/** Ends the comparison from the popover's 'stop' or the chip's ×, which both disappear with it. */
+function stopCompare(from: 'popover' | 'chip'): void {
+  compare.stop();
+  void refocusCompareEntry(from);
+}
 watch(
   [() => sel.value?.codePoint ?? null, () => compare.other?.face.id ?? null],
   ([cp]) => {
@@ -714,7 +725,7 @@ const noResults = computed(
               size="sm"
               data-testid="glyph-compare-stop"
               :label="t('glyphs.compareStop', { family: comparedFamily })"
-              @click="compare.stop()"
+              @click="stopCompare('chip')"
             />
           </span>
           <button
@@ -933,7 +944,7 @@ const noResults = computed(
               type="button"
               class="link muted"
               :aria-label="t('glyphs.compareStop', { family: comparedFamily })"
-              @click="compare.stop()"
+              @click="stopCompare('popover')"
             >
               {{ t('glyphs.stop') }}
             </button>
@@ -1564,7 +1575,10 @@ const noResults = computed(
 .menu button:hover,
 .menu button:focus-visible {
   background-color: var(--fm-hover);
-  outline: none;
+}
+/* The global 2 px accent ring marks the focused item, drawn inside so the layer does not clip it. */
+.menu button:focus-visible {
+  outline-offset: -2px;
 }
 .note {
   font-size: var(--fm-text-xs);
