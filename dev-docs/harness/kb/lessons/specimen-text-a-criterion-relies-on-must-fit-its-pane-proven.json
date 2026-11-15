@@ -1,0 +1,19 @@
+{
+  "id": "specimen-text-a-criterion-relies-on-must-fit-its-pane-proven",
+  "title": "Specimen text a criterion relies on must fit its pane, proven by geometry not DOM text",
+  "category": "testing",
+  "rule": "When a criterion depends on letters of a one-line specimen being visible (descenders g j p q y, a pangram), do not draw it at a fixed size on a `nowrap` line with clipping: fit the size to the pane width (measure the line in the face; refit on resize and on `document.fonts` `loadingdone`). Test it in Playwright at 1280×800 and 1000×700 by asserting the text's right edge is inside its line box; `toContainText` reads DOM text and passes while the glyphs are clipped.",
+  "rationale": "E50.7 (#578): a fixed 96 px specimen in the ~500 px split pane was cut after 'Hamburgefo', so the descender letters the criterion names were never drawn, and the e2e still passed on toContainText.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    578
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-15T06:38:00.060Z",
+  "last_seen": "2026-11-15T06:38:00.060Z"
+}
