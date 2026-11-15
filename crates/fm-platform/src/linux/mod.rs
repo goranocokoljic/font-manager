@@ -28,6 +28,7 @@ pub(crate) mod paths;
 mod pdf;
 #[cfg(target_os = "linux")]
 mod process;
+mod show_folder;
 #[cfg(target_os = "linux")]
 mod trash;
 mod tray;
@@ -49,6 +50,7 @@ pub use pdf::LinuxPdfPrinter;
 pub(crate) use pdf::run_ui_loop;
 #[cfg(target_os = "linux")]
 pub(crate) use process::is_running;
+pub(crate) use show_folder::command as show_folder_command;
 #[cfg(target_os = "linux")]
 pub(crate) use trash::FreedesktopTrash;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]

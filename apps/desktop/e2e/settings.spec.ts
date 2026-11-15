@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { openSection, sectionPanel } from './family-page';
 
@@ -24,7 +25,7 @@ test('Ctrl/Cmd+, opens Settings with its eight sections; Escape closes it', asyn
   ])
     await expect(tab(page, name)).toBeVisible();
   await expect(tab(page, 'Sources')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('list', { name: 'Sources' })).toContainText('/Users/demo/Fonts');
+  await expect(page.getByRole('list', { name: 'Folders' })).toContainText('/Users/demo/Fonts');
 
   await tab(page, 'Advanced').click();
   await expect(page.getByRole('textbox', { name: 'Preview cache size (MB)' })).toHaveValue('1024');
@@ -99,19 +100,87 @@ test('"reactivate on launch" is saved', async ({ page }) => {
   await expect(page.getByRole('checkbox', { name: /Reactivate on launch/ })).toBeChecked();
 });
 
-test('a folder can be added, paused and removed; the system source stays', async ({ page }) => {
+// E50.13: Settings › Sources as cards (dev-docs/design/redesign/11-sources.png). The mock
+// picker answers `/Users/demo/Added 1` first; a folder it never scanned holds 12 fonts and
+// its scan steps every 150 ms, so the Scanning state is seen.
+test('a folder is added, scanned, unwatched and removed; the system card stays', async ({
+  page,
+}) => {
   await page.goto('/#/settings');
-  // The mock folder picker answers `/Users/demo/Added 1` on its first call.
-  await page.getByRole('button', { name: 'Add folder…' }).click();
-  const list = page.getByRole('list', { name: 'Sources' });
-  const added = '/Users/demo/Added 1';
-  await expect(list).toContainText(added);
+  const cards = page.getByRole('list', { name: 'Folders' });
+  await page.getByRole('button', { name: 'Add folder', exact: true }).click();
+  const added = cards.getByRole('listitem', { name: 'Added 1', exact: true });
+  await expect(added).toBeVisible();
+  await expect(added.getByText('/Users/demo/Added 1')).toBeVisible();
 
-  await page.getByRole('checkbox', { name: `Pause ${added}` }).check();
-  await expect(page.getByRole('checkbox', { name: `Pause ${added}` })).toBeChecked();
-  await page.getByRole('button', { name: `Remove ${added}` }).click();
-  await expect(list).not.toContainText(added);
-  await expect(page.getByRole('button', { name: 'Remove /System/Library/Fonts' })).toBeDisabled();
+  // Scanning: the badge and the 3 px bar, fed by the scan events.
+  await expect(added.getByText('Scanning', { exact: true })).toBeVisible();
+  const bar = added.getByRole('progressbar', { name: 'Scanning Added 1' });
+  await expect(bar).toBeVisible();
+  expect(await bar.evaluate((el) => el.getBoundingClientRect().height)).toBe(3);
+
+  // Done: the badge and bar leave, the count and the last scan show.
+  await expect(bar).toHaveCount(0);
+  await expect(added.getByText('Scanning', { exact: true })).toHaveCount(0);
+  await expect(added.getByText('12 fonts')).toBeVisible();
+  await expect(added.getByText(/^scanned /)).toBeVisible();
+
+  // Watch off.
+  const watch = added.getByRole('switch', { name: 'Watch Added 1' });
+  await expect(watch).toHaveAttribute('aria-checked', 'true');
+  await watch.click();
+  await expect(watch).toHaveAttribute('aria-checked', 'false');
+
+  // The actions show on hover, as 28 px targets.
+  const remove = added.getByRole('button', { name: 'Remove Added 1 from the library' });
+  await added.hover();
+  await expect(remove).toBeVisible();
+  expect(await remove.evaluate((el) => el.getBoundingClientRect().height)).toBe(28);
+
+  // Remove asks once; Escape keeps it, Remove forgets it.
+  await remove.click();
+  const question = added.getByRole('alertdialog');
+  await expect(question).toContainText('the files stay where they are');
+  await page.keyboard.press('Escape');
+  await expect(question).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(remove).toBeFocused();
+  await remove.click();
+  await added.getByRole('alertdialog').getByRole('button', { name: 'Remove' }).click();
+  await expect(added).toHaveCount(0);
+  await expect(cards.getByRole('listitem', { name: 'Fonts', exact: true })).toBeVisible();
+
+  // The System fonts card keeps its Show switch and its line; it is never removed.
+  await expect(page.getByText('the app never writes to system folders')).toBeVisible();
+  await expect(
+    page.getByRole('switch', { name: 'Show system fonts in the library' }),
+  ).toBeVisible();
+});
+
+test('a cloud folder and a missing one; the drop zone and the problems strip', async ({ page }) => {
+  await page.goto('/?mockSources=1#/settings');
+  const cards = page.getByRole('list', { name: 'Folders' });
+  const missing = cards.getByRole('listitem', { name: 'Old downloads', exact: true });
+  await expect(missing.getByText('Missing', { exact: true })).toBeVisible();
+  await expect(missing.getByText('folder not found')).toBeVisible();
+  await expect(
+    missing.getByRole('button', { name: 'Show Old downloads in the file manager' }),
+  ).toBeDisabled();
+
+  const cloud = cards.getByRole('listitem', { name: 'Studio type', exact: true });
+  await cloud.hover();
+  await cloud.getByRole('button', { name: 'Show Studio type in the file manager' }).click();
+  expect(
+    await page.evaluate(
+      () => (globalThis as { __fmMockShownFolders?: string[] }).__fmMockShownFolders,
+    ),
+  ).toEqual(['/Users/demo/Dropbox/Studio type']);
+
+  await expect(page.getByTestId('sources-drop')).toHaveText('Choose a folder to add');
+  const strip = page.getByTestId('sources-problems');
+  await expect(strip).toContainText('in these folders');
+  await strip.getByRole('link', { name: 'Open Problems' }).click();
+  await expect(page).toHaveURL(/#\/problems/);
 });
 
 /** WCAG contrast ratio of the field's border against the page background. */
@@ -246,3 +315,26 @@ test('the status-bar Settings link looks like a link and opens Settings', async 
   await link.click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
 });
+
+// E50.13: the remove question's buttons keep WCAG AA contrast (the danger button is red text
+// on the card, not light text on a red fill).
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the remove question passes the colour-contrast check (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.goto('/#/settings');
+    const fonts = page
+      .getByRole('list', { name: 'Folders' })
+      .getByRole('listitem', { name: 'Fonts', exact: true });
+    await fonts.hover();
+    await fonts.getByRole('button', { name: 'Remove Fonts from the library' }).click();
+    const question = fonts.getByRole('alertdialog');
+    await expect(question.getByRole('button', { name: 'Remove' })).toBeFocused();
+    const result = await new AxeBuilder({ page })
+      .include('.cards [role="alertdialog"]')
+      .withRules(['color-contrast'])
+      .analyze();
+    expect(result.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target}`))).toEqual(
+      [],
+    );
+  });
+}

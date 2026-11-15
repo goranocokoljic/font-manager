@@ -234,3 +234,26 @@ describe('tauri client', () => {
     expect(seen).toEqual([e]);
   });
 });
+
+describe('the event subscription across views (E50.13)', () => {
+  it('keeps the newer subscription when the view that leaves stops the older one', async () => {
+    setActivePinia(createPinia());
+    const store = useSourcesStore();
+    // The library's sidebar subscribed; Settings subscribes, then the sidebar stops.
+    await store.load();
+    const leaving = store.stop();
+    await store.load();
+    await leaving;
+    const before = store.sources.length;
+    const picked = await client.addSource({
+      path: '/Users/demo/Later',
+      mode: { kind: 'indexInPlace' },
+    });
+    await client.removeSource(picked.id);
+    // A library change still reaches the store: it reads the sources again.
+    await vi.waitFor(() => expect(store.sources.length).toBe(before));
+    await store.rescan(1);
+    await vi.waitFor(() => expect(store.progressOf(1)).not.toBeNull());
+    await store.stop();
+  });
+});

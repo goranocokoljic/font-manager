@@ -377,6 +377,8 @@ export interface FmClient {
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
   setSourcePaused(req: SetSourcePausedRequest): Promise<Source>;
+  /** Shows a source's folder in the OS file manager; `notFound` when the folder is not there. */
+  showSourceFolder(source: SourceId): Promise<void>;
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
   /** The themes the app ships, the default first (`themeId` in the settings holds one id). */
@@ -534,6 +536,7 @@ export const tauriClient: FmClient = {
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),
   setSourcePaused: (req) => invoke<Source>('set_source_paused', { req }),
+  showSourceFolder: (source) => invoke<void>('show_source_folder', { source }),
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
   listThemes: () => invoke<ThemeDefinition[]>('list_themes'),

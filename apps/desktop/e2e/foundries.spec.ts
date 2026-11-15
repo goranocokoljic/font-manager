@@ -10,6 +10,19 @@ const heading = (page: Page) => nav(page).getByRole('button', { name: 'Foundries
 const list = (page: Page) => page.locator('#fm-foundries-list');
 const row = (page: Page, name: string) => list(page).locator(`button[data-foundry="${name}"]`);
 
+/**
+ * Right-clicks a row once it is on screen. The open menu closes on a scroll (UiPopover), and the
+ * scroll that brings the row into view fires its event a frame later: under a loaded run that
+ * event came after the menu opened and closed it again.
+ */
+async function rightClick(page: Page, name: string) {
+  await row(page, name).scrollIntoViewIfNeeded();
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null)))),
+  );
+  await row(page, name).click({ button: 'right' });
+}
+
 async function open(page: Page) {
   await page.goto('/?mockLibrary=wall#/');
   await expect(heading(page)).toBeVisible();
@@ -68,7 +81,7 @@ test('All N foundries… searches every foundry; Enter filters and gives the foc
 test('right-click merges into another foundry with an undo toast', async ({ page }) => {
   await open(page);
   await heading(page).click();
-  await row(page, 'Font Diner').click({ button: 'right' });
+  await rightClick(page, 'Font Diner');
   const item = page
     .getByRole('menu', { name: 'Foundry Font Diner' })
     .getByRole('menuitem', { name: 'Merge into…' });
@@ -108,7 +121,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(page.getByRole('searchbox', { name: 'Find a foundry' })).toBeFocused();
     await scan();
     await page.keyboard.press('Escape');
-    await row(page, 'Be').click({ button: 'right' });
+    await rightClick(page, 'Be');
     await expect(
       page.getByRole('menu', { name: 'Foundry Be' }).getByRole('menuitem', { name: 'Merge into…' }),
     ).toBeFocused();

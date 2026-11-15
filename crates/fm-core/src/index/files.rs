@@ -139,6 +139,7 @@ impl Index {
     ) -> FmResult<Persisted> {
         let writes: Vec<_> = files.into_iter().map(Write::File).collect();
         let out = self.write_batches(source, &writes, progress)?;
+        self.mark_scanned(source)?;
         self.sync_after_scan(source);
         Ok(out)
     }
@@ -169,6 +170,7 @@ impl Index {
             .chain(rescan.unchanged.iter().map(|p| Write::Found(p)))
             .collect();
         let out = self.write_batches(source, &writes, &mut |_| {})?;
+        self.mark_scanned(source)?;
         self.sync_after_scan(source);
         Ok(out)
     }

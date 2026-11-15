@@ -516,9 +516,60 @@ const systemClash: Partial<Record<FaceId, string>> = {
 
 /** The sources of the Rust mock: one watched folder and the system fonts. */
 export const mockSources: Source[] = [
-  { id: 1, path: '/Users/demo/Fonts', kind: 'watched', paused: false, faceCount: 7 },
-  { id: 2, path: '/System/Library/Fonts', kind: 'system', paused: false, faceCount: 0 },
+  {
+    id: 1,
+    path: '/Users/demo/Fonts',
+    kind: 'watched',
+    paused: false,
+    faceCount: 7,
+    lastScanned: '2026-10-16T09:30:00Z',
+    missing: false,
+    cloud: false,
+  },
+  {
+    id: 2,
+    path: '/System/Library/Fonts',
+    kind: 'system',
+    paused: false,
+    faceCount: 0,
+    lastScanned: null,
+    missing: false,
+    cloud: false,
+  },
 ];
+
+/**
+ * `?mockSources=1` (browser mode): a folder in Dropbox and one on a drive that is not
+ * connected, as on the target image of Settings › Sources (11-sources.png, E50.13).
+ */
+export const mockMoreSources: Source[] = [
+  {
+    id: 901,
+    path: '/Users/demo/Dropbox/Studio type',
+    kind: 'watched',
+    paused: false,
+    faceCount: 0,
+    lastScanned: '2026-10-15T18:00:00Z',
+    missing: false,
+    cloud: true,
+  },
+  {
+    id: 902,
+    path: '/Volumes/Archive/Old downloads',
+    kind: 'watched',
+    paused: true,
+    faceCount: 0,
+    lastScanned: '2026-09-01T12:00:00Z',
+    missing: true,
+    cloud: false,
+  },
+];
+
+/** The fonts a folder the mock never scanned turns out to hold, so its first scan shows. */
+export const MOCK_NEW_FOLDER_FILES = 12;
+
+/** Now in whole seconds, as fm-core stamps a finished scan. */
+const nowStamp = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
 /** `MOCK_NOW` of the Rust mock: when its activations started. */
 export const MOCK_NOW = '2026-10-16T09:00:00Z';
@@ -1043,6 +1094,8 @@ export interface MockOptions {
   library?: 'small' | 'wall';
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
   scanStepMs?: number;
+  /** Sources after the sample ones (`mockMoreSources`: a cloud and a missing folder). */
+  moreSources?: Source[];
   /** Extra families after the sample ones, for long lists (e2e). */
   extraFaces?: number;
   /** Styles in each extra family (1–6, default 1), so families can expand (e2e). */
@@ -2637,7 +2690,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   );
   /** Faces ever activated, active now or not. */
   const everActivated = new Set<FaceId>(active.keys());
-  const sources = structuredClone(mockSources);
+  const sources = structuredClone([...mockSources, ...(options.moreSources ?? [])]);
   const sets = structuredClone(options.sets ?? []);
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
@@ -2729,10 +2782,15 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     steps.forEach((done, i) =>
       setTimeout(() => emit({ type: 'scanProgress', job, done, total: files }), i * step),
     );
-    setTimeout(
-      () => emit({ type: 'scanFinished', job, added: 0, changed: 0, removed: 0, problems: 1 }),
-      steps.length * step,
-    );
+    setTimeout(() => {
+      // The scanned source records its last scan (and a new folder its fonts), as fm-core does.
+      for (const s of sources)
+        if (source == null || s.id === source) {
+          s.lastScanned = nowStamp();
+          if (source != null && s.kind === 'watched') s.faceCount = Math.max(s.faceCount, files);
+        }
+      emit({ type: 'scanFinished', job, added: 0, changed: 0, removed: 0, problems: 1 });
+    }, steps.length * step);
   };
   // The wall's JetBrains Mono clashes with the system copy, as face 6 does in the small library.
   const clashes: Partial<Record<FaceId, string>> =
@@ -3316,6 +3374,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             kind: 'watched',
             paused: false,
             faceCount: 0,
+            lastScanned: null,
+            missing: false,
+            cloud: false,
           };
           sources.push(source);
           return source.id;
@@ -4352,6 +4413,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         kind: 'watched',
         paused: false,
         faceCount: 0,
+        lastScanned: null,
+        missing: false,
+        cloud: false,
       };
       sources.push(source);
       return structuredClone(source);
@@ -4375,17 +4439,33 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return structuredClone(s);
     },
     scan: async (req) => {
+      const one = req.source == null ? null : findSource(req.source);
       const files =
-        req.source == null
+        one == null
           ? sources.reduce((n, s) => n + s.faceCount, 0)
-          : findSource(req.source).faceCount;
+          : one.lastScanned == null && one.kind === 'watched'
+            ? MOCK_NEW_FOLDER_FILES
+            : one.faceCount;
       const job = ++nextId;
       runScan(job, req.source ?? null, files);
       return job;
     },
+    // Each subscription is its own listener, as with Tauri's `listen`: a store that
+    // subscribes its handler twice (a view leaving, the next one arriving) and drops the
+    // older subscription keeps the newer one.
     onEvent: async (handler) => {
-      handlers.add(handler);
-      return () => handlers.delete(handler);
+      const listener = (event: Event) => handler(event);
+      handlers.add(listener);
+      return () => handlers.delete(listener);
+    },
+    // Browser mode has no file manager: the folders asked for are kept in
+    // `window.__fmMockShownFolders`; a missing folder is refused as fm_platform does.
+    showSourceFolder: async (id) => {
+      const s = findSource(id);
+      if (s.missing)
+        throw { code: 'notFound' as const, message: 'The folder cannot be found.', detail: null };
+      const w = globalThis as { __fmMockShownFolders?: string[] };
+      (w.__fmMockShownFolders ??= []).push(s.path);
     },
     pickFolder: async () =>
       mockPickedFolders.length ? mockPickedFolders.shift()! : `/Users/demo/Added ${++picks}`,
@@ -4619,6 +4699,8 @@ const library = libraryFromUrl();
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
+  // `?mockSources=1` adds a folder in Dropbox and a missing one (Settings › Sources, E50.13).
+  moreSources: countFromUrl('mockSources', 1) ? mockMoreSources : [],
   settingsStorage: sessionStorageOf(),
   library,
   ...(library === 'wall'

@@ -158,6 +158,28 @@ export function formatDate(
   return new Intl.DateTimeFormat(current.value, options).format(value);
 }
 
+/** The units `formatRelativeTime` steps through, with their length in seconds. */
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 86_400],
+  ['month', 30 * 86_400],
+  ['week', 7 * 86_400],
+  ['day', 86_400],
+  ['hour', 3_600],
+  ['minute', 60],
+];
+
+/**
+ * How long ago (or from now) `value` is, for the UI's locale, in the largest whole unit
+ * (`2 hr. ago`, `yesterday`); under a minute is `now`.
+ */
+export function formatRelativeTime(value: Date | number, now: number = Date.now()): string {
+  const seconds = Math.round(((value instanceof Date ? value.getTime() : value) - now) / 1000);
+  const format = new Intl.RelativeTimeFormat(current.value, { numeric: 'auto', style: 'short' });
+  for (const [unit, length] of RELATIVE_UNITS)
+    if (Math.abs(seconds) >= length) return format.format(Math.trunc(seconds / length), unit);
+  return format.format(0, 'second');
+}
+
 /** One `Intl.PluralRules` per locale: building one costs more than every card label of a frame. */
 const pluralRules = new Map<string, Intl.PluralRules>();
 

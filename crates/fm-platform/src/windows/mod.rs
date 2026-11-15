@@ -37,6 +37,7 @@ mod process;
 #[cfg(windows)]
 #[allow(unsafe_code)] // Win32 registry FFI; every block has a SAFETY note.
 mod registry;
+mod show_folder;
 #[cfg(windows)]
 #[allow(unsafe_code)] // Shell and security FFI; every block has a SAFETY note.
 mod trash;
@@ -55,6 +56,7 @@ pub(crate) use open_url::command as open_url_command;
 pub use pdf::WindowsPdfPrinter;
 #[cfg(windows)]
 pub(crate) use process::is_running;
+pub(crate) use show_folder::command as show_folder_command;
 #[cfg(windows)]
 pub(crate) use trash::RecycleBin;
 #[cfg_attr(not(windows), allow(unused_imports))]

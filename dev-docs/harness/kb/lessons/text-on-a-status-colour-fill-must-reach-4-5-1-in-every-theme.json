@@ -1,0 +1,19 @@
+{
+  "id": "text-on-a-status-colour-fill-must-reach-4-5-1-in-every-theme",
+  "title": "Text on a status-colour fill must reach 4.5:1 in every theme",
+  "category": "accessibility",
+  "rule": "Do not reuse --fm-on-accent for text on a --fm-danger, --fm-warning or other status fill: that token is tuned for the accent only. Use the status colour as text on the surface (outlined button), or add a matching on-<status> token, and check 4.5:1 for light and dark including hover and pressed tints. Add a Playwright axe color-contrast check with the control visible in both colour schemes.",
+  "rationale": "E50.13 (#584): the remove question's danger button inherited --fm-on-accent on a --fm-danger fill: 2.82:1 light, 2.28:1 dark.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    584
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/styles/**/*.css"
+  ],
+  "first_seen": "2026-11-15T15:26:07.477Z",
+  "last_seen": "2026-11-15T15:26:07.477Z"
+}

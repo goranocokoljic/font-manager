@@ -483,3 +483,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E50.12 #583] crates/fm-api/src/search.rs:154 — `UNKNOWN_FOUNDRY` is a fixed English string from the API, so the German UI shows "Schriftgießerei · Unknown foundry".
 - [E50.12 #583] apps/desktop/src/views/HomeView.vue:96 — `emptyCollection` already ignores glyph-trait filters (E49.6): an open collection with a trait filter and no hits says the collection is empty.
 - [E50.12 #583] apps/desktop/src/stores/foundries.ts:80 — a failed merge leaves `store.error` in the sidebar alert until a later successful list or merge.
+- [E50.13 #584] crates/fm-core/src/index/problems.rs:99 — `missing_source` runs `fs::metadata` on each source under the index lock in `list_problems`; an offline network share stalls the index.
+- [E50.13 #584] crates/fm-core/src/index/sources.rs:123 — `add_source` stores an endpoint path as given (no normalization), so a raw endpoint client can store `D:/Fonts`, which Explorer may not open reliably.

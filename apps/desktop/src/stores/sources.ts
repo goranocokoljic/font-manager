@@ -118,6 +118,11 @@ export const useSourcesStore = defineStore('sources', () => {
     if (done) sources.value = sources.value.filter((s) => s.id !== source);
   }
 
+  /** Shows the source's folder in the OS file manager (Settings › Sources, E50.13). */
+  async function showFolder(source: SourceId): Promise<void> {
+    await attempt(() => useClient().showSourceFolder(source));
+  }
+
   /** The running scan of one source, wherever it was started. */
   function progressOf(source: SourceId): ScanProgress | null {
     for (const [job, s] of jobSource) if (s === source) return scans.get(job) ?? null;
@@ -144,6 +149,7 @@ export const useSourcesStore = defineStore('sources', () => {
     rescan,
     setPaused,
     remove,
+    showFolder,
     progressOf,
   };
 });

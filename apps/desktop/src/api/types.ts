@@ -3691,6 +3691,21 @@ export type Source = {
 	paused: boolean,
 	/**  Faces indexed from it. */
 	faceCount: number,
+	/**
+	 *  When a scan of it last finished (a full scan or a watcher rescan);
+	 *  `None` before its first scan (E50.13).
+	 */
+	lastScanned?: string | null,
+	/**
+	 *  The folder is not there or is not a folder (removed, renamed, an
+	 *  unplugged drive); its faces stay until the source is removed (E50.13).
+	 */
+	missing?: boolean,
+	/**
+	 *  The folder is inside a cloud sync client's folder (Dropbox, OneDrive,
+	 *  iCloud Drive, Google Drive, Box, pCloud), judged from the path (E50.13).
+	 */
+	cloud?: boolean,
 };
 
 /**  A watched folder, the system fonts, or the library folder. */

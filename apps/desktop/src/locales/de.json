@@ -1440,21 +1440,61 @@
       "change": "Ändern…"
     },
     "sources": {
-      "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Wenn du eine Quelle entfernst, vergisst die Bibliothek ihre Schriften; die Dateien bleiben, wo sie sind.",
-      "kinds": {
-        "watched": "Ordner",
-        "system": "Systemschriften",
-        "libraryFolder": "Bibliotheksordner"
-      },
+      "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Nichts wird kopiert oder verschoben; ein beobachteter Ordner wird neu eingelesen, wenn sich seine Dateien ändern.",
       "fonts": {
         "one": "{count} Schrift",
         "other": "{count} Schriften"
       },
-      "pause": "{path} pausieren",
-      "paused": "Pausiert",
-      "remove": "{path} entfernen",
-      "systemCannotRemove": "Systemschriften können nicht entfernt werden.",
-      "addFolder": "Ordner hinzufügen…"
+      "addFolder": "Ordner hinzufügen",
+      "listLabel": "Ordner",
+      "scanningCount": "{done} von {total} Schriften",
+      "scanningNow": "wird eingelesen …",
+      "scanned": "eingelesen {when}",
+      "neverScanned": "noch nicht eingelesen",
+      "notFound": "Ordner nicht gefunden",
+      "scanningBadge": "Wird eingelesen",
+      "missingBadge": "Fehlt",
+      "scanningLabel": "{name} wird eingelesen",
+      "watch": "Beobachten",
+      "watchLabel": "{name} beobachten",
+      "rescanLabel": "{name} neu einlesen",
+      "showLabel": "{name} im Dateimanager zeigen",
+      "removeLabel": "{name} aus der Bibliothek entfernen",
+      "confirmRemove": "{name} aus der Bibliothek entfernen? Die Schriften verlassen die Bibliothek; die Dateien bleiben, wo sie sind.",
+      "drop": "Ordner zum Hinzufügen wählen",
+      "empty": "Noch keine Ordner. Wähle einen Ordner zum Hinzufügen.",
+      "problemsIn": "in diesen Ordnern — {detail}",
+      "problemCounts": {
+        "duplicates": {
+          "one": "{count} Duplikat",
+          "other": "{count} Duplikate"
+        },
+        "broken": {
+          "one": "{count} beschädigte Datei",
+          "other": "{count} beschädigte Dateien"
+        },
+        "legacy": {
+          "one": "{count} veraltete Datei",
+          "other": "{count} veraltete Dateien"
+        },
+        "sidecar": {
+          "one": "{count} Sidecar-Konflikt",
+          "other": "{count} Sidecar-Konflikte"
+        },
+        "activation": {
+          "one": "{count} Aktivierungskonflikt",
+          "other": "{count} Aktivierungskonflikte"
+        },
+        "library": {
+          "one": "{count} Ordner- oder Indexproblem",
+          "other": "{count} Ordner- oder Indexprobleme"
+        }
+      },
+      "openProblems": "Probleme öffnen",
+      "systemTitle": "Systemschriften",
+      "systemNote": "In der Bibliothek gezeigt, schreibgeschützt — die App schreibt nie in Systemordner.",
+      "show": "Zeigen",
+      "showSystemLabel": "Systemschriften in der Bibliothek zeigen"
     },
     "activation": {
       "modeLegend": "Die Schaltfläche „Aktivieren“ aktiviert Schriften",
