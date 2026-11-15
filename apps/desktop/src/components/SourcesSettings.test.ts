@@ -15,7 +15,12 @@ beforeEach(() => {
   setClient(client);
 });
 
-afterEach(() => setClient(undefined));
+// Every mounted App is unmounted, so a failed test leaves no buttons in document.body for the next.
+const mounted: VueWrapper[] = [];
+afterEach(() => {
+  for (const w of mounted.splice(0)) w.unmount();
+  setClient(undefined);
+});
 
 async function mountSources() {
   const router = createAppRouter();
@@ -24,6 +29,12 @@ async function mountSources() {
     global: { plugins: [createPinia(), router] },
     attachTo: document.body,
   });
+  mounted.push(wrapper);
+  const unmount = wrapper.unmount.bind(wrapper);
+  wrapper.unmount = () => {
+    mounted.splice(mounted.indexOf(wrapper), 1);
+    unmount();
+  };
   await router.isReady();
   await flushPromises();
   return { wrapper, router };
@@ -34,9 +45,10 @@ const card = (wrapper: VueWrapper, name: string) =>
 const button = (wrapper: VueWrapper | ReturnType<VueWrapper['get']>, label: string) =>
   wrapper.get(`button[aria-label="${label}"]`);
 
-/** Waits until `check` holds (the mock's scan steps on timers). */
+/** Waits until `check` holds, up to 5 s of clock time (the mock's scan steps on timers). */
 async function until(check: () => boolean): Promise<void> {
-  for (let i = 0; i < 200 && !check(); i++) {
+  const deadline = Date.now() + 5000;
+  while (!check() && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 5));
     await flushPromises();
   }
@@ -103,6 +115,9 @@ describe('Settings › Sources (E50.13)', () => {
   });
 
   it('shows Scanning and a progress bar fed by the scan events, then the new count', async () => {
+    // Steps far apart: under a loaded test run the scan still lasts long enough to be seen.
+    client = createMockClient({ moreSources: mockMoreSources, scanStepMs: 100 });
+    setClient(client);
     const { wrapper } = await mountSources();
     await button(card(wrapper, 'Fonts'), 'Rescan Fonts').trigger('click');
     await until(() => card(wrapper, 'Fonts').find('progress').exists());
