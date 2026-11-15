@@ -25,6 +25,10 @@ export function useActiveFilters() {
   const chips = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
   /** The glyph traits chosen on the Letters preset's letters or typed in the box (E49.6). */
   const traits = computed(() => traitChips(search.traits, search.traitCatalog));
+  /** The foundry chosen in the sidebar (E50.12), as its chip names it: "Foundry · Google". */
+  const foundry = computed(() =>
+    search.foundry === null ? null : t('chips.foundry', { name: search.foundry }),
+  );
   /** The count line's switch hides the families missing glyphs of your text (E43.3). */
   const rendersText = computed(() => search.hiding);
   /** Every chosen filter's name, in the order the chips show them. */
@@ -32,8 +36,9 @@ export function useActiveFilters() {
     ...chips.value.map((c) => c.label),
     ...languages.value.map((code) => languageName(search.languages, code)),
     ...traits.value.map(traitLineLabel),
+    ...(foundry.value ? [foundry.value] : []),
     ...(rendersText.value ? [t('chips.rendersText')] : []),
   ]);
 
-  return { groups, languages, traits, rendersText, chips, labels };
+  return { groups, languages, traits, foundry, rendersText, chips, labels };
 }

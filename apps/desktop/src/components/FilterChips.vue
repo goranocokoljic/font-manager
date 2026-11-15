@@ -24,7 +24,15 @@ import UiDrawer from './ui/UiDrawer.vue';
 const search = useSearchStore();
 const collections = useCollectionsStore();
 const preview = usePreviewStore();
-const { groups, languages, traits, rendersText, chips: active, labels } = useActiveFilters();
+const {
+  groups,
+  languages,
+  traits,
+  foundry,
+  rendersText,
+  chips: active,
+  labels,
+} = useActiveFilters();
 // A trait chip names its glyph and value from the catalog (E49.6).
 watch(
   () => search.traits.length,
@@ -43,7 +51,11 @@ const shownLanguages = computed(() => {
   return all.filter((l, i) => i < LANGUAGES_SHOWN || languages.value.includes(l.code));
 });
 const filtering = computed(
-  () => hasFilters(search.filters) || traits.value.length > 0 || rendersText.value,
+  () =>
+    hasFilters(search.filters) ||
+    traits.value.length > 0 ||
+    foundry.value !== null ||
+    rendersText.value,
 );
 
 /** The count line's switch (E43.3) is remembered with the All fonts view: off goes there. */
@@ -54,6 +66,7 @@ function stopHiding(): void {
 /** Clear: every filter, the count line's switch too. */
 function clearAll(): void {
   search.traits = [];
+  search.foundry = null;
   search.setFilters({});
   stopHiding();
 }
@@ -262,11 +275,27 @@ async function save(): Promise<void> {
         </svg>
       </button>
       <button
+        v-if="foundry"
+        type="button"
+        class="chip active"
+        data-testid="foundry-chip"
+        :class="{ spilled: active.length + languages.length + traits.length >= fit }"
+        :aria-label="t('chips.remove', { name: foundry })"
+        @click="remove(() => search.setFoundry(null))"
+      >
+        {{ foundry }}
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </button>
+      <button
         v-if="rendersText"
         type="button"
         class="chip active"
         data-testid="renders-text-chip"
-        :class="{ spilled: active.length + languages.length + traits.length >= fit }"
+        :class="{
+          spilled: active.length + languages.length + traits.length + (foundry ? 1 : 0) >= fit,
+        }"
         :aria-label="t('chips.remove', { name: t('chips.rendersText') })"
         @click="remove(stopHiding)"
       >

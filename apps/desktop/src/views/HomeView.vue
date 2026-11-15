@@ -6,6 +6,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionHeader from '../components/CollectionHeader.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
+import FoundriesSidebar from '../components/FoundriesSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
 import DocumentFontsPanel from '../components/DocumentFontsPanel.vue';
 import DragGhost from '../components/DragGhost.vue';
@@ -622,6 +623,7 @@ async function openFace(face: FaceId): Promise<void> {
       <LibraryViewsSidebar />
       <QuickCollectionSidebar />
       <CollectionsSidebar />
+      <FoundriesSidebar />
       <TagsSidebar />
       <ProjectSetsSidebar />
       <SourcesSidebar />

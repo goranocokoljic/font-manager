@@ -215,3 +215,29 @@ describe('glyph-trait chips (E49.6)', () => {
     expect(search.traits).toEqual([]);
   });
 });
+
+describe('the foundry chip (E50.12)', () => {
+  it('names the foundry, removes the filter, and Clear takes it off too', async () => {
+    const w = await mountChips();
+    const search = useSearchStore();
+    search.setFoundry('rsms');
+    await flushPromises();
+    const chip = w.get('[data-testid="foundry-chip"]');
+    expect(chip.text()).toBe('Foundry · rsms');
+    expect(chip.attributes('aria-label')).toBe('Remove filter Foundry · rsms');
+    expect(w.get('button.opener').text()).toContain('1');
+    await chip.trigger('click');
+    await flushPromises();
+    expect(search.foundry).toBeNull();
+    expect(w.find('[data-testid="foundry-chip"]').exists()).toBe(false);
+
+    search.setFoundry('rsms');
+    await flushPromises();
+    await w
+      .findAll('button')
+      .find((b) => b.text() === 'Clear filters')!
+      .trigger('click');
+    await flushPromises();
+    expect(search.foundry).toBeNull();
+  });
+});

@@ -480,3 +480,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E50.7 #578] apps/desktop/src/components/FamilyCharacters.vue:115 — `measure()` runs only on scroll and resize, so the grid's cached offset goes stale when content above it changes height without a scroll.
 - [E50.9 #580] apps/desktop/src/components/GlyphCompare.vue:334 — the compare overlay's legend already shows this face's metric lines (x-height) before a second face is picked (E50.8 behaviour).
 - [E50.9 #580] apps/desktop/src/components/ActivationDot.vue:85 — the roving-focus menu key handler is copied in ActivationDot, CollectionsSidebar, FamilyStyles and FamilyCollectionMenu; the glyph cell menu adds one more copy.
+- [E50.12 #583] crates/fm-api/src/search.rs:154 — `UNKNOWN_FOUNDRY` is a fixed English string from the API, so the German UI shows "Schriftgießerei · Unknown foundry".
+- [E50.12 #583] apps/desktop/src/views/HomeView.vue:96 — `emptyCollection` already ignores glyph-trait filters (E49.6): an open collection with a trait filter and no hits says the collection is empty.
+- [E50.12 #583] apps/desktop/src/stores/foundries.ts:80 — a failed merge leaves `store.error` in the sidebar alert until a later successful list or merge.
