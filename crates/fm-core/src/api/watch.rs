@@ -35,8 +35,8 @@ use crate::scanner::{FileIndex, WatchSettings, WatchSink, WatchUpdate, Watcher};
 /// The running watcher and the sources it was told about, by folder, with
 /// whether each is paused.
 pub(super) struct Watching {
-    watcher: Watcher,
-    known: Mutex<HashMap<PathBuf, bool>>,
+    pub(super) watcher: Watcher,
+    pub(super) known: Mutex<HashMap<PathBuf, bool>>,
 }
 
 impl Watching {
@@ -119,7 +119,10 @@ impl CoreApi {
         let Some(watching) = &self.watching else {
             return;
         };
-        match self.lock().sources() {
+        // The guard must go before `sync`: a temporary in a `match`
+        // scrutinee would live to the end of the match.
+        let sources = self.lock().sources();
+        match sources {
             Ok(sources) => watching.sync(&sources),
             Err(e) => tracing::warn!(error = %e, "watched sources not updated"),
         }

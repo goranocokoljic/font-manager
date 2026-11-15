@@ -28,6 +28,14 @@ fn close(lib: Lib) {
     drop(dir);
 }
 
+/// Whether the watcher thread holds `root` as an active source: resuming a
+/// source it watches is a no-op, one it does not know is an error.
+fn watches(api: &CoreApi, root: &Path) -> bool {
+    let watching = api.watching.as_ref().expect("the watcher runs");
+    lock(&watching.known).get(root) == Some(&false)
+        && watching.watcher.set_paused(root, false).is_ok()
+}
+
 fn family_total(api: &CoreApi) -> u32 {
     api.list_families(ListFamiliesRequest {
         page: Page {
@@ -198,8 +206,14 @@ fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
     let events = changes_of(&rx, second.id, Duration::from_millis(1500));
     assert_eq!(lost(&events), 1, "{events:?}");
 
-    // Removed: no longer watched.
+    // Removed: no longer watched. The watcher itself forgets the folder (an
+    // event from it would find no source and be dropped either way).
+    assert!(watches(&lib.api, &other), "the source is watched before");
     lib.api.remove_source(second.id).expect("remove");
+    assert!(
+        !watches(&lib.api, &other),
+        "a removed source is still watched"
+    );
     let _ = changes_of(&rx, second.id, Duration::from_millis(500));
     std::fs::copy(fixtures().join(NEW_FONT), other.join("c.ttf")).expect("copy");
     let events = changes_of(&rx, second.id, Duration::from_millis(1500));
@@ -214,6 +228,45 @@ fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
     let events = changes_of(&rx, source.id, Duration::from_millis(1500));
     assert_eq!(gained(&events), 1, "{events:?}");
     close(lib);
+}
+
+#[test]
+fn a_source_change_while_the_watcher_waits_does_not_deadlock() {
+    let (lib, _source) = watched("api-watch-deadlock", WatchSettings::default());
+    let Lib { dir, api, root, .. } = lib;
+    let api = Arc::new(api);
+    let other = dir.path().join("Other");
+    std::fs::create_dir_all(&other).expect("folder");
+
+    // The watcher thread takes the file index, then the index. Hold the file
+    // index so a change waits in the middle of its work.
+    let files = lock(&api.files);
+    std::fs::copy(fixtures().join(NEW_FONT), root.join("a.ttf")).expect("copy");
+    std::thread::sleep(Duration::from_millis(1000));
+
+    // A source change on another thread asks the waiting watcher thread.
+    let (done, finished) = std::sync::mpsc::channel();
+    let adder = Arc::clone(&api);
+    let path = other.display().to_string();
+    let adding = std::thread::spawn(move || {
+        let added = adder.add_source(AddSourceRequest {
+            path,
+            mode: ImportMode::IndexInPlace,
+        });
+        let _ = done.send(added.is_ok());
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    drop(files);
+
+    // Asked with the index locked, neither thread could go on.
+    let added = finished
+        .recv_timeout(Duration::from_secs(20))
+        .expect("add_source returned: no deadlock");
+    assert!(added);
+    adding.join().expect("the adder thread");
+    let api = Arc::into_inner(api).expect("the adder thread is done");
+    drop(api);
+    drop(dir);
 }
 
 #[test]
