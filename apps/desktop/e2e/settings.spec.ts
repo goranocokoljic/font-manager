@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { openSection, sectionPanel } from './family-page';
 
@@ -314,3 +315,26 @@ test('the status-bar Settings link looks like a link and opens Settings', async 
   await link.click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
 });
+
+// E50.13: the remove question's buttons keep WCAG AA contrast (the danger button is red text
+// on the card, not light text on a red fill).
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the remove question passes the colour-contrast check (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.goto('/#/settings');
+    const fonts = page
+      .getByRole('list', { name: 'Folders' })
+      .getByRole('listitem', { name: 'Fonts', exact: true });
+    await fonts.hover();
+    await fonts.getByRole('button', { name: 'Remove Fonts from the library' }).click();
+    const question = fonts.getByRole('alertdialog');
+    await expect(question.getByRole('button', { name: 'Remove' })).toBeFocused();
+    const result = await new AxeBuilder({ page })
+      .include('.cards [role="alertdialog"]')
+      .withRules(['color-contrast'])
+      .analyze();
+    expect(result.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target}`))).toEqual(
+      [],
+    );
+  });
+}

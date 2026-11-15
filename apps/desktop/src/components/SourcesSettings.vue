@@ -259,10 +259,13 @@ function onConfirmKey(e: KeyboardEvent, id: SourceId): void {
   font: inherit;
   font-weight: 600;
 }
+/* Danger text on the card, as elsewhere in the app: --fm-on-accent on a --fm-danger fill is
+   under 4.5:1 in both themes, --fm-danger on the card surface is over 6.5:1. */
 .primary.danger {
   height: 28px;
   border-color: var(--fm-danger);
-  background-color: var(--fm-danger);
+  background-color: transparent;
+  color: var(--fm-danger);
 }
 .cards {
   display: flex;
