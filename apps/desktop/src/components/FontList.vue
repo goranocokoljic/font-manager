@@ -12,6 +12,12 @@
 // Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A selects all. Plain Space is the
 // app's quick-look key, so the list leaves it alone.
 //
+// Every row starts with a fixed 24 px gutter (E50.4): a family of several styles has its
+// chevron there, a single font and a style leave it empty, so names and samples line up.
+// A family names its style count in a pill ("6 styles"; a variable family's pill says
+// "Variable · 2 axes"), a single font its style instead. A style is indented 16 px
+// more, hanging off a hairline under the chevron, so an open family reads as one block.
+//
 // Each row has a "Similar" action (E23.3), shown on the cursor row and under the
 // pointer; it is out of the Tab order, the S key runs it for the keyboard.
 // A family downloaded from a catalog that the last update check found a newer
@@ -313,13 +319,14 @@ function onToggle(row: ListRow): void {
         @pointerdown="fontSwitch.prime(item.row)"
         @dragstart="onRowDrag(item.row, $event)"
       >
-        <span
-          v-if="item.row.kind === 'family'"
-          class="twisty fm-directional"
-          aria-hidden="true"
-          @click.stop="onToggle(item.row)"
-          ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
-        /></span>
+        <span class="gutter" data-testid="row-gutter" aria-hidden="true"
+          ><span
+            v-if="item.row.kind === 'family' && !item.row.single"
+            class="twisty fm-directional"
+            @click.stop="onToggle(item.row)"
+            ><UiChevron :open="item.row.expanded" /></span
+        ></span>
+        <span v-if="item.row.kind === 'face'" class="indent" aria-hidden="true" />
         <FontPreviewRow
           v-if="item.face"
           class="preview"
@@ -337,7 +344,7 @@ function onToggle(row: ListRow): void {
           :missing="item.missing"
           :variations="item.variations"
           :defer="!motion.settled.value"
-          :show-variable="item.row.kind === 'family'"
+          :show-variable="item.row.kind === 'family' && !item.row.single"
         >
           <template #lead>
             <ActivationDot :key="item.row.key" :state="rowActivation(item.row)" />
@@ -351,7 +358,12 @@ function onToggle(row: ListRow): void {
             >
           </template>
           <template v-if="item.row.kind === 'family'" #detail>
-            <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+            <span v-if="item.row.single" class="style" data-testid="row-style">{{
+              item.face.style
+            }}</span>
+            <UiBadge v-else-if="!item.face.isVariable" class="pill" data-testid="style-count">{{
+              styleCount(item.row.family.styleCount)
+            }}</UiBadge>
             <UiBadge
               v-if="item.row.family.openLicense"
               class="open-license"
@@ -367,8 +379,9 @@ function onToggle(row: ListRow): void {
               >{{ t('catalogs.updates.badge') }}</UiBadge
             >
           </template>
-          <template v-else-if="item.row.virtual" #detail>
-            <span class="count">{{ t('list.pinned') }}</span>
+          <template v-else #detail>
+            <span v-if="item.row.virtual" class="count">{{ t('list.pinned') }}</span>
+            <span v-else class="weight" data-testid="row-weight">{{ item.face.weight }}</span>
           </template>
         </FontPreviewRow>
         <div v-if="item.face" class="row-actions">
@@ -420,6 +433,7 @@ function onToggle(row: ListRow): void {
 
 <style scoped>
 .viewport {
+  --fm-gutter: 24px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -446,7 +460,6 @@ function onToggle(row: ListRow): void {
   contain: layout paint;
 }
 .slot.face {
-  padding-inline-start: 24px;
   background: color-mix(in srgb, var(--fm-fg) 3%, transparent);
 }
 /* Style sub-rows hang off a hairline guide under the family's chevron. */
@@ -454,7 +467,7 @@ function onToggle(row: ListRow): void {
   position: absolute;
   top: 0;
   bottom: 0;
-  inset-inline-start: 12px;
+  inset-inline-start: calc(var(--fm-gutter) / 2);
   width: 1px;
   background: var(--fm-border);
   content: '';
@@ -483,35 +496,44 @@ function onToggle(row: ListRow): void {
 .viewport:focus .slot.cursor {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fm-accent) 60%, transparent);
 }
-.twisty {
+/* The fixed gutter every row starts with; only a family of several styles fills it. */
+.gutter {
   display: grid;
   flex: none;
-  /* Sits on the sample line, not between meta and sample: the row centres the meta line
-     (18 px) and the sample with a 2 px gap, so the sample's middle is 10 px below the row's.
-     Centring a box padded 20 px on top lands the chevron there in both densities. */
-  align-self: center;
   place-items: center;
-  box-sizing: border-box;
-  width: 24px;
-  padding-block-start: 20px;
-  color: var(--fm-muted);
+  width: var(--fm-gutter);
+}
+/* The chevron's target: 20 × 24 px, a 12 px glyph at 55 % ink, turning in 120 ms. */
+.twisty {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 24px;
+  color: color-mix(in srgb, var(--fm-fg) 55%, transparent);
   cursor: pointer;
+}
+.twisty :deep(.ui-icon) {
+  width: 12px;
+  height: 12px;
 }
 .twisty:hover {
   color: var(--fm-fg);
+}
+/* A style starts 16 px further in than its family. */
+.indent {
+  flex: none;
+  width: 16px;
 }
 .preview {
   flex: 1;
   min-width: 0;
 }
-/* The slot draws the row line, full width; the preview row sits inside it, padded
-   by the density (16px comfortable, 8px compact). */
+/* The slot draws the row line, full width; the preview row sits inside it, after the
+   gutter (and a style's indent), padded at its end by the density (16px comfortable,
+   8px compact). */
 .slot .preview {
-  padding-inline: calc(2 * var(--fm-gap));
+  padding-inline: 0 calc(2 * var(--fm-gap));
   border-bottom: 0;
-}
-.slot:not(.face) .preview {
-  padding-inline-start: 0;
 }
 .placeholder {
   display: flex;
@@ -528,8 +550,17 @@ function onToggle(row: ListRow): void {
   align-items: center;
   gap: 8px;
 }
-.count {
+.count,
+.style,
+.weight {
   color: var(--fm-muted);
+}
+.weight {
+  font-variant-numeric: tabular-nums;
+}
+.pill {
+  border-radius: 999px;
+  padding-inline: 6px;
 }
 .note {
   color: var(--fm-warning);

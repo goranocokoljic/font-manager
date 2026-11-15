@@ -1103,6 +1103,10 @@
     "stylesUnavailable": "Styles not available",
     "previewUnavailable": "Preview not available",
     "variable": "Variable",
+    "variableAxes": {
+      "one": "Variable · {count} axis",
+      "other": "Variable · {count} axes"
+    },
     "fallback": "Fallback",
     "fallbackTitle": {
       "missingLetters": "This font lacks {missing}, so it shows its own letters.",

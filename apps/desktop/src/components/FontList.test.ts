@@ -178,7 +178,8 @@ describe('FontList families and styles', () => {
     expect(row.attributes('aria-expanded')).toBe('false');
     expect(row.attributes('aria-label')).toBe('Sample 1, 4 styles, not active');
     expect(row.get('.row').attributes('data-face')).toBe(String(EXTRA_ID_BASE));
-    expect(row.text()).toContain('4 styles');
+    // Sample 1 is variable: its pill says so; the count is in its label.
+    expect(row.get('[data-testid="variable-badge"]').text()).toBe('Variable');
     list.unmount();
   });
 
@@ -227,6 +228,85 @@ describe('FontList families and styles', () => {
     expect(rows[5]!.get('.row').attributes('data-face')).toBe(String(EXTRA_ID_BASE + 2));
     await list.get(`[data-key="family:${EXTRA_ID_BASE}"] .twisty`).trigger('click');
     expect(items(list)).toHaveLength(5);
+    list.unmount();
+  });
+});
+
+describe('FontList chevron gutter (E50.4)', () => {
+  const rowOf = (list: VueWrapper, key: string) => list.get(`[data-key="${key}"]`);
+  /** The row's children up to its preview: what sits before the name and the sample. */
+  const part = (el: Element) => (el.classList.contains('preview') ? 'preview' : el.classList[0]);
+  const lead = (list: VueWrapper, key: string, n = 2) =>
+    [...rowOf(list, key).element.children].slice(0, n).map(part);
+
+  it('every row starts with the gutter; only a family of several styles has a chevron in it', async () => {
+    const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
+    const family = `family:${EXTRA_ID_BASE}`;
+    // A family of 4 styles: the chevron sits in the gutter, then the preview.
+    expect(lead(list, family)).toEqual(['gutter', 'preview']);
+    const gutter = rowOf(list, family).get('[data-testid="row-gutter"]');
+    expect(gutter.find('.twisty svg').exists()).toBe(true);
+    expect(gutter.attributes('aria-hidden')).toBe('true');
+    // A single font (Legacy Grotesk, one style): the same gutter, empty.
+    const single = items(list).find((r) =>
+      r.attributes('aria-label')?.startsWith('Legacy Grotesk,'),
+    )!;
+    expect(single.element.firstElementChild!.className).toBe('gutter');
+    expect(single.get('[data-testid="row-gutter"]').element.children).toHaveLength(0);
+    expect(single.attributes('aria-expanded')).toBeUndefined();
+
+    // Expanded, each style has the same empty gutter, then a 16 px indent, then its preview.
+    await gutter.get('.twisty').trigger('click');
+    await flushPromises();
+    expect(rowOf(list, family).attributes('aria-expanded')).toBe('true');
+    const style = items(list).find((r) => r.attributes('aria-level') === '2')!;
+    expect(lead(list, style.attributes('data-key')!, 3)).toEqual(['gutter', 'indent', 'preview']);
+    expect(style.get('[data-testid="row-gutter"]').element.children).toHaveLength(0);
+    // The chevron turns: closed, then open.
+    expect(gutter.get('.ui-chevron').classes()).toContain('open');
+    await gutter.get('.twisty').trigger('click');
+    await flushPromises();
+    expect(rowOf(list, family).get('.ui-chevron').classes()).not.toContain('open');
+    list.unmount();
+  });
+
+  it('a family shows its style count in a pill; a single font shows its style and no pill', async () => {
+    // Sample 1 is variable (wght only), Sample 2 static; six styles each.
+    const list = await listOf({ extraFaces: 2, stylesPerFamily: 6 });
+    const static6 = rowOf(list, `family:${EXTRA_ID_BASE + 1}`);
+    const pill = static6.get('[data-testid="style-count"]');
+    expect(pill.text()).toBe('6 styles');
+    expect(pill.classes()).toEqual(expect.arrayContaining(['ui-badge', 'pill']));
+    expect(static6.find('[data-testid="row-style"]').exists()).toBe(false);
+    expect(static6.find('[data-testid="variable-badge"]').exists()).toBe(false);
+    // A variable family's pill is the Variable one, not the count.
+    const variable = rowOf(list, `family:${EXTRA_ID_BASE}`);
+    expect(variable.get('[data-testid="variable-badge"]').text()).toBe('Variable');
+    expect(variable.get('[data-testid="variable-badge"]').classes()).toContain('pill');
+    expect(variable.find('[data-testid="style-count"]').exists()).toBe(false);
+    // A single font (Legacy Grotesk, one style "Regular"): its style name, no pill.
+    const single = items(list).find((r) =>
+      r.attributes('aria-label')?.startsWith('Legacy Grotesk,'),
+    )!;
+    expect(single.get('[data-testid="row-style"]').text()).toBe('Regular');
+    expect(single.find('[data-testid="style-count"]').exists()).toBe(false);
+    expect(single.find('[data-testid="variable-badge"]').exists()).toBe(false);
+    // Inter is a single variable font: still its style and no pill.
+    const inter = items(list).find((r) => r.attributes('aria-label')?.startsWith('Inter,'))!;
+    expect(inter.get('[data-testid="row-style"]').text()).toBe('Regular');
+    expect(inter.find('[data-testid="variable-badge"]').exists()).toBe(false);
+    list.unmount();
+  });
+
+  it('a style row names its style and weight, after the indent', async () => {
+    const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
+    await rowOf(list, `family:${EXTRA_ID_BASE}`).get('.twisty').trigger('click');
+    await flushPromises();
+    const bold = items(list).find(
+      (r) => r.attributes('aria-label') === 'Sample 1 Bold, not active',
+    )!;
+    expect(bold.get('[data-family-name]').text()).toBe('Bold');
+    expect(bold.get('[data-testid="row-weight"]').text()).toBe('700');
     list.unmount();
   });
 });

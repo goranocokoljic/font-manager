@@ -17,6 +17,8 @@
 // lines over the sample: a zero-size box inside the text sits on the webview's own
 // baseline, and each line is the metric's share of the em above it, so the lines
 // follow size and line height. With `outline` the sample is drawn as outlines.
+// A variable face shows a "Variable" pill after its name, "Variable · N axes" when it
+// has several axes (E50.4).
 // With `defer` (the list moves fast, E35.8) a row that does not hold its face yet
 // starts no load: it shows its name in the UI font where the sample goes, at the
 // sample's size (`data-state="deferred"`), and loads once `defer` is off. A face it
@@ -245,6 +247,11 @@ function onScrubUp(e: PointerEvent): void {
   }
 }
 
+/** "Variable", or "Variable · 2 axes" once the face's axes are known and there are several. */
+const variableLabel = computed(() =>
+  axes.value.length > 1 ? t('list.variableAxes', { count: axes.value.length }) : t('list.variable'),
+);
+
 /** The characters drawn as tofu: none in a fallback text, which the face draws whole. */
 const tofu = computed(() => (props.fallback ? [] : props.missing));
 
@@ -263,8 +270,10 @@ const deferredStyle = computed(() => ({
     <span class="label">
       <slot name="lead" />
       <bdi data-family-name>{{ name }}</bdi>
+      <UiBadge v-if="showVariable && face.isVariable" class="pill" data-testid="variable-badge">{{
+        variableLabel
+      }}</UiBadge>
       <slot name="detail" />
-      <UiBadge v-if="showVariable && face.isVariable">{{ t('list.variable') }}</UiBadge>
       <UiBadge
         v-if="fallback"
         data-testid="fallback-hint"
@@ -334,6 +343,11 @@ const deferredStyle = computed(() => ({
 }
 .note {
   color: var(--fm-warning);
+}
+/* The Variable pill: the same outlined pill as the list's style count. */
+.pill {
+  border-radius: 999px;
+  padding-inline: 6px;
 }
 .label > .missing-glyphs {
   margin-inline-start: auto;
