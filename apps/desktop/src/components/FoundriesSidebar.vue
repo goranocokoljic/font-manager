@@ -70,6 +70,14 @@ function openMenu(f: FoundryInfo, e: MouseEvent): void {
   picking.value = false;
   menuFor.value = f.name;
 }
+/**
+ * A right press (or Ctrl+press on macOS) opens the menu, which takes the focus. On macOS the
+ * menu event comes during the press, before the press focuses the row: without this, the row
+ * would take the focus back from the menu.
+ */
+function keepFocusForMenu(e: MouseEvent): void {
+  if (e.button === 2 || e.ctrlKey) e.preventDefault();
+}
 /** The menu shows: its item takes the focus. */
 function focusMenu(): void {
   menuEl.value?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
@@ -133,6 +141,7 @@ async function mergeInto(into: string): Promise<void> {
           :aria-haspopup="f.unknown ? undefined : 'menu'"
           :aria-expanded="f.unknown ? undefined : menuFor === f.name"
           @click="search.toggleFoundry(f.name)"
+          @mousedown="keepFocusForMenu"
           @contextmenu.prevent="openMenu(f, $event)"
         >
           <span class="side-lead" aria-hidden="true" />
@@ -180,13 +189,7 @@ async function mergeInto(into: string): Promise<void> {
         :aria-label="t('foundries.menuLabel', { name: menuFor })"
         @keydown="onMenuKey"
       >
-        <button
-          role="menuitem"
-          type="button"
-          :disabled="!targets.length"
-          :aria-label="t('foundries.mergeLabel', { name: menuFor })"
-          @click="startMerge"
-        >
+        <button role="menuitem" type="button" :disabled="!targets.length" @click="startMerge">
           {{ t('foundries.merge') }}
         </button>
       </div>

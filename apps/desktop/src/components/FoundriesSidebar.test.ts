@@ -120,9 +120,11 @@ describe('the Foundries group', () => {
     await fold(w).trigger('click');
     await row(w, 'Font Diner').trigger('contextmenu');
     await flushPromises();
-    const item = document.body.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Merge Font Diner into…"]',
-    )!;
+    const menu = document.body.querySelector<HTMLElement>('[role="menu"]')!;
+    expect(menu.getAttribute('aria-label')).toBe('Foundry Font Diner');
+    const item = menu.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    // The name is the visible text (WCAG 2.5.3); the menu's name says which foundry.
+    expect(item.hasAttribute('aria-label')).toBe(false);
     expect(item.textContent!.trim()).toBe('Merge into…');
     expect(document.activeElement).toBe(item);
     item.click();
@@ -143,6 +145,17 @@ describe('the Foundries group', () => {
     await flushPromises();
     expect(rowNames(w)).toContain('Font Diner');
     expect(row(w, 'Omnibus-Type').get('.side-count').text()).toBe('5');
+  });
+
+  it('keeps a right press from focusing the row, so the menu keeps the focus', async () => {
+    const w = await mountSidebar();
+    await fold(w).trigger('click');
+    const right = new MouseEvent('mousedown', { button: 2, bubbles: true, cancelable: true });
+    row(w, 'Be').element.dispatchEvent(right);
+    expect(right.defaultPrevented).toBe(true);
+    const left = new MouseEvent('mousedown', { button: 0, bubbles: true, cancelable: true });
+    row(w, 'Be').element.dispatchEvent(left);
+    expect(left.defaultPrevented).toBe(false);
   });
 
   it('closes the menu with Escape and gives the focus back to the row', async () => {

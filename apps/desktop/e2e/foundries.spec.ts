@@ -69,7 +69,9 @@ test('right-click merges into another foundry with an undo toast', async ({ page
   await open(page);
   await heading(page).click();
   await row(page, 'Font Diner').click({ button: 'right' });
-  const item = page.getByRole('menuitem', { name: 'Merge Font Diner into…' });
+  const item = page
+    .getByRole('menu', { name: 'Foundry Font Diner' })
+    .getByRole('menuitem', { name: 'Merge into…' });
   await expect(item).toBeFocused();
   await item.press('Enter');
   const field = page.getByRole('searchbox', { name: 'Merge Font Diner into…' });
@@ -107,7 +109,9 @@ for (const scheme of ['light', 'dark'] as const) {
     await scan();
     await page.keyboard.press('Escape');
     await row(page, 'Be').click({ button: 'right' });
-    await expect(page.getByRole('menuitem', { name: 'Merge Be into…' })).toBeFocused();
+    await expect(
+      page.getByRole('menu', { name: 'Foundry Be' }).getByRole('menuitem', { name: 'Merge into…' }),
+    ).toBeFocused();
     await scan();
   });
 }
