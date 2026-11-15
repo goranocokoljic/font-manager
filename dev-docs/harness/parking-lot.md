@@ -475,3 +475,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E50.6 #577] apps/desktop/src/stores/catalogs.ts:342 — starting an install from the catalog dot by keyboard disables that dot while it runs, so the focus drops to body (as with the old Install button).
 - [E50.6 #577] apps/desktop/src/components/FontTable.vue:653 — `max-block-size: 100%` on `.row-compare` can squeeze the 28 px compare icon to 24 px in a compact Table row.
 - [E50.6 #577] apps/desktop/e2e/compare-icon.spec.ts:188 — the `@screens` test times out: since E48.5 the first compare add opens the sheet, and the next hover lands under its scrim (runs only with FM_SCREENS_DIR).
+- [E50.7 #578] apps/desktop/src/components/FamilyCharacters.vue:701 — the cursor outline and the selected ring draw on the same pixels, so focus cannot be told from selection on the selected cell (as with the old border).
+- [E50.7 #578] apps/desktop/src/components/ui/UiSwitch.vue:21 — the off-state track edge (`--fm-border-strong` on `--fm-surface-2`) may not reach 3:1.
+- [E50.7 #578] apps/desktop/src/components/FamilyCharacters.vue:115 — `measure()` runs only on scroll and resize, so the grid's cached offset goes stale when content above it changes height without a scroll.

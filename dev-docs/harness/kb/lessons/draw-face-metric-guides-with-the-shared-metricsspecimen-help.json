@@ -1,0 +1,20 @@
+{
+  "id": "draw-face-metric-guides-with-the-shared-metricsspecimen-help",
+  "title": "Draw face-metric guides with the shared metricsSpecimen helper, not a new copy",
+  "category": "correctness",
+  "rule": "When a UI part draws lines or a box from a face's vertical metrics (ascender, descender, x-height, cap height, baseline), build it from `apps/desktop/src/preview/metricsSpecimen.ts` (`metricsSpecimen`, `specimenRulers`), extending it additively when a line is missing. fm-core passes hhea values through unnormalised, and the helper already clamps a positive descender (`min(descender, 0)`) and keeps a cap or x-height above the ascender in the box (`max(...)`). Test the new part with a positive descender and with an x-height above the ascender.",
+  "rationale": "E50.7 (#578): a second specimenBox helper skipped both guards, so a face with descender +50 got a box ending above its baseline and lost its x-height ruler while the Info section drew it correctly.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    578
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/glyphs/**",
+    "apps/desktop/src/preview/**"
+  ],
+  "first_seen": "2026-11-15T06:38:00.060Z",
+  "last_seen": "2026-11-15T06:38:00.060Z"
+}
