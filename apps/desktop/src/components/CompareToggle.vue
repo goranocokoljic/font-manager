@@ -5,7 +5,7 @@
 // a click removes it. The accessible name says which ("Add … to Compare" / "Remove … from
 // Compare"); there is no aria-pressed, as the name already changes with the state.
 //
-// A 28 px target with the accent focus ring. `scope="family"` stands for the face's whole
+// The 28 px UiIconButton (E50.6) with the accent focus ring. `scope="family"` stands for the face's whole
 // family: a family's card or row is in the set while any of its faces is. By default a click
 // goes to the compare store's `toggle`; with `manual` it only emits `toggle`, for a parent
 // that must act around it (the sheet keeps the focus on the next face). With `fresh` a click
@@ -17,7 +17,7 @@ import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
 import { fontNameSample } from '../preview/sampleText';
 import { useCompareStore, type CompareScope } from '../stores/compare';
-import UiIcon from './ui/UiIcon.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -56,37 +56,23 @@ function onClick(): void {
 </script>
 
 <template>
-  <button
-    type="button"
+  <UiIconButton
     class="compare-toggle"
     :class="{ 'in-set': inSet }"
     :data-in-set="inSet"
-    :aria-label="label"
+    :icon="inSet ? 'compareFilled' : 'compare'"
+    :label="label"
     :title="title"
     :disabled="disabledReason ? true : undefined"
     @click.stop="onClick"
-  >
-    <UiIcon :name="inSet ? 'compareFilled' : 'compare'" />
-  </button>
+  />
 </template>
 
 <style scoped>
+/* The box, the glyph and the hover come from UiIconButton; a square 28 px, as before. */
 .compare-toggle {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
   inline-size: 28px;
-  block-size: 28px;
   padding: 0;
-  border: 0;
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: var(--fm-muted);
-}
-.compare-toggle:not(:disabled):hover {
-  color: var(--fm-fg);
 }
 /* In the set: the shapes fill in the accent. A fill and a stroke, never a text color: the
    accent is not a text color (styles/contrast.test.ts). */

@@ -266,7 +266,8 @@ test('download a family into a chosen folder, by keyboard, with progress and the
   const open = catalogRows(page)
     .filter({ hasText: 'Lato' })
     .getByRole('button', { name: 'Download Lato…' });
-  await expect(open).toHaveText('Download…');
+  await expect(open, 'an icon button (E50.6)').toHaveText('');
+  await expect(open).toHaveAttribute('title', 'Download Lato…');
   await open.focus();
   await page.keyboard.press('Enter');
 
@@ -285,7 +286,14 @@ test('download a family into a chosen folder, by keyboard, with progress and the
   const status = panel.getByRole('status');
   await expect(status).toHaveText('Downloading Lato…');
   await expect(panel.getByRole('progressbar')).toBeVisible();
-  await expect(open, 'one download at a time').toBeDisabled();
+  // E50.6: the item's arrow gives its slot to the progress ring; the others are off.
+  const lato = catalogRows(page).filter({ hasText: 'Lato' });
+  await expect(lato.getByRole('progressbar', { name: 'Downloading Lato…' })).toBeVisible();
+  await expect(open).toHaveCount(0);
+  await expect(
+    catalogRows(page).filter({ hasText: 'Inter' }).getByRole('button', { name: 'Download Inter…' }),
+    'one download at a time',
+  ).toBeDisabled();
 
   await expect(status).toHaveText('Lato: 5 files downloaded into /Users/demo/Fonts/Lato.');
   await expect(panel.getByRole('progressbar')).toHaveCount(0);
@@ -406,8 +414,11 @@ test('Install proposes the folder once, then shows the progress and the family a
 
   const install = catalogRows(page)
     .filter({ hasText: 'Inter' })
-    .getByRole('button', { name: 'Install Inter' });
-  await expect(install).toHaveText('Install');
+    .getByRole('button', { name: 'Inter: not in the library. Click to install and activate it.' });
+  await expect(install, 'the activation dot is the Install (E50.6)').toHaveAttribute(
+    'data-activation',
+    'off',
+  );
   await install.click();
   const line = page.getByTestId('catalog-install');
   await expect(
@@ -420,6 +431,12 @@ test('Install proposes the folder once, then shows the progress and the family a
   const status = page.getByTestId('catalog-install-status');
   await expect(status).toHaveText('Downloading Inter…');
   await expect(install, 'one install at a time').toBeDisabled();
+  await expect(
+    catalogRows(page)
+      .filter({ hasText: 'Inter' })
+      .getByRole('progressbar', { name: 'Downloading Inter…' }),
+    'the ring takes the arrow slot',
+  ).toBeVisible();
   await expect(
     catalogRows(page).filter({ hasText: 'Lato' }).getByRole('button', { name: 'Download Lato…' }),
     'and no download meanwhile',

@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { t } from '../../i18n';
 import { FmFade, FmSlide } from '../../motion';
+import UiIconButton from './UiIconButton.vue';
 
 /**
  * A panel that slides in from the inline-start edge, its full width, over a 6 % scrim
@@ -66,22 +67,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown,
         <header class="head">
           <h2>{{ label }}</h2>
           <slot name="actions" />
-          <button
-            type="button"
+          <UiIconButton
             class="close"
-            :aria-label="t('common.close')"
+            icon="close"
+            :label="t('common.close')"
             @click="emit('close')"
-          >
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-              <path
-                d="M4 4l8 8M12 4l-8 8"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
+          />
         </header>
         <div class="body"><slot /></div>
       </aside>
@@ -124,14 +115,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown,
   margin: 0;
   font-size: var(--fm-text-lg);
   font-weight: 600;
-}
-.close {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-color: transparent;
 }
 .body {
   flex: 1;

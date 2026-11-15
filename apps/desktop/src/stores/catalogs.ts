@@ -73,6 +73,14 @@ export interface CatalogInstallState {
   error: ApiError | null;
 }
 
+/** A running download or install of one family, for its item's progress ring (E50.6). */
+export interface CatalogProgress {
+  phase: 'downloading' | 'scanning';
+  /** Files the rescan has read, of `total`; `null` while the count is not known. */
+  done: number | null;
+  total: number | null;
+}
+
 /**
  * The faces of an install that are active now: those activated, those that already were
  * (no outcome), not those that clashed, failed or were skipped.
@@ -337,6 +345,23 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       install.value?.phase === 'scanning',
   );
 
+  /**
+   * The running download or install of `family` of `catalog`, for the progress ring of its
+   * item (E50.6): `phase` and, while the rescan counts its files, `done` of `total`. `null`
+   * while nothing runs for that family (the panel only choosing, done or failed included).
+   */
+  function progressOf(catalog: CatalogId, family: string): CatalogProgress | null {
+    for (const run of [download.value, install.value]) {
+      if (!run || run.catalog !== catalog || run.family.name !== family) continue;
+      if (run.phase !== 'downloading' && run.phase !== 'scanning') continue;
+      const scan = 'scan' in run ? run.scan : null;
+      return run.phase === 'scanning' && scan && scan.total > 0
+        ? { phase: run.phase, done: scan.done, total: scan.total }
+        : { phase: run.phase, done: null, total: null };
+    }
+    return null;
+  }
+
   /** Opens the "Download..." panel for a family of the open catalog. */
   function askDownload(family: CatalogFamily): void {
     const id = current.value?.id;
@@ -555,6 +580,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     setEnabled,
     download,
     downloading,
+    progressOf,
     askDownload,
     closeDownload,
     startDownload,

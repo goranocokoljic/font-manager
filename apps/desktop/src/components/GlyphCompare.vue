@@ -16,6 +16,7 @@ import { errorMessage, t } from '../i18n';
 import { codePointLabel } from '../glyphs/layout';
 import { useFaceLoader } from '../preview/faceLoader';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
+import UiIconButton from './ui/UiIconButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const compare = useGlyphCompareStore();
@@ -187,15 +188,13 @@ function onKeyDown(e: KeyboardEvent): void {
     >
       <header class="head">
         <h2 id="fm-compare-title">{{ t('glyphCompare.title', { codePoint: cpLabel }) }}</h2>
-        <button
-          type="button"
+        <UiIconButton
           class="close"
-          :aria-label="t('glyphCompare.close')"
+          icon="close"
+          :label="t('glyphCompare.close')"
           :title="t('glyphCompare.closeEsc')"
           @click="compare.close"
-        >
-          ×
-        </button>
+        />
       </header>
       <div class="controls">
         <div class="picker">
@@ -461,14 +460,9 @@ input[type='range']:focus-visible {
   font-weight: 600;
 }
 .close {
-  padding: 0 6px;
   border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
   background-color: var(--fm-bg);
   color: var(--fm-fg);
-  font: inherit;
-  font-size: 16px;
-  line-height: 1.4;
 }
 .stage {
   overflow: auto;

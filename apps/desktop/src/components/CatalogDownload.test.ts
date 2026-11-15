@@ -52,12 +52,13 @@ async function openFor(w: VueWrapper, family: string) {
 }
 
 describe('CatalogBrowser "Download..."', () => {
-  it('every row has a labelled "Download..." button that opens the panel on the source picker', async () => {
+  it('every row has a labelled download arrow that opens the panel on the source picker', async () => {
     const { w } = await opened();
     const button = row(w, 'Lato').get('[data-testid="catalog-download-open"]');
     expect(button.element.tagName).toBe('BUTTON');
-    expect(button.text()).toBe('Download…');
+    expect(button.text(), 'an icon button (E50.6)').toBe('');
     expect(button.attributes('aria-label')).toBe('Download Lato…');
+    expect(button.attributes('title')).toBe('Download Lato…');
     expect(panel(w).exists()).toBe(false);
 
     await openFor(w, 'Lato');
@@ -140,6 +141,14 @@ describe('CatalogBrowser "Download..."', () => {
       row(w, 'Lato').get('[data-testid="catalog-download-open"]').attributes('disabled'),
       'one download at a time',
     ).toBeDefined();
+    // E50.6: the downloading item shows its ring in the arrow's 28 px slot.
+    const lora = row(w, 'Lora');
+    expect(lora.find('[data-testid="catalog-download-open"]').exists()).toBe(false);
+    const ring = lora.get('[data-testid="catalog-progress"]');
+    expect(ring.attributes('role')).toBe('progressbar');
+    expect(ring.attributes('aria-label')).toBe('Downloading Lora…');
+    expect(ring.attributes('aria-valuenow'), 'no count while the files download').toBeUndefined();
+    expect(ring.element.parentElement?.classList.contains('slot')).toBe(true);
     await w.get('[data-testid="catalog-download"]').trigger('keydown', { key: 'Escape' });
     store.closeDownload();
     await flushPromises();

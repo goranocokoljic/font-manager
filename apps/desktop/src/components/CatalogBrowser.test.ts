@@ -253,30 +253,47 @@ describe('CatalogBrowser: Install (E22.7)', () => {
   const row = (w: VueWrapper, family: string) => w.get(`[data-family="${family}"]`);
   const status = (w: VueWrapper) => w.get('[data-testid="catalog-install-status"]').text();
 
-  it('every row, card and waterfall block has Install next to Download…', async () => {
+  // E50.6: the Install and Download… text buttons are icons — the activation dot installs,
+  // the download arrow opens the panel — each with its label as name and tooltip.
+  it('every row, card and waterfall block installs from its dot and downloads from an arrow', async () => {
     const { w } = await opened();
     for (const mode of ['list', 'grid', 'waterfall'] as const) {
       useViewsStore().setMode(CATALOG_VIEW, mode);
       await flushPromises();
-      const install = row(w, 'Lato').get('[data-testid="catalog-install-open"]');
-      expect(install.text(), mode).toBe('Install');
-      expect(install.attributes('aria-label')).toBe('Install Lato');
-      const next = install.element.nextElementSibling as HTMLElement;
-      expect(next.dataset.testid, 'Download… right after it').toBe('catalog-download-open');
+      const item = row(w, 'Lato');
+      const install = item.get('button[data-testid="activation-dot"]');
+      const label = 'Lato: not in the library. Click to install and activate it.';
+      expect(install.attributes('aria-label'), mode).toBe(label);
+      expect(install.attributes('title')).toBe(label);
+      const download = item.get('button[data-testid="catalog-download-open"]');
+      expect(download.classes()).toContain('ui-icon-button');
+      expect(download.text(), 'an icon, no text').toBe('');
+      expect(download.attributes('aria-label')).toBe('Download Lato…');
+      expect(download.attributes('title')).toBe('Download Lato…');
+      expect(
+        item.findAll('button').map((b) => b.text()),
+        'no text button is left',
+      ).toEqual(['', '']);
     }
   });
 
   it('installs at once with a folder set: the line follows it, both buttons off meanwhile', async () => {
     const { store, w } = await opened({ catalogDownloadMs: 30 });
     await useSettingsStore().update({ downloadFolder: '/Users/demo/Installed' });
-    await row(w, 'Inter').get('[data-testid="catalog-install-open"]').trigger('click');
+    await row(w, 'Inter').get('[data-testid="activation-dot"]').trigger('click');
     await flushPromises();
     expect(status(w)).toBe('Downloading Inter…');
     expect(w.get('[data-testid="catalog-install-status"]').attributes('role')).toBe('status');
     for (const b of w.findAll(
-      '[data-testid="catalog-install-open"], [data-testid="catalog-download-open"]',
+      '[data-testid="activation-dot"], [data-testid="catalog-download-open"]',
     ))
       expect(b.attributes('disabled'), 'every button is off').toBeDefined();
+    // The installing family's arrow gives its slot to the progress ring; the others keep it.
+    const ring = row(w, 'Inter').get('[data-testid="catalog-progress"]');
+    expect(ring.attributes('role')).toBe('progressbar');
+    expect(ring.attributes('aria-label')).toBe('Downloading Inter…');
+    expect(row(w, 'Inter').find('[data-testid="catalog-download-open"]').exists()).toBe(false);
+    expect(row(w, 'Lato').find('[data-testid="catalog-progress"]').exists()).toBe(false);
     expect(w.find('[data-testid="catalog-install-close"]').exists()).toBe(false);
 
     await new Promise((r) => setTimeout(r, 120));
@@ -286,20 +303,25 @@ describe('CatalogBrowser: Install (E22.7)', () => {
       count === 1 ? 'Installed Inter: 1 style active' : `Installed Inter: ${count} styles active`,
     );
     expect(
-      row(w, 'Inter').get('[data-testid="catalog-install-open"]').attributes('disabled'),
+      row(w, 'Inter').get('[data-testid="activation-dot"]').attributes('disabled'),
     ).toBeUndefined();
+    expect(
+      row(w, 'Inter').find('[data-testid="catalog-progress"]').exists(),
+      'done: the arrow is back',
+    ).toBe(false);
+    expect(row(w, 'Inter').find('[data-testid="catalog-download-open"]').exists()).toBe(true);
     await w.get('[data-testid="catalog-install-close"]').trigger('click');
     expect(w.find('[data-testid="catalog-install"]').exists()).toBe(false);
 
     // Again: nothing is downloaded, and the line says so.
-    await row(w, 'Inter').get('[data-testid="catalog-install-open"]').trigger('click');
+    await row(w, 'Inter').get('[data-testid="activation-dot"]').trigger('click');
     await flushPromises();
     expect(status(w)).toContain('Inter is already in your library, so nothing was downloaded');
   });
 
   it('the first Install proposes the folder; Use this folder saves it and installs', async () => {
     const { w } = await opened();
-    await row(w, 'Inter').get('[data-testid="catalog-install-open"]').trigger('click');
+    await row(w, 'Inter').get('[data-testid="activation-dot"]').trigger('click');
     await flushPromises();
     const line = w.get('[data-testid="catalog-install"]');
     expect(line.get('h2').text()).toBe('Where should installed fonts go?');
@@ -315,7 +337,7 @@ describe('CatalogBrowser: Install (E22.7)', () => {
   it('a refused install says why in an alert', async () => {
     const { w } = await opened();
     await useSettingsStore().update({ downloadFolder: '/System/Library/Fonts/Mine' });
-    await row(w, 'Lato').get('[data-testid="catalog-install-open"]').trigger('click');
+    await row(w, 'Lato').get('[data-testid="activation-dot"]').trigger('click');
     await flushPromises();
     const s = w.get('[data-testid="catalog-install-status"]');
     expect(s.attributes('role')).toBe('alert');

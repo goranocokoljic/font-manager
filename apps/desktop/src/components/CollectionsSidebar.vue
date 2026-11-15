@@ -450,6 +450,7 @@ const { folded, toggle } = useFolded('collections');
             >
             <span class="side-actions">
               <UiIconButton
+                size="sm"
                 class="more"
                 icon="more"
                 :label="t('collections.moreLabel', { name: row.collection.name })"

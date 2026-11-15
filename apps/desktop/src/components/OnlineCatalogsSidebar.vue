@@ -47,6 +47,7 @@ onMounted(() => void store.load());
         }}</span>
         <span v-if="!c.enabled" class="side-actions">
           <UiIconButton
+            size="sm"
             icon="power"
             :data-testid="`catalog-turn-on-${c.id}`"
             :label="t('catalogs.turnOnLabel', { name: c.name })"

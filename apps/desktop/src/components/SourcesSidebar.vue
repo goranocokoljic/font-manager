@@ -101,12 +101,14 @@ const { folded, toggle } = useFolded('sources');
           }}</span>
           <span v-if="source.kind !== 'system'" class="side-actions">
             <UiIconButton
+              size="sm"
               icon="rescan"
               :label="t('sources.rescanLabel', { name: folderName(source) })"
               :title="t('sources.rescan')"
               @click="store.rescan(source.id)"
             />
             <UiIconButton
+              size="sm"
               :icon="source.paused ? 'play' : 'pause'"
               :label="
                 source.paused
@@ -117,6 +119,7 @@ const { folded, toggle } = useFolded('sources');
               @click="store.setPaused(source.id, !source.paused)"
             />
             <UiIconButton
+              size="sm"
               icon="trash"
               :label="t('sources.removeLabel', { name: folderName(source) })"
               :title="t('sources.removeTitle')"

@@ -72,6 +72,7 @@ const { folded, toggle } = useFolded('sets');
             <span class="side-count count">{{ formatNumber(set.faces.length) }}</span>
           </button>
           <UiIconButton
+            size="sm"
             class="export"
             icon="export"
             :label="t('sets.exportLabel', { name: set.name })"
