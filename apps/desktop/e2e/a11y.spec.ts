@@ -394,7 +394,15 @@ async function violations(page: Page): Promise<string[]> {
 }
 
 const VIEW_MODES = ['List', 'Table', 'Grid', 'Waterfall', 'Layout'];
-const FAMILY_SECTIONS = ['Styles', 'Text', 'Characters', 'Features', 'Pairings', 'Info'] as const;
+const FAMILY_SECTIONS = [
+  'Styles',
+  'Text',
+  'Characters',
+  'Waterfall',
+  'Features',
+  'Pairings',
+  'Info',
+] as const;
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`WCAG 2.2 AA scan, ${colorScheme} theme`, () => {

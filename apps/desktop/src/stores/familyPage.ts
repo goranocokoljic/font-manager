@@ -29,6 +29,7 @@ export const FAMILY_SECTIONS = [
   'styles',
   'text',
   'characters',
+  'waterfall',
   'features',
   'pairings',
   'info',

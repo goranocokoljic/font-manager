@@ -25,3 +25,9 @@ export function waterfallRowPx(lineHeight: number): number {
     WATERFALL_SIZES.reduce((n, size) => n + waterfallLinePx(size, lineHeight), 0)
   );
 }
+
+/**
+ * The size ladder of the family page's Waterfall section (E50.10, board 2): ten sizes from
+ * 10 to 96 px, smallest first. The wall keeps its own six (`WATERFALL_SIZES`).
+ */
+export const FAMILY_WATERFALL_SIZES = [10, 12, 14, 17, 21, 28, 36, 48, 64, 96] as const;
