@@ -1335,6 +1335,89 @@
           ]
         }
       ]
+    },
+    {
+      "id": "E51",
+      "title": "After the designers' test, round two — watched folders, a consistent toolbar, no compact view",
+      "phase": 3,
+      "track": "ui",
+      "milestone": "After the designers' test",
+      "depends": [
+        "E50"
+      ],
+      "labels": [
+        "designers-test"
+      ],
+      "summary": "Five fixes from the second round of the designers' test. Fonts added to a source folder must appear by themselves: the watcher written in fm-core (debounced OS events, hourly rescan) is never started by the app, so it is wired in. The view switch starts with Lines. The size slider and the language picker are disabled, not hidden, wherever they have no effect, so the toolbar keeps its shape (E50.2) and never offers a control that does nothing. The compact density is removed from the interface. Duplicates are deliberately not in this epic; they get their own.",
+      "stories": [
+        {
+          "id": "E51.1",
+          "title": "Start the folder watcher: fonts added to a source appear by themselves",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "The library service starts `scanner::Watcher` when it opens and keeps it for its lifetime (the desktop app and the long-running MCP/endpoint host; the one-shot CLI does not); today the watcher is only ever started from tests",
+            "Adding, removing, pausing or resuming a source updates what is watched without a restart; a paused source is not watched and is rescanned when resumed, as `watch.rs` already specifies",
+            "Every `WatchUpdate` is applied to the index and emitted through the typed `Event` enum as a library change (families added, changed, removed), so the UI updates without polling; sidecar changes in an update are merged as the module describes",
+            "An integration test per platform copies a font into a watched fixture folder and sees it in `list_families` within 2 s, then deletes it and sees it gone; a second test proves a burst of 200 files lands as one refresh; the three-OS matrix must pass",
+            "The watcher only reads (ADR 0004, rule 2) and the idle-memory and cold-start budgets hold: the bench job records both with four watched folders"
+          ]
+        },
+        {
+          "id": "E51.2",
+          "title": "Watched folders in the UI: live list and a quiet notice",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E51.1"
+          ],
+          "criteria": [
+            "When the watcher adds fonts, the wall, Lines and Table lists update in place (E46.2's reflow, no scroll jump, the selection kept) and a toast in the toast corner (E48.6) says '<n> fonts added from <source>' with 'Show', which filters the wall to them; removals update the list without a toast",
+            "The Sources cards (E50.13) update their count and 'scanned just now' from the same events; the Watch switch maps to the source's paused flag and its label says 'Watching' or 'Paused'",
+            "Playwright on MockApi covers an emitted library-change event: the new family appears, the toast shows, 'Show' filters"
+          ]
+        },
+        {
+          "id": "E51.3",
+          "title": "View switch order: Lines first",
+          "size": "S",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "The view switch reads Lines · Wall · Table · Waterfall · Layout, in that order, everywhere it appears (`HomeView`'s `MODES`, the command palette's 'Show as' actions and their 1–5 shortcuts, which follow the same order)",
+            "The default view for a view that has no saved mode is unchanged; saved per-view modes are kept (the stored value is the mode's name, not its position)",
+            "Tests that assert the order are updated; the shortcut sheet lists the five in the new order"
+          ]
+        },
+        {
+          "id": "E51.4",
+          "title": "Size slider and language picker: disabled where they have no effect",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E51.3"
+          ],
+          "criteria": [
+            "One applicability table in a small module (`preview/applicability.ts`, unit-tested) decides both controls from the view mode and the preset; the components only read it. Size applies in Lines and Wall (and the list of the Layout split) for every preset except Paragraph, which is fixed at the body size; it does not apply in Table (the strip has its own size), Waterfall (a fixed ladder) or the Layout pane. Language applies only when the preset is Pangram; it does not apply to Word, your own text, Alphabet, Numerals, Paragraph or Letters, nor in the Layout pane",
+            "A control that does not apply is disabled, never hidden — the toolbar keeps its shape (E50.2): 40 % opacity, `aria-disabled`, not focusable by pointer, still reachable by keyboard so its tooltip can be read; the tooltip says why and what to do ('Size is fixed in Waterfall', 'Language applies to the Pangram preset — switch to Pangram')",
+            "The stored size and language are kept while disabled and apply again when the control does; nothing is reset",
+            "Vitest covers the table for all 5 × 7 combinations; Playwright checks the slider is disabled in Waterfall and Table and enabled in Lines and Wall, and the language picker enabled only in Pangram"
+          ]
+        },
+        {
+          "id": "E51.5",
+          "title": "Remove the compact density from the interface",
+          "size": "S",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "The density button leaves the toolbar, the density option leaves Settings, and the compact row and card styles, `list/density.ts`'s compact branch and the `density` icon are deleted; every list renders at the comfortable metrics",
+            "`fm-api` is not changed (rule 6, 'never remove a field'): `Settings.density` and `Density::Compact` stay in the contract and a stored `compact` is read without error and ignored by the UI; a test loads settings with `density: compact` and gets comfortable rows",
+            "The toolbar after this story is title · search · filter chips · view switch · compare · size, and E50.2's 'identical in every mode' test is updated to it; en and de strings for density are removed; no dead code or unused CSS is left (the lint job proves it)"
+          ]
+        }
+      ]
     }
   ]
 }
