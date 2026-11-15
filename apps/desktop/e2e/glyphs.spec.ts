@@ -31,22 +31,45 @@ const chip = (panel: Locator, name: string) =>
     .getByRole('group', { name: 'Blocks' })
     .getByRole('button', { name: new RegExp(`^${name} \\d`) });
 
-test('the grid draws the face at 26 px in twelve columns, virtualized', async ({ page }) => {
+/** The columns the CSS grid made, its cell size and the glyph's font size, from the first row. */
+const measureRow = (panel: Locator) =>
+  panel
+    .getByRole('row')
+    .first()
+    .evaluate((row) => {
+      const cell = row.querySelector('[role="gridcell"]')!;
+      const r = cell.getBoundingClientRect();
+      return {
+        tracks: getComputedStyle(row).gridTemplateColumns.split(' ').length,
+        width: r.width,
+        height: r.height,
+        font: parseFloat(getComputedStyle(cell.querySelector('.char')!).fontSize),
+      };
+    });
+
+test('the grid fills its rows with 88 px cells, glyphs at half the cell, virtualized', async ({
+  page,
+}) => {
   const panel = await openGlyphs(page);
   await expect(panel).toContainText('32,543 characters');
   await expect(panel.getByRole('rowheader')).toHaveCount(0);
-  await expect(grid(panel)).toHaveAttribute('aria-colcount', '12');
   // 30k+ characters, a few dozen cells in the DOM.
   const cells = await panel.getByRole('gridcell').count();
   expect(cells).toBeGreaterThan(10);
   expect(cells).toBeLessThan(400);
-  // Twelve to a row.
-  const firstRow = panel.getByRole('row').first().getByRole('gridcell');
-  await expect(firstRow).toHaveCount(12);
-  // The cells use the face's own font, loaded through the font URL, at 26 px.
+  // The CSS grid's auto-fill tracks are the columns the script counts; every cell is at
+  // least 88 px wide and square, and the glyph is half of it.
+  const cols = Number(await grid(panel).getAttribute('aria-colcount'));
+  const m = await measureRow(panel);
+  expect(m.tracks).toBe(cols);
+  await expect(panel.getByRole('row').first().getByRole('gridcell')).toHaveCount(cols);
+  expect(m.width).toBeGreaterThanOrEqual(88);
+  expect(m.width).toBeLessThan(88 * 2);
+  expect(Math.abs(m.height - m.width)).toBeLessThan(1.5);
+  expect(m.font).toBe(Math.round(m.height / 2));
+  // The cells use the face's own font, loaded through the font URL.
   const a = panel.getByRole('gridcell', { name: 'U+0041 A', exact: true });
   await expect(a.locator('.char')).toHaveCSS('font-family', /fm-face-1/);
-  await expect(a.locator('.char')).toHaveCSS('font-size', '26px');
   // Scrolling the page to the end renders the last rows, still not every cell.
   await scroller(page).evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect(panel.getByRole('gridcell', { name: /^U\+D7A3 / })).toBeAttached();
@@ -142,7 +165,8 @@ test('the arrow keys move the selection and the card follows; they do not change
   await expect(excl).toHaveAttribute('aria-selected', 'true');
   await expect(card(panel).getByLabel('Code', { exact: true })).toHaveText('U+0021');
   await page.keyboard.press('ArrowDown');
-  await expect(grid(panel)).toHaveAttribute('aria-activedescendant', 'fm-glyph-13');
+  const cols = Number(await grid(panel).getAttribute('aria-colcount'));
+  await expect(grid(panel)).toHaveAttribute('aria-activedescendant', `fm-glyph-${1 + cols}`);
   await expect(card(panel).getByLabel('Code', { exact: true })).not.toHaveText('U+0021');
   expect(page.url()).toBe(url);
   // Every key-reached cell is labelled with code point and name.

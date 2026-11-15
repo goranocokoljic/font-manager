@@ -31,10 +31,17 @@ async function mountWith(face: number | null) {
   return wrapper;
 }
 
+/** Mounts again in a fresh app that keeps the saved view preferences. */
+async function mountWithSaved(face: number) {
+  document.body.innerHTML = '';
+  return mountWith(face);
+}
+
 const card = (w: Awaited<ReturnType<typeof mountWith>>) => w.get('[aria-label="Selected glyph"]');
 
 beforeEach(() => {
   setClient(createMockClient({ cjkFaces: [1] }));
+  localStorage.clear();
   copyText.mockReset();
   copyText.mockResolvedValue(undefined);
 });
@@ -57,10 +64,80 @@ describe('the Characters section', () => {
     expect(Number(w.get('[role="grid"]').attributes('aria-rowcount'))).toBeGreaterThan(2500);
   });
 
-  it('always lays the characters out in twelve columns', async () => {
+  it('fills a row with 88 px cells by default, drawn at half the cell', async () => {
     const w = await mountWith(1);
-    expect(w.get('[role="grid"]').attributes('aria-colcount')).toBe('12');
-    expect(w.findAll('[role="row"]')[0]!.findAll('[role="gridcell"]')).toHaveLength(12);
+    // The fallback width (720 px) holds 8 cells of at least 88 px: 90 px each.
+    expect(w.get('[role="grid"]').attributes('aria-colcount')).toBe('8');
+    const row = w.findAll('[role="row"]')[0]!;
+    expect(row.findAll('[role="gridcell"]')).toHaveLength(8);
+    expect(row.attributes('style')).toContain('repeat(auto-fill, minmax(88px, 1fr))');
+    expect(row.attributes('style')).toContain('height: 90px');
+    expect(row.attributes('style')).toContain('font-size: 45px');
+  });
+
+  it('the cell slider changes the cell size, and the view remembers it', async () => {
+    const w = await mountWith(1);
+    const slider = w.get<HTMLInputElement>('[data-testid="glyph-cell-size"]');
+    expect(slider.attributes()).toMatchObject({ min: '48', max: '140', 'aria-label': 'Cell size' });
+    expect(slider.element.value).toBe('88');
+    await slider.setValue(48);
+    expect(w.get('[role="grid"]').attributes('aria-colcount')).toBe('15');
+    const row = w.findAll('[role="row"]')[0]!;
+    expect(row.findAll('[role="gridcell"]')).toHaveLength(15);
+    expect(row.attributes('style')).toContain('minmax(48px, 1fr)');
+    expect(row.attributes('style')).toContain('font-size: 24px');
+    w.unmount();
+    const again = await mountWithSaved(1);
+    expect(again.get('[role="grid"]').attributes('aria-colcount')).toBe('15');
+  });
+
+  it('draws the hairline grid by default, and the Grid switch turns it off and is remembered', async () => {
+    const w = await mountWith(1);
+    const grid = w.get('[role="grid"]');
+    const toggle = w.get('[data-testid="glyph-grid-lines"]');
+    expect(grid.classes()).toContain('lines');
+    expect(toggle.attributes('aria-checked')).toBe('true');
+    expect(toggle.attributes('aria-labelledby')).toBe('fm-glyph-lines');
+    await toggle.trigger('click');
+    expect(grid.classes()).not.toContain('lines');
+    expect(toggle.attributes('aria-checked')).toBe('false');
+    w.unmount();
+    const again = await mountWithSaved(1);
+    expect(again.get('[role="grid"]').classes()).not.toContain('lines');
+  });
+
+  it("puts each cell's code point at its corner, for hover", async () => {
+    const w = await mountWith(1);
+    const a = w.get('[role="gridcell"][aria-label="U+0041 A"]');
+    expect(a.get('.cp').text()).toBe('U+0041');
+    expect(a.get('.cp').attributes('aria-hidden')).toBe('true');
+  });
+
+  it("sizes the specimen from the face's ascender and descender, with four rulers", async () => {
+    const w = await mountWith(1);
+    // MockApi face 1: 1000 upm, ascender 900, descender -250, x-height 520; drawn at 96 px.
+    const box = w.get('[data-testid="glyph-specimen"]');
+    expect(box.attributes('style')).toContain('height: 110.4px');
+    expect(box.get('.strut').attributes('style')).toContain('height: 86.4px');
+    expect(box.get('.specimen-text').text()).toBe('Hamburgefonstiv gjpqy');
+    const rulers = box.findAll('[data-ruler]');
+    expect(rulers.map((r) => [r.attributes('data-ruler'), r.attributes('style')])).toEqual([
+      ['ascender', 'top: 0px;'],
+      ['xHeight', 'top: 36.48px;'],
+      ['baseline', 'top: 86.4px;'],
+      ['descender', 'top: 110.4px;'],
+    ]);
+    expect(rulers.map((r) => r.text())).toEqual(['ascender', 'x-height', 'baseline', 'descender']);
+  });
+
+  it('shows no specimen when the metrics cannot place it', async () => {
+    const w = await mountWith(1);
+    const detail = {
+      ...w.props('detail')!,
+      metrics: { unitsPerEm: 0, ascender: 0, descender: 0, xHeight: null, capHeight: null },
+    };
+    await w.setProps({ detail });
+    expect(w.find('[data-testid="glyph-specimen"]').exists()).toBe(false);
   });
 
   it('has a chip with its count for every block of the face', async () => {
@@ -97,7 +174,7 @@ describe('the Characters section', () => {
     const w = await mountWith(1);
     const a = w.get('[data-code-point="65"]');
     expect(a.attributes('aria-label')).toBe('U+0041 A');
-    expect(a.text()).toBe('A');
+    expect(a.get('.char').text()).toBe('A');
     expect(a.get('.char').attributes('style')).toContain('fm-test');
   });
 
@@ -118,7 +195,7 @@ describe('the Characters section', () => {
     expect(card(w).text()).toContain('U+0021');
     await grid.trigger('keydown', { key: 'ArrowDown' });
     await flushPromises();
-    expect(grid.attributes('aria-activedescendant')).toBe('fm-glyph-13');
+    expect(grid.attributes('aria-activedescendant')).toBe('fm-glyph-9'); // one row of 8 cells down
     await grid.trigger('keydown', { key: 'ArrowUp' });
     await flushPromises();
     expect(grid.attributes('aria-activedescendant')).toBe('fm-glyph-1');

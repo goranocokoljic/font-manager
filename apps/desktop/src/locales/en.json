@@ -952,7 +952,17 @@
     "replacedByNone": "No feature replaces this glyph.",
     "unregisteredFeature": "Unregistered feature",
     "featureTag": "feature tag",
-    "unicodeVersion": "Blocks from Unicode {version}."
+    "unicodeVersion": "Blocks from Unicode {version}.",
+    "cellSize": "Cell size",
+    "gridLines": "Grid",
+    "specimen": "Hamburgefonstiv gjpqy",
+    "specimenLabel": "Sample text with the face's vertical metrics",
+    "rulers": {
+      "ascender": "ascender",
+      "xHeight": "x-height",
+      "baseline": "baseline",
+      "descender": "descender"
+    }
   },
   "coverage": {
     "title": "Coverage",

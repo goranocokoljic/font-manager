@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // The Characters section of the family page (E42.5): every character the face maps, drawn by the
-// webview from the face's own file, in twelve columns. fm-core lists the characters, runs the
+// webview from the face's own file. The cells scale (E50.7): a row holds as many cells of at
+// least the slider's size as fit, they stretch to fill it, and the glyph is half its cell; a
+// hairline grid runs between them. Above the grid, a specimen line whose box comes from the
+// face's ascender and descender, with rulers. fm-core lists the characters, runs the
 // search and answers for the detail; this section lays them out. The grid has no scrollbar of its
 // own: it is as tall as its rows and the page scrolls it, so only the rows in the page's window
 // exist, and a CJK face with 30k+ characters scrolls like a Latin one.
@@ -15,12 +18,16 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch, watchEffec
 import type { FaceDetail, FaceId, FeatureInfo, GlyphInfo } from '../api/types';
 import { glyphAlternates, type GlyphAlternate } from '../glyphs/alternates';
 import {
-  GLYPH_COLUMNS,
+  CELL,
+  cellTemplate,
   codePointLabel,
+  glyphColumns,
+  glyphFontSize,
   glyphRowCount,
   glyphRowHeight,
   moveCursor,
   rowOf,
+  specimenBox,
 } from '../glyphs/layout';
 import { errorMessage, inlineKey, t } from '../i18n';
 import { windowRange } from '../list/virtual';
@@ -28,6 +35,7 @@ import { useAxesStore } from '../stores/axes';
 import { useCoverageStore } from '../stores/coverage';
 import { useFamilyPageStore } from '../stores/familyPage';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
+import { useGlyphGridStore } from '../stores/glyphGrid';
 import { useGlyphsStore } from '../stores/glyphs';
 import CopyValue from './CopyValue.vue';
 import GlyphCompare from './GlyphCompare.vue';
@@ -35,6 +43,7 @@ import FamilyTraits from './FamilyTraits.vue';
 import GlyphCoverage from './GlyphCoverage.vue';
 import UiChevron from './ui/UiChevron.vue';
 import UiIcon from './ui/UiIcon.vue';
+import UiSwitch from './ui/UiSwitch.vue';
 import { useCopy } from './useCopy';
 import { likeThisLabel } from '../search/like';
 import type { TraitTag } from '../search/traits';
@@ -62,12 +71,17 @@ const FALLBACK_HEIGHT = 384;
 const FALLBACK_WIDTH = 720;
 /** Room left between a revealed row and the edge of the window. */
 const REVEAL_MARGIN = 8;
+/** The view whose cell size and grid switch this section remembers. */
+const GRID_VIEW = 'family.characters';
+/** The specimen's font size, CSS px. */
+const SPECIMEN_PX = 96;
 
 const page = useFamilyPageStore();
 const axesSet = useAxesStore();
 const glyphs = useGlyphsStore();
 const compare = useGlyphCompareStore();
 const coverage = useCoverageStore();
+const gridSetup = useGlyphGridStore();
 const { status: copyStatus, copy } = useCopy();
 
 const faceId = computed(() => props.detail?.face.id ?? null);
@@ -101,7 +115,9 @@ function findScroller(el: HTMLElement): HTMLElement | null {
 function measure(): void {
   const el = grid.value;
   if (!el) return;
-  if (el.clientWidth > 0) width.value = el.clientWidth;
+  // The fractional width, as the CSS grid's auto-fill counts its tracks from it.
+  const w = el.getBoundingClientRect().width || el.clientWidth;
+  if (w > 0) width.value = w;
   const s = scroller.value;
   if (!s || s.clientHeight <= 0) return;
   height.value = s.clientHeight;
@@ -130,8 +146,24 @@ watch(
 );
 onBeforeUnmount(detach);
 
-const rowHeight = computed(() => glyphRowHeight(width.value));
-const rowCount = computed(() => glyphRowCount(glyphs.total));
+const cell = computed(() => gridSetup.settingsFor(GRID_VIEW).cell);
+const lines = computed(() => gridSetup.settingsFor(GRID_VIEW).lines);
+const columns = computed(() => glyphColumns(width.value, cell.value));
+const rowHeight = computed(() => glyphRowHeight(width.value, columns.value));
+const rowCount = computed(() => glyphRowCount(glyphs.total, columns.value));
+const rowStyle = computed(() => ({
+  gridTemplateColumns: cellTemplate(cell.value),
+  fontSize: `${glyphFontSize(rowHeight.value)}px`,
+}));
+function slideCell(e: Event): void {
+  gridSetup.update(GRID_VIEW, { cell: (e.target as HTMLInputElement).valueAsNumber });
+}
+function toggleLines(): void {
+  gridSetup.update(GRID_VIEW, { lines: !lines.value });
+}
+
+/** The specimen's box and rulers; null until the face's metrics are known (or when unusable). */
+const specimen = computed(() => specimenBox(props.detail?.metrics, SPECIMEN_PX));
 const range = computed(() =>
   windowRange(scrollTop.value, height.value, rowHeight.value, props.overscan, rowCount.value),
 );
@@ -143,8 +175,8 @@ const cellId = (i: number) => `fm-glyph-${i}`;
 const visible = computed(() => {
   const rows = [];
   for (let r = range.value.start; r < range.value.end; r++) {
-    const first = r * GLYPH_COLUMNS;
-    const count = Math.min(GLYPH_COLUMNS, glyphs.total - first);
+    const first = r * columns.value;
+    const count = Math.min(columns.value, glyphs.total - first);
     rows.push({
       r,
       cells: Array.from({ length: count }, (_, c) => ({
@@ -159,8 +191,8 @@ const visible = computed(() => {
 // Load the pages of the rows on screen.
 watchEffect(() => {
   void glyphs.ensure(
-    range.value.start * GLYPH_COLUMNS,
-    Math.min(range.value.end * GLYPH_COLUMNS, glyphs.total),
+    range.value.start * columns.value,
+    Math.min(range.value.end * columns.value, glyphs.total),
   );
 });
 
@@ -174,7 +206,7 @@ const charOf = (g: GlyphInfo) => String.fromCodePoint(g.codePoint);
 const activeId = computed(() => {
   const i = cursor.value;
   if (i < 0) return undefined;
-  const r = rowOf(i);
+  const r = rowOf(i, columns.value);
   return r >= range.value.start && r < range.value.end ? cellId(i) : undefined;
 });
 
@@ -182,7 +214,7 @@ const activeId = computed(() => {
 async function reveal(i: number): Promise<void> {
   const el = grid.value;
   const s = scroller.value;
-  const row = rowOf(i) * rowHeight.value;
+  const row = rowOf(i, columns.value) * rowHeight.value;
   if (el && s && s.clientHeight > 0) {
     const top = s.scrollTop + el.getBoundingClientRect().top - s.getBoundingClientRect().top + row;
     if (top < s.scrollTop) s.scrollTop = top - REVEAL_MARGIN;
@@ -234,7 +266,7 @@ async function onKeyDown(e: KeyboardEvent): Promise<void> {
     return;
   }
   // Left/Right follow what the user sees: the grid runs from the right in RTL chrome.
-  const next = moveCursor(glyphs.total, Math.max(cursor.value, 0), inlineKey(e.key));
+  const next = moveCursor(glyphs.total, Math.max(cursor.value, 0), inlineKey(e.key), columns.value);
   if (next === null) return;
   e.preventDefault();
   const to = cursor.value < 0 && e.key !== 'Home' && e.key !== 'End' ? 0 : next;
@@ -387,6 +419,58 @@ const noResults = computed(
             <span class="chip-count">{{ b.count }}</span>
           </button>
         </div>
+        <span class="grid-controls">
+          <span class="cell-size">
+            <span class="small" aria-hidden="true">{{ t('preview.sizeGlyph') }}</span>
+            <input
+              type="range"
+              data-testid="glyph-cell-size"
+              :aria-label="t('glyphs.cellSize')"
+              :min="CELL.min"
+              :max="CELL.max"
+              :step="CELL.step"
+              :value="cell"
+              @input="slideCell"
+            />
+            <span class="large" aria-hidden="true">{{ t('preview.sizeGlyph') }}</span>
+          </span>
+          <span class="switch">
+            <span id="fm-glyph-lines" aria-hidden="true">{{ t('glyphs.gridLines') }}</span>
+            <UiSwitch
+              :checked="lines"
+              aria-labelledby="fm-glyph-lines"
+              data-testid="glyph-grid-lines"
+              @click="toggleLines"
+            />
+          </span>
+        </span>
+      </div>
+      <div
+        v-if="specimen"
+        class="specimen"
+        data-testid="glyph-specimen"
+        role="img"
+        :aria-label="t('glyphs.specimenLabel')"
+        :style="{ height: `${specimen.height}px` }"
+      >
+        <span
+          v-for="r in specimen.rulers"
+          :key="r.id"
+          class="ruler"
+          :class="r.id"
+          :data-ruler="r.id"
+          :style="{ top: `${r.top}px` }"
+        >
+          <span class="ruler-label">{{ t(`glyphs.rulers.${r.id}`) }}</span>
+        </span>
+        <div class="specimen-line" :style="{ fontSize: `${SPECIMEN_PX}px` }">
+          <span class="strut" :style="{ height: `${specimen.baseline}px` }" /><span
+            class="specimen-text"
+            :class="{ loading: !faceStyle }"
+            :style="faceStyle"
+            >{{ t('glyphs.specimen') }}</span
+          >
+        </div>
       </div>
       <p v-if="broken" class="placeholder" role="status">
         {{ t('glyphs.broken', { reason: broken }) }}
@@ -403,11 +487,12 @@ const noResults = computed(
       <div
         ref="grid"
         class="grid"
+        :class="{ lines }"
         role="grid"
         data-keeps-arrows
         :aria-label="t('glyphs.grid')"
         :aria-rowcount="rowCount"
-        :aria-colcount="GLYPH_COLUMNS"
+        :aria-colcount="columns"
         :aria-activedescendant="activeId"
         tabindex="0"
         @keydown="onKeyDown"
@@ -419,7 +504,11 @@ const noResults = computed(
             role="row"
             class="row"
             :aria-rowindex="v.r + 1"
-            :style="{ transform: `translateY(${v.r * rowHeight}px)`, height: `${rowHeight}px` }"
+            :style="{
+              ...rowStyle,
+              transform: `translateY(${v.r * rowHeight}px)`,
+              height: `${rowHeight}px`,
+            }"
           >
             <div
               v-for="c in v.cells"
@@ -442,6 +531,9 @@ const noResults = computed(
                 aria-hidden="true"
                 >{{ charOf(c.glyph) }}</span
               >
+              <span v-if="c.glyph" class="cp" aria-hidden="true">{{
+                codePointLabel(c.glyph.codePoint)
+              }}</span>
             </div>
           </div>
         </div>
@@ -656,27 +748,47 @@ const noResults = computed(
   top: 0;
   inset-inline: 0;
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* grid-template-columns and font-size come from the cell slider (rowStyle). */
 }
 .cell {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   box-sizing: border-box;
-  border: 2px solid transparent;
-  background-clip: padding-box;
   border-radius: var(--fm-radius-md);
-  font-size: 26px;
   cursor: default;
   transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+/* The hairline grid: 0.5 px at 7 % ink between cells, square so the lines meet. */
+.grid.lines .cell {
+  border-inline-end: 0.5px solid color-mix(in srgb, var(--fm-fg) 7%, transparent);
+  border-block-end: 0.5px solid color-mix(in srgb, var(--fm-fg) 7%, transparent);
+  border-radius: 0;
 }
 .cell:hover {
   background-color: var(--fm-hover);
 }
+/* An inset ring, so the selection does not move the hairlines. */
 .cell[aria-selected='true'] {
-  border-color: var(--fm-accent);
+  box-shadow: inset 0 0 0 2px var(--fm-accent);
   background-color: color-mix(in srgb, var(--fm-accent) 12%, transparent);
+}
+/* The code point at the corner of the hovered cell. */
+.cp {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 4px;
+  color: var(--fm-muted);
+  font-family: var(--fm-font-mono);
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+.cell:hover .cp {
+  opacity: 1;
 }
 .grid:focus-visible .cell.cursor {
   outline: 2px solid var(--fm-accent);
@@ -687,6 +799,71 @@ const noResults = computed(
 }
 .char {
   line-height: 1;
+}
+.grid-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-4);
+  margin-inline-start: auto;
+}
+.cell-size,
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-2);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.cell-size .small {
+  font-size: var(--fm-text-xs);
+}
+.cell-size .large {
+  font-size: var(--fm-text-lg);
+}
+.cell-size input {
+  width: 96px;
+  accent-color: var(--fm-accent);
+}
+.cell-size input:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+/* The specimen: its box is the face's ascender to its descender, so descenders stay in it. */
+.specimen {
+  position: relative;
+  margin-block: var(--fm-space-3);
+}
+.ruler {
+  position: absolute;
+  inset-inline: 0;
+  height: 0;
+  border-block-start: 1px dashed color-mix(in srgb, var(--fm-fg) 12%, transparent);
+  pointer-events: none;
+}
+.ruler.baseline {
+  border-block-start-style: solid;
+  border-block-start-color: color-mix(in srgb, var(--fm-fg) 20%, transparent);
+}
+.ruler-label {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-end: 2px;
+  color: var(--fm-muted);
+  font-size: 10px;
+  line-height: 1;
+}
+/* line-height 0: the strut alone sets the line's top, so the baseline lands on its bottom. */
+.specimen-line {
+  position: relative;
+  overflow-x: clip;
+  margin-inline-end: 72px;
+  line-height: 0;
+  white-space: nowrap;
+}
+.strut {
+  display: inline-block;
+  width: 0;
+  vertical-align: baseline;
 }
 /* Sticks while the window is tall enough to show the card and the page above it. */
 .card {

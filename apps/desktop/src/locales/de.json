@@ -952,7 +952,17 @@
     "replacedByNone": "Kein Feature ersetzt diese Glyphe.",
     "unregisteredFeature": "Nicht registriertes Feature",
     "featureTag": "Feature-Tag",
-    "unicodeVersion": "Blöcke aus Unicode {version}."
+    "unicodeVersion": "Blöcke aus Unicode {version}.",
+    "cellSize": "Zellengröße",
+    "gridLines": "Raster",
+    "specimen": "Hamburgefonstiv gjpqy",
+    "specimenLabel": "Mustertext mit den vertikalen Maßen der Schrift",
+    "rulers": {
+      "ascender": "Oberlänge",
+      "xHeight": "x-Höhe",
+      "baseline": "Grundlinie",
+      "descender": "Unterlänge"
+    }
   },
   "coverage": {
     "title": "Abdeckung",
