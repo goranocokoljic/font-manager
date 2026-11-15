@@ -35,8 +35,9 @@ your team, read [Shared libraries](shared-libraries.md).
   that letter and that shape chosen. Your other filters stay.
 - To find fonts with a letter like one you see, point to a card in **Letters** and click
   the letter above its preview (**Fonts with an R like this**), or press `L` for the
-  first letter of the card you are on. On a family's page, select a character in
-  **Characters** and choose the same button. The list is then sorted by how close each
+  first letter of the card you are on. On a family's page, right-click a character in
+  **Characters** and choose the same item (it is also under **More details** in the
+  character's details). The list is then sorted by how close each
   font's letter is to that one, closest first. The line above the list says **Sorted by
   R like Inter**. Your filters stay. Click the **R like Inter** button to remove the sort:
   the list goes back to the sort it had before.

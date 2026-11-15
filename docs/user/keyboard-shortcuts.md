@@ -144,6 +144,8 @@ Press `Tab` to go from the sidebar to the font list. On the family page, `Tab` m
 between the sections and their controls, and `Left` and `Right` go to the previous or
 next family. `Esc` goes back to the list. On a feature switch, `Space` turns the feature on or off.
 In the glyph grid, the arrow keys move from character to character, `Home` and `End`
-go to the first and the last character, and `Enter` selects the character.
+go to the first and the last character, and `Enter` opens the details of the character.
+`Esc` closes the details. `Shift+F10` or the `Menu` key opens the menu of the character.
+When the **Details on click** switch is off, the details are in this menu.
 Letter and number keys also work on keyboards for other alphabets, for example
 Cyrillic or Greek.
