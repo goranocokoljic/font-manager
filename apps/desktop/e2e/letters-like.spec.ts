@@ -115,7 +115,7 @@ test('L on the cursor card sorts by its first letter', async ({ page }) => {
   await expect(wall).toBeFocused();
 });
 
-test("the Characters glyph card's 'Fonts with an R like this' goes back to the wall sorted", async ({
+test("the Characters glyph popover's 'Fonts with an R like this' goes back to the wall sorted", async ({
   page,
 }) => {
   const wall = await openWall(page);
@@ -125,7 +125,10 @@ test("the Characters glyph card's 'Fonts with an R like this' goes back to the w
   await expect(page).toHaveURL(/#\/family\//);
   const panel = await showSection(page, 'Characters');
   await panel.locator('[data-code-point="82"]').click();
-  await panel.getByRole('button', { name: 'Fonts with an R like this' }).click();
+  // The action sits under the glyph popover's More details (E50.9).
+  const detail = panel.getByRole('dialog', { name: 'Selected glyph' });
+  await detail.getByRole('button', { name: 'More details' }).click();
+  await detail.getByRole('button', { name: 'Fonts with an R like this' }).click();
 
   await expect(page).not.toHaveURL(/family/);
   await expect(wall).toBeVisible();

@@ -1,0 +1,18 @@
+{
+  "id": "a-jsdom-focus-return-test-must-first-focus-the-element-being",
+  "title": "A jsdom focus-return test must first focus the element being activated",
+  "category": "testing",
+  "rule": "When a component test asserts that focus returns somewhere (the grid, a trigger button) after a control is clicked, first call `.focus()` on that control and assert it is `document.activeElement`. `trigger('click')` does not move focus in jsdom and `document.body.focus()` is a no-op, so an element that was already focused stays focused and the test passes even with the refocus code removed. Check that the test fails without the refocus call.",
+  "rationale": "E50.9 (#580): the popover close-button test passed without `grid.focus()` in `closeDetail`, because the cell click had already focused the grid.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    580
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-11-15T09:39:34.653Z",
+  "last_seen": "2026-11-15T09:39:34.653Z"
+}

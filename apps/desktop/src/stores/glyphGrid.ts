@@ -11,9 +11,15 @@ export interface GlyphGridSettings {
   cell: number;
   /** The hairline grid between cells. */
   lines: boolean;
+  /** A click on a cell opens the glyph popover (E50.9); off, a click only selects it. */
+  details: boolean;
 }
 
-export const DEFAULT_GLYPH_GRID: GlyphGridSettings = { cell: CELL.default, lines: true };
+export const DEFAULT_GLYPH_GRID: GlyphGridSettings = {
+  cell: CELL.default,
+  lines: true,
+  details: true,
+};
 
 /** A saved setup, repaired: a bad or missing field takes its default. */
 export function normalizeGlyphGrid(raw: unknown): GlyphGridSettings {
@@ -21,6 +27,7 @@ export function normalizeGlyphGrid(raw: unknown): GlyphGridSettings {
   return {
     cell: clampCell(r.cell),
     lines: typeof r.lines === 'boolean' ? r.lines : DEFAULT_GLYPH_GRID.lines,
+    details: typeof r.details === 'boolean' ? r.details : DEFAULT_GLYPH_GRID.details,
   };
 }
 
@@ -46,7 +53,8 @@ function readSaved(): Record<string, GlyphGridSettings> {
 
 /**
  * The cell size and grid switch of each view that shows a glyph grid, remembered across
- * restarts. A view that never changed them gets the defaults (88 px cells, grid on).
+ * restarts. A view that never changed them gets the defaults (88 px cells, grid on,
+ * details on click).
  */
 export const useGlyphGridStore = defineStore('glyphGrid', () => {
   const saved = reactive<Record<string, GlyphGridSettings>>(readSaved());

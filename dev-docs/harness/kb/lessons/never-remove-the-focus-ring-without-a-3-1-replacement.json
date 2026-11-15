@@ -1,0 +1,19 @@
+{
+  "id": "never-remove-the-focus-ring-without-a-3-1-replacement",
+  "title": "Never remove the focus ring without a 3:1 replacement",
+  "category": "accessibility",
+  "rule": "In a component's `:focus-visible` rule, do not set `outline: none` (or 0) to replace the global 2 px accent ring with a background tint. A hover tint such as `--fm-hover` is about 1.1:1, far under the 3:1 a focus indicator needs. Keep the global ring (use a negative `outline-offset` when a clipping parent would cut it) or draw your own 2 px accent ring, and add a contrast.test.ts check that the rule never sets `outline: none|0`.",
+  "rationale": "E50.9 (#580): the Characters cell context menu set `outline: none` on its focused item, so keyboard users saw only a faint hover tint.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    580
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/styles/**"
+  ],
+  "first_seen": "2026-11-15T09:39:34.653Z",
+  "last_seen": "2026-11-15T09:39:34.653Z"
+}

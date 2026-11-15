@@ -25,7 +25,8 @@ async function openGlyphs(page: Page, { cjk = true } = {}) {
 
 const scroller = (page: Page) => page.locator('main.scroll');
 const grid = (panel: Locator) => panel.getByRole('grid', { name: 'Glyphs' });
-const card = (panel: Locator) => panel.getByRole('region', { name: 'Selected glyph' });
+const card = (panel: Locator) => panel.getByRole('dialog', { name: 'Selected glyph' });
+const more = (panel: Locator) => card(panel).getByRole('button', { name: 'More details' }).click();
 const chip = (panel: Locator, name: string) =>
   panel
     .getByRole('group', { name: 'Blocks' })
@@ -101,21 +102,42 @@ test('no inner scrollbars: the grid grows with the page', async ({ page }) => {
   expect(inner).toBe(0);
 });
 
-test('the detail card is sticky on a tall window, and not on a short one', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  const panel = await openGlyphs(page);
-  await panel.getByRole('gridcell', { name: 'U+0041 A', exact: true }).click();
+test('a click opens a 360 px popover beside its cell; outside it closes, focus on the grid', async ({
+  page,
+}) => {
+  const panel = await openGlyphs(page, { cjk: false });
+  const cell = panel.getByRole('gridcell', { name: 'U+0041 A', exact: true });
+  await cell.click();
   await expect(card(panel)).toBeVisible();
-  await scroller(page).evaluate((el) => (el.scrollTop = 6000));
-  await expect(card(panel)).toBeInViewport();
-  const top = await card(panel).evaluate((el) => el.getBoundingClientRect().top);
-  await scroller(page).evaluate((el) => (el.scrollTop = 9000));
-  await expect
-    .poll(() => card(panel).evaluate((el) => el.getBoundingClientRect().top))
-    .toBeCloseTo(top, 0);
+  const c = await cell.boundingBox();
+  const p = await card(panel).boundingBox();
+  expect(Math.round(p!.width)).toBe(360);
+  expect(Math.abs(p!.y - c!.y)).toBeLessThan(2);
+  // Beside the cell, not over it.
+  expect(p!.x >= c!.x + c!.width || p!.x + p!.width <= c!.x).toBe(true);
+  await panel.getByTestId('glyph-specimen').click();
+  await expect(card(panel)).toBeHidden();
+  await expect(grid(panel)).toBeFocused();
+  await expect(grid(panel)).toHaveAttribute(
+    'aria-activedescendant',
+    (await cell.getAttribute('id'))!,
+  );
+});
 
-  await page.setViewportSize({ width: 1280, height: 700 });
-  await expect(card(panel)).toHaveCSS('position', 'static');
+test("'Details on click' off: a click selects only; the context menu opens the detail", async ({
+  page,
+}) => {
+  const panel = await openGlyphs(page, { cjk: false });
+  await panel.getByRole('switch', { name: 'Details on click' }).click();
+  const cell = panel.getByRole('gridcell', { name: 'U+0061 a', exact: true });
+  await cell.click();
+  await expect(cell).toHaveAttribute('aria-selected', 'true');
+  await expect(card(panel)).toBeHidden();
+  await cell.click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: 'Actions for U+0061' });
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(card(panel).getByTestId('glyph-code')).toHaveText('U+0061');
 });
 
 test('a chip lists its block with its count, and a second press lists every block', async ({
@@ -136,7 +158,7 @@ test('a search takes a character, a code point or a glyph name', async ({ page }
   const field = panel.getByRole('searchbox', { name: 'Search glyphs' });
   for (const query of ['Ж', 'U+0416', 'uni0416']) {
     await field.fill(query);
-    await expect(card(panel).getByLabel('Code', { exact: true })).toHaveText('U+0416');
+    await expect(card(panel).getByTestId('glyph-code')).toHaveText('U+0416');
     await field.fill('');
   }
   await field.fill('nothing like this');
@@ -149,7 +171,7 @@ test('search by code point scrolls the page to the glyph and selects it', async 
   const cell = panel.getByRole('gridcell', { name: /^U\+AC01 / });
   await expect(cell).toBeInViewport();
   await expect(cell).toHaveAttribute('aria-selected', 'true');
-  await expect(card(panel).getByLabel('Code', { exact: true })).toHaveText('U+AC01');
+  await expect(card(panel).getByTestId('glyph-code')).toHaveText('U+AC01');
 });
 
 test('the arrow keys move the selection and the card follows; they do not change the family', async ({
@@ -163,11 +185,13 @@ test('the arrow keys move the selection and the card follows; they do not change
   await expect(grid(panel)).toHaveAttribute('aria-activedescendant', 'fm-glyph-1');
   const excl = panel.getByRole('gridcell', { name: 'U+0021 uni0021' });
   await expect(excl).toHaveAttribute('aria-selected', 'true');
-  await expect(card(panel).getByLabel('Code', { exact: true })).toHaveText('U+0021');
+  await expect(card(panel)).toBeHidden();
+  await page.keyboard.press('Enter');
+  await expect(card(panel).getByTestId('glyph-code')).toHaveText('U+0021');
   await page.keyboard.press('ArrowDown');
   const cols = Number(await grid(panel).getAttribute('aria-colcount'));
   await expect(grid(panel)).toHaveAttribute('aria-activedescendant', `fm-glyph-${1 + cols}`);
-  await expect(card(panel).getByLabel('Code', { exact: true })).not.toHaveText('U+0021');
+  await expect(card(panel).getByTestId('glyph-code')).not.toHaveText('U+0021');
   expect(page.url()).toBe(url);
   // Every key-reached cell is labelled with code point and name.
   await page.keyboard.press('End');
@@ -183,19 +207,21 @@ test('the arrow keys move the selection and the card follows; they do not change
   await expect(excl).toHaveAttribute('aria-selected', 'false');
 });
 
-test('the card shows the glyph at 160 px with name, code, styles and live alternates', async ({
+test('the popover shows the glyph at 92 px with code, names, feature chips, styles and live alternates', async ({
   page,
 }) => {
   const panel = await openGlyphs(page, { cjk: false });
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0061');
   const detail = card(panel);
-  await expect(detail.getByLabel('Code', { exact: true })).toHaveText('U+0061');
-  await expect(detail.getByLabel('Name', { exact: true })).toHaveText('a');
-  await expect(detail.getByLabel('In styles', { exact: true })).toHaveText('all 4');
+  await expect(detail.getByTestId('glyph-code')).toHaveText('U+0061');
+  await expect(detail.getByTestId('glyph-names')).toHaveText('LATIN SMALL LETTER A · glyph a');
+  await expect(detail.getByRole('list', { name: 'Features' })).toContainText('ss01');
   const big = detail.getByTestId('glyph-big');
-  await expect(big).toHaveCSS('font-size', '160px');
+  await expect(big).toHaveCSS('font-size', '92px');
   await expect(big).toHaveCSS('font-family', /fm-face-1/);
   await expect(big).toHaveText('a');
+  await more(panel);
+  await expect(detail.getByLabel('In styles', { exact: true })).toHaveText('all 4');
   const alternate = detail.getByRole('list', { name: 'Alternates' }).getByRole('listitem').first();
   await expect(alternate).toContainText('Stylistic set 1');
   await expect(alternate.locator('.alternate-char')).toHaveCSS('font-feature-settings', /"ss01"/);
@@ -204,6 +230,7 @@ test('the card shows the glyph at 160 px with name, code, styles and live altern
 test('the card draws the axis ends of the glyph live', async ({ page }) => {
   const panel = await openGlyphs(page, { cjk: false });
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0041');
+  await more(panel);
   const list = card(panel).getByRole('list', { name: 'Alternates' });
   for (const value of [100, 900])
     await expect(
@@ -218,31 +245,28 @@ test('End on a long list selects the last character, and the card follows', asyn
   const panel = await openGlyphs(page);
   await grid(panel).focus();
   await page.keyboard.press('End');
-  await expect(card(panel).getByLabel('Code', { exact: true })).toHaveText('U+D7A3');
+  await page.keyboard.press('Enter');
+  await expect(card(panel).getByTestId('glyph-code')).toHaveText('U+D7A3');
   await expect(panel.getByRole('gridcell', { name: /^U\+D7A3 / })).toHaveAttribute(
     'aria-selected',
     'true',
   );
 });
 
-test('Tab reaches the card; Escape closes it and returns to the grid', async ({ page }) => {
+test('Tab reaches the popover; Escape closes it and returns to the grid', async ({ page }) => {
   const panel = await openGlyphs(page, { cjk: false });
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0061');
   const detail = card(panel);
   await expect(detail).toBeVisible();
-  // The coverage list comes after the grid in its column, so start from the card's first button.
-  await detail.getByRole('button', { name: 'Copy glyph' }).focus();
+  await detail.getByRole('button', { name: 'Close glyph details' }).focus();
   await page.keyboard.press('Tab');
-  await expect(detail.getByRole('button', { name: 'Compare with…' })).toBeFocused();
-  await page.keyboard.press('Tab');
-  // 'Fonts with an a like this' (E49.9) is the card's next action.
-  await expect(detail.getByTestId('glyph-like')).toBeFocused();
-  await page.keyboard.press('Tab');
-  const more = detail.getByRole('button', { name: 'More details' });
-  await expect(more).toBeFocused();
+  await expect(detail.getByRole('button', { name: 'Copy feature tag: smcp' })).toBeFocused();
+  const moreButton = detail.getByRole('button', { name: 'More details' });
+  await moreButton.focus();
   await page.keyboard.press('Enter');
-  await expect(detail.getByLabel('Advance width', { exact: true })).toHaveText(/^\d[\d,]* units$/);
-  await expect(detail.getByRole('list', { name: 'Replaced by' })).toContainText('Small capitals');
+  await expect(detail.getByLabel('Block', { exact: true })).toHaveText('Basic Latin');
+  // No metric without a comparison.
+  await expect(detail).not.toContainText(/advance|units/i);
   await page.keyboard.press('Escape');
   await expect(detail).toBeHidden();
   await expect(grid(panel)).toBeFocused();
@@ -254,6 +278,7 @@ test('Copy glyph puts the character on the clipboard', async ({ page, context, b
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const panel = await openGlyphs(page, { cjk: false });
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0416');
+  await more(panel);
   await card(panel).getByRole('button', { name: 'Copy glyph' }).click();
   await expect(card(panel)).toContainText('Copied');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Ж');

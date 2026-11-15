@@ -2014,6 +2014,8 @@ fn the_glyph_detail_matches_the_glyph_map_and_names_features() {
     let advance = a.advance_width.unwrap() as i32;
     assert_eq!(a.left_side_bearing, Some(b.x_min));
     assert_eq!(a.right_side_bearing, Some(advance - b.x_max));
+    // E50.9: the Unicode name of the character.
+    assert_eq!(a.unicode_name.as_deref(), Some("LATIN SMALL LETTER A"));
     let tags: Vec<_> = a.replaced_by.iter().map(|f| f.tag.as_str()).collect();
     assert_eq!(tags, ["smcp", "ss01"]);
     assert!(a.replaced_by.iter().all(|f| f.name.is_some()));

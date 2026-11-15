@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient } from '../api/mock';
 import type { FaceDetail } from '../api/types';
+import { setFaceLoader, type FaceLoader } from '../preview/faceLoader';
 import { useAxesStore } from '../stores/axes';
 import { useFamilyPageStore } from '../stores/familyPage';
 import { STYLE_COUNT_DELAY, useGlyphsStore } from '../stores/glyphs';
@@ -37,7 +38,27 @@ async function mountWithSaved(face: number) {
   return mountWith(face);
 }
 
-const card = (w: Awaited<ReturnType<typeof mountWith>>) => w.get('[aria-label="Selected glyph"]');
+type Wrapper = Awaited<ReturnType<typeof mountWith>>;
+const card = (w: Wrapper) => w.get('[aria-label="Selected glyph"]');
+const hasCard = (w: Wrapper) => w.find('[aria-label="Selected glyph"]').exists();
+
+/** Opens the popover's 'More details'. */
+async function openMore(w: Wrapper) {
+  await card(w)
+    .findAll('button')
+    .find((b) => b.text() === 'More details')!
+    .trigger('click');
+}
+
+/** Picks JetBrains Mono (face 6) to compare with, as the overlay's picker does. */
+async function compareWithMono() {
+  const compare = useGlyphCompareStore();
+  await compare.start(1, 97);
+  await compare.pickFace(6);
+  compare.close();
+  await flushPromises();
+  return compare;
+}
 
 beforeEach(() => {
   setClient(createMockClient({ cjkFaces: [1] }));
@@ -47,6 +68,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   setClient(undefined);
+  setFaceLoader(undefined);
   document.body.innerHTML = '';
 });
 
@@ -215,7 +237,7 @@ describe('the Characters section', () => {
     expect(w.get('[data-code-point="65"] .char').classes()).toContain('loading');
   });
 
-  it('the arrow keys move the cursor and the card follows', async () => {
+  it('the arrow keys move the cursor, Enter opens the popover and it follows', async () => {
     const w = await mountWith(1);
     const grid = w.get('[role="grid"]');
     await grid.trigger('keydown', { key: 'ArrowRight' });
@@ -223,6 +245,9 @@ describe('the Characters section', () => {
     await flushPromises();
     expect(grid.attributes('aria-activedescendant')).toBe('fm-glyph-1');
     expect(w.get('#fm-glyph-1').attributes('aria-selected')).toBe('true');
+    expect(hasCard(w)).toBe(false);
+    await grid.trigger('keydown', { key: 'Enter' });
+    await flushPromises();
     expect(card(w).text()).toContain('U+0021');
     await grid.trigger('keydown', { key: 'ArrowDown' });
     await flushPromises();
@@ -277,6 +302,7 @@ describe('the Characters section', () => {
     const zhe = w.get('[data-code-point="1046"]');
     expect(zhe.attributes('aria-selected')).toBe('true');
     expect(w.get('[role="grid"]').attributes('aria-activedescendant')).toBe(zhe.attributes('id'));
+    expect(card(w).get('[data-testid="glyph-code"]').text()).toBe('U+0416');
   });
 
   it('says why when the face is broken', async () => {
@@ -294,27 +320,102 @@ describe('the Characters section', () => {
     expect(w.text()).toContain('The cmap table is malformed.');
   });
 
-  it('keeps the card column with a hint before anything is selected', async () => {
+  it('shows no popover and keeps the whole width for the grid before a click', async () => {
     const w = await mountWith(1);
-    expect(w.find('[aria-label="Selected glyph"]').exists()).toBe(false);
-    expect(w.get('[data-testid="glyph-card-empty"]').text()).toContain('Select a character');
+    expect(hasCard(w)).toBe(false);
+    expect(w.find('[data-testid="glyph-card-empty"]').exists()).toBe(false);
   });
 
-  it('the card shows the glyph large, its name and its code point', async () => {
+  it('a click opens a 360 px popover with the glyph, U+code, Unicode and glyph names and feature chips', async () => {
     const w = await mountWith(1);
-    await w.get('[data-code-point="97"]').trigger('click');
+    const cell = w.get('[data-code-point="97"]');
+    expect(cell.attributes('aria-haspopup')).toBe('dialog');
+    await cell.trigger('click');
     await flushPromises();
     const detail = card(w);
+    expect(detail.attributes('role')).toBe('dialog');
+    expect(detail.attributes('style')).toContain('width: 360px');
     expect(detail.get('[data-testid="glyph-big"]').text()).toBe('a');
     expect(detail.get('[data-testid="glyph-big"]').attributes('style')).toContain('fm-test');
-    expect(detail.get('[aria-labelledby="fm-glyph-cp"]').text()).toBe('U+0061');
-    expect(detail.get('[aria-labelledby="fm-glyph-name"]').text()).toBe('a');
+    expect(detail.get('[data-testid="glyph-code"]').text()).toBe('U+0061');
+    expect(detail.get('[data-testid="glyph-names"]').text()).toBe('LATIN SMALL LETTER A · glyph a');
+    const chips = detail.get('[data-testid="glyph-features"]');
+    expect(chips.text()).toContain('smcp');
+    expect(chips.text()).toContain('ss01');
   });
 
-  it("the card's alternates draw the stylistic sets of GlyphDetail, live", async () => {
+  it('a character without a Unicode name shows its glyph name only', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="33"]').trigger('click');
+    await flushPromises();
+    expect(card(w).get('[data-testid="glyph-names"]').text()).toBe('glyph uni0021');
+    expect(card(w).find('[data-testid="glyph-features"]').exists()).toBe(false);
+  });
+
+  it('the close button closes the popover and focus goes back to the cell', async () => {
+    const w = await mountWith(1);
+    const grid = w.get('[role="grid"]');
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    // A real click focuses the button first; it then goes away with the popover.
+    const close = card(w).get('[data-testid="glyph-popover-close"]');
+    (close.element as HTMLElement).focus();
+    expect(document.activeElement).toBe(close.element);
+    await close.trigger('click');
+    expect(hasCard(w)).toBe(false);
+    expect(document.activeElement).toBe(grid.element);
+    expect(grid.attributes('aria-activedescendant')).toBe(
+      w.get('[data-code-point="65"]').attributes('id'),
+    );
+  });
+
+  it('a search hit opens no popover with Details on click off', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-testid="glyph-details-on-click"]').trigger('click');
+    await w.get('input[type="search"]').setValue('U+0416');
+    await flushPromises();
+    expect(w.get('[data-code-point="1046"]').attributes('aria-selected')).toBe('true');
+    expect(hasCard(w)).toBe(false);
+  });
+
+  it('a press in a dialog (the compare overlay) leaves the popover open', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    const overlay = document.createElement('div');
+    overlay.setAttribute('role', 'dialog');
+    document.body.append(overlay);
+    overlay.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(hasCard(w)).toBe(true);
+  });
+
+  it('a press outside the popover closes it; a press inside or on a cell does not', async () => {
+    const w = await mountWith(1);
+    const grid = w.get('[role="grid"]');
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    card(w).element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(hasCard(w)).toBe(true);
+    w.get('[data-code-point="66"]').element.dispatchEvent(
+      new Event('pointerdown', { bubbles: true }),
+    );
+    await flushPromises();
+    expect(hasCard(w)).toBe(true);
+    w.get('[data-testid="glyph-specimen"]').element.dispatchEvent(
+      new Event('pointerdown', { bubbles: true }),
+    );
+    await flushPromises();
+    expect(hasCard(w)).toBe(false);
+    expect(document.activeElement).toBe(grid.element);
+  });
+
+  it("the popover's alternates draw the stylistic sets of GlyphDetail, live", async () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="97"]').trigger('click');
     await flushPromises();
+    await openMore(w);
     const alternates = w.findAll('[data-testid="glyph-alternate"]');
     const set = alternates.find((a) => a.text().includes('Stylistic set 1'))!;
     expect(set.get('.alternate-char').text()).toBe('a');
@@ -329,6 +430,7 @@ describe('the Characters section', () => {
     const w = await mountWith(6);
     await w.get('[data-code-point="65"]').trigger('click');
     await flushPromises();
+    await openMore(w);
     expect(w.findAll('[data-testid="glyph-alternate"]')).toHaveLength(0);
     expect(card(w).text()).toContain('none');
   });
@@ -344,6 +446,7 @@ describe('the Characters section', () => {
     vi.useFakeTimers();
     try {
       await w.get('[data-code-point="65"]').trigger('click');
+      await openMore(w);
       const shown = () => card(w).get('[aria-labelledby="fm-glyph-styles"]').text();
       expect(shown()).toBe('loading…');
       await vi.advanceTimersByTimeAsync(STYLE_COUNT_DELAY);
@@ -363,6 +466,7 @@ describe('the Characters section', () => {
     vi.useFakeTimers();
     try {
       await w.get('[data-code-point="65"]').trigger('click');
+      await openMore(w);
       await vi.advanceTimersByTimeAsync(STYLE_COUNT_DELAY);
       await flushPromises();
       expect(card(w).get('[aria-labelledby="fm-glyph-styles"]').text()).toBe('unknown');
@@ -371,10 +475,11 @@ describe('the Characters section', () => {
     }
   });
 
-  it("the card's alternates draw both ends of each axis, live", async () => {
+  it("the popover's alternates draw both ends of each axis, live", async () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="65"]').trigger('click');
     await flushPromises();
+    await openMore(w);
     const alternates = w.findAll('[data-testid="glyph-alternate"]');
     const end = (label: string) =>
       alternates.find((a) => a.text().includes(label))!.get('.alternate-char');
@@ -393,6 +498,7 @@ describe('the Characters section', () => {
     useAxesStore().set(1, opsz, 30);
     await w.get('[data-code-point="65"]').trigger('click');
     await flushPromises();
+    await openMore(w);
     const heavy = w
       .findAll('[data-testid="glyph-alternate"]')
       .find((a) => a.text().includes('Weight 900'))!;
@@ -405,6 +511,7 @@ describe('the Characters section', () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="97"]').trigger('click');
     await flushPromises();
+    await openMore(w);
     const button = card(w)
       .findAll('button')
       .find((b) => b.text() === 'Copy glyph')!;
@@ -432,6 +539,7 @@ describe('the Characters section', () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="97"]').trigger('click');
     await flushPromises();
+    await openMore(w);
     const button = card(w).get('[data-testid="glyph-like"]');
     expect(button.text()).toBe('Fonts with an a like this');
     await button.trigger('click');
@@ -441,32 +549,28 @@ describe('the Characters section', () => {
     ]);
   });
 
-  it('More details keeps the glyph id, advance width, block and features', async () => {
+  it('More details keeps the glyph id and block, and no metric', async () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="97"]').trigger('click');
     await flushPromises();
     const detail = card(w);
-    expect(detail.find('[aria-labelledby="fm-glyph-advance"]').exists()).toBe(false);
     const more = detail.findAll('button').find((b) => b.text() === 'More details')!;
     expect(more.attributes('aria-expanded')).toBe('false');
     await more.trigger('click');
     expect(more.attributes('aria-expanded')).toBe('true');
-    expect(detail.get('[aria-labelledby="fm-glyph-advance"]').text()).toMatch(/^\d[\d,]* units$/);
+    expect(detail.get('[aria-labelledby="fm-glyph-id"]').text()).toMatch(/^\d+$/);
     expect(detail.get('[aria-labelledby="fm-glyph-block"]').text()).toBe('Basic Latin');
-    const replaced = detail.get('ul[aria-labelledby="fm-glyph-replaced"]');
-    expect(replaced.text()).toContain('smcp');
-    expect(replaced.text()).toContain('Small capitals');
-    expect(detail.text()).toContain('No feature produces this glyph.');
+    expect(detail.text()).not.toMatch(/advance|units/i);
   });
 
-  it('a feature in the details is copied by its tag', async () => {
+  it('a feature chip is copied by its tag and named in its tooltip', async () => {
     const w = await mountWith(1);
     await w.get('[data-code-point="97"]').trigger('click');
     await flushPromises();
-    await card(w)
-      .findAll('button')
-      .find((b) => b.text() === 'More details')!
-      .trigger('click');
+    const chip = card(w)
+      .findAll('.feature-chip')
+      .find((c) => c.text().includes('smcp'))!;
+    expect(chip.attributes('title')).toBe('Small capitals');
     await w.get('button[aria-label="Copy feature tag: ss01"]').trigger('click');
     expect(copyText).toHaveBeenCalledWith('ss01');
   });
@@ -477,7 +581,194 @@ describe('the Characters section', () => {
     await w.get('[data-code-point="65"]').trigger('click');
     await flushPromises();
     await card(w).trigger('keydown', { key: 'Escape' });
-    expect(w.find('[aria-label="Selected glyph"]').exists()).toBe(false);
+    expect(hasCard(w)).toBe(false);
     expect(document.activeElement).toBe(grid.element);
+  });
+});
+
+describe("'Details on click' (E50.9)", () => {
+  it('is on by default; off, a click only selects the cell, and the view remembers it', async () => {
+    let w = await mountWith(1);
+    const toggle = w.get('[data-testid="glyph-details-on-click"]');
+    expect(toggle.attributes('aria-checked')).toBe('true');
+    await toggle.trigger('click');
+    expect(toggle.attributes('aria-checked')).toBe('false');
+    const cell = w.get('[data-code-point="65"]');
+    expect(cell.attributes('aria-haspopup')).toBeUndefined();
+    await cell.trigger('click');
+    await flushPromises();
+    expect(cell.attributes('aria-selected')).toBe('true');
+    expect(hasCard(w)).toBe(false);
+    await w.get('[role="grid"]').trigger('keydown', { key: 'Enter' });
+    await flushPromises();
+    expect(hasCard(w)).toBe(false);
+    w = await mountWithSaved(1);
+    expect(w.get('[data-testid="glyph-details-on-click"]').attributes('aria-checked')).toBe(
+      'false',
+    );
+  });
+
+  it('turning it off closes an open popover', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    await w.get('[data-testid="glyph-details-on-click"]').trigger('click');
+    expect(hasCard(w)).toBe(false);
+  });
+
+  it("with it off, the cell's context menu opens the glyph detail", async () => {
+    const w = await mountWith(1);
+    await w.get('[data-testid="glyph-details-on-click"]').trigger('click');
+    await w.get('[data-code-point="97"]').trigger('contextmenu');
+    await flushPromises();
+    const menu = document.querySelector('[data-testid="glyph-menu"]') as HTMLElement;
+    expect(menu.getAttribute('role')).toBe('menu');
+    expect(menu.getAttribute('aria-label')).toBe('Actions for U+0061');
+    const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((b) => b.textContent?.trim())).toEqual([
+      'Glyph details',
+      'Copy glyph',
+      'Fonts with an a like this',
+      'Compare with…',
+    ]);
+    items[0]!.click();
+    await flushPromises();
+    expect(card(w).get('[data-testid="glyph-code"]').text()).toBe('U+0061');
+    expect(document.querySelector('[data-testid="glyph-menu"]')).toBeNull();
+  });
+
+  it('Shift+F10 opens the menu on the cursor cell; Escape closes it back to the grid', async () => {
+    const w = await mountWith(1);
+    const grid = w.get('[role="grid"]');
+    await grid.trigger('keydown', { key: 'ArrowRight' });
+    await flushPromises();
+    await grid.trigger('keydown', { key: 'F10', shiftKey: true });
+    await flushPromises();
+    const menu = document.querySelector('[data-testid="glyph-menu"]') as HTMLElement;
+    expect(menu.getAttribute('aria-label')).toBe('Actions for U+0020');
+    menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(document.querySelector('[data-testid="glyph-menu"]')).toBeNull();
+    expect(document.activeElement).toBe(grid.element);
+  });
+
+  it("the menu's Copy glyph copies the character", async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="97"]').trigger('contextmenu');
+    await flushPromises();
+    const items = document.querySelectorAll<HTMLElement>(
+      '[data-testid="glyph-menu"] [role="menuitem"]',
+    );
+    items[1]!.click();
+    await flushPromises();
+    expect(copyText).toHaveBeenCalledWith('a');
+  });
+});
+
+describe('metrics only while comparing (E50.9)', () => {
+  it('with no comparison: no metrics row and no metric anywhere in the section', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="97"]').trigger('click');
+    await flushPromises();
+    await openMore(w);
+    expect(w.find('[data-testid="glyph-metrics"]').exists()).toBe(false);
+    expect(w.find('[data-testid="glyph-ghost"]').exists()).toBe(false);
+    expect(w.text()).not.toMatch(/advance|bearing|per 1000 em|units/i);
+    expect(card(w).text()).toContain('another font to see metrics side by side');
+    const chip = w.get('[data-testid="glyph-compare-chip"]');
+    expect(chip.text()).toBe('Compare with…');
+  });
+
+  it("the control row's Compare with… opens the overlay on the selected character", async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="97"]').trigger('click');
+    await w.get('[data-testid="glyph-compare-chip"]').trigger('click');
+    await flushPromises();
+    const compare = useGlyphCompareStore();
+    expect(compare.open).toBe(true);
+    expect(compare.codePoint).toBe(97);
+  });
+
+  it("while comparing: this face's and the compared face's metrics per 1000 em, and the ghost", async () => {
+    setFaceLoader({
+      acquire: async (id: number) => `fm-face-${id}`,
+      release: () => undefined,
+    } as unknown as FaceLoader);
+    const w = await mountWith(1);
+    await compareWithMono();
+    await w.get('[data-code-point="97"]').trigger('click');
+    await flushPromises();
+    const metrics = card(w).get('[data-testid="glyph-metrics"]');
+    expect(metrics.text()).toContain('Metrics · per 1000 em');
+    expect(metrics.text()).toContain('JetBrains Mono');
+    const value = (id: string) => {
+      const dd = metrics.get(`[data-metric="${id}"] dd`);
+      return [dd.get('.mine').text(), dd.get('.theirs').text()];
+    };
+    // The mock: 'a' is 600 units wide, inked 40 in from both sides; Inter's x-height is 520,
+    // JetBrains Mono's 550, both at 1000 units per em.
+    expect(value('advance')).toEqual(['600', '600']);
+    expect(value('leftBearing')).toEqual(['40', '40']);
+    expect(value('rightBearing')).toEqual(['40', '40']);
+    expect(value('xHeight')).toEqual(['520', '550']);
+    expect(metrics.get('[data-metric="xHeight"] dd').attributes('aria-label')).toBe(
+      'Inter: 520, JetBrains Mono: 550',
+    );
+    expect(metrics.get('[data-metric="xHeight"] .theirs').classes()).toContain('accent');
+    const ghost = card(w).get('[data-testid="glyph-ghost"]');
+    expect(ghost.text()).toBe('a');
+    expect(ghost.attributes('style')).toContain('fm-face-6');
+    expect(card(w).text()).toContain('Comparing with');
+    expect(w.get('[data-testid="glyph-compare-chip"]').text()).toContain(
+      'Compare with JetBrains Mono',
+    );
+  });
+
+  it('a compared face that lacks the character shows dashes and no ghost', async () => {
+    setFaceLoader({
+      acquire: async (id: number) => `fm-face-${id}`,
+      release: () => undefined,
+    } as unknown as FaceLoader);
+    const w = await mountWith(1);
+    await compareWithMono();
+    // Inter (face 1) maps CJK in this mock; JetBrains Mono does not.
+    await useGlyphsStore().search('U+4E00');
+    await flushPromises();
+    await w.get('[data-code-point="19968"]').trigger('click');
+    await flushPromises();
+    const metrics = card(w).get('[data-testid="glyph-metrics"]');
+    expect(metrics.get('[data-metric="advance"] .theirs').text()).toBe('—');
+    expect(metrics.get('[data-metric="xHeight"] .theirs').text()).toBe('550');
+    expect(card(w).find('[data-testid="glyph-ghost"]').exists()).toBe(false);
+  });
+
+  it('stop ends the comparison: the metrics row goes, from the popover or the chip', async () => {
+    const w = await mountWith(1);
+    await compareWithMono();
+    await w.get('[data-code-point="97"]').trigger('click');
+    await flushPromises();
+    expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(true);
+    // Keyboard use: the focused 'stop' goes away; focus goes to what replaced it.
+    const stop = card(w)
+      .findAll('button')
+      .find((b) => b.text() === 'stop')!;
+    (stop.element as HTMLElement).focus();
+    await stop.trigger('click');
+    await flushPromises();
+    expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(false);
+    const entry = card(w)
+      .findAll('button')
+      .find((b) => b.text() === 'Compare with…')!;
+    expect(document.activeElement).toBe(entry.element);
+    await compareWithMono();
+    expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(true);
+    const x = w.get('[data-testid="glyph-compare-stop"]');
+    (x.element as HTMLElement).focus();
+    await x.trigger('click');
+    await flushPromises();
+    expect(card(w).find('[data-testid="glyph-metrics"]').exists()).toBe(false);
+    const chip = w.get('[data-testid="glyph-compare-chip"]');
+    expect(chip.text()).toBe('Compare with…');
+    expect(document.activeElement).toBe(chip.element);
   });
 });

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useClient } from '../api/client';
 import type {
   ApiError,
@@ -8,6 +8,7 @@ import type {
   FaceId,
   FaceSummary,
   FamilyHit,
+  GlyphDetail,
 } from '../api/types';
 import { COMPARE_SIZE, clampSize } from '../glyphs/compare';
 
@@ -36,10 +37,18 @@ export const useGlyphCompareStore = defineStore('glyphCompare', () => {
   const query = ref('');
   const results = ref<FamilyHit[]>([]);
   const error = ref<ApiError | null>(null);
+  /**
+   * The compared face's detail of one character (E50.9), for the metrics row of the glyph
+   * popover; null while it loads, without a compared face, or when that face lacks it.
+   */
+  const otherGlyph = ref<GlyphDetail | null>(null);
+  /** A comparison is on: a second face is picked. */
+  const active = computed(() => other.value !== null);
 
   // Answers to an older search or pick are dropped.
   let searchRequest = 0;
   let pickRequest = 0;
+  let glyphRequest = 0;
 
   /** Opens the overlay for character `cp` of face `face`; a second face stays picked. */
   async function start(face: FaceId, cp: number): Promise<void> {
@@ -110,6 +119,32 @@ export const useGlyphCompareStore = defineStore('glyphCompare', () => {
     }
   }
 
+  /** Loads the compared face's detail of character `cp`, for the glyph popover. */
+  async function loadOtherGlyph(cp: number | null): Promise<void> {
+    const mine = ++glyphRequest;
+    const face = other.value?.face.id;
+    if (otherGlyph.value?.codePoint !== cp) otherGlyph.value = null;
+    if (face === undefined || cp === null) return;
+    try {
+      const detail = await useClient().getGlyph({ face, codePoint: cp });
+      if (mine === glyphRequest) otherGlyph.value = detail;
+    } catch {
+      // The compared face lacks the character (or cannot be read): its glyph metrics are blank.
+      if (mine === glyphRequest) otherGlyph.value = null;
+    }
+  }
+
+  /** Ends the comparison: no second face, no metrics, the overlay closed. */
+  function stop(): void {
+    ++pickRequest;
+    ++glyphRequest;
+    open.value = false;
+    other.value = null;
+    coverage.value = null;
+    otherGlyph.value = null;
+    styles.value = [];
+  }
+
   function setSize(px: number): void {
     size.value = clampSize(px);
   }
@@ -125,11 +160,15 @@ export const useGlyphCompareStore = defineStore('glyphCompare', () => {
     query,
     results,
     error,
+    otherGlyph,
+    active,
     start,
     close,
     search,
     pickFamily,
     pickFace,
+    loadOtherGlyph,
+    stop,
     setSize,
   };
 });

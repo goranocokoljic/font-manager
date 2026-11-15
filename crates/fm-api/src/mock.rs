@@ -1542,6 +1542,22 @@ fn mock_glyph_name(c: char) -> String {
     }
 }
 
+/// The Unicode name of a mock character: the Latin letters and figures
+/// carry theirs, the rest none.
+fn mock_unicode_name(c: char) -> Option<String> {
+    const DIGITS: [&str; 10] = [
+        "ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE",
+    ];
+    match c {
+        'a'..='z' => Some(format!("LATIN SMALL LETTER {}", c.to_ascii_uppercase())),
+        'A'..='Z' => Some(format!("LATIN CAPITAL LETTER {c}")),
+        '0'..='9' => DIGITS
+            .get(c as usize - '0' as usize)
+            .map(|d| format!("DIGIT {d}")),
+        _ => None,
+    }
+}
+
 /// The group of a mock feature, as in `data/features`.
 fn mock_feature_group(tag: &str) -> FeatureGroup {
     match tag {
@@ -2121,6 +2137,7 @@ impl LibraryService for MockApi {
                 _ => Vec::new(),
             },
             health: Health::Ok,
+            unicode_name: mock_unicode_name(c),
         })
     }
 

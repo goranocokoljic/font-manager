@@ -345,6 +345,11 @@ fn the_detail_has_code_point_glyph_id_name_and_advance() {
     assert_eq!(d.code_point, 0x416);
     assert_eq!(d.glyph_id, gid.to_u32());
     assert_eq!(d.name.as_deref(), Some("uni0416"));
+    assert_eq!(
+        d.unicode_name.as_deref(),
+        Some("CYRILLIC CAPITAL LETTER ZHE"),
+        "the Unicode name, beside the font's own glyph name"
+    );
     let hmtx = font.hmtx().expect("hmtx");
     assert_eq!(
         d.advance_width,
@@ -422,6 +427,11 @@ fn a_broken_font_is_a_broken_detail_not_a_panic() {
             (d.left_side_bearing, d.right_side_bearing, d.bounds),
             (None, None, None),
             "a broken font has no ink metrics"
+        );
+        assert_eq!(
+            d.unicode_name.as_deref(),
+            Some("LATIN CAPITAL LETTER A"),
+            "the character's name does not depend on the font"
         );
         assert_eq!(d.glyph_id, 0);
         assert!(d.produced_by.is_empty() && d.replaced_by.is_empty());

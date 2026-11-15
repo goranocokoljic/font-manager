@@ -1166,6 +1166,11 @@ pub struct GlyphDetail {
     /// read.
     #[serde(default)]
     pub bounds: Option<GlyphBounds>,
+    /// The Unicode name of the character (`LATIN SMALL LETTER G`, E50.9),
+    /// from the Unicode Character Database; absent for a control, a
+    /// surrogate, private use or a code point Unicode has not assigned.
+    #[serde(default)]
+    pub unicode_name: Option<String>,
 }
 
 /// The ink box of a glyph's outline in font units (E50.8): the tight box of
