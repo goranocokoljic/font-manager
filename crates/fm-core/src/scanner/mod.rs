@@ -10,4 +10,4 @@ pub mod watch;
 pub use changes::{FileHash, FileIndex, IndexedFile, Rescan, hash_and_parse};
 pub use discovery::{Discovery, FONT_EXTENSIONS, FoundFile, Unreadable, discover, is_font_file};
 pub use job::{PROGRESS_INTERVAL, ScanJob, Throttle};
-pub use watch::{Debounce, Trigger, WatchSettings, WatchUpdate, Watcher};
+pub use watch::{Debounce, Trigger, WatchSettings, WatchSink, WatchUpdate, Watcher};

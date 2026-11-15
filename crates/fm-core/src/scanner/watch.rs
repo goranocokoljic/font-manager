@@ -24,6 +24,11 @@
 //!
 //! The watcher only reads (ADR 0004). Every change it makes to the index is
 //! reported to the caller as a [`WatchUpdate`].
+//!
+//! Where the file index lives is the caller's choice ([`WatchSink`]): a test
+//! keeps one in memory ([`Watcher::start`]); the library loads it from its
+//! database for each change and lets it go after, as a scan does (ADR 0019),
+//! so an idle watcher holds no file index.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -35,6 +40,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use fm_api::ErrorCode;
+use fm_api::settings::Settings;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode};
 
 use crate::scanner::{FileIndex, Rescan, discover};
@@ -66,7 +72,13 @@ impl Default for WatchSettings {
 impl WatchSettings {
     /// The defaults with the rescan interval the user set.
     pub fn from_config(config: &Config) -> Self {
-        let minutes = u64::from(config.settings.rescan_interval_minutes.max(1));
+        Self::from_settings(&config.settings)
+    }
+
+    /// The defaults with the rescan interval of `settings` (at least a
+    /// minute).
+    pub fn from_settings(settings: &Settings) -> Self {
+        let minutes = u64::from(settings.rescan_interval_minutes.max(1));
         Self {
             rescan_interval: Duration::from_secs(minutes * 60),
             ..Self::default()
@@ -156,8 +168,58 @@ pub struct WatchUpdate {
     pub sidecars: Vec<PathBuf>,
 }
 
-/// Watches source folders and keeps a shared [`FileIndex`] current. Dropping
-/// it stops the thread.
+/// Where a [`Watcher`] finds the file index it keeps current, and what it
+/// does with every change. Both methods run on the watcher thread.
+pub trait WatchSink: Send + 'static {
+    /// Runs `change` on the file index; when it returns an update, applies
+    /// that update while the file index is still at hand. An error means the
+    /// file index could not be had; the change waits for the next rescan.
+    fn change(
+        &mut self,
+        change: &mut dyn FnMut(&mut FileIndex) -> Option<WatchUpdate>,
+    ) -> FmResult<()>;
+
+    /// An update that changed nothing: the source folder could not be
+    /// scanned ([`WatchUpdate::result`] is the error).
+    fn failed(&mut self, update: WatchUpdate);
+}
+
+/// A file index shared in memory, and a callback for every update.
+struct Shared<F> {
+    index: Arc<Mutex<FileIndex>>,
+    on_update: F,
+}
+
+impl<F: FnMut(WatchUpdate) + Send + 'static> WatchSink for Shared<F> {
+    fn change(
+        &mut self,
+        change: &mut dyn FnMut(&mut FileIndex) -> Option<WatchUpdate>,
+    ) -> FmResult<()> {
+        // The lock is let go before the callback, which may read the index.
+        let update = change(&mut lock(&self.index));
+        if let Some(update) = update {
+            (self.on_update)(update);
+        }
+        Ok(())
+    }
+
+    fn failed(&mut self, update: WatchUpdate) {
+        (self.on_update)(update);
+    }
+}
+
+/// How a source is added.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Added {
+    /// Watched and scanned at once ([`Trigger::Added`]).
+    Scan,
+    /// Registered without a scan: watched unless paused, rescanned after
+    /// the interval.
+    Quiet { paused: bool },
+}
+
+/// Watches source folders and keeps a [`FileIndex`] current. Dropping it
+/// stops the thread.
 pub struct Watcher {
     tx: Sender<Msg>,
     worker: Option<JoinHandle<()>>,
@@ -173,15 +235,15 @@ type Reply = Sender<FmResult<()>>;
 
 enum Msg {
     Fs(notify::Result<notify::Event>),
-    Add(PathBuf, Reply),
+    Add(PathBuf, Added, Reply),
     Remove(PathBuf, Reply),
     Pause(PathBuf, bool, Reply),
     Stop,
 }
 
 impl Watcher {
-    /// Starts the watcher thread. `on_update` runs on that thread for every
-    /// change to `index`.
+    /// Starts the watcher thread over a file index in memory. `on_update`
+    /// runs on that thread for every change to `index`.
     pub fn start(
         index: Arc<Mutex<FileIndex>>,
         settings: WatchSettings,
@@ -190,11 +252,24 @@ impl Watcher {
         Self::start_with::<RecommendedWatcher>(index, settings, on_update)
     }
 
+    /// Starts the watcher thread over `sink`, which finds the file index for
+    /// each change and applies the change.
+    pub fn start_sink(sink: impl WatchSink, settings: WatchSettings) -> FmResult<Self> {
+        Self::start_sink_with::<RecommendedWatcher>(Box::new(sink), settings)
+    }
+
     /// [`Watcher::start`] over any OS watcher; tests put in one that fails.
     fn start_with<W: notify::Watcher + Send + 'static>(
         index: Arc<Mutex<FileIndex>>,
         settings: WatchSettings,
         on_update: impl FnMut(WatchUpdate) + Send + 'static,
+    ) -> FmResult<Self> {
+        Self::start_sink_with::<W>(Box::new(Shared { index, on_update }), settings)
+    }
+
+    fn start_sink_with<W: notify::Watcher + Send + 'static>(
+        sink: Box<dyn WatchSink>,
+        settings: WatchSettings,
     ) -> FmResult<Self> {
         let (tx, rx) = mpsc::channel();
         let events = tx.clone();
@@ -207,9 +282,8 @@ impl Watcher {
         .map_err(|e| watch_error("File changes cannot be watched.", Path::new(""), e))?;
         let worker = Worker {
             os,
-            index,
+            sink,
             settings,
-            on_update: Box::new(on_update),
             sources: BTreeMap::new(),
             debounce: Debounce::new(&settings),
         };
@@ -225,7 +299,14 @@ impl Watcher {
 
     /// Watches `root` and scans it once ([`Trigger::Added`]).
     pub fn add_source(&self, root: &Path) -> FmResult<()> {
-        self.ask(|reply| Msg::Add(root.to_path_buf(), reply))
+        self.ask(|reply| Msg::Add(root.to_path_buf(), Added::Scan, reply))
+    }
+
+    /// Registers `root` without scanning it: the caller's index holds it
+    /// already, or a scan the user started reads it. It is watched unless
+    /// `paused`, and rescanned after the interval.
+    pub fn watch_source(&self, root: &Path, paused: bool) -> FmResult<()> {
+        self.ask(|reply| Msg::Add(root.to_path_buf(), Added::Quiet { paused }, reply))
     }
 
     /// Stops watching `root`. Its entries stay in the index.
@@ -267,9 +348,8 @@ struct Source {
 
 struct Worker<W> {
     os: W,
-    index: Arc<Mutex<FileIndex>>,
+    sink: Box<dyn WatchSink>,
     settings: WatchSettings,
-    on_update: Box<dyn FnMut(WatchUpdate) + Send>,
     sources: BTreeMap<PathBuf, Source>,
     debounce: Debounce,
 }
@@ -284,9 +364,9 @@ impl<W: notify::Watcher> Worker<W> {
             match msg {
                 Ok(Msg::Stop) | Err(RecvTimeoutError::Disconnected) => return,
                 Ok(Msg::Fs(event)) => self.event(event),
-                Ok(Msg::Add(root, reply)) => {
-                    let result = self.add(&root);
-                    let added = result.is_ok();
+                Ok(Msg::Add(root, how, reply)) => {
+                    let result = self.add(&root, how);
+                    let added = result.is_ok() && how == Added::Scan;
                     let _ = reply.send(result);
                     if added {
                         self.full_rescan(&root, Trigger::Added);
@@ -336,7 +416,7 @@ impl<W: notify::Watcher> Worker<W> {
         }
     }
 
-    fn add(&mut self, root: &Path) -> FmResult<()> {
+    fn add(&mut self, root: &Path, how: Added) -> FmResult<()> {
         if self.sources.contains_key(root) {
             return Err(FmError::invalid("The folder is already a source.")
                 .with_detail(root.display().to_string()));
@@ -345,13 +425,22 @@ impl<W: notify::Watcher> Worker<W> {
             return Err(FmError::invalid("The source is not a folder.")
                 .with_detail(root.display().to_string()));
         }
-        self.watch(root)?;
+        let (paused, next_rescan) = match how {
+            Added::Scan => (false, Some(Instant::now())),
+            Added::Quiet { paused } => (
+                paused,
+                Instant::now().checked_add(self.settings.rescan_interval),
+            ),
+        };
+        if !paused {
+            self.watch(root)?;
+        }
         self.sources.insert(
             root.to_path_buf(),
             Source {
                 canonical: root.canonicalize().ok(),
-                paused: false,
-                next_rescan: Some(Instant::now()),
+                paused,
+                next_rescan,
             },
         );
         Ok(())
@@ -503,14 +592,19 @@ impl<W: notify::Watcher> Worker<W> {
                 .into_iter()
                 .filter(|p| is_sidecar(&dir, p))
                 .collect();
-            let rescan = lock(&self.index).refresh(&root, &fonts);
-            if !rescan.is_quiet() || !sidecars.is_empty() {
-                (self.on_update)(WatchUpdate {
-                    source: root,
+            let mut sidecars = Some(sidecars);
+            let changed = self.sink.change(&mut |index| {
+                let rescan = index.refresh(&root, &fonts);
+                let sidecars = sidecars.take().unwrap_or_default();
+                (!rescan.is_quiet() || !sidecars.is_empty()).then(|| WatchUpdate {
+                    source: root.clone(),
                     trigger: Trigger::Events,
                     result: Ok(rescan),
                     sidecars,
-                });
+                })
+            });
+            if let Err(e) = changed {
+                tracing::warn!("changes in {} not applied: {e}", root.display());
             }
         }
     }
@@ -521,16 +615,25 @@ impl<W: notify::Watcher> Worker<W> {
         };
         let now = Instant::now();
         source.next_rescan = now.checked_add(self.settings.rescan_interval);
-        let result = discover(root).map(|found| lock(&self.index).rescan(root, &found));
-        if let Err(e) = &result {
-            tracing::warn!("rescan of {} failed: {e}", root.display());
-        }
-        (self.on_update)(WatchUpdate {
+        let update = |result| WatchUpdate {
             source: root.to_path_buf(),
             trigger,
             result,
             sidecars: Vec::new(),
-        });
+        };
+        let found = match discover(root) {
+            Ok(found) => found,
+            Err(e) => {
+                tracing::warn!("rescan of {} failed: {e}", root.display());
+                return self.sink.failed(update(Err(e)));
+            }
+        };
+        let changed = self
+            .sink
+            .change(&mut |index| Some(update(Ok(index.rescan(root, &found)))));
+        if let Err(e) = changed {
+            tracing::warn!("rescan of {} not applied: {e}", root.display());
+        }
     }
 }
 
@@ -880,6 +983,44 @@ mod tests {
         fs::remove_file(&path).expect("remove");
         let took = f.until(|i| gone(i, &path));
         assert!(took < WITHIN, "remove after resume took {took:?}");
+    }
+
+    #[test]
+    fn a_quiet_source_is_watched_without_a_first_scan() {
+        let f = Fixture::new("watch-quiet", WatchSettings::default());
+        let other = f.tmp.path().join("Other");
+        put(&other.join("old.ttf"), &fixture(OTHER));
+
+        f.watcher.watch_source(&other, false).expect("watch");
+        assert!(
+            f.next(Duration::from_millis(1500)).is_none(),
+            "no first scan"
+        );
+        assert!(lock(&f.index).get(&other.join("old.ttf")).is_none());
+
+        let path = other.join("new.ttf");
+        put(&path, &fixture(REGULAR));
+        let took = f.until(|i| present(i, &path));
+        assert!(took < WITHIN, "create took {took:?}");
+        f.watcher.remove_source(&other).expect("remove");
+    }
+
+    #[test]
+    fn a_quiet_paused_source_is_not_watched_until_resumed() {
+        let f = Fixture::new("watch-quiet-paused", WatchSettings::default());
+        let other = f.tmp.path().join("Other");
+        fs::create_dir_all(&other).expect("create source");
+
+        f.watcher.watch_source(&other, true).expect("watch");
+        let path = other.join("a.ttf");
+        put(&path, &fixture(REGULAR));
+        assert!(f.next(Duration::from_millis(1500)).is_none());
+
+        f.watcher.set_paused(&other, false).expect("resume");
+        let update = f.next(Duration::from_secs(5)).expect("resume rescan");
+        assert_eq!(update.trigger, Trigger::Resumed);
+        assert_eq!(update.result.expect("rescanned").added, vec![path]);
+        f.watcher.remove_source(&other).expect("remove");
     }
 
     #[test]

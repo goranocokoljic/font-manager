@@ -77,7 +77,13 @@ pub struct Started {
     pub families: u32,
     /// Rows on the first page.
     pub page: usize,
+    /// Source folders the started API watches (E51.1): [`WATCHED_FOLDERS`].
+    pub watched_folders: usize,
 }
+
+/// The source folders a start watches (E51.1): the library and empty
+/// folders in the bench home, as a user's library spread over four folders.
+pub const WATCHED_FOLDERS: usize = 4;
 
 /// What the app does first ([`startup::init`] without the per-user
 /// folders): app folders and settings, logging, the index with its
@@ -99,12 +105,23 @@ pub fn start_with(
     home: &Path,
     activator: Arc<dyn FontActivator>,
 ) -> BenchResult<(Started, logging::LogGuard)> {
-    let begin = Instant::now();
+    serve_with(home, activator).map(|(started, log, _api)| (started, log))
+}
+
+/// [`start_with`], returning the started API too: the idle run keeps it, and
+/// with it the folder watcher, while its memory is sampled.
+pub fn serve_with(
+    home: &Path,
+    activator: Arc<dyn FontActivator>,
+) -> BenchResult<(Started, logging::LogGuard, CoreApi)> {
     let paths = home_paths(home);
+    let watched_folders = watch_folders(home, &paths)?;
+    let begin = Instant::now();
     let config = startup::prepare(&paths)?;
     let log = logging::init(&paths.logs, config.log_level)?;
     let index = startup::open_index(&paths)?.index;
-    let api = CoreApi::open(&paths, index, activator);
+    // The app watches every source for its lifetime (E51.1).
+    let api = CoreApi::open(&paths, index, activator).with_watcher();
     api.start()?;
     let res = api.list_families(ListFamiliesRequest {
         page: Page {
@@ -117,8 +134,31 @@ pub fn start_with(
         ms: ms(begin.elapsed()),
         families: res.total,
         page: res.items.len(),
+        watched_folders,
     };
-    Ok((started, log))
+    Ok((started, log, api))
+}
+
+/// Makes the index in `home` hold at least [`WATCHED_FOLDERS`] sources,
+/// adding empty folders under `<home>/watched` (outside the timed start),
+/// and returns how many it holds.
+fn watch_folders(home: &Path, paths: &AppPaths) -> BenchResult<usize> {
+    std::fs::create_dir_all(&paths.data)?;
+    let mut index = Index::open(&paths.data.join(INDEX_FILE))?.index;
+    let mut sources = index.sources()?.len();
+    let mut n = 0;
+    while sources < WATCHED_FOLDERS {
+        n += 1;
+        let folder = home.join("watched").join(n.to_string());
+        let known = folder.to_string_lossy();
+        if index.sources()?.iter().any(|s| s.path == known) {
+            continue;
+        }
+        std::fs::create_dir_all(&folder)?;
+        index.add_source(&known, SourceKind::Watched)?;
+        sources += 1;
+    }
+    Ok(sources)
 }
 
 /// What a scan or rescan did.
