@@ -238,3 +238,53 @@ for (const scheme of ['light', 'dark'] as const) {
     for (const m of marks.filter((m) => !m.selected)) expect(m.bar).toBe(false);
   });
 }
+
+test('a 24 px gutter holds the chevron; names and samples line up, styles 16 px in (E50.4)', async ({
+  page,
+}) => {
+  const tree = await open(page, '?mockFaces=3&mockStyles=4');
+  const family = tree.getByRole('treeitem', { name: SAMPLE_1 });
+  const single = tree.getByRole('treeitem', { name: 'Legacy Grotesk, 1 style' });
+  await expect(family.locator('.row')).toHaveAttribute('data-state', 'ready');
+  const box = async (l: ReturnType<Page['locator']>) => (await l.boundingBox())!;
+
+  // The gutter is 24 px on every row; the chevron's target is 20 × 24 with a 12 px glyph.
+  for (const row of [family, single]) {
+    expect((await box(row.getByTestId('row-gutter'))).width).toBeCloseTo(24, 0);
+  }
+  const twisty = family.locator('.twisty');
+  const t = await box(twisty);
+  expect([Math.round(t.width), Math.round(t.height)]).toEqual([20, 24]);
+  const glyph = await box(twisty.locator('svg'));
+  expect([Math.round(glyph.width), Math.round(glyph.height)]).toEqual([12, 12]);
+  await expect(single.locator('.twisty')).toHaveCount(0);
+  // 55 % ink: the chevron's color is the text color at 0.55 alpha.
+  const ink = await twisty.evaluate((el) => getComputedStyle(el).color);
+  expect(ink).toMatch(/0\.55\)$/);
+  await expect(twisty.locator('svg')).toHaveCSS('transition-duration', '0.12s');
+
+  // Name and sample start at the same x on a family row and a single-font row.
+  const x = async (row: ReturnType<Page['locator']>, sel: string) =>
+    (await box(row.locator(sel).first())).x;
+  expect(await x(single, '[data-family-name]')).toBeCloseTo(
+    await x(family, '[data-family-name]'),
+    0,
+  );
+  expect(await x(single, '.sample')).toBeCloseTo(await x(family, '.sample'), 0);
+
+  // Open: the chevron turns 90°, and each style starts 16 px further in.
+  await twisty.click();
+  await expect(family).toHaveAttribute('aria-expanded', 'true');
+  await expect(twisty.locator('svg')).toHaveCSS('transform', 'matrix(0, 1, -1, 0, 0, 0)');
+  const style = tree.locator('[role="treeitem"][aria-level="2"]').first();
+  expect(
+    (await x(style, '[data-family-name]')) - (await x(family, '[data-family-name]')),
+  ).toBeCloseTo(16, 0);
+  expect((await x(style, '.sample')) - (await x(family, '.sample'))).toBeCloseTo(16, 0);
+  // The hairline on the left of the styles: a 1 px line in the gutter.
+  const line = await style.evaluate((el) => {
+    const s = getComputedStyle(el, '::after');
+    return { width: s.width, content: s.content };
+  });
+  expect(line).toEqual({ width: '1px', content: '""' });
+});

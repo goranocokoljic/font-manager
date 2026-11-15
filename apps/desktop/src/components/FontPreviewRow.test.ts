@@ -80,6 +80,35 @@ describe('FontPreviewRow', () => {
     expect(row.text()).toContain('Variable');
   });
 
+  it('names the axis count in the Variable pill when a face has several axes (E50.4)', async () => {
+    const client = createMockClient();
+    const getFace = client.getFace.bind(client);
+    client.getFace = async (id) => {
+      const detail = await getFace(id);
+      return {
+        ...detail,
+        axes: [
+          ...detail.axes,
+          { tag: 'opsz', name: 'Optical size', min: 14, default: 14, max: 32 },
+        ],
+      };
+    };
+    setClient(client);
+    const row = mount(FontPreviewRow, { props: { face: inter } });
+    await flushPromises();
+    expect(row.get('[data-testid="variable-badge"]').text()).toBe('Variable · 2 axes');
+    // One axis (the stock mock: wght only) keeps the plain pill.
+    setClient(createMockClient());
+    clearFaceAxes();
+    const one = mount(FontPreviewRow, { props: { face: inter } });
+    await flushPromises();
+    expect(one.get('[data-testid="variable-badge"]').text()).toBe('Variable');
+    // A static face has no pill at all.
+    const plain = mount(FontPreviewRow, { props: { face: mono } });
+    await flushPromises();
+    expect(plain.find('[data-testid="variable-badge"]').exists()).toBe(false);
+  });
+
   it('leaves a static face at normal variation settings', async () => {
     const row = mount(FontPreviewRow, { props: { face: mono } });
     await flushPromises();

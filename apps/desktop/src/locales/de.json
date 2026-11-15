@@ -1103,6 +1103,10 @@
     "stylesUnavailable": "Schnitte nicht verfügbar",
     "previewUnavailable": "Vorschau nicht verfügbar",
     "variable": "Variabel",
+    "variableAxes": {
+      "one": "Variabel · {count} Achse",
+      "other": "Variabel · {count} Achsen"
+    },
     "fallback": "Ersatz",
     "fallbackTitle": {
       "missingLetters": "Dieser Schrift fehlen {missing}, daher zeigt sie ihre eigenen Buchstaben.",
