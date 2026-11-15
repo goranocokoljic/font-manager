@@ -104,8 +104,8 @@ test.describe('in right-to-left chrome', () => {
     const label = row.locator('.label bdi').first();
     const rowEdges = await edges(row);
     const labelEdges = await edges(label);
-    // Before it at the start: the chevron gutter and the 24 px activation dot (E50.5).
-    expect(rowEdges.right - labelEdges.right).toBeLessThan(64);
+    // Before it at the start: the 36 px chevron gutter and the 24 px activation dot (E50.5).
+    expect(rowEdges.right - labelEdges.right).toBeLessThan(76);
     expect(labelEdges.left - rowEdges.left).toBeGreaterThan(48);
     await expect(row.locator('.label')).toHaveCSS('direction', 'rtl');
 

@@ -12,7 +12,7 @@
 // Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A selects all. Plain Space is the
 // app's quick-look key, so the list leaves it alone.
 //
-// Every row starts with a fixed 24 px gutter (E50.4): a family of several styles has its
+// Every row starts with a fixed 36 px gutter (E50.4): a family of several styles has its
 // chevron there, a single font and a style leave it empty, so names and samples line up.
 // A family names its style count in a pill ("6 styles"; a variable family's pill says
 // "Variable · 2 axes"), a single font its style instead. A style is indented 16 px
@@ -442,7 +442,7 @@ function onToggle(row: ListRow): void {
 
 <style scoped>
 .viewport {
-  --fm-gutter: 24px;
+  --fm-gutter: 36px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
