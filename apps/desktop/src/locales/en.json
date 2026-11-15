@@ -1629,6 +1629,7 @@
       "styles": "Styles",
       "text": "Text",
       "characters": "Characters",
+      "waterfall": "Waterfall",
       "features": "Features",
       "pairings": "Pairings",
       "info": "Info"
@@ -1649,6 +1650,8 @@
     "browseCatalogs": "Browse catalogs",
     "sectionLater": "This section comes in a later update.",
     "textHint": "Reading test · three sizes, your line length",
+    "waterfallHint": "The hero's text and style, {from} → {to} px",
+    "waterfallLines": "The text from {from} to {to} px",
     "textMeasure": "Measure",
     "textMeasureValue": "{value} ch",
     "textLeading": "Leading",

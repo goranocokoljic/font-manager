@@ -3,7 +3,8 @@ import { expect, type Locator, type Page } from '@playwright/test';
 // The MockApi's faces and the families they belong to.
 const FAMILY_OF: Record<number, number> = { 1: 1, 6: 3, 7: 4, 8: 8, 9: 9 };
 
-export type Section = 'Styles' | 'Text' | 'Characters' | 'Features' | 'Pairings' | 'Info';
+export type Section =
+  'Styles' | 'Text' | 'Characters' | 'Waterfall' | 'Features' | 'Pairings' | 'Info';
 
 /** The hash of the family page that shows `face`. */
 export const faceHash = (face: number) => `#/family/${FAMILY_OF[face]}?face=${face}`;

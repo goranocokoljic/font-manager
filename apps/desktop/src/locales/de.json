@@ -1629,6 +1629,7 @@
       "styles": "Schnitte",
       "text": "Text",
       "characters": "Zeichen",
+      "waterfall": "Wasserfall",
       "features": "Funktionen",
       "pairings": "Kombinationen",
       "info": "Info"
@@ -1649,6 +1650,8 @@
     "browseCatalogs": "Kataloge durchsuchen",
     "sectionLater": "Dieser Bereich kommt in einem späteren Update.",
     "textHint": "Lesetest · drei Größen, Ihre Zeilenlänge",
+    "waterfallHint": "Text und Schnitt des Musters, {from} → {to} px",
+    "waterfallLines": "Der Text von {from} bis {to} px",
     "textMeasure": "Satzbreite",
     "textMeasureValue": "{value} ch",
     "textLeading": "Zeilenabstand",

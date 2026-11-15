@@ -211,16 +211,14 @@ test('the keyboard moves between the sections and leaves the arrows to the famil
   const sections = page.getByRole('group', { name: 'Section' });
   const styles = sections.getByRole('button', { name: 'Styles' });
   await styles.focus();
-  // Styles, Text, Characters, Features.
-  for (let i = 0; i < 3; i++) await page.keyboard.press('Tab');
+  // Styles, Text, Characters, Waterfall, Features.
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Tab');
   const features = sections.getByRole('button', { name: 'Features' });
   await expect(features).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(features).toHaveAttribute('aria-pressed', 'true');
   await expect(sectionPanel(page, 'Features')).toBeVisible();
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
   await expect(styles).toHaveAttribute('aria-pressed', 'true');
 });

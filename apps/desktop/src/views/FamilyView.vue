@@ -16,6 +16,7 @@ import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilyRail from '../components/FamilyRail.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
 import FamilyText from '../components/FamilyText.vue';
+import FamilyWaterfall from '../components/FamilyWaterfall.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
@@ -480,6 +481,12 @@ onBeforeUnmount(() => {
                     :face-style="specimenStyle"
                     @find-trait="findWithTrait"
                     @find-like="findLikeGlyph"
+                  />
+                  <FamilyWaterfall
+                    v-else-if="page.section === 'waterfall'"
+                    :face="page.face"
+                    :text="specimen"
+                    :missing="heroSpecimen.tofu"
                   />
                   <FamilyFeatures
                     v-else-if="page.section === 'features'"
