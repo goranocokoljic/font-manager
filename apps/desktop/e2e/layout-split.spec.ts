@@ -60,10 +60,10 @@ test('the Layout mode is a split: the Lines list at 560 px, the pane beside it',
   expect(l.x + l.width).toBeLessThanOrEqual(d.x + 1);
   expect(d.x + d.width).toBeLessThanOrEqual(p.x + 1);
   expect(p.x + p.width).toBeCloseTo(1280, 0);
-  // The same list as Lines: the 24 px chevron gutter on every row (E50.4), search narrows it.
+  // The same list as Lines: the 36 px chevron gutter on every row (E50.4), search narrows it.
   const gutter = list.getByTestId('row-gutter').first();
   await expect(gutter).toBeVisible();
-  expect((await gutter.boundingBox())!.width).toBeCloseTo(24, 0);
+  expect((await gutter.boundingBox())!.width).toBeCloseTo(36, 0);
   const before = await list.getByRole('treeitem').count();
   await page.getByRole('searchbox').fill('mono');
   await expect.poll(() => list.getByRole('treeitem').count()).toBeLessThan(before);

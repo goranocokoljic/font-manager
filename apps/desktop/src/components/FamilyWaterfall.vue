@@ -69,7 +69,7 @@ const to = FAMILY_WATERFALL_SIZES[FAMILY_WATERFALL_SIZES.length - 1];
   align-items: baseline;
   gap: var(--fm-space-4);
   height: auto;
-  padding-block: 4px;
+  padding-block: 16px 4px;
   padding-inline: 0;
 }
 .line :deep(.label) {

@@ -239,7 +239,7 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
-test('a 24 px gutter holds the chevron; names and samples line up, styles 16 px in (E50.4)', async ({
+test('a 36 px gutter holds the chevron; names and samples line up, styles 16 px in (E50.4)', async ({
   page,
 }) => {
   const tree = await open(page, '?mockFaces=3&mockStyles=4');
@@ -248,9 +248,9 @@ test('a 24 px gutter holds the chevron; names and samples line up, styles 16 px 
   await expect(family.locator('.row')).toHaveAttribute('data-state', 'ready');
   const box = async (l: ReturnType<Page['locator']>) => (await l.boundingBox())!;
 
-  // The gutter is 24 px on every row; the chevron's target is 20 × 24 with a 12 px glyph.
+  // The gutter is 36 px on every row; the chevron's target is 20 × 24 with a 12 px glyph.
   for (const row of [family, single]) {
-    expect((await box(row.getByTestId('row-gutter'))).width).toBeCloseTo(24, 0);
+    expect((await box(row.getByTestId('row-gutter'))).width).toBeCloseTo(36, 0);
   }
   const twisty = family.locator('.twisty');
   const t = await box(twisty);
