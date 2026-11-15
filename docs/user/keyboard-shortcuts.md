@@ -24,8 +24,8 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `Ctrl+A` | Select all fonts |
 | `A` | Activate or deactivate the selected fonts for this session |
 | `Shift+A` | Activate or deactivate the selected fonts permanently |
-| `1` | Show the fonts as a grid of cards |
-| `2` | Show the fonts as a list |
+| `1` | Show the fonts as a list |
+| `2` | Show the fonts as a grid of cards |
 | `3` | Show the fonts as a table |
 | `4` | Show the fonts as a waterfall: the preview text at six sizes |
 | `5` | Show the selected font in a layout: a page of text, for example a book page |
