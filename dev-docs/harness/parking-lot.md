@@ -472,3 +472,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-15
 
 - [E50.4 #575] apps/desktop/src/components/FontList.vue:206 — the chevron is not focusable and its gutter is aria-hidden (as before E50.4); keyboard users expand with → / ← on the tree.
+- [E50.6 #577] apps/desktop/src/stores/catalogs.ts:342 — starting an install from the catalog dot by keyboard disables that dot while it runs, so the focus drops to body (as with the old Install button).
+- [E50.6 #577] apps/desktop/src/components/FontTable.vue:653 — `max-block-size: 100%` on `.row-compare` can squeeze the 28 px compare icon to 24 px in a compact Table row.
+- [E50.6 #577] apps/desktop/e2e/compare-icon.spec.ts:188 — the `@screens` test times out: since E48.5 the first compare add opens the sheet, and the next hover lands under its scrim (runs only with FM_SCREENS_DIR).
