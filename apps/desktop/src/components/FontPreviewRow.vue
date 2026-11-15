@@ -270,7 +270,7 @@ const deferredStyle = computed(() => ({
     <span class="label">
       <slot name="lead" />
       <bdi data-family-name>{{ name }}</bdi>
-      <UiBadge v-if="showVariable && face.isVariable" data-testid="variable-badge">{{
+      <UiBadge v-if="showVariable && face.isVariable" class="pill" data-testid="variable-badge">{{
         variableLabel
       }}</UiBadge>
       <slot name="detail" />
@@ -343,6 +343,11 @@ const deferredStyle = computed(() => ({
 }
 .note {
   color: var(--fm-warning);
+}
+/* The Variable pill: the same outlined pill as the list's style count. */
+.pill {
+  border-radius: 999px;
+  padding-inline: 6px;
 }
 .label > .missing-glyphs {
   margin-inline-start: auto;

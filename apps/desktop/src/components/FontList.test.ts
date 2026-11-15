@@ -282,6 +282,7 @@ describe('FontList chevron gutter (E50.4)', () => {
     // A variable family's pill is the Variable one, not the count.
     const variable = rowOf(list, `family:${EXTRA_ID_BASE}`);
     expect(variable.get('[data-testid="variable-badge"]').text()).toBe('Variable');
+    expect(variable.get('[data-testid="variable-badge"]').classes()).toContain('pill');
     expect(variable.find('[data-testid="style-count"]').exists()).toBe(false);
     // A single font (Legacy Grotesk, one style "Regular"): its style name, no pill.
     const single = items(list).find((r) =>
