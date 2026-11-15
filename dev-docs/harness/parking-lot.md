@@ -486,3 +486,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E50.13 #584] crates/fm-core/src/index/problems.rs:99 — `missing_source` runs `fs::metadata` on each source under the index lock in `list_problems`; an offline network share stalls the index.
 - [E50.13 #584] crates/fm-core/src/index/sources.rs:123 — `add_source` stores an endpoint path as given (no normalization), so a raw endpoint client can store `D:/Fonts`, which Explorer may not open reliably.
 - [E50.10 #581] apps/desktop/src/components/FontPreviewRow.vue:230 — weight scrubbing on a sample line is pointer-only; keyboard users have the hero's Axes slider but no per-line equivalent.
+
+## 2026-11-16
+
+- [E51.1 #599] crates/fm-core/src/scanner/watch.rs:74 — `WatchSettings::from_config` now only forwards to `from_settings`; outside the scanner tests nothing calls it.
+- [E51.1 #599] crates/fm-core/src/scanner/watch.rs:495 — on Linux an exhausted inotify watch limit is only a `warn!`; fonts in the unwatched folders appear at the next periodic rescan, and no ADR mentions it.
+- [E51.1 #599] crates/fm-core/src/scanner/watch.rs:505 — `Worker::unwatch` matches nested sources by their added paths, not canonical paths; sources nested only through a symlink can drop each other's inotify watches.
