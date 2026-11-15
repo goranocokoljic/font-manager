@@ -68,7 +68,10 @@ fn fresh_database_has_every_table_of_the_data_model() {
 
     // The columns the spec names for the three core tables.
     for (table, columns) in [
-        ("source", &["id", "path", "kind", "paused"][..]),
+        (
+            "source",
+            &["id", "path", "kind", "paused", "scanned_at"][..],
+        ),
         (
             "font_file",
             &[
@@ -417,6 +420,73 @@ fn source_changes_validate_and_mirror_to_the_backup() {
             { "id": work.id.0, "path": "/fonts/work", "kind": "watched", "paused": false }
         ])
     );
+}
+
+/// E50.13: a source card shows when its last scan finished, whether its
+/// folder is missing, and whether it lies in a cloud sync folder.
+#[test]
+fn a_source_reports_its_last_scan_a_missing_folder_and_a_cloud_folder() {
+    let dir = TempDir::new("index-source-card");
+    let mut index = open(&db_in(&dir)).index;
+    let here = dir.path().join("Fonts");
+    fs::create_dir_all(&here).expect("folder");
+    let cloud = dir.path().join("Dropbox (Studio)").join("type");
+    fs::create_dir_all(&cloud).expect("cloud folder");
+    let gone = dir.path().join("unplugged drive");
+
+    let here = index
+        .add_source(&here.to_string_lossy(), SourceKind::Watched)
+        .expect("add");
+    let cloud = index
+        .add_source(&cloud.to_string_lossy(), SourceKind::Watched)
+        .expect("add cloud");
+    let gone = index
+        .add_source(&gone.to_string_lossy(), SourceKind::Watched)
+        .expect("add missing");
+
+    assert_eq!(here.last_scanned, None, "never scanned yet");
+    assert!(!here.missing && !here.cloud);
+    assert!(!cloud.missing && cloud.cloud);
+    assert!(gone.missing && !gone.cloud);
+
+    index
+        .persist_files(here.id, std::iter::empty())
+        .expect("scan");
+    let sources = index.sources().expect("sources");
+    let scanned = sources.iter().find(|s| s.id == here.id).expect("here");
+    let stamp = scanned.last_scanned.as_deref().expect("scanned");
+    assert_eq!(stamp.len(), "2026-11-15T10:00:00Z".len(), "{stamp}");
+    assert!(stamp.ends_with('Z'), "{stamp}");
+    let other = sources.iter().find(|s| s.id == cloud.id).expect("cloud");
+    assert_eq!(
+        other.last_scanned, None,
+        "only the scanned source is stamped"
+    );
+}
+
+#[test]
+fn cloud_folders_are_told_by_their_folder_names() {
+    use super::sources::in_cloud_folder;
+    for cloud in [
+        "C:/Users/me/Dropbox/Studio type",
+        "C:/Users/me/OneDrive - Acme/fonts",
+        "C:/Users/me/OneDrive/fonts",
+        "/Users/me/Library/CloudStorage/GoogleDrive-me/My Drive/fonts",
+        "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/fonts",
+        "G:/My Drive/fonts",
+        "/home/me/pCloud Drive/fonts",
+    ] {
+        assert!(in_cloud_folder(Path::new(cloud)), "{cloud}");
+    }
+    for local in [
+        "D:/Type/Library",
+        "/home/me/dropboxes/fonts",
+        "/home/me/OneDriveBackup/fonts",
+        "/Users/me/Library/Fonts",
+        "",
+    ] {
+        assert!(!in_cloud_folder(Path::new(local)), "{local}");
+    }
 }
 
 /// E16.2 criterion 3: a face stored without metrics (indexed before E16.2)

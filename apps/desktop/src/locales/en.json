@@ -1440,21 +1440,61 @@
       "change": "Change…"
     },
     "sources": {
-      "note": "Folders the library indexes in place. Removing a source forgets its fonts; the files stay where they are.",
-      "kinds": {
-        "watched": "Folder",
-        "system": "System fonts",
-        "libraryFolder": "Library folder"
-      },
+      "note": "Folders the library indexes in place. Nothing is copied or moved; a watched folder is rescanned when its files change.",
       "fonts": {
         "one": "{count} font",
         "other": "{count} fonts"
       },
-      "pause": "Pause {path}",
-      "paused": "Paused",
-      "remove": "Remove {path}",
-      "systemCannotRemove": "System fonts cannot be removed.",
-      "addFolder": "Add folder…"
+      "addFolder": "Add folder",
+      "listLabel": "Folders",
+      "scanningCount": "{done} of {total} fonts",
+      "scanningNow": "scanning…",
+      "scanned": "scanned {when}",
+      "neverScanned": "not scanned yet",
+      "notFound": "folder not found",
+      "scanningBadge": "Scanning",
+      "missingBadge": "Missing",
+      "scanningLabel": "Scanning {name}",
+      "watch": "Watch",
+      "watchLabel": "Watch {name}",
+      "rescanLabel": "Rescan {name}",
+      "showLabel": "Show {name} in the file manager",
+      "removeLabel": "Remove {name} from the library",
+      "confirmRemove": "Remove {name} from the library? Its fonts leave the library; the files stay where they are.",
+      "drop": "Drop a folder here, or choose one with Add folder",
+      "empty": "No folders yet. Drop a folder here, or choose one with Add folder.",
+      "problemsIn": "in these folders — {detail}",
+      "problemCounts": {
+        "duplicates": {
+          "one": "{count} duplicate",
+          "other": "{count} duplicates"
+        },
+        "broken": {
+          "one": "{count} broken file",
+          "other": "{count} broken files"
+        },
+        "legacy": {
+          "one": "{count} legacy file",
+          "other": "{count} legacy files"
+        },
+        "sidecar": {
+          "one": "{count} sidecar conflict",
+          "other": "{count} sidecar conflicts"
+        },
+        "activation": {
+          "one": "{count} activation conflict",
+          "other": "{count} activation conflicts"
+        },
+        "library": {
+          "one": "{count} folder or index problem",
+          "other": "{count} folder or index problems"
+        }
+      },
+      "openProblems": "Open Problems",
+      "systemTitle": "System fonts",
+      "systemNote": "Shown in the library, read-only — the app never writes to system folders.",
+      "show": "Show",
+      "showSystemLabel": "Show system fonts in the library"
     },
     "activation": {
       "modeLegend": "The Activate button activates fonts",

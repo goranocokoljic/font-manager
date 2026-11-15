@@ -85,6 +85,18 @@ pub struct Source {
     pub paused: bool,
     /// Faces indexed from it.
     pub face_count: u32,
+    /// When a scan of it last finished (a full scan or a watcher rescan);
+    /// `None` before its first scan (E50.13).
+    #[serde(default)]
+    pub last_scanned: Option<Timestamp>,
+    /// The folder is not there or is not a folder (removed, renamed, an
+    /// unplugged drive); its faces stay until the source is removed (E50.13).
+    #[serde(default)]
+    pub missing: bool,
+    /// The folder is inside a cloud sync client's folder (Dropbox, OneDrive,
+    /// iCloud Drive, Google Drive, Box, pCloud), judged from the path (E50.13).
+    #[serde(default)]
+    pub cloud: bool,
 }
 
 /// How dropped or added fonts join the library (ADR 0004).

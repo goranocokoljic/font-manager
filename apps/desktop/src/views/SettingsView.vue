@@ -8,6 +8,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
+import SourcesSettings from '../components/SourcesSettings.vue';
 import ThemeCard from '../components/ThemeCard.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
@@ -230,47 +231,7 @@ function chooseLanguage(value: string): void {
       >
         <p v-if="error" role="alert" class="error">{{ errorMessage(error) }}</p>
 
-        <template v-if="current === 'sources'">
-          <h2 class="heading">{{ sectionTitle('sources') }}</h2>
-          <p class="note">{{ t('settings.sources.note') }}</p>
-          <ul class="sources" :aria-label="sectionTitle('sources')">
-            <li v-for="source in sources.sources" :key="source.id" class="source">
-              <div class="source-text">
-                <span class="path">{{ source.path }}</span>
-                <span class="meta">
-                  {{ t(`settings.sources.kinds.${source.kind}`) }} ·
-                  {{ t('settings.sources.fonts', { count: source.faceCount }) }}
-                </span>
-              </div>
-              <label class="check">
-                <input
-                  type="checkbox"
-                  :checked="source.paused"
-                  :aria-label="t('settings.sources.pause', { path: source.path })"
-                  @change="
-                    sources.setPaused(source.id, ($event.target as HTMLInputElement).checked)
-                  "
-                />
-                {{ t('settings.sources.paused') }}
-              </label>
-              <UiButton
-                :aria-label="t('settings.sources.remove', { path: source.path })"
-                :disabled="source.kind === 'system'"
-                :title="
-                  source.kind === 'system' ? t('settings.sources.systemCannotRemove') : undefined
-                "
-                @click="sources.remove(source.id)"
-              >
-                {{ t('common.remove') }}
-              </UiButton>
-            </li>
-          </ul>
-          <div class="add">
-            <UiButton @click="sources.add">
-              {{ t('settings.sources.addFolder') }}
-            </UiButton>
-          </div>
-        </template>
+        <SourcesSettings v-if="current === 'sources'" />
 
         <template v-else-if="current === 'activation' && s">
           <h2 class="heading">{{ sectionTitle('activation') }}</h2>
@@ -716,37 +677,6 @@ function chooseLanguage(value: string): void {
   margin: 0 0 12px;
   color: var(--fm-danger);
 }
-.sources {
-  margin: 0 0 16px;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-}
-.source {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--fm-row-height);
-  padding: var(--fm-gap) 12px;
-}
-.source + .source {
-  border-top: 1px solid var(--fm-border);
-}
-.source-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-.path {
-  overflow-wrap: anywhere;
-}
-.meta {
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-}
-.check,
 .choice {
   display: flex;
   align-items: center;

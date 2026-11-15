@@ -700,6 +700,12 @@ CREATE TABLE foundry_merge (
 ) WITHOUT ROWID;
 ";
 
+/// Source cards (E50.13): when a scan of the source last finished, RFC 3339
+/// in UTC; `NULL` until its first scan.
+const V26: &str = r"
+ALTER TABLE source ADD COLUMN scanned_at TEXT;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -707,7 +713,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
-    V22, V23, V24, V25,
+    V22, V23, V24, V25, V26,
 ];
 
 /// The schema version this build writes.

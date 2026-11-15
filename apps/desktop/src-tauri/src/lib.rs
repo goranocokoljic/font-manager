@@ -1413,6 +1413,29 @@ async fn open_url(url: String) -> ApiResult<()> {
     })
 }
 
+/// Shows a source's folder in the OS file manager (E50.13: the source card's
+/// "Show in file manager"). The UI names the source, not a path, so only a
+/// folder the user added can be opened; a folder that is not there is
+/// `NotFound`.
+#[tauri::command]
+async fn show_source_folder(state: State<'_, AppState>, source: SourceId) -> ApiResult<()> {
+    let sources = call(&state, |api| api.list_sources()).await?;
+    let found = sources
+        .into_iter()
+        .find(|s| s.id == source)
+        .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "The source is not in the library."))?;
+    fm_platform::show_folder(Path::new(&found.path)).map_err(|e| match e {
+        fm_platform::ShowFolderError::NotAFolder(_) => {
+            ApiError::new(ErrorCode::NotFound, "The folder cannot be found.")
+                .with_detail(e.to_string())
+        }
+        fm_platform::ShowFolderError::Launch(_) => {
+            ApiError::new(ErrorCode::Io, "The file manager could not be opened.")
+                .with_detail(e.to_string())
+        }
+    })
+}
+
 /// Shows the native shell's labels (Help menu, tray) in the UI's locale; the
 /// UI calls it at start and when the Language setting changes.
 #[tauri::command]
@@ -1610,6 +1633,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             answer_mcp_confirmation,
             open_help,
             open_url,
+            show_source_folder,
             set_shell_locale,
             print_page,
             updater::update_support,

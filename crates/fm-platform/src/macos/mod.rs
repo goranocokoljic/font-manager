@@ -30,6 +30,7 @@ pub(crate) mod paths;
 mod pdf;
 #[cfg(target_os = "macos")]
 mod process;
+mod show_folder;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)] // Objective-C runtime and CoreFoundation FFI; every block has a SAFETY note.
 mod trash;
@@ -52,6 +53,7 @@ pub use pdf::MacosPdfPrinter;
 pub(crate) use pdf::run_ui_loop;
 #[cfg(target_os = "macos")]
 pub(crate) use process::is_running;
+pub(crate) use show_folder::command as show_folder_command;
 #[cfg(target_os = "macos")]
 pub(crate) use trash::FinderTrash;
 #[cfg_attr(not(target_os = "macos"), allow(unused_imports))]

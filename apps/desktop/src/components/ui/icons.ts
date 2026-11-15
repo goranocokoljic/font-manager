@@ -48,6 +48,9 @@ export const ICONS = {
   arrowRight: '<path d="M3 8h10M9 4l4 4-4 4"/>',
   folderPlus:
     '<path d="M2.5 4.5v7a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H8L6.8 3.5H3.5a1 1 0 0 0-1 1zM8 7.5v3M6.5 9h3"/>',
+  cloud: '<path d="M4.5 12.5a3 3 0 0 1-.4-6 4 4 0 0 1 7.7-.9 3.5 3.5 0 0 1 .2 6.9z"/>',
+  folderOpen:
+    '<path d="M2.5 11.5v-7a1 1 0 0 1 1-1h3.3L8 4.5h4.5a1 1 0 0 1 1 1v1M2.5 11.5l1.6-4.3a1 1 0 0 1 .9-.7h8.8a.7.7 0 0 1 .7.9l-1.3 4.1a1 1 0 0 1-1 .7H3.5a1 1 0 0 1-1-.7z"/>',
   clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 4.8V8l2.2 1.3"/>',
   zap: '<path d="M8.8 2.5L3.5 9h4l-.3 4.5L12.5 7h-4z"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',

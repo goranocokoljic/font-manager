@@ -15,6 +15,43 @@ use serde::{Deserialize, Serialize};
 use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
 
+/// Folder names that cloud sync clients create for the folder they sync:
+/// Dropbox, OneDrive (`OneDrive`, `OneDrive - Company`), Google Drive
+/// (`Google Drive`, `My Drive`), Box, pCloud, and on macOS the File Provider
+/// root `~/Library/CloudStorage` and iCloud Drive's `Mobile Documents`.
+const CLOUD_FOLDERS: &[&str] = &[
+    "dropbox",
+    "onedrive",
+    "google drive",
+    "googledrive",
+    "my drive",
+    "box",
+    "box sync",
+    "pcloud drive",
+    "icloud drive",
+    "iclouddrive",
+    "mobile documents",
+    "cloudstorage",
+];
+
+/// Whether `path` lies inside a cloud sync client's folder, judged by the
+/// names of its folders (case-insensitive; `OneDrive - Company` and
+/// `Dropbox (Team)` count). Never touches the disk.
+pub(crate) fn in_cloud_folder(path: &Path) -> bool {
+    path.components().any(|c| {
+        let std::path::Component::Normal(name) = c else {
+            return false;
+        };
+        let name = name.to_string_lossy().to_lowercase();
+        CLOUD_FOLDERS.iter().any(|cloud| {
+            name == *cloud
+                || name
+                    .strip_prefix(cloud)
+                    .is_some_and(|rest| rest.starts_with(" -") || rest.starts_with(" ("))
+        })
+    })
+}
+
 /// The file name of the sources backup, next to the database.
 pub(crate) const BACKUP_FILE: &str = "sources.json";
 
@@ -34,7 +71,7 @@ impl Index {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT s.id, s.path, s.kind, s.paused, COUNT(face.id)
+                "SELECT s.id, s.path, s.kind, s.paused, COUNT(face.id), s.scanned_at
                  FROM source s
                  LEFT JOIN font_file f ON f.source_id = s.id
                  LEFT JOIN face ON face.file_id = f.id
@@ -49,21 +86,38 @@ impl Index {
                     row.get::<_, String>(2)?,
                     row.get::<_, bool>(3)?,
                     row.get::<_, u32>(4)?,
+                    row.get::<_, Option<String>>(5)?,
                 ))
             })
             .map_err(|e| db_error(&e))?;
         let mut out = Vec::new();
         for row in rows {
-            let (id, path, kind, paused, face_count) = row.map_err(|e| db_error(&e))?;
+            let (id, path, kind, paused, face_count, last_scanned) =
+                row.map_err(|e| db_error(&e))?;
+            let folder = Path::new(&path);
             out.push(Source {
                 id: SourceId(id),
+                missing: !folder.is_dir(),
+                cloud: in_cloud_folder(folder),
                 path,
                 kind: kind_from_sql(&kind)?,
                 paused,
                 face_count,
+                last_scanned,
             });
         }
         Ok(out)
+    }
+
+    /// Records that a scan of `source` finished now (the card's "last scan").
+    pub(super) fn mark_scanned(&self, source: SourceId) -> FmResult<()> {
+        self.conn
+            .execute(
+                "UPDATE source SET scanned_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?1",
+                [source.0],
+            )
+            .map_err(|e| db_error(&e))?;
+        Ok(())
     }
 
     /// Adds a folder as a source. `Conflict` when the folder is already one.

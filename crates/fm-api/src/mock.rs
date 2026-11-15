@@ -999,6 +999,9 @@ impl State {
                 kind: SourceKind::Watched,
                 paused: false,
                 face_count: 7,
+                last_scanned: Some("2026-10-16T09:30:00Z".into()),
+                missing: false,
+                cloud: false,
             },
             Source {
                 id: SourceId(2),
@@ -1006,6 +1009,9 @@ impl State {
                 kind: SourceKind::System,
                 paused: false,
                 face_count: 0,
+                last_scanned: None,
+                missing: false,
+                cloud: false,
             },
         ];
         Self {
@@ -1667,6 +1673,9 @@ impl LibraryService for MockApi {
             kind: SourceKind::Watched,
             paused: false,
             face_count: 0,
+            last_scanned: None,
+            missing: false,
+            cloud: false,
         };
         st.sources.push(source.clone());
         Ok(source)
