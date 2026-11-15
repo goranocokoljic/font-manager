@@ -1461,8 +1461,8 @@
       "showLabel": "Show {name} in the file manager",
       "removeLabel": "Remove {name} from the library",
       "confirmRemove": "Remove {name} from the library? Its fonts leave the library; the files stay where they are.",
-      "drop": "Drop a folder here, or choose one with Add folder",
-      "empty": "No folders yet. Drop a folder here, or choose one with Add folder.",
+      "drop": "Choose a folder to add",
+      "empty": "No folders yet. Choose a folder to add.",
       "problemsIn": "in these folders — {detail}",
       "problemCounts": {
         "duplicates": {

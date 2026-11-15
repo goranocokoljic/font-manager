@@ -1461,8 +1461,8 @@
       "showLabel": "{name} im Dateimanager zeigen",
       "removeLabel": "{name} aus der Bibliothek entfernen",
       "confirmRemove": "{name} aus der Bibliothek entfernen? Die Schriften verlassen die Bibliothek; die Dateien bleiben, wo sie sind.",
-      "drop": "Ziehe einen Ordner hierher oder wähle einen mit „Ordner hinzufügen“",
-      "empty": "Noch keine Ordner. Ziehe einen Ordner hierher oder wähle einen mit „Ordner hinzufügen“.",
+      "drop": "Ordner zum Hinzufügen wählen",
+      "empty": "Noch keine Ordner. Wähle einen Ordner zum Hinzufügen.",
       "problemsIn": "in diesen Ordnern — {detail}",
       "problemCounts": {
         "duplicates": {

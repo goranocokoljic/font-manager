@@ -175,9 +175,7 @@ test('a cloud folder and a missing one; the drop zone and the problems strip', a
     ),
   ).toEqual(['/Users/demo/Dropbox/Studio type']);
 
-  await expect(page.getByTestId('sources-drop')).toHaveText(
-    'Drop a folder here, or choose one with Add folder',
-  );
+  await expect(page.getByTestId('sources-drop')).toHaveText('Choose a folder to add');
   const strip = page.getByTestId('sources-problems');
   await expect(strip).toContainText('in these folders');
   await strip.getByRole('link', { name: 'Open Problems' }).click();

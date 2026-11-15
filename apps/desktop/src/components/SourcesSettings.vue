@@ -3,7 +3,7 @@
 // for a folder a sync client keeps), name, path, font count and last scan, a Watch switch
 // and, on hover or focus, Rescan · Show in file manager · Remove. A running scan shows a
 // badge and a 3 px bar fed by the scan events; a folder that is not there shows Missing.
-// Under the cards: the drop zone (also the empty state), the problems strip and the System
+// Under the cards: the dashed zone that opens the folder picker (also the empty state), the problems strip and the System
 // fonts card. Removing asks once; it removes the index entries only (rule 2). Every fact
 // shown (missing, cloud, last scan, counts) comes from fm-api; this file only lays it out.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -193,10 +193,12 @@ function onConfirmKey(e: KeyboardEvent, id: SourceId): void {
       </li>
     </ul>
 
-    <div class="drop" data-testid="sources-drop">
+    <!-- A click opens the folder picker. A dropped folder gives the webview no path while
+         in-window drags are on (ADR 0017), so the zone does not take a drop. -->
+    <button type="button" class="drop" data-testid="sources-drop" @click="sources.add">
       <UiIcon name="export" />
       <span>{{ folders.length ? t('settings.sources.drop') : t('settings.sources.empty') }}</span>
-    </div>
+    </button>
 
     <div v-if="problems.total" class="problems" data-testid="sources-problems">
       <span class="dot" aria-hidden="true" />
@@ -388,13 +390,21 @@ function onConfirmKey(e: KeyboardEvent, id: SourceId): void {
   align-items: center;
   justify-content: center;
   gap: var(--fm-space-2);
+  width: 100%;
   min-height: 72px;
   margin-top: var(--fm-space-2);
   padding: var(--fm-space-4);
   border: 1.5px dashed var(--fm-border-strong);
   border-radius: var(--fm-radius-lg);
+  background: none;
   color: var(--fm-muted);
+  font: inherit;
   text-align: center;
+  cursor: pointer;
+}
+.drop:hover {
+  border-color: var(--fm-fg);
+  color: var(--fm-fg);
 }
 .problems {
   display: flex;

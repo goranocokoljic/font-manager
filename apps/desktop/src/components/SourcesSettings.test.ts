@@ -208,12 +208,16 @@ describe('Settings › Sources (E50.13)', () => {
 
   it('has the drop zone under the cards, and it is the empty state without folders', async () => {
     const { wrapper } = await mountSources();
-    expect(wrapper.get('[data-testid="sources-drop"]').text()).toBe(
-      'Drop a folder here, or choose one with Add folder',
-    );
+    const zone = wrapper.get('button[data-testid="sources-drop"]');
+    expect(zone.text()).toBe('Choose a folder to add');
+    // A click opens the folder picker, as Add folder does (no drop: ADR 0017).
+    mockPickedFolders.push('/Users/demo/Client brand');
+    await zone.trigger('click');
+    await until(() => wrapper.find('.cards > li[aria-label="Client brand"]').exists());
     wrapper.unmount();
 
-    for (const id of [1, 901, 902]) await client.removeSource(id);
+    for (const s of await client.listSources())
+      if (s.kind !== 'system') await client.removeSource(s.id);
     const empty = await mountSources();
     expect(empty.wrapper.find('.cards').exists()).toBe(false);
     expect(empty.wrapper.get('[data-testid="sources-drop"]').text()).toContain('No folders yet');
