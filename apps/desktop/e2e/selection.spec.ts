@@ -218,8 +218,8 @@ test.describe('the selection bar', () => {
       .nth(1)
       .click({ modifiers: ['Shift'] });
     await bar(page).getByRole('button', { name: 'Activate' }).click();
-    await expect(cards(wall).nth(0).locator('[data-activation="active"]')).toHaveCount(1);
-    await expect(cards(wall).nth(1).locator('[data-activation="active"]')).toHaveCount(1);
+    await expect(cards(wall).nth(0).locator('[data-activation="session"]')).toHaveCount(1);
+    await expect(cards(wall).nth(1).locator('[data-activation="session"]')).toHaveCount(1);
     await expect(bar(page).getByRole('button', { name: 'Deactivate' })).toBeVisible();
 
     // A collection to add to (browser mode starts without one).

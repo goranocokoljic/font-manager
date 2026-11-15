@@ -103,7 +103,10 @@ describe('FontTable', () => {
     ]);
     const inter = rows(t)[0]!;
     expect(inter.attributes('aria-label')).toBe('Inter, 1 style, not active');
-    expect(cell(inter, 'activation').text()).toBe('Inactive');
+    // The cell is the activation dot (E50.5): its button says the state and what a click does.
+    expect(cell(inter, 'activation').get('button').attributes('aria-label')).toBe(
+      'Inter: inactive. Click to activate it for this session.',
+    );
     expect(cell(inter, 'styleCount').text()).toBe('1');
     expect(cell(inter, 'weightRange').text()).toBe('100–900'); // the wght axis
     // The weight line: one dot at 400, a span for the variable range.

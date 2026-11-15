@@ -9,7 +9,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
 import { useScrollSettle } from '../list/settle';
-import { rowActivation } from '../list/activation';
+import { dotName, dotState, dotTarget } from '../list/activation';
 import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
@@ -228,7 +228,13 @@ function onToggle(row: ListRow): void {
             @click.stop="onToggle(item.row)"
             ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
           /></span>
-          <ActivationDot :key="item.row.key" :state="rowActivation(item.row)" />
+          <ActivationDot
+            :key="item.row.key"
+            tabindex="-1"
+            :state="dotState(item.row)"
+            :name="dotName(item.row)"
+            :target="dotTarget(item.row)"
+          />
           <bdi class="name" data-family-name>{{
             item.row.kind === 'face'
               ? `${item.row.family.name} ${styleName(item.row)}`

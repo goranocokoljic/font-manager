@@ -5,7 +5,8 @@
 // cache folder the first time a row shows it, only while the catalog is on. As a list
 // row, a grid card or a waterfall block (the six sizes). Its "Install" button downloads the
 // family into the download folder and activates it in one call (E22.7); its "Download..."
-// button opens the browser's download panel for the family (E22.3). A family the last update check found a
+// button opens the browser's download panel for the family (E22.3). Its activation dot (E50.5)
+// is always off — a catalog family is not in the library — and a click on it installs it. A family the last update check found a
 // newer version of shows an "Update available" badge (E22.4).
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useClient } from '../api/client';
@@ -17,6 +18,7 @@ import { WATERFALL_SIZES } from '../list/waterfall';
 import { catalogFamily, useFaceLoader } from '../preview/faceLoader';
 import { useCatalogsStore } from '../stores/catalogs';
 import type { PreviewSettings } from '../stores/preview';
+import ActivationDot from './ActivationDot.vue';
 import UiBadge from './ui/UiBadge.vue';
 import UiButton from './ui/UiButton.vue';
 
@@ -89,6 +91,13 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
     data-testid="catalog-family"
   >
     <span class="label">
+      <ActivationDot
+        state="off"
+        catalog
+        :name="family.name"
+        :disabled="catalogs.downloading"
+        @activate="catalogs.askInstall(family)"
+      />
       <bdi class="name">{{ family.name }}</bdi>
       <span v-if="mode !== 'grid'" class="detail">
         <span v-if="family.category">{{ family.category }}</span>

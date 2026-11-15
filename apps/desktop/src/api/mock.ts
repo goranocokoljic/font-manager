@@ -1311,6 +1311,11 @@ function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySumma
     declaredLicense: details.find((d) => d.license.declared)?.license.declared ?? null,
     tags,
     notes: detail?.familyNotes ?? null,
+    activeMode: faces.some((f) => f.active === 'permanent')
+      ? 'permanent'
+      : active > 0
+        ? 'session'
+        : null,
   };
 }
 

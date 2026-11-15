@@ -8,6 +8,7 @@ import type {
   FaceId,
   FaceSummary,
   FamilyId,
+  FamilySummary,
   Target,
 } from '../api/types';
 import { t } from '../i18n';
@@ -18,6 +19,39 @@ export type RowActivation = 'active' | 'partial' | 'inactive';
 /** A style row is active or not; a family row can also be partly active. */
 export function rowActivation(row: ListRow): RowActivation {
   return row.kind === 'face' ? (row.face.active ? 'active' : 'inactive') : row.family.activation;
+}
+
+/**
+ * The three states of the activation dot (E50.5): off, active for the session,
+ * permanently active. A family is permanent when any of its faces is, else
+ * session when any is active; a partly active family shows the mode of its
+ * active faces (its row label still says "partly active").
+ */
+export type DotState = 'off' | 'session' | 'permanent';
+
+/** The dot of a row. */
+export function dotState(row: ListRow): DotState {
+  return row.kind === 'face' ? (row.face.active ?? 'off') : familyDotState(row.family);
+}
+
+/** The dot of a family (a family row, the Family page hero). */
+export function familyDotState(family: FamilySummary): DotState {
+  if (family.activation === 'inactive') return 'off';
+  return family.activeMode ?? 'session';
+}
+
+/** What the dot of a row acts on: the face of a style row, the whole family of a family row. */
+export function dotTarget(row: ListRow): Target {
+  return row.kind === 'face'
+    ? { kind: 'faces', faces: [row.face.id] }
+    : { kind: 'family', family: row.family.id };
+}
+
+/** The name the dot's label gives a row: the family, and the style of a style row. */
+export function dotName(row: ListRow): string {
+  if (row.kind === 'family') return row.family.name;
+  const style = row.virtual?.name ?? row.face.style;
+  return `${row.face.familyName} ${style}`;
 }
 
 /** What a toggle does to the rows: one request per target, all the same way. */

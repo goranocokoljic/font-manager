@@ -72,18 +72,18 @@ test('a row dragged out of the window carries the payload and activates its face
 }) => {
   const tree = await open(page);
   const inter = tree.getByRole('treeitem', { name: /^Inter,/ });
-  await expect(dot(page, 'Inter')).toHaveAttribute('data-activation', 'inactive');
+  await expect(dot(page, 'Inter')).toHaveAttribute('data-activation', 'off');
 
   const carried = await dragOut(page, inter);
   expect(JSON.parse(carried['application/x-fm-font-switch']!)).toEqual(INTER);
   expect(carried['text/plain']).toBe('Inter-Regular');
   expect(carried['text/uri-list']).toBe(INTER.fileUrl);
   expect(JSON.parse(carried['application/x-fm-fonts']!)).toEqual({ faces: [], families: [1] });
-  await expect(dot(page, 'Inter')).toHaveAttribute('data-activation', 'inactive');
+  await expect(dot(page, 'Inter')).toHaveAttribute('data-activation', 'off');
 
   await leaveWindow(page);
   await expect(page.getByText(/fonts? active$/)).toHaveText('1 font active');
-  await expect(dot(page, 'Inter')).not.toHaveAttribute('data-activation', 'inactive');
+  await expect(dot(page, 'Inter')).not.toHaveAttribute('data-activation', 'off');
 
   // The drag ends; the face stays active.
   await page.evaluate(() => document.dispatchEvent(new DragEvent('dragend')));

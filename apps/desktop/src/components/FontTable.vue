@@ -26,7 +26,7 @@ import {
   type Column,
   type ColumnId,
 } from '../list/columns';
-import { rowActivation } from '../list/activation';
+import { dotName, dotState, dotTarget } from '../list/activation';
 import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleName, type ListRow } from '../list/rows';
@@ -387,7 +387,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
               @click="views.sortBy(view, col.id)"
             >
               <span :class="{ 'sr-only': col.id === 'activation' }">{{ col.label }}</span>
-              <ActivationDot v-if="col.id === 'activation'" state="inactive" />
+              <ActivationDot v-if="col.id === 'activation'" state="off" decorative />
               <span class="arrow" aria-hidden="true">{{
                 SORT_ARROW[ariaSort(config, col.id)]
               }}</span>
@@ -438,8 +438,13 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
               :data-column="col.id"
             >
               <template v-if="col.id === 'activation'">
-                <ActivationDot :state="rowActivation(item.row)" still />
-                <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
+                <ActivationDot
+                  tabindex="-1"
+                  :state="dotState(item.row)"
+                  :name="dotName(item.row)"
+                  :target="dotTarget(item.row)"
+                  still
+                />
               </template>
               <template v-else-if="col.id === 'name'">
                 <span

@@ -55,7 +55,10 @@ test("table mode shows the spec's columns for every family", async ({ page }) =>
   await expect(inter.locator('[data-column="location"]')).toHaveText('/Users/demo/Fonts');
   await expect(inter.locator('[data-column="license"]')).toHaveText('Open license');
   await expect(inter.locator('[data-column="weightLine"] .mark')).toHaveCount(1);
-  await expect(inter.locator('[data-column="activation"]')).toHaveText('Inactive');
+  // The activation cell is the dot (E50.5); its button says the state and what a click does.
+  await expect(
+    inter.locator('[data-column="activation"]').getByRole('button'),
+  ).toHaveAccessibleName('Inter: inactive. Click to activate it for this session.');
 });
 
 test('columns sort, reorder and hide, and the setup survives a reload', async ({ page }) => {

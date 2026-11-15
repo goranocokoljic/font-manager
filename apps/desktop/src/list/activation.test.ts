@@ -8,7 +8,15 @@ import type {
   FamilySummary,
   OutcomeStatus,
 } from '../api/types';
-import { bulkMessage, planToggle, rowActivation, undoSteps } from './activation';
+import {
+  bulkMessage,
+  dotName,
+  dotState,
+  dotTarget,
+  planToggle,
+  rowActivation,
+  undoSteps,
+} from './activation';
 import { faceKey, familyKey, type FaceRow, type FamilyRow } from './rows';
 
 const family = (id: number, activation: FamilyActivation = 'inactive'): FamilySummary => ({
@@ -43,6 +51,35 @@ describe('rowActivation', () => {
     expect(rowActivation(faceRow(1, 1, 'permanent'))).toBe('active');
     expect(rowActivation(familyRow(1, 'partial'))).toBe('partial');
     expect(rowActivation(familyRow(1, 'active'))).toBe('active');
+  });
+});
+
+describe('dotState, dotTarget, dotName (E50.5)', () => {
+  it('a style row shows its mode; off when inactive', () => {
+    expect(dotState(faceRow(1, 1))).toBe('off');
+    expect(dotState(faceRow(1, 1, 'session'))).toBe('session');
+    expect(dotState(faceRow(1, 1, 'permanent'))).toBe('permanent');
+  });
+
+  it('a family row shows the strongest mode of its active faces', () => {
+    expect(dotState(familyRow(1))).toBe('off');
+    const row = (activation: FamilyActivation, activeMode?: ActivationMode | null): FamilyRow => ({
+      ...familyRow(1, activation),
+      family: { ...family(1, activation), activeMode },
+    });
+    expect(dotState(row('active', 'session'))).toBe('session');
+    expect(dotState(row('partial', 'permanent'))).toBe('permanent');
+    expect(dotState(row('partial', 'session'))).toBe('session');
+    // An older core without the field: active is at least a session.
+    expect(dotState(row('active'))).toBe('session');
+  });
+
+  it('acts on the face of a style row and the whole family of a family row', () => {
+    expect(dotTarget(faceRow(4, 1))).toEqual({ kind: 'faces', faces: [4] });
+    expect(dotTarget(familyRow(2))).toEqual({ kind: 'family', family: 2 });
+    expect(dotName(familyRow(2))).toBe(family(2).name);
+    const face = faceRow(4, 1);
+    expect(dotName(face)).toBe(`${face.face.familyName} ${face.face.style}`);
   });
 });
 

@@ -1503,6 +1503,12 @@ export type FamilySummary = {
 	tags?: string[],
 	/**  The user's notes on the family (E13.5), not those of its faces. */
 	notes?: string | null,
+	/**
+	 *  How its active faces are active (E50.5): `Permanent` when any face is
+	 *  permanently active, else `Session` when any is active; absent when no
+	 *  face is active. The activation dot draws it.
+	 */
+	activeMode?: ActivationMode | null,
 };
 
 /**  The group a registered OpenType feature is listed under. */

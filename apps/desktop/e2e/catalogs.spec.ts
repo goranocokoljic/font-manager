@@ -398,10 +398,7 @@ test('Install proposes the folder once, then shows the progress and the family a
   await serveFonts(page);
   await page.goto('/?mockCatalog=1&mockDownloadMs=600');
   const interDot = page.getByRole('treeitem', { name: /^Inter,/ }).locator('[data-activation]');
-  await expect(interDot, 'not active before the install').not.toHaveAttribute(
-    'data-activation',
-    'active',
-  );
+  await expect(interDot, 'not active before the install').toHaveAttribute('data-activation', 'off');
   const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   const google = catalogs.getByRole('button', { name: 'Google Fonts', exact: true });
   await google.click();
@@ -431,11 +428,33 @@ test('Install proposes the folder once, then shows the progress and the family a
   await expect(install).toBeEnabled();
 
   await sidebar(page).getByRole('button', { name: 'All fonts' }).click();
-  await expect(interDot).toHaveAttribute('data-activation', 'active');
+  await expect(interDot).toHaveAttribute('data-activation', 'session');
 
   // Later: no proposal, and a family already installed is not downloaded again.
   await google.click();
   await install.click();
   await expect(status).toContainText('Inter is already in your library, so nothing was downloaded');
   await expect(line.getByRole('heading')).toHaveCount(0);
+});
+
+// E50.5: a catalog item carries the same activation dot, off; a click installs the family.
+test('a catalog item has the activation dot; a click on it starts the install', async ({
+  page,
+}) => {
+  await serveFonts(page);
+  await page.goto('/?mockCatalog=1');
+  await sidebar(page).getByRole('button', { name: 'Google Fonts', exact: true }).click();
+  await expect(catalogRows(page)).toHaveCount(4);
+  const dot = catalogRows(page).filter({ hasText: 'Inter' }).getByTestId('activation-dot');
+  await expect(dot).toHaveAttribute('data-activation', 'off');
+  await expect(dot).toHaveAttribute(
+    'aria-label',
+    'Inter: not in the library. Click to install and activate it.',
+  );
+  await dot.click();
+  await expect(
+    page
+      .getByTestId('catalog-install')
+      .getByRole('heading', { name: 'Where should installed fonts go?' }),
+  ).toBeVisible();
 });

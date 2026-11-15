@@ -1191,6 +1191,10 @@ impl State {
             declared_license: faces.iter().find_map(|f| f.detail.license.declared),
             tags,
             notes: self.family_notes.get(&fam.id).cloned(),
+            active_mode: faces
+                .iter()
+                .filter_map(|f| self.active.get(&f.detail.face.id).map(|a| a.mode))
+                .max_by_key(|m| matches!(m, ActivationMode::Permanent)),
         }
     }
 

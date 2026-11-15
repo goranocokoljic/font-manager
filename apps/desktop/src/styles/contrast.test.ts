@@ -462,12 +462,16 @@ describe('the accent in the style sheets', () => {
     expect(ruleOf(file, selector)).toMatch(pattern);
   });
 
-  it('shows the activation dot fill when the face is active (E46.4)', () => {
-    expect(ruleOf('components/ActivationDot.vue', '.dot.active::before')).toMatch(
-      /transform:\s*scale\(1\)/,
-    );
-    expect(ruleOf('components/ActivationDot.vue', '.dot.active, .dot.partial')).toMatch(
+  it('shows the activation dot fill when the face is active (E46.4, E50.5)', () => {
+    expect(
+      ruleOf('components/ActivationDot.vue', '.dot.session::before, .dot.permanent::before'),
+    ).toMatch(/transform:\s*scale\(1\)/);
+    expect(ruleOf('components/ActivationDot.vue', '.dot.session, .dot.permanent')).toMatch(
       /border-color:\s*var\(--fm-accent\)/,
+    );
+    // Permanent is told apart by shape: a ring outside a gap, not another colour.
+    expect(ruleOf('components/ActivationDot.vue', '.dot.permanent')).toMatch(
+      /outline:\s*1\.5px solid var\(--fm-accent\)/,
     );
   });
 

@@ -680,6 +680,14 @@
     "notActivated": {
       "one": "{count} font not activated.",
       "other": "{count} fonts not activated."
+    },
+    "dot": {
+      "offLabel": "{name}: inactive. Click to activate it for this session.",
+      "sessionLabel": "{name}: active for this session. Click to deactivate it.",
+      "permanentLabel": "{name}: permanently active. Click for the activation menu.",
+      "catalogLabel": "{name}: not in the library. Click to install and activate it.",
+      "menu": "Activation of {name}",
+      "deactivate": "Deactivate"
     }
   },
   "info": {

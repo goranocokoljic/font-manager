@@ -434,6 +434,11 @@ pub struct FamilySummary {
     /// The user's notes on the family (E13.5), not those of its faces.
     #[serde(default)]
     pub notes: Option<String>,
+    /// How its active faces are active (E50.5): `Permanent` when any face is
+    /// permanently active, else `Session` when any is active; absent when no
+    /// face is active. The activation dot draws it.
+    #[serde(default)]
+    pub active_mode: Option<ActivationMode>,
 }
 
 /// One style on a family's weight line.
@@ -1480,6 +1485,7 @@ mod tests {
             declared_license: None,
             tags: Vec::new(),
             notes: None,
+            active_mode: None,
         }
     }
 

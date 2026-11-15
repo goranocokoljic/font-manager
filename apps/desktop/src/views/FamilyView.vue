@@ -7,6 +7,7 @@
 // family's first.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import ActivationDot from '../components/ActivationDot.vue';
 import FamilyCharacters from '../components/FamilyCharacters.vue';
 import FamilyFeatures from '../components/FamilyFeatures.vue';
 import FamilyInfo from '../components/FamilyInfo.vue';
@@ -35,6 +36,7 @@ import SpecimenText from '../components/SpecimenText';
 import MissingGlyphs from '../components/MissingGlyphs.vue';
 import { useWeightScrub } from '../preview/useWeightScrub';
 import { variationSettings } from '../preview/variations';
+import { familyDotState } from '../list/activation';
 import { useAxesStore } from '../stores/axes';
 import type { CollectionId, PairingSuggestion } from '../api/types';
 import { useCatalogsStore } from '../stores/catalogs';
@@ -411,7 +413,11 @@ onBeforeUnmount(() => {
             <p v-if="page.summary" class="meta" data-testid="family-meta">
               <span v-for="part in metaParts" :key="part" class="meta-part">{{ part }}</span>
               <span class="state" :data-state="page.summary.activation">
-                <span class="dot" aria-hidden="true" />
+                <ActivationDot
+                  :state="familyDotState(page.summary)"
+                  :name="page.summary.name"
+                  :target="{ kind: 'family', family: page.summary.id }"
+                />
                 {{ t(`columns.state.${page.summary.activation}`) }}
               </span>
             </p>
@@ -608,31 +614,6 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--fm-space-1);
-}
-/* The state dot: activation fills it, the fill scaling 0 → 1 (E46.4, motion table "Activate"). */
-.dot {
-  position: relative;
-  width: 7px;
-  height: 7px;
-  border: 1px solid var(--fm-muted);
-  border-radius: 50%;
-  transition: border-color var(--fm-motion-fast) var(--fm-ease);
-}
-.dot::before {
-  position: absolute;
-  inset: -1px;
-  border-radius: 50%;
-  background-color: var(--fm-success);
-  transform: scale(0);
-  transition: transform var(--fm-motion-fast) var(--fm-ease);
-  content: '';
-}
-.state[data-state='active'] .dot,
-.state[data-state='partial'] .dot {
-  border-color: var(--fm-success);
-}
-.state[data-state='active'] .dot::before {
-  transform: scale(1);
 }
 .specimen {
   overflow: hidden;
