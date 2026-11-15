@@ -478,3 +478,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E50.7 #578] apps/desktop/src/components/FamilyCharacters.vue:701 — the cursor outline and the selected ring draw on the same pixels, so focus cannot be told from selection on the selected cell (as with the old border).
 - [E50.7 #578] apps/desktop/src/components/ui/UiSwitch.vue:21 — the off-state track edge (`--fm-border-strong` on `--fm-surface-2`) may not reach 3:1.
 - [E50.7 #578] apps/desktop/src/components/FamilyCharacters.vue:115 — `measure()` runs only on scroll and resize, so the grid's cached offset goes stale when content above it changes height without a scroll.
+- [E50.9 #580] apps/desktop/src/components/GlyphCompare.vue:334 — the compare overlay's legend already shows this face's metric lines (x-height) before a second face is picked (E50.8 behaviour).
+- [E50.9 #580] apps/desktop/src/components/ActivationDot.vue:85 — the roving-focus menu key handler is copied in ActivationDot, CollectionsSidebar, FamilyStyles and FamilyCollectionMenu; the glyph cell menu adds one more copy.
