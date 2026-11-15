@@ -40,7 +40,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect
 import type { FaceId, FaceSummary } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
 import { SETTLE_MS, useScrollSettle } from '../list/settle';
-import { rowActivation } from '../list/activation';
+import { dotName, dotState, dotTarget } from '../list/activation';
 import { dragKeys } from '../list/drag';
 import { boxBetween, cardsInBox, isClick, type Box } from '../list/marquee';
 import {
@@ -757,7 +757,12 @@ function onToggle(row: ListRow): void {
             /></span>
             <div class="meta">
               <span class="lead">
-                <ActivationDot :state="rowActivation(item.row)" />
+                <ActivationDot
+                  pointer
+                  :state="dotState(item.row)"
+                  :name="dotName(item.row)"
+                  :target="dotTarget(item.row)"
+                />
                 <bdi class="name" data-family-name>{{ item.name }}</bdi>
               </span>
               <span

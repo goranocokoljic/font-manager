@@ -806,6 +806,10 @@ fn summary(faces: &[&Row], cache: &SearchCache) -> FamilySummary {
         declared_license: faces.iter().find_map(|f| f.facts.license),
         tags,
         notes: first.and_then(|f| cache.family_notes.get(&f.family_key).cloned()),
+        active_mode: faces
+            .iter()
+            .filter_map(|f| f.active)
+            .max_by_key(|m| matches!(m, ActivationMode::Permanent)),
     }
 }
 

@@ -680,6 +680,14 @@
     "notActivated": {
       "one": "{count} Schrift nicht aktiviert.",
       "other": "{count} Schriften nicht aktiviert."
+    },
+    "dot": {
+      "offLabel": "{name}: inaktiv. Klicken, um die Schrift für diese Sitzung zu aktivieren.",
+      "sessionLabel": "{name}: für diese Sitzung aktiv. Klicken, um die Schrift zu deaktivieren.",
+      "permanentLabel": "{name}: dauerhaft aktiv. Klicken für das Aktivierungsmenü.",
+      "catalogLabel": "{name}: nicht in der Bibliothek. Klicken, um die Schrift zu installieren und zu aktivieren.",
+      "menu": "Aktivierung von {name}",
+      "deactivate": "Deaktivieren"
     }
   },
   "info": {

@@ -143,7 +143,7 @@ async function activateFirst(page: Page) {
   await tree.getByRole('treeitem').first().click();
   await record(page);
   await page.keyboard.press('a');
-  await expect(tree.locator('[data-activation="active"]').first()).toBeAttached();
+  await expect(tree.locator('[data-activation="session"]').first()).toBeAttached();
   await page.waitForTimeout(100);
   return recorded(page);
 }
@@ -308,7 +308,7 @@ test.describe('nothing animates while the user types or moves by keyboard (E46.4
           .getByRole('group', { name: 'View mode' })
           .getByRole('button', { name: 'Waterfall' })
           .click();
-      const active = page.locator('[data-activation="active"], [data-activation="partial"]');
+      const active = page.locator('[data-activation="session"], [data-activation="permanent"]');
       await expect(active.first()).toBeAttached();
       const box = page.getByRole('searchbox', { name: 'Search fonts' });
       await box.click();

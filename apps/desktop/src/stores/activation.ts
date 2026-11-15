@@ -139,6 +139,19 @@ export const useActivationStore = defineStore('activation', () => {
     if (plan) await bulk(plan.deactivate, plan.targets, mode);
   }
 
+  /**
+   * A click on an activation dot (E50.5): activates `target` for the session, or
+   * deactivates it when `deactivate` (a dot in the session state). A toast with Undo after.
+   */
+  function toggleSession(target: Target, deactivate: boolean): Promise<void> {
+    return bulk(deactivate, [target], 'session');
+  }
+
+  /** Deactivates `target`, a permanent one too (the dot's menu). A toast with Undo after. */
+  function deactivateTarget(target: Target): Promise<void> {
+    return bulk(true, [target]);
+  }
+
   /** Activates `faces` in `mode` the way the bulk actions do: a toast with Undo after. */
   function activateFaces(faces: readonly FaceId[], mode: ActivationMode): Promise<void> {
     return bulk(false, [{ kind: 'faces', faces: [...faces] }], mode);
@@ -161,6 +174,8 @@ export const useActivationStore = defineStore('activation', () => {
     stop,
     refresh,
     toggleRows,
+    toggleSession,
+    deactivateTarget,
     activateFaces,
     deactivateAll,
     deactivateAllExcept,

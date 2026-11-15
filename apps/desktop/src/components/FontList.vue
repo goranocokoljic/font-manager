@@ -31,7 +31,7 @@ import { keepRowInView } from '../list/density';
 import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
-import { rowActivation } from '../list/activation';
+import { dotName, dotState, dotTarget } from '../list/activation';
 import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
@@ -347,7 +347,13 @@ function onToggle(row: ListRow): void {
           :show-variable="item.row.kind === 'family' && !item.row.single"
         >
           <template #lead>
-            <ActivationDot :key="item.row.key" :state="rowActivation(item.row)" />
+            <ActivationDot
+              :key="item.row.key"
+              tabindex="-1"
+              :state="dotState(item.row)"
+              :name="dotName(item.row)"
+              :target="dotTarget(item.row)"
+            />
             <span
               v-if="quick.holds(item.row)"
               class="quick-mark"
@@ -417,10 +423,13 @@ function onToggle(row: ListRow): void {
           :data-state="motion.settled.value ? undefined : 'deferred'"
         >
           <span class="label"
-            ><ActivationDot :key="item.row.key" :state="rowActivation(item.row)" /><bdi
-              data-family-name
-              >{{ item.row.family.name }}</bdi
-            ></span
+            ><ActivationDot
+              :key="item.row.key"
+              tabindex="-1"
+              :state="dotState(item.row)"
+              :name="dotName(item.row)"
+              :target="dotTarget(item.row)"
+            /><bdi data-family-name>{{ item.row.family.name }}</bdi></span
           >
           <span v-if="library.failed.has(item.row.family.id)" class="note">
             {{ t('list.stylesUnavailable') }}

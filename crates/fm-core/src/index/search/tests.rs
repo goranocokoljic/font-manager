@@ -465,6 +465,40 @@ fn the_family_row_shows_activation() {
     assert!(res.families[0].family.is_variable);
 }
 
+#[test]
+fn the_family_row_names_the_strongest_activation_mode() {
+    let (index, _) = indexed(&library());
+    assert_eq!(
+        search(&index, "roboto").families[0].family.active_mode,
+        None
+    );
+    index
+        .conn
+        .execute(
+            "INSERT INTO activation VALUES (?1, 'session', NULL, '2026-10-18T10:00:00Z')",
+            [face_id(&index, "Roboto-Bold")],
+        )
+        .expect("session");
+    let res = search(&index, "roboto");
+    assert_eq!(
+        res.families[0].family.active_mode,
+        Some(ActivationMode::Session)
+    );
+    // One permanent face makes the family permanent, whatever the others are.
+    index
+        .conn
+        .execute(
+            "INSERT INTO activation VALUES (?1, 'permanent', NULL, '2026-10-18T10:00:00Z')",
+            [face_id(&index, "Roboto-Regular")],
+        )
+        .expect("permanent");
+    let res = search(&index, "roboto");
+    assert_eq!(
+        res.families[0].family.active_mode,
+        Some(ActivationMode::Permanent)
+    );
+}
+
 /// `library()` with something for every filter: Roboto Regular has `smcp`,
 /// Black Ops One is color, Source Sans is an OTF, a second source holds a
 /// broken Lora; Helvetica Neue Bold is declared a web font, favorite, five
