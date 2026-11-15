@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 import { defaultTable } from '../list/columns';
 import { ALL_FONTS_VIEW } from './preview';
-import { useViewsStore, VIEWS_STORAGE_KEY } from './views';
+import { useViewsStore, VIEW_MODES, VIEWS_STORAGE_KEY } from './views';
 
 function freshStore() {
   setActivePinia(createPinia());
@@ -87,6 +87,21 @@ describe('views store', () => {
     const store = freshStore();
     expect(store.modeFor(ALL_FONTS_VIEW)).toBe('list');
     expect(store.tableFor(ALL_FONTS_VIEW)).toEqual(defaultTable());
+  });
+
+  it('orders the modes Lines first: Lines · Wall · Table · Waterfall · Layout (E51.3)', () => {
+    expect(VIEW_MODES).toEqual(['list', 'grid', 'table', 'waterfall', 'layout']);
+  });
+
+  it('reads a saved mode by its name, not by its place in the switch (E51.3)', () => {
+    // Saved while Wall was the first button: the view still opens in the Wall.
+    localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify({ [ALL_FONTS_VIEW]: { mode: 'grid' } }));
+    expect(freshStore().modeFor(ALL_FONTS_VIEW)).toBe('grid');
+    // A view with nothing saved still opens in Lines.
+    expect(freshStore().modeFor('some-other-view')).toBe('list');
+    // A position is not a mode name.
+    localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify({ [ALL_FONTS_VIEW]: { mode: 0 } }));
+    expect(freshStore().modeFor(ALL_FONTS_VIEW)).toBe('list');
   });
 
   it('keeps the grid and waterfall modes, with no API order until one is chosen', async () => {

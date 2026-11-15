@@ -137,7 +137,7 @@ test('the mode switch and the preset picker work from the keyboard and the palet
   page,
 }) => {
   await open(page);
-  // Key 5 is the layout mode (keys 1–5: grid, list, table, waterfall, layout).
+  // Key 5 is the layout mode (keys 1–5: list, grid, table, waterfall, layout).
   await page.getByRole('main').focus();
   await page.keyboard.press('5');
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
@@ -167,7 +167,7 @@ test('the mode switch and the preset picker work from the keyboard and the palet
       palette.getByRole('option').filter({ hasText: `Show the ${name} layout` }),
     ).toHaveCount(1);
   await page.keyboard.press('Escape');
-  await page.keyboard.press('2');
+  await page.keyboard.press('1');
   await expect(modeButton(page, 'List')).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('Show the Quote layout');

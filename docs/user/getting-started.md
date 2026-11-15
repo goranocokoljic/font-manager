@@ -47,7 +47,7 @@ your team, read [Shared libraries](shared-libraries.md).
   or **Cap height** to make them look the same size. Each font then shows its small
   letters (or its capitals) at the same height. A font that does not give this height
   stays at the size you set. Each view keeps its own setting.
-- Use the **List**, **Table**, **Grid**, **Waterfall** and **Layout** buttons to change
+- Use the **List**, **Grid**, **Table**, **Waterfall** and **Layout** buttons to change
   how the fonts show. The grid shows a card for each font. The waterfall shows the
   preview text at six sizes. The layout shows the selected font as a page of text. Pick
   the page in the **Preset** box: Book, Columns, Magazine, Quote, Characters or

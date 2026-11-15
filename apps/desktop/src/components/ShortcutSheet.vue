@@ -5,6 +5,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
+import { VIEW_MODES } from '../stores/views';
 
 const open = ref(false);
 const dialog = ref<HTMLElement | null>(null);
@@ -56,7 +57,8 @@ const groups = computed(() => [
     title: t('shortcuts.groups.view'),
     rows: [
       { label: t('shortcuts.rows.previewField'), keys: [chord(ACTIONS.previewField)] },
-      { label: t('shortcuts.rows.views'), keys: ['1–5'] },
+      // The five modes in the order of the view switch and its 1–5 keys (E51.3).
+      { label: VIEW_MODES.map((m) => t(`home.modes.${m}`)).join(', '), keys: ['1–5'] },
       { label: t('shortcuts.rows.sidebar'), keys: ['['] },
       { label: t('shortcuts.rows.settings'), keys: [chord(ACTIONS.settings)] },
     ],

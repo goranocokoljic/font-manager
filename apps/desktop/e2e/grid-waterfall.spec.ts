@@ -43,7 +43,7 @@ test('grid mode shows a card with a rendered thumbnail per family', async ({ pag
 
 test('waterfall mode shows the sample text at six sizes per family', async ({ page }) => {
   await open(page);
-  // Key 4 is the waterfall (keys 1–5: grid, list, table, waterfall, layout).
+  // Key 4 is the waterfall (keys 1–5: list, grid, table, waterfall, layout).
   await page.keyboard.press('4');
   await expect(modeButton(page, 'Waterfall')).toHaveAttribute('aria-pressed', 'true');
   const fall = page.getByRole('tree', { name: 'Font waterfall' });

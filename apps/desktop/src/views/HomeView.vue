@@ -73,7 +73,7 @@ import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useTextLayoutsStore } from '../stores/textLayouts';
-import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore, type ViewMode } from '../stores/views';
+import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore, VIEW_MODES } from '../stores/views';
 import { useFamilyNavigation } from './useFamilyNavigation';
 import { useLiveLibrary } from './useLiveLibrary';
 
@@ -144,11 +144,9 @@ function pinLeaving(el: Element): void {
   e.setAttribute('aria-hidden', 'true');
   e.inert = true;
 }
-// The label of each is `home.modes.<mode>`.
-// The order of the toolbar's view switch (E50.2, board 9): Wall · Lines · Table · Waterfall · Layout.
-const MODES: readonly ViewMode[] = ['grid', 'list', 'table', 'waterfall', 'layout'];
+// The label of each is `home.modes.<mode>`; the order is `VIEW_MODES` (E51.3: Lines first).
 const modeOptions = computed(() =>
-  MODES.map((m) => ({ value: m, label: t(`home.modes.${m}`), icon: m })),
+  VIEW_MODES.map((m) => ({ value: m, label: t(`home.modes.${m}`), icon: m })),
 );
 
 // The layout mode is a split (E50.3): the list, and beside it the list cursor's face (else the
@@ -457,7 +455,7 @@ useActions([
     run: () => (sets.current ? activation.deactivateAllExcept(sets.current.id) : undefined),
   },
   // Keys 1–5 switch the view mode, in the order of the toolbar buttons.
-  ...MODES.map((m, i) => ({
+  ...VIEW_MODES.map((m, i) => ({
     id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4 | 5),
     get title() {
       return t(`home.actions.showAs.${m}`);

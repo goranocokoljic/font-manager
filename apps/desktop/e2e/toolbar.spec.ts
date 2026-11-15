@@ -14,8 +14,8 @@ const fixture = readFileSync(
   ),
 );
 
-/** The view switch in the order of board 9: Wall · Lines · Table · Waterfall · Layout. */
-const MODES = ['Grid', 'List', 'Table', 'Waterfall', 'Layout'] as const;
+/** The view switch in its order (E51.3): Lines · Wall · Table · Waterfall · Layout. */
+const MODES = ['List', 'Grid', 'Table', 'Waterfall', 'Layout'] as const;
 
 async function open(page: Page) {
   await page.route('**/fmfont/*', (route) =>
@@ -115,4 +115,34 @@ test('the view switch does not move from Table to Layout to Wall', async ({ page
   }
   expect(boxes[0]).not.toBeNull();
   for (const b of boxes.slice(1)) expect(b).toEqual(boxes[0]);
+});
+
+test('the 1–5 keys, the palette and the shortcut sheet follow the switch order (E51.3)', async ({
+  page,
+}) => {
+  await open(page);
+  // Lines is the first button and the view a fresh window opens in.
+  await expect(modeButton(page, 'List')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('tree', { name: 'Font list' }).focus();
+  for (const [i, mode] of [...MODES].entries()) {
+    await page.keyboard.press(String(i + 1));
+    await expect(modeButton(page, mode)).toHaveAttribute('aria-pressed', 'true');
+  }
+
+  await page.keyboard.press('ControlOrMeta+k');
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await page.keyboard.type('Show fonts as');
+  // Each 'Show fonts as' action carries the key of its place in the switch.
+  for (const [i, m] of ['list', 'grid', 'table', 'waterfall', 'layout'].entries())
+    await expect(
+      palette
+        .getByRole('option')
+        .filter({ hasText: `Show fonts as a ${m}` })
+        .locator('kbd'),
+    ).toHaveText(String(i + 1));
+  await page.keyboard.press('Escape');
+
+  await page.keyboard.press('?');
+  const sheet = page.getByRole('dialog', { name: /Keyboard shortcuts/ });
+  await expect(sheet).toContainText('List, Grid, Table, Waterfall, Layout');
 });
