@@ -581,8 +581,12 @@ function onToggle(row: ListRow): void {
   margin-inline-end: var(--fm-space-2);
   visibility: hidden;
 }
+/* On hover, at the cursor, while the row holds the focus, and while a menu of the row is open
+   (its activation dot's, E50.6): the menu lives in <body>, so the row loses :hover under it. */
 .slot:hover .row-actions,
-.slot.cursor .row-actions {
+.slot.cursor .row-actions,
+.slot:focus-within .row-actions,
+.slot:has([aria-expanded='true']) .row-actions {
   visibility: visible;
 }
 .quick-mark {

@@ -89,24 +89,20 @@ function onFocusOut(e: FocusEvent): void {
               @change="views.toggleColumn(view, item.id)"
             />
             <label :for="`${uid}-${item.id}`">{{ item.label }}</label>
-            <button
-              type="button"
+            <UiIconButton
               class="move"
-              :aria-label="t('table.columnsMenu.moveUp', { column: item.label })"
+              icon="chevronUp"
+              :label="t('table.columnsMenu.moveUp', { column: item.label })"
               :disabled="item.index === 0"
               @click="move(item.id, item.index - 1, $event)"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
+            />
+            <UiIconButton
               class="move"
-              :aria-label="t('table.columnsMenu.moveDown', { column: item.label })"
+              icon="chevronDown"
+              :label="t('table.columnsMenu.moveDown', { column: item.label })"
               :disabled="item.index === items.length - 1"
               @click="move(item.id, item.index + 1, $event)"
-            >
-              ↓
-            </button>
+            />
           </li>
         </ul>
         <button type="button" class="reset" @click="views.resetColumns(view)">
@@ -121,7 +117,6 @@ function onFocusOut(e: FocusEvent): void {
 .menu {
   position: relative;
 }
-.move,
 .reset {
   padding: 4px 8px;
   border: 1px solid var(--fm-border);
@@ -155,12 +150,6 @@ li {
 }
 label {
   flex: 1;
-}
-.move {
-  padding: 0 6px;
-}
-.move:disabled {
-  opacity: 0.4;
 }
 .reset {
   width: 100%;

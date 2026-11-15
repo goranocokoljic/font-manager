@@ -411,3 +411,61 @@ describe('catalogs store: install (E22.7)', () => {
     ).toBe(2);
   });
 });
+
+describe('catalogs store: progressOf (E50.6)', () => {
+  const family = (name: string) => ({ name, category: null, styles: [], axes: [] });
+
+  it('names the family a download runs for, with the rescan count once it is known', () => {
+    const store = useCatalogsStore();
+    expect(store.progressOf('googleFonts', 'Lato')).toBeNull();
+    store.download = {
+      catalog: 'googleFonts',
+      family: family('Lato'),
+      phase: 'choosing',
+      scan: null,
+      result: null,
+      error: null,
+    };
+    expect(store.progressOf('googleFonts', 'Lato'), 'choosing runs nothing').toBeNull();
+    store.download!.phase = 'downloading';
+    expect(store.progressOf('googleFonts', 'Lato')).toEqual({
+      phase: 'downloading',
+      done: null,
+      total: null,
+    });
+    expect(store.progressOf('googleFonts', 'Lora'), 'another family').toBeNull();
+    expect(store.progressOf('fontshare', 'Lato'), 'another catalog').toBeNull();
+    store.download!.phase = 'scanning';
+    store.download!.scan = { done: 0, total: 0 };
+    expect(store.progressOf('googleFonts', 'Lato')?.total, 'no count yet').toBeNull();
+    store.download!.scan = { done: 3, total: 5 };
+    expect(store.progressOf('googleFonts', 'Lato')).toEqual({
+      phase: 'scanning',
+      done: 3,
+      total: 5,
+    });
+    store.download!.phase = 'done';
+    expect(store.progressOf('googleFonts', 'Lato')).toBeNull();
+    store.download!.phase = 'failed';
+    expect(store.progressOf('googleFonts', 'Lato')).toBeNull();
+  });
+
+  it('names the family an install runs for', () => {
+    const store = useCatalogsStore();
+    store.install = {
+      catalog: 'googleFonts',
+      family: family('Inter'),
+      phase: 'proposing',
+      proposed: '/x',
+      result: null,
+      error: null,
+    };
+    expect(store.progressOf('googleFonts', 'Inter'), 'proposing runs nothing').toBeNull();
+    store.install!.phase = 'scanning';
+    expect(store.progressOf('googleFonts', 'Inter')).toEqual({
+      phase: 'scanning',
+      done: null,
+      total: null,
+    });
+  });
+});

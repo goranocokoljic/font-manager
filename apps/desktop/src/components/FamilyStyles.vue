@@ -462,8 +462,10 @@ async function deleteMenuPin(): Promise<void> {
   background-color: var(--fm-bg);
   opacity: 0;
 }
+/* A menu of the row (the pin menu) keeps them while it is open: it lives in <body> (E50.6). */
 .row:hover .hover-actions,
-.row:focus-within .hover-actions {
+.row:focus-within .hover-actions,
+.row:has([aria-expanded='true']) .hover-actions {
   opacity: 1;
 }
 @media (hover: none) {

@@ -15,6 +15,7 @@ import ActivationNotice from './ActivationNotice.vue';
 import CopyValue from './CopyValue.vue';
 import UiChevron from './ui/UiChevron.vue';
 import UiIcon from './ui/UiIcon.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import HealthBadge from './HealthBadge.vue';
 import InspectorLicense from './InspectorLicense.vue';
 import InspectorPalettes from './InspectorPalettes.vue';
@@ -169,14 +170,13 @@ const activationState = computed(() => {
             <ul class="tags" aria-labelledby="fm-info-tags">
               <li v-for="name in d.tags" :key="name" class="tag">
                 {{ name }}
-                <button
-                  type="button"
+                <UiIconButton
                   class="untag"
-                  :aria-label="t('info.user.removeTag', { tag: name })"
+                  icon="close"
+                  size="sm"
+                  :label="t('info.user.removeTag', { tag: name })"
                   @click="selection.removeTag(name)"
-                >
-                  ×
-                </button>
+                />
               </li>
             </ul>
             <form class="add-tag" @submit.prevent="addTag">
@@ -208,19 +208,17 @@ const activationState = computed(() => {
           <dt id="fm-info-rating">{{ t('info.user.rating') }}</dt>
           <dd>
             <div class="stars" role="group" aria-labelledby="fm-info-rating">
-              <button
+              <UiIconButton
                 v-for="n in STARS"
                 :key="n"
-                type="button"
                 class="star"
                 :class="{ on: (d.rating ?? 0) >= n }"
-                :aria-label="starLabel(n)"
+                :icon="(d.rating ?? 0) >= n ? 'starFilled' : 'star'"
+                :label="starLabel(n)"
                 :aria-pressed="d.rating === n"
                 :title="d.rating === n ? t('info.user.clearRating') : starLabel(n)"
                 @click="rate(n)"
-              >
-                <UiIcon :name="(d.rating ?? 0) >= n ? 'starFilled' : 'star'" />
-              </button>
+              />
               <span class="state" data-testid="rating">{{
                 d.rating ? t('info.user.ratingOf', { rating: d.rating }) : t('info.user.notRated')
               }}</span>
@@ -573,9 +571,12 @@ dd {
   gap: 2px;
 }
 .star {
-  display: inline-flex;
-  padding: 2px;
+  padding: 0;
   color: var(--fm-muted);
+}
+/* The filled stars say the rating; the pressed tint of UiIconButton would say it twice. */
+.star[aria-pressed='true'] {
+  background-color: transparent;
 }
 .star:hover {
   color: var(--fm-fg);

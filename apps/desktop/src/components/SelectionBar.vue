@@ -27,6 +27,7 @@ import { useTaggingStore } from '../stores/tagging';
 import { useToastStore } from '../stores/toast';
 import FamilyCollectionMenu from './FamilyCollectionMenu.vue';
 import UiIcon from './ui/UiIcon.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 
 /** The bar's × or Esc cleared the selection; the bar goes, so the focus must go somewhere. */
 const emit = defineEmits<{ cleared: [] }>();
@@ -203,16 +204,13 @@ function onKey(e: KeyboardEvent): void {
         {{ t('selection.bar.files') }}
       </button>
       <span class="divider" aria-hidden="true" />
-      <button
-        type="button"
+      <UiIconButton
         class="action clear"
         data-testid="bar-clear"
-        :aria-label="t('selection.bar.clear')"
-        :title="t('selection.bar.clear')"
+        icon="close"
+        :label="t('selection.bar.clear')"
         @click="clear"
-      >
-        <UiIcon name="close" />
-      </button>
+      />
     </div>
   </div>
 </template>

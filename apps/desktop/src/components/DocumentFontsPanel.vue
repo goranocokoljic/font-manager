@@ -13,6 +13,7 @@ import { t } from '../i18n';
 import { useActivationStore } from '../stores/activation';
 import { useActions } from '../stores/commands';
 import { useDocumentFontsStore } from '../stores/documentFonts';
+import UiIconButton from './ui/UiIconButton.vue';
 
 const emit = defineEmits<{
   /** A library font was picked: show its face in the inspector. */
@@ -134,9 +135,7 @@ function onKeyDown(e: KeyboardEvent): void {
         <bdi>{{ t('documentFonts.document', { name: fileName }) }}</bdi>
       </p>
       <p class="hint">{{ t('documentFonts.hint') }}</p>
-      <button type="button" class="close" :aria-label="t('documentFonts.close')" @click="close">
-        ×
-      </button>
+      <UiIconButton class="close" icon="close" :label="t('documentFonts.close')" @click="close" />
     </header>
     <p v-if="!rows.length" class="message" role="status">{{ t('documentFonts.empty') }}</p>
     <ul v-else ref="list" class="list" :aria-label="t('documentFonts.fonts')">
@@ -209,14 +208,6 @@ function onKeyDown(e: KeyboardEvent): void {
   margin: 0;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
-}
-.close {
-  padding: 0 8px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
 }
 .message,
 .note {
