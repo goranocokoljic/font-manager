@@ -26,9 +26,11 @@ import {
   glyphRowCount,
   glyphRowHeight,
   moveCursor,
+  SPECIMEN_FIT,
+  fitSpecimenSize,
   rowOf,
-  specimenBox,
 } from '../glyphs/layout';
+import { metricsSpecimen, specimenRulers } from '../preview/metricsSpecimen';
 import { errorMessage, inlineKey, t } from '../i18n';
 import { windowRange } from '../list/virtual';
 import { useAxesStore } from '../stores/axes';
@@ -73,8 +75,6 @@ const FALLBACK_WIDTH = 720;
 const REVEAL_MARGIN = 8;
 /** The view whose cell size and grid switch this section remembers. */
 const GRID_VIEW = 'family.characters';
-/** The specimen's font size, CSS px. */
-const SPECIMEN_PX = 96;
 
 const page = useFamilyPageStore();
 const axesSet = useAxesStore();
@@ -162,8 +162,47 @@ function toggleLines(): void {
   gridSetup.update(GRID_VIEW, { lines: !lines.value });
 }
 
-/** The specimen's box and rulers; null until the face's metrics are known (or when unusable). */
-const specimen = computed(() => specimenBox(props.detail?.metrics, SPECIMEN_PX));
+// The specimen: the largest size up to 96 px at which the whole line fits its pane, measured in
+// the face (again when the pane resizes or a font loads). Its box and rulers come from the face's
+// metrics (`metricsSpecimen`, shared with the Info section): ascender to descender, so g j p q y
+// stay inside it.
+const specimenLine = ref<HTMLElement | null>(null);
+const specimenText = ref<HTMLElement | null>(null);
+const specimenPx = ref<number>(SPECIMEN_FIT.max);
+const specimen = computed(() => {
+  const m = props.detail?.metrics;
+  return m ? metricsSpecimen(m, specimenPx.value) : null;
+});
+/** A length in CSS px, to the hundredth. */
+const px = (v: number) => `${Math.round(v * 100) / 100}px`;
+const rulers = computed(() => (specimen.value ? specimenRulers(specimen.value) : []));
+function fitSpecimen(): void {
+  const line = specimenLine.value;
+  const text = specimenText.value;
+  if (!line || !text) return;
+  const drawn = text.getBoundingClientRect().width;
+  specimenPx.value = fitSpecimenSize(drawn / specimenPx.value, line.clientWidth);
+}
+let specimenObserver: ResizeObserver | undefined;
+watch(
+  [specimenLine, () => props.faceStyle],
+  ([el]) => {
+    specimenObserver?.disconnect();
+    if (!el) return;
+    if (typeof ResizeObserver !== 'undefined') {
+      specimenObserver ??= new ResizeObserver(fitSpecimen);
+      specimenObserver.observe(el);
+    }
+    fitSpecimen();
+  },
+  { flush: 'post' },
+);
+const fontSet = typeof document !== 'undefined' ? document.fonts : undefined;
+fontSet?.addEventListener?.('loadingdone', fitSpecimen);
+onBeforeUnmount(() => {
+  specimenObserver?.disconnect();
+  fontSet?.removeEventListener?.('loadingdone', fitSpecimen);
+});
 const range = computed(() =>
   windowRange(scrollTop.value, height.value, rowHeight.value, props.overscan, rowCount.value),
 );
@@ -451,20 +490,21 @@ const noResults = computed(
         data-testid="glyph-specimen"
         role="img"
         :aria-label="t('glyphs.specimenLabel')"
-        :style="{ height: `${specimen.height}px` }"
+        :style="{ height: px(specimen.height) }"
       >
         <span
-          v-for="r in specimen.rulers"
+          v-for="r in rulers"
           :key="r.id"
           class="ruler"
           :class="r.id"
           :data-ruler="r.id"
-          :style="{ top: `${r.top}px` }"
+          :style="{ top: px(r.top) }"
         >
           <span class="ruler-label">{{ t(`glyphs.rulers.${r.id}`) }}</span>
         </span>
-        <div class="specimen-line" :style="{ fontSize: `${SPECIMEN_PX}px` }">
-          <span class="strut" :style="{ height: `${specimen.baseline}px` }" /><span
+        <div ref="specimenLine" class="specimen-line" :style="{ fontSize: `${specimenPx}px` }">
+          <span class="strut" :style="{ height: px(specimen.baseline) }" /><span
+            ref="specimenText"
             class="specimen-text"
             :class="{ loading: !faceStyle }"
             :style="faceStyle"

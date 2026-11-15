@@ -10,7 +10,8 @@ import {
   glyphRowHeight,
   moveCursor,
   rowOf,
-  specimenBox,
+  SPECIMEN_FIT,
+  fitSpecimenSize,
 } from './layout';
 
 describe('glyph grid layout', () => {
@@ -103,48 +104,19 @@ describe('glyph grid layout', () => {
   });
 });
 
-describe('the specimen box', () => {
-  const metrics = {
-    unitsPerEm: 1000,
-    ascender: 900,
-    descender: -250,
-    xHeight: 520,
-    capHeight: 720,
-  };
-
-  it('runs from the ascender to the descender, so descenders stay inside', () => {
-    const box = specimenBox(metrics, 100)!;
-    expect(box.height).toBe(115);
-    expect(box.baseline).toBe(90);
-    expect(box.height - box.baseline).toBe(25);
+describe('the specimen size', () => {
+  it('is the largest size up to 96 px at which the line fits its pane', () => {
+    // A line 10 px wide per px of font size in a 500 px pane: 50 px.
+    expect(fitSpecimenSize(10, 500)).toBe(50);
+    expect(fitSpecimenSize(10, 509)).toBe(50);
+    // A wide pane never goes past 96 px; a narrow one never under 24 px.
+    expect(fitSpecimenSize(10, 5000)).toBe(SPECIMEN_FIT.max);
+    expect(fitSpecimenSize(10, 100)).toBe(SPECIMEN_FIT.min);
   });
 
-  it('places the rulers at ascender, x-height, baseline and descender, top to bottom', () => {
-    const box = specimenBox(metrics, 100)!;
-    expect(box.rulers).toEqual([
-      { id: 'ascender', top: 0 },
-      { id: 'xHeight', top: 38 },
-      { id: 'baseline', top: 90 },
-      { id: 'descender', top: 115 },
-    ]);
-  });
-
-  it('does not use a line height: a tall descender makes a taller box', () => {
-    const deep = specimenBox({ ...metrics, descender: -400 }, 100)!;
-    expect(deep.height).toBe(130);
-    expect(deep.baseline).toBe(90);
-  });
-
-  it('leaves the x-height ruler out when the face declares none', () => {
-    const box = specimenBox({ ...metrics, xHeight: null }, 100)!;
-    expect(box.rulers.map((r) => r.id)).toEqual(['ascender', 'baseline', 'descender']);
-    expect(specimenBox({ ...metrics, xHeight: 0 }, 100)!.rulers).toHaveLength(3);
-  });
-
-  it('gives no box for metrics it cannot place', () => {
-    expect(specimenBox(undefined, 100)).toBeNull();
-    expect(specimenBox({ ...metrics, unitsPerEm: 0 }, 100)).toBeNull();
-    expect(specimenBox({ ...metrics, ascender: -300 }, 100)).toBeNull();
-    expect(specimenBox(metrics, 0)).toBeNull();
+  it('stays at 96 px while nothing is measured', () => {
+    expect(fitSpecimenSize(0, 500)).toBe(96);
+    expect(fitSpecimenSize(10, 0)).toBe(96);
+    expect(fitSpecimenSize(Number.NaN, 500)).toBe(96);
   });
 });

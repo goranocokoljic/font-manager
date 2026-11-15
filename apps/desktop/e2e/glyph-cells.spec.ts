@@ -107,42 +107,80 @@ test('a hairline grid runs between cells, the Grid switch hides it, hover shows 
   await expect(cp).toHaveCSS('font-family', /mono/i);
 });
 
-test("the specimen's box runs from ascender to descender, its glyphs on the baseline ruler", async ({
-  page,
-}) => {
-  const panel = await openGlyphs(page);
-  const specimen = panel.getByTestId('glyph-specimen');
-  await expect(specimen).toContainText('Hamburgefonstiv gjpqy');
-  const box = await specimen.evaluate((el) => {
-    const top = el.getBoundingClientRect().top;
-    const rulers = Object.fromEntries(
-      [...el.querySelectorAll<HTMLElement>('[data-ruler]')].map((r) => [
-        r.dataset.ruler!,
-        {
-          y: r.getBoundingClientRect().top - top,
-          label: getComputedStyle(r.querySelector('.ruler-label')!).fontSize,
-        },
-      ]),
-    );
-    // A zero-size inline block after the text: its bottom edge is the text's baseline.
-    const probe = document.createElement('span');
-    probe.style.cssText = 'display:inline-block;width:0;height:0';
-    el.querySelector('.specimen-text')!.after(probe);
-    const baseline = probe.getBoundingClientRect().bottom - top;
-    probe.remove();
-    return { height: el.getBoundingClientRect().height, rulers, baseline };
+for (const [w, h] of [
+  [1280, 800],
+  [1000, 700],
+] as const) {
+  test(`the whole specimen line fits, its box runs from ascender to descender (${w}×${h})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: w, height: h });
+    const panel = await openGlyphs(page);
+    const specimen = panel.getByTestId('glyph-specimen');
+    await expect(specimen).toContainText('Hamburgefonstiv gjpqy');
+    // The face file loads, the line is measured in it and shrinks to fit.
+    await expect
+      .poll(() =>
+        specimen.evaluate(
+          (el) =>
+            el.querySelector('.specimen-text')!.getBoundingClientRect().right <=
+            el.querySelector('.specimen-line')!.getBoundingClientRect().right + 1,
+        ),
+      )
+      .toBe(true);
+    const box = await specimen.evaluate((el) => {
+      const r0 = el.getBoundingClientRect();
+      const rulers = Object.fromEntries(
+        [...el.querySelectorAll<HTMLElement>('[data-ruler]')].map((r) => {
+          const label = r.querySelector('.ruler-label')!;
+          return [
+            r.dataset.ruler!,
+            {
+              y: r.getBoundingClientRect().top - r0.top,
+              label: getComputedStyle(label).fontSize,
+              right: r0.right - label.getBoundingClientRect().right,
+            },
+          ];
+        }),
+      );
+      // A zero-size inline block after the text: its bottom edge is the text's baseline.
+      const text = el.querySelector('.specimen-text')!;
+      const probe = document.createElement('span');
+      probe.style.cssText = 'display:inline-block;width:0;height:0';
+      text.after(probe);
+      const baseline = probe.getBoundingClientRect().bottom - r0.top;
+      probe.remove();
+      const line = el.querySelector<HTMLElement>('.specimen-line')!;
+      return {
+        size: parseFloat(getComputedStyle(line).fontSize),
+        height: r0.height,
+        rulers,
+        baseline,
+        textRight: text.getBoundingClientRect().right,
+        lineRight: line.getBoundingClientRect().right,
+      };
+    });
+    // Every letter, g j p q y included, is drawn inside the line: none is cut off at the side.
+    expect(box.textRight).toBeLessThanOrEqual(box.lineRight + 1);
+    expect(box.size).toBeLessThanOrEqual(96);
+    expect(box.size).toBeGreaterThanOrEqual(24);
+    // MockApi face 1: 1000 upm, ascender 900, descender -250, x-height 520, at the fitted size.
+    const at = (units: number) => ((900 - units) * box.size) / 1000;
+    expect(box.height).toBeCloseTo(at(-250), 0);
+    expect(box.rulers.ascender!.y).toBeCloseTo(0, 0);
+    expect(box.rulers.xHeight!.y).toBeCloseTo(at(520), 0);
+    expect(box.rulers.baseline!.y).toBeCloseTo(at(0), 0);
+    expect(box.rulers.descender!.y).toBeCloseTo(at(-250), 0);
+    // 10 px labels at the right.
+    for (const r of Object.values(box.rulers)) {
+      expect(r.label).toBe('10px');
+      expect(Math.abs(r.right)).toBeLessThan(1.5);
+    }
+    // The text sits on the baseline ruler, so its descenders end inside the box.
+    expect(Math.abs(box.baseline - box.rulers.baseline!.y)).toBeLessThan(1.5);
+    await expect(specimen).toHaveCSS('overflow-y', 'visible');
   });
-  // MockApi face 1: 1000 upm, ascender 900, descender -250, x-height 520; drawn at 96 px.
-  expect(box.height).toBeCloseTo(110.4, 0);
-  expect(box.rulers.ascender!.y).toBeCloseTo(0, 0);
-  expect(box.rulers.xHeight!.y).toBeCloseTo(36.5, 0);
-  expect(box.rulers.baseline!.y).toBeCloseTo(86.4, 0);
-  expect(box.rulers.descender!.y).toBeCloseTo(110.4, 0);
-  for (const r of Object.values(box.rulers)) expect(r.label).toBe('10px');
-  // The text sits on the baseline ruler, so its descenders end inside the box.
-  expect(Math.abs(box.baseline - box.rulers.baseline!.y)).toBeLessThan(1.5);
-  await expect(specimen).toHaveCSS('overflow-y', 'visible');
-});
+}
 
 test('the grid scrolls at 60 fps with 48 px cells', async ({ page }) => {
   test.setTimeout(90_000);

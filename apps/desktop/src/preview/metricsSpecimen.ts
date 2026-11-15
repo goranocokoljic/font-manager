@@ -15,6 +15,24 @@ export interface MetricsSpecimen {
   capLine: number | null;
   /** The x-height line; absent when the font does not state it. */
   xLine: number | null;
+  /** The ascender line (E50.7): the box's top, or below it when a cap or x-height rises higher. */
+  ascLine: number;
+  /** The descender line (E50.7): the box's bottom, never above the baseline. */
+  descLine: number;
+}
+
+/** A ruler of a specimen (E50.7): which line, and its distance from the box's top in px. */
+export interface SpecimenRuler {
+  id: 'ascender' | 'xHeight' | 'baseline' | 'descender';
+  top: number;
+}
+
+/** The rulers of `s`, top to bottom: ascender, x-height (when stated), baseline, descender. */
+export function specimenRulers(s: MetricsSpecimen): SpecimenRuler[] {
+  const rulers: SpecimenRuler[] = [{ id: 'ascender', top: s.ascLine }];
+  if (s.xLine !== null) rulers.push({ id: 'xHeight', top: s.xLine });
+  rulers.push({ id: 'baseline', top: s.baseline }, { id: 'descender', top: s.descLine });
+  return rulers;
 }
 
 /** The letters of the specimen: a cap, an x-height letter and a descender. Not UI text. */
@@ -35,12 +53,15 @@ export function metricsSpecimen(
   const bottom = Math.min(metrics.descender, 0);
   const baseline = top * scale;
   const line = (v: number | null) => (v === null || v <= 0 ? null : baseline - v * scale);
+  const height = (top - bottom) * scale;
   return {
     size,
-    height: (top - bottom) * scale,
+    height,
     baseline,
     capLine: line(metrics.capHeight),
     xLine: line(metrics.xHeight),
+    ascLine: baseline - metrics.ascender * scale,
+    descLine: height,
   };
 }
 

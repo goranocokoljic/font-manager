@@ -130,6 +130,37 @@ describe('the Characters section', () => {
     expect(rulers.map((r) => r.text())).toEqual(['ascender', 'x-height', 'baseline', 'descender']);
   });
 
+  it('shrinks the specimen until its whole line fits the pane, and its box with it', async () => {
+    // The line draws 10 px wide per px of font size; the pane leaves it 500 px.
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const w = this.classList.contains('specimen-text')
+          ? 10 * parseFloat(this.parentElement!.style.fontSize)
+          : 0;
+        return { width: w, height: 0, top: 0, left: 0, right: w, bottom: 0, x: 0, y: 0 } as DOMRect;
+      });
+    const client = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains('specimen-line') ? 500 : 0;
+      });
+    try {
+      const w = await mountWith(1);
+      await flushPromises();
+      const line = w.get('.specimen-line');
+      expect(line.attributes('style')).toContain('font-size: 50px');
+      // 1000 upm, ascender 900, descender -250 at 50 px: a 57.5 px box, baseline at 45 px.
+      expect(w.get('[data-testid="glyph-specimen"]').attributes('style')).toContain(
+        'height: 57.5px',
+      );
+      expect(w.get('.strut').attributes('style')).toContain('height: 45px');
+    } finally {
+      rect.mockRestore();
+      client.mockRestore();
+    }
+  });
+
   it('shows no specimen when the metrics cannot place it', async () => {
     const w = await mountWith(1);
     const detail = {

@@ -2,10 +2,8 @@
 // `repeat(auto-fill, minmax(<cell>px, 1fr))`, so a row holds as many cells of at least the
 // chosen size as fit, and the cells stretch to fill it. A wider window gives larger cells, not
 // smaller ones. Every row has the same height, so the list's window math (`list/virtual.ts`)
-// picks the rows to render. Also the specimen above the grid: its box and its rulers, from the
-// face's vertical metrics.
-
-import type { Metrics } from '../api/types';
+// picks the rows to render. Also the size of the specimen above the grid, fitted to its pane
+// (its box and rulers are `preview/metricsSpecimen.ts`).
 
 /** The cell-size slider: CSS px, the smallest a cell may get (E50.7). */
 export const CELL = { min: 48, max: 140, step: 4, default: 88 } as const;
@@ -86,38 +84,15 @@ export function codePointLabel(cp: number): string {
   return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
 }
 
-/** A ruler of the specimen: which line, and its distance from the box's top in CSS px. */
-export interface SpecimenRuler {
-  id: 'ascender' | 'xHeight' | 'baseline' | 'descender';
-  top: number;
-}
-
-/** The specimen's box: its height, where the baseline sits, and its rulers. */
-export interface SpecimenBox {
-  height: number;
-  baseline: number;
-  rulers: SpecimenRuler[];
-}
+/** The specimen's largest and smallest font size, CSS px (E50.7). */
+export const SPECIMEN_FIT = { max: 96, min: 24 } as const;
 
 /**
- * The specimen's box at `sizePx` from the face's ascender and descender, not from a line
- * height, so descenders (g j p q y) stay inside it. `null` when the metrics cannot place it:
- * no units per em, or an ascender not above the descender. The x-height ruler is left out when
- * the face declares no x-height.
+ * The specimen's font size so its line fits `available` px: `perPx` is the line's width per px
+ * of font size (measured in the face). The largest size that fits, from 24 to 96 px; 96 while
+ * nothing is measured yet.
  */
-export function specimenBox(
-  metrics: Metrics | null | undefined,
-  sizePx: number,
-): SpecimenBox | null {
-  if (!metrics || !(metrics.unitsPerEm > 0) || !(sizePx > 0)) return null;
-  const { ascender, descender, xHeight, unitsPerEm } = metrics;
-  if (!Number.isFinite(ascender) || !Number.isFinite(descender) || ascender <= descender)
-    return null;
-  const scale = sizePx / unitsPerEm;
-  const at = (units: number) => Math.round((ascender - units) * scale * 100) / 100;
-  const rulers: SpecimenRuler[] = [{ id: 'ascender', top: 0 }];
-  if (xHeight !== null && xHeight > 0 && xHeight < ascender)
-    rulers.push({ id: 'xHeight', top: at(xHeight) });
-  rulers.push({ id: 'baseline', top: at(0) }, { id: 'descender', top: at(descender) });
-  return { height: at(descender), baseline: at(0), rulers };
+export function fitSpecimenSize(perPx: number, available: number): number {
+  if (!(perPx > 0) || !(available > 0)) return SPECIMEN_FIT.max;
+  return Math.min(SPECIMEN_FIT.max, Math.max(SPECIMEN_FIT.min, Math.floor(available / perPx)));
 }
