@@ -56,12 +56,30 @@ function onClick(): void {
   }
   const target = props.target;
   if (!target) return;
-  if (props.state === 'permanent') menuOpen.value = !menuOpen.value;
-  else void activation.toggleSession(target, props.state === 'session');
+  if (props.state === 'permanent') {
+    if (!menuOpen.value) returnTo = focusBack();
+    menuOpen.value = !menuOpen.value;
+  } else void activation.toggleSession(target, props.state === 'session');
+}
+
+/**
+ * Where the focus goes when the menu closes: what had it when the menu opened (the dot
+ * itself, or the list that holds a Wall card's pointer-only dot), else the dot.
+ */
+let returnTo: HTMLElement | null = null;
+function focusBack(): HTMLElement | null {
+  const active = document.activeElement;
+  return active instanceof HTMLElement && active !== document.body ? active : button.value;
 }
 
 function closeMenu(): void {
   menuOpen.value = false;
+}
+
+/** Closes the menu and gives the focus back, so the keyboard goes on from the dot. */
+function closeMenuAndRefocus(): void {
+  closeMenu();
+  (returnTo ?? button.value)?.focus();
 }
 
 function focusMenu(): void {
@@ -72,17 +90,15 @@ function focusMenu(): void {
 function onMenuKey(e: KeyboardEvent): void {
   e.stopPropagation();
   if (e.key === 'Tab') {
-    button.value?.focus();
-    closeMenu();
+    closeMenuAndRefocus();
   } else if (e.key === 'Escape') {
     e.preventDefault();
-    closeMenu();
-    button.value?.focus();
+    closeMenuAndRefocus();
   }
 }
 
 function deactivate(): void {
-  closeMenu();
+  closeMenuAndRefocus();
   if (props.target) void activation.deactivateTarget(props.target);
 }
 </script>

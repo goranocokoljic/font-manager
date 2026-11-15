@@ -95,6 +95,47 @@ describe('ActivationDot (E50.5)', () => {
     expect(document.querySelector('[data-testid="activation-dot-menu"]')).toBeNull();
   });
 
+  it('gives the focus back to the dot after Deactivate and after Escape', async () => {
+    vi.spyOn(useActivationStore(), 'deactivateTarget').mockResolvedValue();
+    const w = dot('permanent');
+    const button = w.get('button').element as HTMLButtonElement;
+    for (const close of ['deactivate', 'escape'] as const) {
+      button.focus();
+      button.click();
+      await flushPromises();
+      const item = document.querySelector('[role="menuitem"]') as HTMLButtonElement;
+      await vi.waitFor(() => expect(document.activeElement).toBe(item));
+      if (close === 'deactivate') item.click();
+      else item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await flushPromises();
+      expect(document.querySelector('[role="menu"]'), close).toBeNull();
+      expect(document.activeElement, close).toBe(button);
+    }
+  });
+
+  it('a Wall card dot gives the focus back to the list that had it', async () => {
+    const remove = vi.spyOn(useActivationStore(), 'deactivateTarget').mockResolvedValue();
+    const w = mount(
+      {
+        components: { ActivationDot },
+        setup: () => ({ target }),
+        template: `<div tabindex="0" data-testid="list">
+          <ActivationDot state="permanent" name="X" :target="target" pointer /></div>`,
+      },
+      { attachTo: document.body },
+    );
+    const list = w.get('[data-testid="list"]').element as HTMLElement;
+    list.focus();
+    await w.get('[data-testid="activation-dot"]').trigger('click');
+    await flushPromises();
+    const item = document.querySelector('[role="menuitem"]') as HTMLButtonElement;
+    await vi.waitFor(() => expect(document.activeElement).toBe(item));
+    item.click();
+    await flushPromises();
+    expect(remove).toHaveBeenCalledWith(target);
+    expect(document.activeElement).toBe(list);
+  });
+
   it('keeps its click from the row: no select, no double-click activation', async () => {
     const row = vi.fn();
     vi.spyOn(useActivationStore(), 'toggleSession').mockResolvedValue();
