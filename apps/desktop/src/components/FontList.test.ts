@@ -12,7 +12,6 @@ import { clearFaceAxes } from '../preview/variations';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useFaceMetricsStore } from '../stores/faceMetrics';
-import { useFontListStore } from '../stores/fontList';
 import { useSettingsStore } from '../stores/settings';
 import FontList from './FontList.vue';
 
@@ -739,39 +738,23 @@ describe('FontList metrics overlay and outline (E16.1)', () => {
   });
 });
 
-describe('FontList density', () => {
-  it('pads rows by the density, keeps the sample size and the cursor row in view', async () => {
+describe('FontList row height (E51.5)', () => {
+  it('draws comfortable rows when the saved settings say compact', async () => {
+    // A settings file from before E51.5 can still hold `density: compact`: it is read
+    // without error and the UI ignores it.
     const list = await listOf(
       { extraFaces: 997 },
       { preview: { ...DEFAULT_PREVIEW }, overscan: 2 },
     );
-    const tree = list.get('[role="tree"]');
-    const el = tree.element as HTMLElement;
+    await useClient().updateSettings({ density: 'compact' });
     const settings = useSettingsStore();
-    await settings.load();
+    expect(await settings.load()).toBe(true);
     await flushPromises();
+    expect(settings.settings?.density).toBe('compact');
     // 28 px × 1.2 sample line + 30 px label and padding.
     expect(items(list)[0]!.attributes('style')).toContain('height: 64px');
     expect(list.get('.spacer').attributes('style')).toContain(`height: ${1000 * 64}px`);
-    const comfortable = items(list).length;
-
-    const store = useFontListStore();
-    store.click(store.rows[500]!.key, 'replace');
-    el.scrollTop = 500 * 64 - 128;
-    await tree.trigger('scroll');
-    await flushPromises();
-
-    await settings.setDensity('compact');
-    await flushPromises();
-    expect(items(list)[0]!.attributes('style')).toContain('height: 54px');
-    expect(list.get('.spacer').attributes('style')).toContain(`height: ${1000 * 54}px`);
-    expect(el.scrollTop).toBe(500 * 54 - 128);
-    expect(list.get('.slot.cursor').attributes('data-key')).toBe(store.rows[500]!.key);
-    // The sample keeps the size the user chose.
     expect(list.get('.sample').attributes('style')).toContain('font-size: 28px');
-    // Only a window of rows, a few more than before.
-    expect(items(list).length).toBeGreaterThan(comfortable);
-    expect(items(list).length).toBeLessThanOrEqual(Math.ceil(600 / 54) + 1 + 4);
     list.unmount();
   });
 });

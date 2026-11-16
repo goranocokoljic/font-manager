@@ -45,7 +45,6 @@ import SmartRuleEditor from '../components/SmartRuleEditor.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
 import { errorMessage, t } from '../i18n';
-import { DENSITIES } from '../list/density';
 import { WALL_SIZE, wallLayout } from '../list/grid';
 import FmFade from '../motion/FmFade.vue';
 import FmSlide from '../motion/FmSlide.vue';
@@ -67,7 +66,6 @@ import { useQuickLookStore } from '../stores/quickLook';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
-import { useSettingsStore } from '../stores/settings';
 import { useSimilarStore } from '../stores/similar';
 import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
@@ -99,8 +97,6 @@ const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
 const quickLook = useQuickLookStore();
-const settings = useSettingsStore();
-const densityLabel = computed(() => t(`home.density.${settings.density}`));
 const quick = useQuickCollectionStore();
 const catalogs = useCatalogsStore();
 const tagging = useTaggingStore();
@@ -467,18 +463,6 @@ useActions([
     },
     run: () => views.setMode(ALL_FONTS_VIEW, m),
   })),
-  // The row density of the list and the table: the same setting as in Settings.
-  ...DENSITIES.map((d) => ({
-    id: `view.density.${d.value}`,
-    get title() {
-      return t(`home.actions.density.${d.value}`);
-    },
-    get group() {
-      return t('palette.groups.view');
-    },
-    enabled: () => settings.density !== d.value,
-    run: () => settings.setDensity(d.value),
-  })),
   ...LAYOUT_PRESETS.map((p) => ({
     id: `view.layoutPreset.${p}`,
     get title() {
@@ -661,13 +645,6 @@ async function openFace(face: FaceId): Promise<void> {
           />
           <!-- The toolbar never changes shape (E50.2): the same controls in every view mode.
                A control of one view lives inside that view (Columns, the layout preset). -->
-          <UiIconButton
-            icon="density"
-            :label="t('home.compactRows')"
-            :aria-pressed="settings.density === 'compact'"
-            :title="t('home.densityTitle', { density: densityLabel })"
-            @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
-          />
           <UiIconButton
             icon="compare"
             :label="t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS })"

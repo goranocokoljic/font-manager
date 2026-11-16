@@ -1,15 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient, type FullSettings } from '../api/client';
-import type {
-  ApiError,
-  AppFolders,
-  Density,
-  EndpointInfo,
-  McpStatus,
-  SettingsUpdate,
-} from '../api/types';
-import { DEFAULT_DENSITY } from '../list/density';
+import type { ApiError, AppFolders, EndpointInfo, McpStatus, SettingsUpdate } from '../api/types';
 
 /**
  * The user's settings and the app folders, as fm-api reports them. Every change is
@@ -113,13 +105,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const activationMode = computed(() => settings.value?.activationMode ?? 'session');
   /** What activation does on a name clash; keep the existing font until read. */
   const onConflict = computed(() => settings.value?.onConflict ?? 'keepExisting');
-  /** The row density of the font list and table; comfortable until read. */
-  const density = computed<Density>(() => settings.value?.density ?? DEFAULT_DENSITY);
-
-  /** Saves the row density (the toolbar, the palette and Settings all go through here). */
-  function setDensity(value: Density): Promise<boolean> {
-    return update({ density: value });
-  }
 
   return {
     settings,
@@ -129,7 +114,6 @@ export const useSettingsStore = defineStore('settings', () => {
     error,
     activationMode,
     onConflict,
-    density,
     load,
     loadWindow,
     loadEndpoint,
@@ -138,6 +122,5 @@ export const useSettingsStore = defineStore('settings', () => {
     setMcpEnabled,
     setMcpGrant,
     update,
-    setDensity,
   };
 });

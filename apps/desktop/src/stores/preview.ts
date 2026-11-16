@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
-import type { Density, LanguagePreset, SizeBasis } from '../api/types';
-import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
+import type { LanguagePreset, SizeBasis } from '../api/types';
+import { LIST_CHROME_PX } from '../list/density';
 import { PARAGRAPH_LINE_HEIGHT, PARAGRAPH_PX, wallLayout, type WallPreset } from '../list/grid';
 import {
   FALLBACK_LANGUAGE,
@@ -190,13 +190,10 @@ export function listPreview(settings: PreviewSettings): PreviewSettings {
 
 /**
  * Height of one preview row: the sample line at the size the user chose, plus the
- * name label and padding of the row density.
+ * name label and padding of the row.
  */
-export function previewRowHeight(
-  settings: Pick<PreviewSettings, 'sizePx' | 'lineHeight'>,
-  density: Density = DEFAULT_DENSITY,
-): number {
-  return Math.ceil(settings.sizePx * settings.lineHeight) + DENSITY_ROWS[density].listChromePx;
+export function previewRowHeight(settings: Pick<PreviewSettings, 'sizePx' | 'lineHeight'>): number {
+  return Math.ceil(settings.sizePx * settings.lineHeight) + LIST_CHROME_PX;
 }
 
 function readSaved(storage: Storage | undefined): Record<string, PreviewSettings> {

@@ -216,12 +216,10 @@ describe('preview store', () => {
     });
   });
 
-  it('pads rows by the density and keeps the sample size the user chose', () => {
-    expect(previewRowHeight(DEFAULT_PREVIEW, 'comfortable')).toBe(64);
-    expect(previewRowHeight(DEFAULT_PREVIEW, 'compact')).toBe(54);
-    // The sample line is the same at both densities; only the padding changes.
+  it('pads every row by the comfortable 30 px around the sample line the user chose', () => {
+    expect(previewRowHeight(DEFAULT_PREVIEW)).toBe(64);
     const big = { sizePx: 120, lineHeight: 1.2 };
-    expect(previewRowHeight(big, 'comfortable') - previewRowHeight(big, 'compact')).toBe(10);
+    expect(previewRowHeight(big)).toBe(144 + 30);
   });
 
   describe('pangrams', () => {

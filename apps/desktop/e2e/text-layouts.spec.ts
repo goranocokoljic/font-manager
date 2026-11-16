@@ -143,12 +143,13 @@ test('the mode switch and the preset picker work from the keyboard and the palet
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
   await expect(layout(page, 'Book')).toBeVisible();
 
-  // The toolbar never changes shape (E50.2): Tab goes from the mode buttons to the density
-  // toggle, and the labelled picker is in the layout pane's head (E50.3). With no row under the
-  // cursor yet, Previous font is off, so Tab goes from the picker to Next font, then Studio.
+  // The toolbar never changes shape (E50.2): Tab goes from the mode buttons past Compare (off
+  // with nothing pinned) to the size slider, no density toggle between them (E51.5), and the
+  // labelled picker is in the layout pane's head (E50.3). With no row under the cursor yet,
+  // Previous font is off, so Tab goes from the picker to Next font, then Studio.
   await modeButton(page, 'Layout').focus();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Compact rows' })).toBeFocused();
+  await expect(page.locator('header.toolbar').getByLabel('Size slider')).toBeFocused();
   await picker(page).focus();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Next font' })).toBeFocused();

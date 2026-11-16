@@ -22,7 +22,6 @@ beforeEach(() => {
   client = createMockClient();
   setClient(client);
   delete document.documentElement.dataset.theme;
-  delete document.documentElement.dataset.density;
 });
 
 afterEach(() => setClient(undefined));
@@ -150,15 +149,15 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
-  it('applies the theme and density the moment they change, and saves them', async () => {
+  it('applies the theme the moment it changes and saves it; there is no density (E51.5)', async () => {
     const { wrapper } = await mountAt('/settings?section=appearance');
     await radio(wrapper, 'Dark').setValue(true);
     await flushPromises();
     expect(document.documentElement.dataset.theme).toBe('dark');
-    await radio(wrapper, 'Compact').setValue(true);
-    await flushPromises();
-    expect(document.documentElement.dataset.density).toBe('compact');
-    expect(await client.getSettings()).toMatchObject({ theme: 'dark', density: 'compact' });
+    expect(await client.getSettings()).toMatchObject({ theme: 'dark' });
+    expect(wrapper.find('input[name="density"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Density');
+    expect(document.documentElement.dataset.density).toBeUndefined();
     wrapper.unmount();
   });
 

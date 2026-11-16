@@ -17,7 +17,6 @@ import { waterfallRowPx } from '../list/waterfall';
 import { sampleTextFor } from '../preview/sampleText';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
 import { listPreview, previewRowHeight, usePreviewStore } from '../stores/preview';
-import { useSettingsStore } from '../stores/settings';
 import { useViewsStore, type ViewMode } from '../stores/views';
 import CatalogDownload from './CatalogDownload.vue';
 import CatalogFamilyItem from './CatalogFamilyItem.vue';
@@ -29,7 +28,6 @@ const props = withDefaults(defineProps<{ overscan?: number }>(), { overscan: 2 }
 
 const store = useCatalogsStore();
 const previews = usePreviewStore();
-const settings = useSettingsStore();
 const views = useViewsStore();
 
 type CatalogMode = 'list' | 'grid' | 'waterfall';
@@ -106,7 +104,7 @@ const perLine = computed(() => (mode.value === 'grid' ? gridColumns(width.value)
 const linePx = computed(() => {
   if (mode.value === 'grid') return CARD.linePx;
   if (mode.value === 'waterfall') return waterfallRowPx(preview.value.lineHeight);
-  return previewRowHeight(preview.value, settings.density);
+  return previewRowHeight(preview.value);
 });
 const lines = computed(() => Math.ceil(store.total / perLine.value));
 const range = computed(() =>

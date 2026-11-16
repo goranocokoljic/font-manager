@@ -16,10 +16,6 @@ const css = (l: Locator, property: string) =>
   l.evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), property);
 const height = async (l: Locator) => (await l.boundingBox())!.height;
 
-/** Sets the Settings density as the app does: on the root element. */
-const compact = (page: Page) =>
-  page.evaluate(() => document.documentElement.setAttribute('data-density', 'compact'));
-
 test.describe('the panel', () => {
   for (const [scheme, surface] of [
     ['light', 'rgb(246, 245, 242)'],
@@ -52,13 +48,6 @@ test.describe('the rows', () => {
     const end = (await all.boundingBox())!;
     const box = (await count.boundingBox())!;
     expect(end.x + end.width - (box.x + box.width)).toBeLessThanOrEqual(9);
-  });
-
-  test('are 24 px in the compact density, the heading keeping its type', async ({ page }) => {
-    await open(page);
-    await compact(page);
-    expect(await height(row(page, 'All fonts'))).toBe(24);
-    await expect(nav(page).locator('h2').first()).toHaveCSS('font-size', '11px');
   });
 
   test('tint the active row 7 %, and only that row', async ({ page }) => {
