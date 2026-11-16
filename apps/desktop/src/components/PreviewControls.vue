@@ -18,6 +18,7 @@ import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import { LETTERS_HINT, SAMPLE_KINDS, sampleTextFor } from '../preview/sampleText';
+import { applicability, previewPreset, type PreviewSurface } from '../preview/applicability';
 import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
@@ -42,6 +43,8 @@ const props = defineProps<{
   fontCount?: number;
   /** Draws the size slider in the row, for a view with no top bar to hold it. */
   inlineSize?: boolean;
+  /** The view mode the rows are in: it decides where the Language picker applies (E51.4). */
+  mode?: PreviewSurface;
 }>();
 const emit = defineEmits<{
   /** Escape in the field: the focus goes back to the font list. */
@@ -259,6 +262,17 @@ const layout = computed(() => wallLayout(s.value.preset, s.value.sample, s.value
 const rows = computed(() => layout.value === 'paragraph');
 
 /**
+ * The Language picker applies to the Pangram preset only (E51.4): elsewhere it stays in its
+ * place, off, and its tooltip says to switch to Pangram. The stored language is kept.
+ */
+const languageState = computed(
+  () => applicability(props.mode ?? 'list', previewPreset(s.value)).language,
+);
+const languageWhy = computed(() =>
+  languageState.value.applies ? undefined : t(languageState.value.reason),
+);
+
+/**
  * The language the API detects in your own text (E43.3): only while the count line checks
  * this field's text, so the note and the count speak of the same text.
  */
@@ -464,7 +478,12 @@ function colorFrom(e: Event): string {
         </button>
       </div>
       <span class="divider" aria-hidden="true" />
-      <div class="language">
+      <div
+        class="language"
+        :class="{ off: !languageState.applies }"
+        :title="languageWhy"
+        data-testid="language-picker"
+      >
         <UiIcon name="globe" />
         <label :for="`${uid}-language`" class="sr-only">{{ t('preview.language') }}</label>
         <UiSelect
@@ -472,11 +491,22 @@ function colorFrom(e: Event): string {
           :model-value="s.language"
           :options="languageOptions"
           :fit="false"
+          :inactive="!languageState.applies"
+          :title="languageWhy"
+          :aria-describedby="languageWhy ? `${uid}-language-why` : undefined"
           @update:model-value="store.chooseLanguage(view, $event)"
           @repick="store.chooseLanguage(view, $event)"
         />
+        <span v-if="languageWhy" :id="`${uid}-language-why`" class="sr-only">{{
+          languageWhy
+        }}</span>
       </div>
-      <PreviewSizeSlider v-if="inlineSize" :view="view" :size-range="sizeRange" />
+      <PreviewSizeSlider
+        v-if="inlineSize"
+        :view="view"
+        :size-range="sizeRange"
+        :mode="mode ?? 'list'"
+      />
       <span ref="toggle" class="options-toggle">
         <UiIconButton
           icon="sliders"
@@ -828,6 +858,10 @@ function colorFrom(e: Event): string {
   align-items: center;
   gap: var(--fm-space-1);
   color: var(--fm-muted);
+}
+/* Off (E51.4): the same place and size, at 40 %. */
+.language.off {
+  opacity: 0.4;
 }
 .options-toggle {
   display: inline-flex;

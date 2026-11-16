@@ -36,13 +36,17 @@ async function setMode(page: Page, name: (typeof MODES)[number]) {
   await expect(modeButton(page, name)).toHaveAttribute('aria-pressed', 'true');
 }
 
-/** Each child of the toolbar: what it is and where it is, rounded to whole pixels. */
+/**
+ * Each child of the toolbar: what it is and where it is, rounded to whole pixels. A control
+ * that is off where it has no effect (`off`, E51.4) keeps its shape, so that class is left out.
+ */
 function shape(bar: Locator) {
   return bar.evaluate((el) =>
     [...el.children].map((c) => {
       const r = c.getBoundingClientRect();
       const name = c.getAttribute('aria-label') ?? c.getAttribute('role') ?? '';
-      return `${c.tagName}.${[...c.classList].sort().join('.')}[${name}] @${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+      const classes = [...c.classList].filter((k) => k !== 'off').sort();
+      return `${c.tagName}.${classes.join('.')}[${name}] @${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`;
     }),
   );
 }

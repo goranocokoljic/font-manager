@@ -263,6 +263,14 @@
     "addLetter": "Add {letter}",
     "preset": "Preset",
     "noPangram": "No pangram for this language yet",
+    "inactive": {
+      "sizeTable": "Size is set by the strip in Table — use the strip's size slider",
+      "sizeWaterfall": "Size is fixed in Waterfall — switch to List or Grid to change it",
+      "sizeLayout": "Size does not apply to the layout — change it in the layout",
+      "sizeParagraph": "Paragraph is set at the body size — change it in Preview options",
+      "language": "Language applies to the Pangram preset — switch to Pangram",
+      "languageLayout": "Language does not apply to the layout"
+    },
     "presets": {
       "word": "Word",
       "pangram": "Pangram",
