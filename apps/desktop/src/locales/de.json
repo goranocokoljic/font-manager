@@ -380,12 +380,6 @@
       "widthAuto": "Fenster"
     },
     "unreadable": "{name} (nicht lesbar)",
-    "density": {
-      "comfortable": "Bequem",
-      "compact": "Kompakt"
-    },
-    "densityTitle": "Zeilen: {density}. Kompakte Zeilen zeigen mehr Schriften auf einmal.",
-    "compactRows": "Kompakte Zeilen",
     "compareTitle": "Vergleich öffnen; {chord} beginnt einen neuen Vergleich mit der ausgewählten Schrift",
     "compareButton": "Vergleichen {pinned}/{max}",
     "sidebar": "Seitenleiste",
@@ -428,10 +422,6 @@
         "grid": "Schriften als Raster anzeigen",
         "waterfall": "Schriften als Wasserfall anzeigen",
         "layout": "Schriften als Satzbild anzeigen"
-      },
-      "density": {
-        "comfortable": "Bequeme Zeilen verwenden",
-        "compact": "Kompakte Zeilen verwenden"
       },
       "showPreset": "Satzbild „{preset}“ anzeigen",
       "reopenComparison": "Vergleich öffnen: {name}",
@@ -1178,10 +1168,6 @@
     "label": "Schriftwasserfall",
     "size": "{size} px"
   },
-  "density": {
-    "comfortable": "Komfortabel",
-    "compact": "Kompakt"
-  },
   "libraryViews": {
     "heading": "Bibliotheksansichten",
     "all": "Alle Schriften",
@@ -1524,11 +1510,6 @@
         "system": "Wie das System",
         "light": "Hell",
         "dark": "Dunkel"
-      },
-      "density": "Dichte",
-      "densities": {
-        "comfortable": "Großzügig",
-        "compact": "Kompakt"
       }
     },
     "advanced": {

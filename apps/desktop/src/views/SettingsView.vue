@@ -348,18 +348,6 @@ function chooseLanguage(value: string): void {
               {{ t(`settings.appearance.themes.${value}`) }}
             </label>
           </fieldset>
-          <fieldset class="group">
-            <legend>{{ t('settings.appearance.density') }}</legend>
-            <label v-for="value in ['comfortable', 'compact'] as const" :key="value" class="choice">
-              <input
-                type="radio"
-                name="density"
-                :checked="s.density === value"
-                @change="choose({ density: value })"
-              />
-              {{ t(`settings.appearance.densities.${value}`) }}
-            </label>
-          </fieldset>
           <label class="field">
             <span>{{ t('language.label') }}</span>
             <UiSelect

@@ -174,25 +174,11 @@
   --fm-collection-slate: #9aa0ab;
 }
 
-/* The Settings density (`data-density` on the root) swaps the spacing set. */
+/* Row and spacing metrics (one density: the compact one left in E51.5). */
 :root {
   --fm-row-height: 32px;
   --fm-side-row: 30px;
   --fm-gap: 8px;
-}
-
-:root[data-density='compact'] {
-  --fm-row-height: 24px;
-  --fm-side-row: 24px;
-  --fm-gap: 4px;
-  --fm-control-height: 24px;
-  --fm-space-2: 6px;
-  --fm-space-3: 8px;
-  --fm-space-4: 12px;
-  --fm-space-5: 16px;
-  --fm-space-6: 20px;
-  --fm-space-8: 24px;
-  font-size: var(--fm-text-sm);
 }
 
 html {

@@ -1,37 +1,13 @@
-// Row density of the font list and the detail table (the Settings `density`).
-// The virtualizers take their fixed row height from here, so the rows on screen,
-// the spacer and the keyboard paging always agree with what the density draws.
-import type { Density } from '../api/types';
-import { t } from '../i18n';
+// Row metrics of the font list and the detail table. Every list has the comfortable
+// metrics: the compact density left the interface in E51.5 (a stored `compact` in the
+// settings is read and ignored). The virtualizers take their fixed row height from here,
+// so the rows on screen, the spacer and the keyboard paging always agree with what is drawn.
 
-/** The density before the settings are read, and the fm-api default. */
-export const DEFAULT_DENSITY: Density = 'comfortable';
+/** Height of one detail-table row (also its header), in CSS px. */
+export const TABLE_ROW_PX = 32;
 
-/** A density and its label in the UI language. */
-const density = (value: Density): { value: Density; label: string } => ({
-  value,
-  get label() {
-    return t(`density.${value}`);
-  },
-});
-
-/** The densities in the order the toolbar, the palette and Settings list them. */
-export const DENSITIES: readonly { value: Density; label: string }[] = [
-  density('comfortable'),
-  density('compact'),
-];
-
-/** Row metrics of each density, in CSS px. */
-export const DENSITY_ROWS: Record<Density, { tablePx: number; listChromePx: number }> = {
-  // A table row; the list row's name label, gap and padding around the sample line.
-  comfortable: { tablePx: 32, listChromePx: 30 },
-  compact: { tablePx: 24, listChromePx: 20 },
-};
-
-/** Height of one detail-table row (also its header). */
-export function tableRowHeight(density: Density): number {
-  return DENSITY_ROWS[density].tablePx;
-}
+/** A list row's name label, gap and padding around the sample line, in CSS px. */
+export const LIST_CHROME_PX = 30;
 
 /**
  * The scroll position that keeps row `index` in view after the row height changed

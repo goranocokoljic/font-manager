@@ -42,7 +42,6 @@ import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
-import { useSettingsStore } from '../stores/settings';
 import { useSimilarStore } from '../stores/similar';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import { t } from '../i18n';
@@ -56,7 +55,7 @@ import UiIconButton from './ui/UiIconButton.vue';
 const props = withDefaults(
   defineProps<{
     preview?: PreviewSettings;
-    /** Fixed row height; derived from `preview` and the row density when absent. */
+    /** Fixed row height; derived from `preview` when absent. */
     rowHeight?: number;
     /** Rows rendered beyond each edge of the viewport. */
     overscan?: number;
@@ -87,13 +86,12 @@ function updateTitle(family: string): string | null {
   });
 }
 const quick = useQuickCollectionStore();
-const settings = useSettingsStore();
 const similar = useSimilarStore();
 const similarChord = chordOf(ACTIONS.similar)!;
 const activateChord = chordOf(ACTIONS.activateSession)!;
 const activation = useActivationStore();
 
-const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
+const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -197,7 +195,7 @@ async function revealCursor(): Promise<void> {
   await nextTick();
 }
 
-// A new row height (the density, the preview size) keeps the cursor row on screen;
+// A new row height (the preview size) keeps the cursor row on screen;
 // without a cursor, the first visible family stays at the top. After the render,
 // so the spacer already has its new height.
 watch(
@@ -538,8 +536,7 @@ function onToggle(row: ListRow): void {
   min-width: 0;
 }
 /* The slot draws the row line, full width; the preview row sits inside it, after the
-   gutter (and a style's indent), padded at its end by the density (16px comfortable,
-   8px compact). */
+   gutter (and a style's indent), padded 16px at its end. */
 .slot .preview {
   padding-inline: 0 calc(2 * var(--fm-gap));
   border-bottom: 0;

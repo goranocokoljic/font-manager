@@ -40,18 +40,12 @@ test('Ctrl/Cmd+, opens Settings with its eight sections; Escape closes it', asyn
   await expect(page.getByRole('heading', { name: 'All fonts' })).toBeVisible();
 });
 
-test('theme and density apply at once, without a reload', async ({ page }) => {
+test('the theme applies at once, without a reload', async ({ page }) => {
   await page.goto('/#/settings?section=appearance');
   const light = await bg(page);
   await page.getByRole('radio', { name: 'Dark' }).check();
   await expect.poll(() => bg(page)).not.toBe(light);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-
-  await page.getByRole('radio', { name: 'Compact' }).check();
-  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
-  await expect
-    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize))
-    .toBe('12px');
 
   await page.getByRole('radio', { name: 'Same as the system' }).check();
   await expect.poll(() => bg(page)).toBe(light);

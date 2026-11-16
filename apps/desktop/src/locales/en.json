@@ -380,12 +380,6 @@
       "widthAuto": "Window"
     },
     "unreadable": "{name} (cannot be read)",
-    "density": {
-      "comfortable": "Comfortable",
-      "compact": "Compact"
-    },
-    "densityTitle": "Rows: {density}. Compact rows show more fonts at a time.",
-    "compactRows": "Compact rows",
     "compareTitle": "Open Compare; {chord} starts a new comparison with the selected font",
     "compareButton": "Compare {pinned}/{max}",
     "sidebar": "Sidebar",
@@ -428,10 +422,6 @@
         "grid": "Show fonts as a grid",
         "waterfall": "Show fonts as a waterfall",
         "layout": "Show fonts as a layout"
-      },
-      "density": {
-        "comfortable": "Use comfortable rows",
-        "compact": "Use compact rows"
       },
       "showPreset": "Show the {preset} layout",
       "reopenComparison": "Open comparison: {name}",
@@ -1178,10 +1168,6 @@
     "label": "Font waterfall",
     "size": "{size} px"
   },
-  "density": {
-    "comfortable": "Comfortable",
-    "compact": "Compact"
-  },
   "libraryViews": {
     "heading": "Library views",
     "all": "All fonts",
@@ -1524,11 +1510,6 @@
         "system": "Same as the system",
         "light": "Light",
         "dark": "Dark"
-      },
-      "density": "Density",
-      "densities": {
-        "comfortable": "Comfortable",
-        "compact": "Compact"
       }
     },
     "advanced": {

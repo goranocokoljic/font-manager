@@ -210,10 +210,7 @@ describe('CatalogBrowser', () => {
     expect(store.total).toBe(1000);
     expect(offsets, 'only the first page is read').toEqual([0]);
 
-    const rowPx = previewRowHeight(
-      usePreviewStore().settingsFor(CATALOG_VIEW),
-      useSettingsStore().density,
-    );
+    const rowPx = previewRowHeight(usePreviewStore().settingsFor(CATALOG_VIEW));
     const slots = () => w.findAll('[role="listitem"]');
     // 600 px fallback viewport: the rows on screen, one partly visible, 2 overscan each side.
     expect(slots()).toHaveLength(poolSize(600, rowPx, 2));

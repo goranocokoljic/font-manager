@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DENSITY, DENSITIES, keepRowInView, tableRowHeight } from './density';
+import { keepRowInView, LIST_CHROME_PX, TABLE_ROW_PX } from './density';
 
-describe('row density', () => {
-  it('is comfortable by default, as in fm-api, and lists both densities', () => {
-    expect(DEFAULT_DENSITY).toBe('comfortable');
-    expect(DENSITIES.map((d) => d.value)).toEqual(['comfortable', 'compact']);
-  });
-
-  it('gives compact table rows less height than comfortable ones', () => {
-    expect(tableRowHeight('comfortable')).toBe(32);
-    expect(tableRowHeight('compact')).toBe(24);
+describe('row metrics', () => {
+  it('are the comfortable ones: the only density since E51.5', () => {
+    expect(TABLE_ROW_PX).toBe(32);
+    expect(LIST_CHROME_PX).toBe(30);
   });
 });
 

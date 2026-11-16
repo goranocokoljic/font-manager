@@ -50,13 +50,14 @@ describe('settings store', () => {
     expect(await client.getSettings()).toEqual(store.settings);
   });
 
-  it('reads the density as comfortable until loaded, and saves a new one', async () => {
+  it('reads a stored compact density without error and offers no way to set it (E51.5)', async () => {
+    await client.updateSettings({ density: 'compact' });
     const store = useSettingsStore();
-    expect(store.density).toBe('comfortable');
-    await store.load();
-    expect(await store.setDensity('compact')).toBe(true);
-    expect(store.density).toBe('compact');
-    expect((await client.getSettings()).density).toBe('compact');
+    expect(await store.load()).toBe(true);
+    expect(store.error).toBeNull();
+    expect(store.settings?.density).toBe('compact');
+    expect('density' in store).toBe(false);
+    expect('setDensity' in store).toBe(false);
   });
 
   it('keeps the saved value and shows the error when the API refuses', async () => {

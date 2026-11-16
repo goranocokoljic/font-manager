@@ -251,37 +251,17 @@ describe('FontTable', () => {
     expect(t.emitted('cursorFace')?.at(-1)).toEqual([6]);
   });
 
-  it('sizes rows by the density and keeps the cursor row in view when it changes', async () => {
+  it('draws comfortable 32 px rows when the saved settings say compact (E51.5)', async () => {
+    // A stored `density: compact` is read without error and ignored.
     const t = await tableOf({ extraFaces: 5000 });
-    const grid = t.get('[role="treegrid"]');
-    const el = grid.element as HTMLElement;
+    await client!.updateSettings({ density: 'compact' });
     const settings = useSettingsStore();
-    await settings.load();
+    expect(await settings.load()).toBe(true);
     await flushPromises();
+    expect(settings.settings?.density).toBe('compact');
     expect(rows(t)[0]!.attributes('style')).toContain('height: 32px');
+    expect(t.get('.header').attributes('style')).toContain('height: 32px');
     expect(t.get('.spacer').attributes('style')).toContain(`height: ${5003 * 32}px`);
-    const comfortable = rows(t).length;
-
-    // Row 3000 is the cursor, 200 px below the top of the viewport.
-    useFontListStore().click(useFontListStore().rows[3000]!.key, 'replace');
-    el.scrollTop = 3000 * 32 - 200;
-    await grid.trigger('scroll');
-    await flushPromises();
-
-    await settings.setDensity('compact');
-    await flushPromises();
-    expect(rows(t)[0]!.attributes('style')).toContain('height: 24px');
-    expect(t.get('.spacer').attributes('style')).toContain(`height: ${5003 * 24}px`);
-    expect(t.get('.header').attributes('style')).toContain('height: 24px');
-    expect(el.scrollTop).toBe(3000 * 24 - 200);
-    expect(grid.attributes('aria-activedescendant')).toBe(
-      rows(t)
-        .find((r) => r.classes('cursor'))!
-        .attributes('id'),
-    );
-    // Still only a window of rows: a few more fit, not the whole library.
-    expect(rows(t).length).toBeGreaterThan(comfortable);
-    expect(rows(t).length).toBeLessThan(80);
   });
 
   it('renders only a window of rows for a long library', async () => {

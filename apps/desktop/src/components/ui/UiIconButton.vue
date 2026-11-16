@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The one icon button of the app (E50.6): a 28 px target around a 16 px glyph. The label is
 // the accessible name and the tooltip. `size="sm"` (24 px, same glyph) is only for a button
-// inside a row that is 24 px tall: a sidebar row in the compact density (styles/sidebar.css)
+// inside a short row: a sidebar row (styles/sidebar.css)
 // and the remove button of a tag chip. Everything else keeps the default. `aria-pressed`
 // (a toggle) keeps a tint; `aria-expanded` turns it accent, like UiButton. The hover/press
 // tint and the disabled fade come from the global `button` baseline in theme.css (do not add

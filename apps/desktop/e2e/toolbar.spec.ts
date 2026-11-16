@@ -68,6 +68,19 @@ test('the toolbar has the same children at the same places in all five view mode
     shapes.push(await shape(toolbar(page)));
   }
   for (const s of shapes.slice(1)) expect(s).toEqual(shapes[0]);
+  // The toolbar (E51.5): the sidebar toggle, then title · search · filter chips · view switch ·
+  // compare · size. No density toggle.
+  const kinds = shapes[0]!.map((s) => s.replace(/ @.*$/, ''));
+  expect(kinds).toEqual([
+    expect.stringMatching(/^BUTTON\..*\[Sidebar\]$/),
+    expect.stringMatching(/^H1\.title\[\]$/),
+    expect.stringMatching(/^INPUT\..*\[Search fonts\]$/),
+    expect.stringMatching(/^SECTION\..*filters.*\[Filters\]$/),
+    expect.stringMatching(/^DIV\..*\[View mode\]$/),
+    expect.stringMatching(/^BUTTON\..*\[Compare \d+\/\d+\]$/),
+    expect.stringMatching(/^DIV\.size\[\]$/),
+  ]);
+  await expect(toolbar(page).getByRole('button', { name: 'Compact rows' })).toHaveCount(0);
   // Nothing of one view in the toolbar.
   await expect(toolbar(page).getByRole('button', { name: 'Columns' })).toHaveCount(0);
   await expect(toolbar(page).getByRole('combobox', { name: 'Preset' })).toHaveCount(0);

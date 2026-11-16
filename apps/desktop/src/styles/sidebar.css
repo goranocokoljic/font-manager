@@ -1,6 +1,6 @@
 /* The sidebar is one quiet paper panel (E41.3): every group shares these rows, so an icon,
    a label and a count line up from the top of the panel to its foot. --fm-side-row is
-   30 px, 24 px in the compact density. */
+   30 px. */
 .side-section {
   flex: none;
   margin-block-start: var(--fm-space-3);

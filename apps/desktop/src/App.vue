@@ -102,13 +102,12 @@ watch(
 );
 onUnmounted(() => unregisterThemes.splice(0).forEach((u) => u()));
 
-// Theme and density apply the moment a setting changes: theme.css reads them
-// from the root element.
+// The theme applies the moment the setting changes: theme.css reads it from the root
+// element.
 watchEffect(() => {
   const s = settings.settings;
   if (!s) return;
   document.documentElement.dataset.theme = s.theme;
-  document.documentElement.dataset.density = s.density;
 });
 
 // The Language setting relabels the UI at once: "System" (and the time before the

@@ -120,11 +120,6 @@ your team, read [Shared libraries](shared-libraries.md).
 - To make a PDF of a panel, print it and choose the PDF printer in the print
   dialog: **Microsoft Print to PDF** on Windows, **PDF** › **Save as PDF** on a Mac, and
   **Print to File** (PDF) on Linux. The text in the PDF stays text, in its fonts.
-- To see more fonts at a time, click **Compact rows** in the toolbar. The rows of
-  the list and the table get less space around them. The preview text keeps its
-  size. Click **Compact rows** again to go back to comfortable rows. You can also choose
-  **Use compact rows** or **Use comfortable rows** in the command palette, or
-  **Density** in **Settings**. Font Manager keeps your choice.
 - Select a font to see its name and state in the line above the list. Press `Enter`
   or click the name to open the family page. It shows everything about the family:
   styles, axes, characters, features, license, notes and the data for developers.

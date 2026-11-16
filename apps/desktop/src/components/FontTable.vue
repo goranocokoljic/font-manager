@@ -32,12 +32,11 @@ import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
-import { keepRowInView, tableRowHeight } from '../list/density';
+import { TABLE_ROW_PX } from '../list/density';
 import { useFontListStore } from '../stores/fontList';
 import { useFontDragStore } from '../stores/fontDrag';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
-import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
@@ -69,10 +68,9 @@ const fontSwitch = useFontSwitchStore();
 const fontDrag = useFontDragStore();
 const library = useLibraryStore();
 const views = useViewsStore();
-const settings = useSettingsStore();
 
-/** Row and header height in CSS px, from the row density. */
-const rowPx = computed(() => tableRowHeight(settings.density));
+/** Row and header height in CSS px. */
+const rowPx = TABLE_ROW_PX;
 
 const config = computed(() => views.tableFor(props.view));
 const columns = computed(() => visibleColumns(config.value));
@@ -101,7 +99,7 @@ function measure(): void {
   gutter.value = Math.max(0, el.offsetWidth - el.clientWidth);
 }
 
-const anchor = useScrollAnchor(viewport, () => rowPx.value);
+const anchor = useScrollAnchor(viewport, () => rowPx);
 
 onMounted(() => {
   measure();
@@ -120,12 +118,12 @@ function onScroll(): void {
 }
 
 /** The rows' part of the viewport: the sticky header covers the top. */
-const bodyHeight = computed(() => Math.max(rowPx.value, height.value - rowPx.value));
+const bodyHeight = computed(() => Math.max(rowPx, height.value - rowPx));
 const count = computed(() => list.rows.length);
 const range = computed(() =>
-  windowRange(scrollTop.value, bodyHeight.value, rowPx.value, props.overscan, count.value),
+  windowRange(scrollTop.value, bodyHeight.value, rowPx, props.overscan, count.value),
 );
-const pool = computed(() => poolSize(bodyHeight.value, rowPx.value, props.overscan));
+const pool = computed(() => poolSize(bodyHeight.value, rowPx, props.overscan));
 
 const rowId = (row: ListRow) => `fm-trow-${row.key.replace(':', '-')}`;
 
@@ -172,34 +170,15 @@ async function revealCursor(): Promise<void> {
   const el = viewport.value;
   const i = list.cursorIndex;
   if (!el || i < 0) return;
-  const top = scrollToShow(i, rowPx.value, el.scrollTop, bodyHeight.value);
+  const top = scrollToShow(i, rowPx, el.scrollTop, bodyHeight.value);
   if (top !== el.scrollTop) el.scrollTop = top;
   measure();
   await nextTick();
 }
 
-// A new row density keeps the cursor row on screen; without a cursor, the first
-// visible family stays at the top. After the render, so the spacer has its new height.
-watch(
-  rowPx,
-  (after, before) => {
-    const el = viewport.value;
-    if (!el) return;
-    const i = list.cursorIndex;
-    if (i < 0) {
-      anchor.restore();
-    } else {
-      const top = keepRowInView(i, before, after, el.scrollTop, bodyHeight.value);
-      if (top !== el.scrollTop) el.scrollTop = top;
-    }
-    measure();
-  },
-  { flush: 'post' },
-);
-
 function onKeyDown(e: KeyboardEvent): void {
   if (e.target !== viewport.value) return; // keys on a header button are the button's
-  const page = Math.max(1, Math.floor(bodyHeight.value / rowPx.value));
+  const page = Math.max(1, Math.floor(bodyHeight.value / rowPx));
   if (!handleListKey(e, list, { page, count: count.value, open: (row) => emit('open', row) }))
     return;
   e.preventDefault();
@@ -636,7 +615,6 @@ span.sort {
   min-width: 0;
   align-items: center;
   gap: 4px;
-  /* The density's gap: 8px comfortable, 4px compact. */
   padding: 0 var(--fm-gap);
   overflow: hidden;
 }
@@ -647,8 +625,7 @@ span.sort {
 }
 /* The compare icon (E48.4) ends the name cell: hidden at rest, shown on hover or at the
    cursor, and always while it is in the set. It shows at once, like the list's row actions:
-   nothing animates while the cursor moves by keyboard (E46.4). A compact row is 24 px: the
-   icon fits it. */
+   nothing animates while the cursor moves by keyboard (E46.4). */
 .row-compare {
   max-block-size: 100%;
   margin-inline-start: auto;
