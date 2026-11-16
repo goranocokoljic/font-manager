@@ -992,11 +992,11 @@ mod tests {
         put(&other.join("old.ttf"), &fixture(OTHER));
 
         f.watcher.watch_source(&other, false).expect("watch");
-        assert!(
-            f.next(Duration::from_millis(1500)).is_none(),
-            "no first scan"
-        );
-        assert!(lock(&f.index).get(&other.join("old.ttf")).is_none());
+        // No scan of the folder. macOS (FSEvents) may still report the write
+        // just before the watch as an event; that is a refresh, not a scan.
+        while let Some(update) = f.next(Duration::from_millis(1500)) {
+            assert_eq!(update.trigger, Trigger::Events, "no first scan: {update:?}");
+        }
 
         let path = other.join("new.ttf");
         put(&path, &fixture(REGULAR));
