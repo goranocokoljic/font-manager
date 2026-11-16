@@ -2,10 +2,11 @@
 // The Font Fu logo: the ff tile and the wordmark, drawn as outlines (no font needed).
 // "Font" takes the text colour, so it follows the theme; the tile and "Fu" keep the brand
 // purple in both. Source artwork: docs/brand/. Decorative size is the caller's (set a height).
+import { t } from '../i18n';
 </script>
 
 <template>
-  <svg class="app-logo" viewBox="721.52 400 470.09 120" role="img" aria-label="Font Fu">
+  <svg class="app-logo" viewBox="721.52 400 470.09 120" role="img" :aria-label="t('app.name')">
     <defs>
       <linearGradient
         id="fm-logo-tile"
