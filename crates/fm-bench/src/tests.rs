@@ -349,6 +349,10 @@ fn start_prepares_the_app_folders_and_serves_the_first_page() {
     );
     assert_eq!(started.families, families);
     assert_eq!(started.page, (families as usize).min(FIRST_PAGE as usize));
+    assert_eq!(
+        started.watched_folders, WATCHED_FOLDERS,
+        "the start watches four folders"
+    );
     let paths = home_paths(home.path());
     assert!(paths.config_file().is_file());
     assert!(paths.logs.is_dir());

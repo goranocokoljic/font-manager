@@ -25,11 +25,12 @@
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use fm_bench::{
     BenchResult, activate, first_scan, fonts_needed, glyph_geometry, glyph_similar, incremental,
-    layout_png, pairings, preview_cache, search, similar, smart_collections, start, trait_pass,
-    trait_search,
+    layout_png, pairings, preview_cache, search, serve_with, similar, smart_collections, start,
+    trait_pass, trait_search,
 };
 use serde::Serialize;
 
@@ -80,7 +81,10 @@ fn run(args: Args) -> BenchResult<()> {
             print(&started)
         }
         "idle" => {
-            let (started, _log) = start(&home)?;
+            // The API, and its folder watcher, stay up while the script
+            // samples the memory.
+            let (started, _log, _api) =
+                serve_with(&home, Arc::new(fm_platform::MockActivator::new()))?;
             // What a user does in the first minute: a few searches.
             search(&home, 1)?;
             print(&started)?;

@@ -7728,3 +7728,4 @@ fn foundry_aliases_fold_on_the_fixture_corpus() {
     };
     assert_eq!(again, updated);
 }
+mod watching;
