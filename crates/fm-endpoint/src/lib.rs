@@ -1,4 +1,4 @@
-//! Font Manager local API endpoint (ADR 0015).
+//! Font Fu local API endpoint (ADR 0015).
 //!
 //! A thin transport over `Arc<dyn Api>`: every service method is
 //! `POST /v1/<method>` on `127.0.0.1:<port the OS picks>`, with the request

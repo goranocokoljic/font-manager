@@ -328,7 +328,7 @@ describe('Settings window', () => {
     const notes = wrapper.get('ul[aria-labelledby="platform-notes-title"]');
     expect(wrapper.get('#platform-notes-title').text()).toBe('Platform notes');
     expect(notes.findAll('li').map((li) => li.text())).toEqual(mockAppInfo.platformNotes);
-    expect(notes.text()).toContain('closing the window quits Font Manager');
+    expect(notes.text()).toContain('closing the window quits Font Fu');
     wrapper.unmount();
   });
 

@@ -140,7 +140,7 @@ impl Write for IpcStream {
 }
 
 /// The message of the [`connect`] error when nothing listens at the name.
-pub const NOT_RUNNING: &str = "Font Manager is not running";
+pub const NOT_RUNNING: &str = "Font Fu is not running";
 
 /// Connects to the listener at `name`. When nothing listens there (the app
 /// quit: the pipe is gone, the socket file removed or not answering), the

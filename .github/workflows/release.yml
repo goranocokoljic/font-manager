@@ -122,7 +122,7 @@ jobs:
         run: |
           pnpm --filter @fm/sketch-plugin build
           mkdir -p release-assets
-          cp plugins/sketch/dist/font-manager.sketchplugin.zip             "release-assets/font-manager_${{ needs.plan.outputs.version }}_sketch-plugin.zip"
+          cp plugins/sketch/dist/font-manager.sketchplugin.zip             "release-assets/font-fu_${{ needs.plan.outputs.version }}_sketch-plugin.zip"
           ls -l release-assets
 
       - uses: actions/upload-artifact@v4
@@ -173,4 +173,4 @@ jobs:
         run: |
           ls -l release-assets
           gh release create "$TAG" release-assets/* --verify-tag --latest \
-            --title "Font Manager ${{ needs.plan.outputs.version }}" --notes-file release-notes.md
+            --title "Font Fu ${{ needs.plan.outputs.version }}" --notes-file release-notes.md

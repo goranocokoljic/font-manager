@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/foundries.schema.json",
-  "title": "Font Manager foundry names",
+  "title": "Font Fu foundry names",
   "description": "How the raw foundry strings of a font's name table (manufacturer, trademark, copyright, designer) fold into one canonical foundry name. Names compare as keys: lower case, every run of characters that are not letters or digits made one space, the legal suffixes at the end dropped. foundries.json follows it.",
   "type": "object",
   "additionalProperties": false,

@@ -77,7 +77,7 @@ impl Answer {
 /// The message for the app's 401: the token in `endpoint.json` is not the
 /// one the app holds now. It names where the user sees the current token;
 /// the app's own message stays in the detail.
-pub(crate) const WRONG_TOKEN: &str = "Font Manager did not accept the token of its local API. Check the token in Font Manager under Settings > Local API, or restart Font Manager.";
+pub(crate) const WRONG_TOKEN: &str = "Font Fu did not accept the token of its local API. Check the token in Font Fu under Settings > Local API, or restart Font Fu.";
 
 fn wrong_token(e: ApiError) -> ApiError {
     let detail = match e.detail {
@@ -301,22 +301,21 @@ impl<R: BufRead> Read for Chunked<R> {
 pub(crate) fn not_reachable(e: io::Error) -> ApiError {
     ApiError::new(
         ErrorCode::Io,
-        "Font Manager is not running, or its local API does not answer.",
+        "Font Fu is not running, or its local API does not answer.",
     )
     .with_detail(e.to_string())
 }
 
 /// The connection broke after the request started.
 pub(crate) fn lost(e: io::Error) -> ApiError {
-    ApiError::new(ErrorCode::Io, "The connection to Font Manager was lost.")
-        .with_detail(e.to_string())
+    ApiError::new(ErrorCode::Io, "The connection to Font Fu was lost.").with_detail(e.to_string())
 }
 
 /// The other side answered something that is not the local API.
 pub(crate) fn unreadable(detail: impl Into<String>) -> ApiError {
     ApiError::new(
         ErrorCode::Internal,
-        "Font Manager sent an answer this program cannot read.",
+        "Font Fu sent an answer this program cannot read.",
     )
     .with_detail(detail)
 }
@@ -345,7 +344,7 @@ mod tests {
     fn a_head_cut_off_is_a_lost_connection_and_garbage_is_unreadable() {
         let cut = head("HTTP/1.1 200 OK\r\nContent-Le").unwrap_err();
         assert_eq!(cut.code, ErrorCode::Io);
-        assert_eq!(cut.message, "The connection to Font Manager was lost.");
+        assert_eq!(cut.message, "The connection to Font Fu was lost.");
         assert_eq!(head("").unwrap_err().code, ErrorCode::Io);
         let garbage = head("SSH-2.0-OpenSSH_9.6\r\n\r\n").unwrap_err();
         assert_eq!(garbage.code, ErrorCode::Internal);

@@ -1,4 +1,4 @@
-//! Font Manager platform layer.
+//! Font Fu platform layer.
 //!
 //! The one place with OS-specific code: the `FontActivator` trait with one
 //! implementation per OS under `src/{windows,macos,linux}/`, the app-paths

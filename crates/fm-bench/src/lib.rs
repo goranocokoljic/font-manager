@@ -1,4 +1,4 @@
-//! Font Manager performance driver.
+//! Font Fu performance driver.
 //!
 //! Each function runs one thing the performance budgets cover against a bench
 //! home folder (the app folders of a throwaway user) and says how long it

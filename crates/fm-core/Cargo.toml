@@ -1,6 +1,6 @@
 [package]
 name = "fm-core"
-description = "Font Manager core: scanner, parser, index, search, coverage, previews, activation service, export and catalogs."
+description = "Font Fu core: scanner, parser, index, search, coverage, previews, activation service, export and catalogs."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

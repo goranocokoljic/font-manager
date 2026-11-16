@@ -32,7 +32,7 @@ test('the palette opens a document and lists active, in-library and missing font
   await expect(row(page, 'JetBrainsMono-Regular')).toHaveAccessibleName(
     'JetBrainsMono-Regular: Active',
   );
-  await expect(panel(page)).toContainText('Font Manager does not download them');
+  await expect(panel(page)).toContainText('Font Fu does not download them');
   // Not a modal: the font list stays in the page and usable.
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
@@ -69,7 +69,7 @@ test('the close button is labelled and closes the panel', async ({ page }) => {
 });
 
 for (const [n, reason] of [
-  ['1', 'Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx'],
+  ['1', 'Font Fu reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx'],
   ['2', "This document's fonts could not be read."],
 ] as const)
   test(`a file that cannot be checked (${n}) is a toast with the reason and no panel`, async ({

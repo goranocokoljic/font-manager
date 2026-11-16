@@ -462,8 +462,7 @@ fn window_only_methods_are_refused_with_403_and_never_reach_the_service() {
         assert_eq!(reply.status, 403, "{route}: {}", reply.body);
         assert_eq!(reply.body["code"], "permissionDenied", "{route}");
         assert_eq!(
-            reply.body["message"],
-            "Only the Font Manager window can change what AI assistants may do.",
+            reply.body["message"], "Only the Font Fu window can change what AI assistants may do.",
             "{route}"
         );
         // Also with a body that would be refused: the method is refused first.

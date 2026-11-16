@@ -56,7 +56,7 @@ describe('extendScriptUi', () => {
 
   it('shows a message with fmTell and does not wait for it', () => {
     const { cep, scripts } = cepAnswering(() => EVAL_SCRIPT_ERROR);
-    extendScriptUi(cepExtendScript(cep)).notify('Font Manager is not running');
-    expect(scripts).toEqual(['fmTell("Font Manager is not running")']);
+    extendScriptUi(cepExtendScript(cep)).notify('Font Fu is not running');
+    expect(scripts).toEqual(['fmTell("Font Fu is not running")']);
   });
 });

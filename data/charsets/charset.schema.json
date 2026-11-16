@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/charsets/charset.schema.json",
-  "title": "Font Manager character-set file",
+  "title": "Font Fu character-set file",
   "description": "Language presets: the characters a font must cover to set a language. One file per script group; every *.json file in data/charsets except this schema follows it.",
   "type": "object",
   "additionalProperties": false,

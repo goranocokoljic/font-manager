@@ -25,7 +25,7 @@ test('the site has the required pages, in reading order', () => {
   ]);
   for (const { slug, title } of built) {
     const html = page(slug);
-    assert.match(html, new RegExp(`<title>${title} · Font Manager Help</title>`));
+    assert.match(html, new RegExp(`<title>${title} · Font Fu Help</title>`));
     assert.match(html, new RegExp(`<h1 id="[a-z0-9-]+">${title}</h1>`));
   }
   assert.ok(existsSync(join(out, 'index.html')));

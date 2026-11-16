@@ -20,7 +20,7 @@
 //!   [`Index::sidecar_conflicts`] until the user resolves it
 //!   ([`Index::resolve_sidecar_conflict`]), sets the field again, or a merge
 //!   brings this machine to the same value. A sidecar that does not parse, or that a
-//!   newer Font Manager wrote, is reported and never rewritten. Entries for
+//!   newer Font Fu wrote, is reported and never rewritten. Entries for
 //!   faces this machine has not indexed are written back unchanged, and a
 //!   deleted sidecar file is written again from the index, not taken as the
 //!   other machine clearing everything.
@@ -578,7 +578,7 @@ impl Index {
                         src.id,
                         name,
                         &format!(
-                            "This sidecar was written by a newer Font Manager (format {version}); update the app to merge it. It is left unchanged."
+                            "This sidecar was written by a newer Font Fu (format {version}); update the app to merge it. It is left unchanged."
                         ),
                     )?;
                     return Ok(out);

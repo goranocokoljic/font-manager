@@ -1,4 +1,4 @@
-//! Font Manager core.
+//! Font Fu core.
 //!
 //! All logic lives here: scanning, parsing (fontations), the SQLite/FTS5 index,
 //! search and filters, coverage, previews, activation, export and catalog

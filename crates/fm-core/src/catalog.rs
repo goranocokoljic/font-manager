@@ -1047,7 +1047,7 @@ impl Fetcher for HttpFetcher {
         if body.len() as u64 > MAX_BODY_BYTES {
             return Err(FmError::new(
                 ErrorCode::Io,
-                "The catalog sent more data than Font Manager accepts.",
+                "The catalog sent more data than Font Fu accepts.",
             )
             .with_detail(format!("GET {url}: over {MAX_BODY_BYTES} bytes")));
         }
@@ -1059,7 +1059,7 @@ impl Fetcher for HttpFetcher {
 pub(crate) fn malformed(what: &str, detail: impl std::fmt::Display) -> FmError {
     FmError::new(
         ErrorCode::Io,
-        format!("The catalog sent {what} Font Manager cannot read."),
+        format!("The catalog sent {what} Font Fu cannot read."),
     )
     .with_detail(detail.to_string())
 }

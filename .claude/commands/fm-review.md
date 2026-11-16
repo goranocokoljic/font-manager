@@ -1,6 +1,6 @@
 ---
 description: >-
-  Code review of a Font Manager story branch (Rust workspace + Tauri 2 / Vue 3).
+  Code review of a Font Fu story branch (Rust workspace + Tauri 2 / Vue 3).
   Full mode: the parent captures the diff once, picks the lenses the diff needs
   (SPEC, COR, TST always; REUSE, FFI, A11Y when the diff calls for them), runs
   them as isolated parallel subagents, merges duplicates, then runs ONE
@@ -11,7 +11,7 @@ description: >-
 argument-hint: "[anchor: the story id + what it must do] --issue <n> [--mode full|verify] [--cycle <k>] [--prior <review file>] [--since <sha>] [--lenses SPEC,COR,TST,REUSE,FFI,A11Y] [--base main]"
 ---
 
-# fm-review — Font Manager code review
+# fm-review — Font Fu code review
 
 ## Why this command looks the way it does
 

@@ -1,14 +1,14 @@
 # Activation
 
 Activation makes a font available to other apps, for example a word processor or a
-design tool. Font Manager does not copy or install the file: it tells the operating
+design tool. Font Fu does not copy or install the file: it tells the operating
 system where the file is.
 
 ## Two kinds of activation
 
 | Kind | Key | How long it lasts |
 |------|-----|-------------------|
-| For this session | `A` | Until you quit Font Manager. |
+| For this session | `A` | Until you quit Font Fu. |
 | Permanent | `Shift+A` | Also after a restart, until you deactivate the font. |
 
 Select one or more fonts and press the key. Press it again to deactivate them. If only
@@ -30,7 +30,7 @@ The status bar shows how many fonts are active.
 
 ## Deactivate all
 
-Press `Ctrl+K` and choose **Deactivate all**. All fonts that Font Manager activated stop
+Press `Ctrl+K` and choose **Deactivate all**. All fonts that Font Fu activated stop
 being active, for this session and permanent ones.
 
 ## Keep only the current set
@@ -39,7 +39,7 @@ A project set is a named group of fonts for one job. The sets are under **Projec
 in the sidebar. Click a set to make it the current set. Click it again to clear it.
 
 Press `Ctrl+K` and choose **Deactivate everything not in the current set**. All fonts that
-Font Manager activated stop being active, but the fonts of the current set stay active.
+Font Fu activated stop being active, but the fonts of the current set stay active.
 The command is dimmed when no set is current.
 
 ## Share a set with a teammate
@@ -50,7 +50,7 @@ The file names each font by the content of its file. It holds no fonts, so your 
 must have the same font files.
 
 To use a set file, click **Import set…** next to **Project sets** and choose the file.
-Font Manager finds each font by its content, so a renamed or moved copy still matches.
+Font Fu finds each font by its content, so a renamed or moved copy still matches.
 The new set holds the fonts that your library has. A note lists the fonts that your
 library does not have, by family and style.
 
@@ -79,7 +79,7 @@ the clipboard.
 To give the font files themselves to another app (Explorer, Finder, a file
 manager, a mail or chat app), select the fonts, then hold **Files** in the
 selection bar and drag the pointer past the edge of the window. Drop the files
-where you want them. The other app gets a copy of each font file. Font Manager
+where you want them. The other app gets a copy of each font file. Font Fu
 does not move or change your files. A file that is no longer on the disk is
 left out, and a message tells you how many.
 
@@ -88,9 +88,9 @@ the pointer on it to see why.
 
 ## Fonts a document needs
 
-The Font Manager plugins for design apps (Photoshop, Illustrator, InDesign and
-Sketch) tell Font Manager which fonts a document uses when you open it. Font
-Manager finds them in your library and activates them for this session. When you
+The Font Fu plugins for design apps (Photoshop, Illustrator, InDesign and
+Sketch) tell Font Fu which fonts a document uses when you open it. Font
+Fu finds them in your library and activates them for this session. When you
 close the document, the plugin asks if it can deactivate the fonts that only
 this document used. The question names these fonts, for example:
 
@@ -105,11 +105,11 @@ A font that your library does not have is listed as missing.
 
 The fonts of a Photoshop document are the fonts that its text uses. Photoshop
 also stores its default fonts, for example Myriad Pro, in every text layer.
-Font Manager does not list a default font that no text uses.
+Font Fu does not list a default font that no text uses.
 
 ### Download a missing font from a catalog
 
-Font Manager can also download a missing font from an online catalog. This is
+Font Fu can also download a missing font from an online catalog. This is
 off until you turn it on:
 
 1. Open **Settings** → **Online catalogs**.
@@ -117,70 +117,70 @@ off until you turn it on:
    installed fonts**.
 3. Select **Download fonts a document needs from the catalogs you turned on**.
 
-When a document needs a font that your library does not have, Font Manager looks
+When a document needs a font that your library does not have, Font Fu looks
 for its family in the font lists of the catalogs you turned on. It looks only in
 the lists it already has, so the search itself does not use the internet. When it
 finds the family, it downloads it into the folder for installed fonts, adds it to
 your library and activates the font for the document. The plugin tells you, for
 example "Downloaded 1 family from Google Fonts: Alegreya".
 
-Font Manager downloads only from catalogs you turned on, and only when a design
+Font Fu downloads only from catalogs you turned on, and only when a design
 app opens a document. A download that fails, or that takes longer than one
 minute, leaves the font missing; the other fonts are not affected.
 
 ## Rules that keep your system safe
 
-- Font Manager never needs administrator rights.
+- Font Fu never needs administrator rights.
 - It never writes to the system font folders. Activation is for your user account only.
 - It only deactivates fonts that it activated itself. Fonts that other apps or your
   system installed stay as they are.
-- If the file is moved or deleted, the font stops working. Font Manager shows this in
+- If the file is moved or deleted, the font stops working. Font Fu shows this in
   the list.
 
 ## When two fonts have the same name
 
 Sometimes a font has the same PostScript name as a system font or a font that is
 already active. Apps ask for fonts by this name, so they can show only one of the two.
-When you activate such a font, Font Manager asks you what to do:
+When you activate such a font, Font Fu asks you what to do:
 
 - **Keep existing** — the other font stays. Your font is not activated.
-- **Replace for this session** — your font is activated until you quit Font Manager,
+- **Replace for this session** — your font is activated until you quit Font Fu,
   also when you asked for a permanent activation. After that, the other font is back.
 - **Cancel** — nothing changes.
 
 In the settings, under **Activation**, you can choose **Replace the other font for this
-session without asking**. Then Font Manager does not ask.
+session without asking**. Then Font Fu does not ask.
 
-Font Manager never deactivates the other font. If the other font is a system font or a
+Font Fu never deactivates the other font. If the other font is a system font or a
 font that another app installed, it stays installed.
 
 ### The Conflicts view
 
 Open **Conflicts** in the status bar, or **Show font conflicts** in the command
 palette. The view lists every active font that has the same PostScript name as another
-font, the other font, and the winner. The winner is the font that Font Manager puts
+font, the other font, and the winner. The winner is the font that Font Fu puts
 first: the font you activated with **Replace for this session**, or the font activated
-last when Font Manager activated both.
+last when Font Fu activated both.
 
 ## How it works on each system
 
 | System | Session | Permanent |
 |--------|---------|-----------|
-| Windows | A per-user font entry, removed when Font Manager quits | A per-user font entry |
+| Windows | A per-user font entry, removed when Font Fu quits | A per-user font entry |
 | macOS | Registered for this login session | Registered for your user |
-| Linux | A link in `~/.local/share/fonts` that Font Manager removes when it quits | A link in `~/.local/share/fonts` |
+| Linux | A link in `~/.local/share/fonts` that Font Fu removes when it quits | A link in `~/.local/share/fonts` |
 
 Apps that are already open can need a few seconds to see a new font. On Linux this
 can take up to 30 seconds. Some apps only see new fonts after a restart.
 
-> If Font Manager stops unexpectedly, it removes the session fonts the next time it
+> If Font Fu stops unexpectedly, it removes the session fonts the next time it
 > starts.
 
 ## Keep fonts active after you log in
 
-Session fonts stay active while Font Manager runs. To have Font Manager start in the
+Session fonts stay active while Font Fu runs. To have Font Fu start in the
 tray when you log in, open **Settings → Activation** and turn on **Start at login**.
-Font Manager adds itself to the apps that your system starts at login:
+Font Fu adds itself to the apps that your system starts at login:
 
 | System | The login entry |
 |--------|-----------------|
@@ -188,9 +188,9 @@ Font Manager adds itself to the apps that your system starts at login:
 | macOS | A login item, `~/Library/LaunchAgents/org.fontmanager.app.autostart.plist` |
 | Linux | `~/.config/autostart/org.fontmanager.app.desktop` (or under `$XDG_CONFIG_HOME`) |
 
-Turn the switch off to remove the entry. Font Manager removes only an entry that it
-wrote. If you wrote a file with the same name yourself, Font Manager does not change
+Turn the switch off to remove the entry. Font Fu removes only an entry that it
+wrote. If you wrote a file with the same name yourself, Font Fu does not change
 or remove it.
 
-> Inside a Flatpak, Font Manager cannot add itself to the apps that start at login,
+> Inside a Flatpak, Font Fu cannot add itself to the apps that start at login,
 > so **Start at login** is not shown. **Settings → About → Platform notes** says so.

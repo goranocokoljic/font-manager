@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Font Manager",
+  "productName": "Font Fu",
   "identifier": "org.fontmanager.app",
   "build": {
     "beforeDevCommand": "pnpm sidecar && pnpm dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Font Manager",
+        "title": "Font Fu",
         "width": 1280,
         "height": 800,
         "minWidth": 1000,

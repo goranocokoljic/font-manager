@@ -49,7 +49,7 @@ macro_rules! window_only {
         assert_eq!(err.code, ErrorCode::PermissionDenied, "{}", stringify!($m));
         assert_eq!(
             err.message,
-            "Only the Font Manager window can change what AI assistants may do.",
+            "Only the Font Fu window can change what AI assistants may do.",
             "{}",
             stringify!($m)
         );

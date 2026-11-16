@@ -424,7 +424,7 @@ test('Install proposes the folder once, then shows the progress and the family a
   await expect(
     line.getByRole('heading', { name: 'Where should installed fonts go?' }),
   ).toBeVisible();
-  await expect(line).toContainText('/Users/demo/Documents/Font Manager Fonts');
+  await expect(line).toContainText('/Users/demo/Documents/Font Fu Fonts');
   await expect(line.getByRole('button', { name: 'Choose…' })).toBeVisible();
   await line.getByRole('button', { name: 'Use this folder' }).click();
 

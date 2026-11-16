@@ -16,7 +16,7 @@ HTTP requests (`probe-endpoint.py`, transcript in §4).
   and the plugins need that. An AI assistant's host (Claude Code with the HTTP snippet,
   Claude Desktop through the shim) is such a program.
 - **What the MCP switches are for:** to limit what an assistant does *through its Font
-  Manager tools*: nothing changes until the user grants a tool, and a deactivation asks
+  Fu tools*: nothing changes until the user grants a tool, and a deactivation asks
   every time. They are not, and cannot be, a wall against a program that runs with the
   user's rights: such a program can run `fm activate` directly.
 
@@ -55,7 +55,7 @@ so an agent with a shell could have granted itself every tool and approved its o
 deactivations, which empties the consent the switches stand for.
 
 **Fix (this PR):** `fm_endpoint::routes::WINDOW_ONLY` lists the four methods;
-`routes::dispatch` refuses them with `permissionDenied` ("Only the Font Manager window
+`routes::dispatch` refuses them with `permissionDenied` ("Only the Font Fu window
 can change what AI assistants may do.") before any body is parsed, over HTTP (403) and
 the pipe alike. The window calls them through Tauri commands; the app's MCP server asks
 the gate in-process on `CoreApi`, so tools still work. `mcp_status` stays readable.
@@ -85,7 +85,7 @@ it plainly.
 
 By design (ADR 0015): a client learns the API version before it reads the discovery
 file. A browser page cannot read the answer (no CORS headers) but can tell the port
-answers. It reveals that Font Manager runs and its version, nothing else.
+answers. It reveals that Font Fu runs and its version, nothing else.
 
 ### F5 — No connection limits or header timeouts on the HTTP listener (low) — accepted
 

@@ -390,7 +390,7 @@ fn activate_and_deactivate_in_direct_link_mode_do_nothing_and_exit_4() {
     assert!(out.stdout.is_empty());
     assert_eq!(
         text(&out.stderr).trim_end(),
-        "fm: Font Manager must be running to activate fonts; start it and try again"
+        "fm: Font Fu must be running to activate fonts; start it and try again"
     );
 
     let out = home.fm(&["--json", "deactivate", "Barlow-BoldItalic"]);

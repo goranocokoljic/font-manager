@@ -1,4 +1,4 @@
-# Font Manager
+# Font Fu
 
 A free, open-source, cross-platform font manager for Windows, macOS and Linux. A Rust
 core with a Tauri 2 + Vue 3 desktop shell, and a CLI and an MCP server over one typed
@@ -28,7 +28,7 @@ Every night with new commits on `main`, the `nightly` workflow builds unsigned
 installers and attaches them to a GitHub pre-release named `nightly-<version>-<hash>`:
 `.msi` and `.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux. The version is
 the `[workspace.package]` version of `Cargo.toml` plus the short commit hash, for example
-`font-manager_0.1.0-1a2b3c4_windows_x64.msi`. The installers are not signed: Windows
+`font-fu_0.1.0-1a2b3c4_windows_x64.msi`. The installers are not signed: Windows
 SmartScreen and macOS Gatekeeper warn before they open. Each nightly has a `SHA256SUMS`
 file. Build the installers locally with
 `node scripts/release/build.mjs installer --os windows` (or `macos`, `linux`).

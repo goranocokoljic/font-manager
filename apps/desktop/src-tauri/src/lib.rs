@@ -1,4 +1,4 @@
-//! The Font Manager desktop shell: Tauri commands are thin adapters over
+//! The Font Fu desktop shell: Tauri commands are thin adapters over
 //! `fm-api`. Each command takes the shared [`Api`] from Tauri state, calls one
 //! service method off the async runtime (ADR 0006) and returns its result as is.
 
@@ -1229,7 +1229,7 @@ async fn save_set_file<R: Runtime>(
         .file()
         .set_title("Export set")
         .set_file_name(file_name)
-        .add_filter("Font Manager set", &["json"]);
+        .add_filter("Font Fu set", &["json"]);
     let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
         .await
         .map_err(join_error)?;
@@ -1254,7 +1254,7 @@ async fn load_set_file<R: Runtime>(
         .dialog()
         .file()
         .set_title("Import set")
-        .add_filter("Font Manager set", &["json"]);
+        .add_filter("Font Fu set", &["json"]);
     let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_file())
         .await
         .map_err(join_error)?;
@@ -1726,7 +1726,7 @@ pub fn run() {
     let mut startup = match fm_core::startup::init() {
         Ok(startup) => Some(startup),
         Err(e) => {
-            eprintln!("font manager: {e}");
+            eprintln!("Font Fu: {e}");
             None
         }
     };
@@ -1764,8 +1764,8 @@ pub fn run() {
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(e) => {
-            tracing::error!(error = %e, "font manager failed to start");
-            eprintln!("font manager failed to start: {e}");
+            tracing::error!(error = %e, "Font Fu failed to start");
+            eprintln!("Font Fu failed to start: {e}");
             drop(startup); // flush the log before exit skips destructors
             std::process::exit(1);
         }

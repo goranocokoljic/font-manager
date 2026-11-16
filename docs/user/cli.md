@@ -44,7 +44,7 @@ answer.
 
 ## Activation needs the app
 
-`fm activate` and `fm deactivate` work only when Font Manager runs. When the
+`fm activate` and `fm deactivate` work only when Font Fu runs. When the
 app is closed, they do nothing and exit with code 4. A font that `fm`
 activated itself would stop when `fm` stops.
 

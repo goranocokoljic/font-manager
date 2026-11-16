@@ -1,11 +1,11 @@
 # Getting started
 
-Font Manager shows every font on your computer in one list. You can search them,
+Font Fu shows every font on your computer in one list. You can search them,
 preview them and make them available to other apps. It is free and works offline.
 
 ## Your fonts stay where they are
 
-Font Manager does not copy, move or change your font files. It reads the folders you
+Font Fu does not copy, move or change your font files. It reads the folders you
 choose and keeps a list of the fonts in them. When you remove a folder from the app,
 the files stay on your disk.
 
@@ -13,7 +13,7 @@ the files stay on your disk.
 
 1. In the sidebar, under **Sources**, select **Add folder**.
 2. Choose the folder that holds your fonts.
-3. Font Manager reads the folder. A progress bar shows how many files it has read.
+3. Font Fu reads the folder. A progress bar shows how many files it has read.
 
 The fonts on your system are always in the list too. They show as **System fonts**.
 Read [Sources](sources.md) to learn more about folders. To share a folder of fonts with
@@ -142,18 +142,18 @@ your team, read [Shared libraries](shared-libraries.md).
 - Some color fonts have more than one color palette. For such a font, the **Info**
   tab shows **Color palette** with the colors and the name of each palette. Click a
   palette, or use the arrow keys, to choose it. All styles of the family then show in
-  that palette, in every view mode. Font Manager keeps your choice for the view.
+  that palette, in every view mode. Font Fu keeps your choice for the view.
 - Write notes in the **Info** tab. **Notes** are for the style that you selected.
-  **Family notes** are for all styles of the family. Font Manager saves a note when
+  **Family notes** are for all styles of the family. Font Fu saves a note when
   you leave its field. To delete a note, clear its field. The **Notes** column of the
-  table shows the family notes. Notes stay when Font Manager reads the folder again.
+  table shows the family notes. Notes stay when Font Fu reads the folder again.
 - Record your license in the **License** section of the **Info** tab. Set the license
   type, the number of seats and the purchase date, then click **Save license**. The
   license is for all styles of the family. To attach a receipt, choose where Font
-  Manager keeps its copy and click **Attach receipt…**. **Next to the font** puts the
+  Fu keeps its copy and click **Attach receipt…**. **Next to the font** puts the
   copy in the `.fontlibrary` folder of the font's folder, so a synced folder carries
-  it to your team. Font Manager copies the receipt; your file stays where it is. When
-  you remove or replace a receipt, Font Manager moves its copy to the trash.
+  it to your team. Font Fu copies the receipt; your file stays where it is. When
+  you remove or replace a receipt, Font Fu moves its copy to the trash.
 - To get a list of your licenses for a spreadsheet, open the command palette and
   choose **Export license inventory…**, or click **Export license inventory…** on a
   collection. Choose where to save the CSV file. The file has one row for each
@@ -208,7 +208,7 @@ editor.
 ## Use a font in other apps
 
 Select a font and press `A`. The font is now active: other apps can use it until you
-quit Font Manager. Press `Shift+A` to keep it active after a restart. Read
+quit Font Fu. Press `Shift+A` to keep it active after a restart. Read
 [Activation](activation.md) for the details.
 
 ## Do everything from the keyboard
@@ -222,7 +222,7 @@ what you want to do and press `Enter`. All keys are on the
 Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. You can also open them in
 these places:
 
-- The **File** menu: choose **Settings…**. On a Mac, it is in the **Font Manager** menu.
+- The **File** menu: choose **Settings…**. On a Mac, it is in the **Font Fu** menu.
 - The tray menu: choose **Settings…**.
 - The status bar at the bottom of the window: click **Settings**.
 
@@ -230,30 +230,30 @@ There you can choose the theme, the size of the rows, and how activation works.
 
 ## Connect other programs
 
-While Font Manager runs, other programs on your computer (the `fm` command, plugins for
+While Font Fu runs, other programs on your computer (the `fm` command, plugins for
 design apps) can use it through a local address. Open Settings → Local API to see the
 address and the token. Each program needs the token. Click **Show** to see it and
 **Copy** to copy it. Keep the token secret: a program that has it can do everything
-Font Manager can do. If you think someone else has it, click **Regenerate**. The old
+Font Fu can do. If you think someone else has it, click **Regenerate**. The old
 token stops working at once.
 
 Only programs on this computer can connect. Web pages in your browser cannot.
 
-Plugins keep working when you close the window, because Font Manager keeps running in the
-tray. This also applies when Font Manager starts at login. When you quit Font Manager,
-plugins tell you that it is not running. If closing the window quits Font Manager (the
+Plugins keep working when you close the window, because Font Fu keeps running in the
+tray. This also applies when Font Fu starts at login. When you quit Font Fu,
+plugins tell you that it is not running. If closing the window quits Font Fu (the
 tray setting is off, or your desktop has no tray), keep the window open while you use
 plugins. Settings → About → Platform notes tells you when this applies.
 
 ## Connect an AI assistant
 
-AI assistants such as Claude Code can use Font Manager through the Model Context Protocol
+AI assistants such as Claude Code can use Font Fu through the Model Context Protocol
 (MCP). This is off until you turn it on. Open Settings → AI assistants and turn on
 **Allow AI assistants (MCP server)**. Then click **Copy Claude Code command** and run the
 command in a terminal, or click **Copy HTTP client config** and paste the block into the
 settings of another assistant. The snippets contain the token, so keep them secret.
 
-The address changes each time Font Manager starts. After a restart, copy the snippet
+The address changes each time Font Fu starts. After a restart, copy the snippet
 again. Turn the switch off to stop all assistants at once.
 
 An assistant can always search the library, read font details and render previews. It
@@ -285,17 +285,17 @@ Read [AI assistants](mcp.md) for the steps for Claude Code and Claude Desktop.
 ## Get updates
 
 Open Settings → About and click **Check for updates**. If a new version is out, Font
-Manager shows its number and release notes, and installs it only when you click
+Fu shows its number and release notes, and installs it only when you click
 **Install and restart**. A major version (for example 1.x to 2.0) asks you a second time.
-Installing quits Font Manager first, so session activations end, and then starts the new
-version. Turn on **Check automatically when Font Manager starts** to check at every start.
+Installing quits Font Fu first, so session activations end, and then starts the new
+version. Turn on **Check automatically when Font Fu starts** to check at every start.
 It is off until you turn it on.
 
-Font Manager installs only updates signed with its release key. If you installed it with
+Font Fu installs only updates signed with its release key. If you installed it with
 Flatpak or a package manager, that tool installs the updates, and Settings → About says
-so under Platform notes. Font Manager never asks for administrator rights, so a copy
+so under Platform notes. Font Fu never asks for administrator rights, so a copy
 installed for all users (the .msi on Windows, or an app in a folder your account cannot
 change) does not update itself: install the new version from the releases page. The
 per-user .exe installer on Windows updates itself.
 
-> Font Manager makes no network calls unless you ask it to, and it has no accounts.
+> Font Fu makes no network calls unless you ask it to, and it has no accounts.

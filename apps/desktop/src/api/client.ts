@@ -308,7 +308,7 @@ export interface FmClient {
    * configured mode. A family already in the library is not downloaded again.
    */
   installFamily(req: InstallFamilyRequest): Promise<InstallFamilyResponse>;
-  /** The folder the first Install proposes: `Font Manager Fonts` in the user's Documents. */
+  /** The folder the first Install proposes: `Font Fu Fonts` in the user's Documents. */
   suggestedDownloadFolder(): Promise<string>;
   /** Every family downloaded from a catalog, newest first, with where its files are now. */
   listCatalogDownloads(): Promise<CatalogDownload[]>;
@@ -434,7 +434,7 @@ export interface FmClient {
 
 /** The client backed by the Tauri commands in `src-tauri`. */
 /** The name of the folder the first Install proposes inside the user's Documents. */
-export const SUGGESTED_DOWNLOAD_FOLDER = 'Font Manager Fonts';
+export const SUGGESTED_DOWNLOAD_FOLDER = 'Font Fu Fonts';
 
 export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),

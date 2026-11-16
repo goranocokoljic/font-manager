@@ -56,7 +56,7 @@ fn write_log(dir: &Path, info: &PanicHookInfo<'_>) -> io::Result<PathBuf> {
 /// The text of a crash log.
 fn format_log(report: &CrashReport, thread: &str, backtrace: &str) -> String {
     format!(
-        "Font Manager {} crashed.\nmessage: {}\nlocation: {}\nthread: {thread}\nos: {} {}\n\nbacktrace:\n{backtrace}\n",
+        "Font Fu {} crashed.\nmessage: {}\nlocation: {}\nthread: {thread}\nos: {} {}\n\nbacktrace:\n{backtrace}\n",
         env!("CARGO_PKG_VERSION"),
         report.message,
         report.location.as_deref().unwrap_or("unknown"),

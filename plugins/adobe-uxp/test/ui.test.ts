@@ -9,12 +9,10 @@ describe('uxpUi', () => {
     document.body.innerHTML = '<p id="status"></p>';
     const show = vi.fn();
     HTMLDialogElement.prototype.show = show;
-    uxpUi(document).notify('Font Manager is not running');
+    uxpUi(document).notify('Font Fu is not running');
     expect(show).toHaveBeenCalledOnce();
-    expect(document.getElementById('status')?.textContent).toBe('Font Manager is not running');
-    expect(document.querySelector('dialog sp-body')?.textContent).toBe(
-      'Font Manager is not running',
-    );
+    expect(document.getElementById('status')?.textContent).toBe('Font Fu is not running');
+    expect(document.querySelector('dialog sp-body')?.textContent).toBe('Font Fu is not running');
     expect(document.querySelector('dialog sp-button')?.textContent).toBe('OK');
   });
 

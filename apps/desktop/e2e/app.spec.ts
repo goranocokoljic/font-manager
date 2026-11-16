@@ -6,8 +6,9 @@ test('opens the shell and shows the app info from the API client', async ({ page
   await page.keyboard.press('ControlOrMeta+,');
   await page.getByRole('tab', { name: 'About' }).click();
   const info = page.getByTestId('app-info');
-  await expect(info).toContainText('Font Manager (mock)');
+  await expect(info).toContainText('Font Fu (mock)');
   await expect(info).toContainText(/\d+\.\d+\.\d+/);
+  await expect(page.getByRole('img', { name: 'Font Fu' })).toBeVisible();
 });
 
 test('an unknown route lands on home', async ({ page }) => {

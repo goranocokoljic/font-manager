@@ -1,7 +1,7 @@
-# Font Manager for Illustrator (CEP)
+# Font Fu for Illustrator (CEP)
 
 A CEP extension for Illustrator 27.0 (2023) and later. It has no font logic:
-it tells the running Font Manager app which fonts a document uses, and the
+it tells the running Font Fu app which fonts a document uses, and the
 app finds and activates them (E29.2). It does what the UXP plugin
 (`plugins/adobe-uxp/`) does for InDesign and Photoshop.
 
@@ -21,7 +21,7 @@ app finds and activates them (E29.2). It does what the UXP plugin
   first 8, then "and N more"; the count only from an app older than E30.5);
   Deactivate calls `deactivate` with those faces, Keep them
   leaves them active.
-- **App not running.** It says "Font Manager is not running" once and does
+- **App not running.** It says "Font Fu is not running" once and does
   nothing else.
 
 CEP gives Illustrator no open or close event. The extension compares the
@@ -63,7 +63,7 @@ socket on macOS. No token is needed. The manifest turns Node on
 cannot be opened, it tries the local API (ADR 0015) through `endpoint.json`;
 that fails by design, because a `file://` page's `fetch` sends an `Origin`
 header and the endpoint refuses those (403). So the pipe or socket is the
-transport; without it the extension says "Font Manager is not running".
+transport; without it the extension says "Font Fu is not running".
 The client and the document logic are in `plugins/shared/`; the types are
 the generated `apps/desktop/src/api/types.ts`. ADR 0018 records what the
 real apps do.

@@ -159,7 +159,7 @@ fn with_the_app_running_fm_goes_through_it_and_never_opens_the_index() {
     let v = json(&out);
     assert_eq!(v["mode"], "endpoint");
     // The app's answer: the mock's name and the API it serves.
-    assert_eq!(v["name"], "Font Manager (mock)");
+    assert_eq!(v["name"], "Font Fu (mock)");
     assert_eq!(v["apiVersion"]["major"], API_VERSION.major);
     assert_eq!(v["apiVersion"]["minor"], API_VERSION.minor);
     assert_eq!(v["apiVersion"]["patch"], API_VERSION.patch);
@@ -194,7 +194,7 @@ fn direct_forces_direct_link_while_the_app_runs() {
     assert_eq!(code(&out), 0, "{}", text(&out.stderr));
     let v = json(&out);
     assert_eq!(v["mode"], "direct");
-    assert_ne!(v["name"], "Font Manager (mock)");
+    assert_ne!(v["name"], "Font Fu (mock)");
     assert!(home.index_file().is_file(), "direct-link opens the index");
     // The flag is global, like --json.
     assert_eq!(mode(&home, &["version", "--json", "--direct"]), "direct");

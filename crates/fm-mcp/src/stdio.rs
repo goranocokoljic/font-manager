@@ -33,7 +33,7 @@ use rmcp::transport::{IntoTransport as _, StreamableHttpClientTransport, Transpo
 use tokio::task::JoinSet;
 
 /// What the client is told when it cannot reach the app.
-pub const UNAVAILABLE: &str = "Open Font Manager and turn on AI assistants in Settings.";
+pub const UNAVAILABLE: &str = "Open Font Fu and turn on AI assistants in Settings.";
 
 /// How long the shim waits for the client's first message when it has only
 /// an error to answer with: long enough for a client that starts the shim
@@ -60,16 +60,16 @@ impl std::fmt::Debug for Target {
 /// why there is none to talk to (for stderr). Blocking: a few calls to the
 /// local API.
 pub fn find(paths: &AppPaths) -> Result<Target, String> {
-    let client = fm_client::connect(paths).ok_or("Font Manager is not running.")?;
+    let client = fm_client::connect(paths).ok_or("Font Fu is not running.")?;
     let status = client
         .mcp_status()
-        .map_err(|e| format!("Font Manager did not report its MCP server: {e}"))?;
+        .map_err(|e| format!("Font Fu did not report its MCP server: {e}"))?;
     if !status.enabled {
         return Err("AI assistants are turned off in Settings.".to_owned());
     }
     let token = client
         .endpoint_info()
-        .map_err(|e| format!("Font Manager did not report its local API: {e}"))?
+        .map_err(|e| format!("Font Fu did not report its local API: {e}"))?
         .token;
     Ok(Target {
         // The address the app answered on: the one it publishes.
@@ -204,13 +204,13 @@ pub async fn forward<T: Transport<RoleServer>>(target: &Target, mut client: T) -
                     }
                 }
                 None => {
-                    log("Font Manager closed the connection.");
+                    log("Font Fu closed the connection.");
                     break End::AppGone;
                 }
             },
             Some(sent) = sends.join_next(), if !sends.is_empty() => {
                 if let Ok((id, Err(e))) = sent {
-                    log(&format!("a message did not reach Font Manager: {e}"));
+                    log(&format!("a message did not reach Font Fu: {e}"));
                     if let Some(id) = id.filter(|id| open.remove(id)) {
                         let error = ServerJsonRpcMessage::error(unavailable(), Some(id));
                         let _ = client.send(error).await;

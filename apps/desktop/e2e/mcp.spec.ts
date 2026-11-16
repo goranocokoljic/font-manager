@@ -73,14 +73,14 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
   const desktopSnippet = page.getByLabel('Claude Desktop (starts the bundled fm-mcp-stdio)');
   await expect(desktopSnippet).toBeVisible();
   await expect(desktopSnippet).toContainText(
-    '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio',
+    '/Applications/Font Fu.app/Contents/MacOS/fm-mcp-stdio',
   );
   await page.keyboard.press('Enter');
   await expect
     .poll(async () => JSON.parse(await page.evaluate(() => navigator.clipboard.readText())))
     .toMatchObject({
       mcpServers: {
-        'font-manager': { command: '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio' },
+        'font-manager': { command: '/Applications/Font Fu.app/Contents/MacOS/fm-mcp-stdio' },
       },
     });
 

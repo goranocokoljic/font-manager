@@ -3,7 +3,7 @@
 //!
 //! The bundle installs `fm-mcp-stdio` beside the app's executable (Tauri
 //! `externalBin`): `<install dir>\fm-mcp-stdio.exe` on Windows,
-//! `Font Manager.app/Contents/MacOS/fm-mcp-stdio` on macOS, `usr/bin` on
+//! `Font Fu.app/Contents/MacOS/fm-mcp-stdio` on macOS, `usr/bin` on
 //! Linux. Inside an AppImage that folder is a mount that exists only while
 //! the app runs and changes its name at every start (as for the login entry,
 //! ADR 0011), so the command is the AppImage file itself with [`SHIM_ARG`],
@@ -69,7 +69,7 @@ mod tests {
     use crate::paths::test_env;
 
     fn exe() -> PathBuf {
-        PathBuf::from("/opt/Font Manager/fm-app")
+        PathBuf::from("/opt/Font Fu/fm-app")
     }
 
     #[test]
@@ -78,19 +78,13 @@ mod tests {
         let windows = command(Os::Windows, &exe(), &none).expect("a folder");
         assert_eq!(
             windows.program,
-            PathBuf::from("/opt/Font Manager/fm-mcp-stdio.exe")
+            PathBuf::from("/opt/Font Fu/fm-mcp-stdio.exe")
         );
         assert!(windows.args.is_empty());
         let macos = command(Os::MacOs, &exe(), &none).expect("a folder");
-        assert_eq!(
-            macos.program,
-            PathBuf::from("/opt/Font Manager/fm-mcp-stdio")
-        );
+        assert_eq!(macos.program, PathBuf::from("/opt/Font Fu/fm-mcp-stdio"));
         let linux = command(Os::Linux, &exe(), &none).expect("a folder");
-        assert_eq!(
-            linux.program,
-            PathBuf::from("/opt/Font Manager/fm-mcp-stdio")
-        );
+        assert_eq!(linux.program, PathBuf::from("/opt/Font Fu/fm-mcp-stdio"));
         assert_eq!(command(Os::Linux, Path::new(""), &none), None);
     }
 

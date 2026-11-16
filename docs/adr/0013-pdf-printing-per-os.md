@@ -45,7 +45,7 @@ already pulls in: `webview2-com`, `objc2-web-kit` (with `objc2`,
 - **Injection.** `fm-core` takes the printer as a dependency
   (`CoreApi::with_pdf_printer`). The app passes `fm_platform::pdf::system`.
   Without a printer (the CLI's direct link, which has no UI loop) a PDF is
-  `Unsupported`: "PDF export needs the Font Manager app running."
+  `Unsupported`: "PDF export needs the Font Fu app running."
 - **Files.** `fm-core` writes the page to a temporary HTML file, has it
   printed to a hidden partial file in the target folder, and renames that over
   the chosen path only when the print succeeded and the file starts with

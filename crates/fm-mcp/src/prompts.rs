@@ -105,7 +105,7 @@ fn choose(brief: &str, languages: &[String]) -> String {
         )
     };
     format!(
-        "Choose fonts from my Font Manager library for this brief:\n\n{brief}{cover}\n\n\
+        "Choose fonts from my Font Fu library for this brief:\n\n{brief}{cover}\n\n\
          1. Call `{PICK_FONTS_FOR_BRIEF}` with {args}. It answers with candidate faces \
          from the library, with their face ids.\n\
          2. Call `{RENDER_PREVIEW}` for each candidate you consider, with a short line \
@@ -119,7 +119,7 @@ fn coverage(text: &str, font: Option<&str>) -> String {
     let quoted = serde_json::to_string(text).unwrap_or_default();
     match font {
         Some(font) => format!(
-            "Check whether the font {font} in my Font Manager library covers every \
+            "Check whether the font {font} in my Font Fu library covers every \
              character of this text:\n\n{text}\n\n\
              1. If {font} is not a face id, call `{SEARCH_FONTS}` with `query` set to \
              the font's name to find its face id.\n\
@@ -127,7 +127,7 @@ fn coverage(text: &str, font: Option<&str>) -> String {
              3. Tell me whether it covers the text, and list the characters it misses."
         ),
         None => format!(
-            "Find the fonts in my Font Manager library that cover every character of \
+            "Find the fonts in my Font Fu library that cover every character of \
              this text:\n\n{text}\n\n\
              1. Call `{SEARCH_FONTS}` with `text` set to {quoted} to find candidate faces.\n\
              2. Call `{CHECK_COVERAGE}` with each candidate's face id and `text` set to \

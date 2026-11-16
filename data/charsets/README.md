@@ -1,6 +1,6 @@
 # data/charsets
 
-Language → required characters, as JSON, community-editable. Font Manager uses these
+Language → required characters, as JSON, community-editable. Font Fu uses these
 presets for the "supports language" filter and the coverage report. Every file is
 validated against the JSON schema next to it by a test (epic E3).
 

@@ -37,7 +37,7 @@ describe('the bundled manifest', () => {
       script: 'plugin.js',
       handler: 'onApplyCopiedFont',
     });
-    expect(manifest.menu).toEqual({ title: 'Font Manager', items: [fontSwitch.identifier] });
+    expect(manifest.menu).toEqual({ title: 'Font Fu', items: [fontSwitch.identifier] });
   });
 
   it('names the handlers main.ts makes global', () => {

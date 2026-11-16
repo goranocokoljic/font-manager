@@ -1,14 +1,14 @@
 {
   "$schema": "./manifest.schema.json",
-  "name": "Font Manager",
+  "name": "Font Fu",
   "identifier": "org.fontmanager.sketch",
-  "description": "Activates the fonts of a document from your Font Manager library when it opens, and applies a font copied in Font Manager to the selected text.",
-  "author": "Font Manager",
+  "description": "Activates the fonts of a document from your Font Fu library when it opens, and applies a font copied in Font Fu to the selected text.",
+  "author": "Font Fu",
   "compatibleVersion": "70",
   "bundleVersion": 1,
   "commands": [
     {
-      "name": "Font Manager document events",
+      "name": "Font Fu document events",
       "identifier": "org.fontmanager.sketch.documents",
       "script": "plugin.js",
       "handlers": {
@@ -26,7 +26,7 @@
     }
   ],
   "menu": {
-    "title": "Font Manager",
+    "title": "Font Fu",
     "items": ["org.fontmanager.sketch.fontswitch"]
   }
 }

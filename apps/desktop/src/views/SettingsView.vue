@@ -5,6 +5,7 @@ import { formatApiVersion } from '../api/version';
 import type { FullSettings } from '../api/client';
 import type { Language, SettingsUpdate } from '../api/types';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
+import AppLogo from '../components/AppLogo.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
@@ -477,6 +478,7 @@ function chooseLanguage(value: string): void {
 
         <template v-else-if="current === 'about' && app.info">
           <h2 class="heading">{{ sectionTitle('about') }}</h2>
+          <AppLogo class="brand" data-testid="app-logo" />
           <dl class="info" data-testid="app-info">
             <dt>{{ t('home.info.app') }}</dt>
             <dd>
@@ -726,6 +728,10 @@ function chooseLanguage(value: string): void {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: var(--fm-space-3);
+}
+.brand {
+  block-size: 40px;
+  margin-block-end: var(--fm-space-4);
 }
 .info {
   display: grid;

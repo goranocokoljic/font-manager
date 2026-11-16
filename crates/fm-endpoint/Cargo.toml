@@ -1,6 +1,6 @@
 [package]
 name = "fm-endpoint"
-description = "Font Manager local API endpoint: every fm-api service method over localhost HTTP with a bearer token (ADR 0015) and over the user's named pipe or Unix socket (ADR 0016)."
+description = "Font Fu local API endpoint: every fm-api service method over localhost HTTP with a bearer token (ADR 0015) and over the user's named pipe or Unix socket (ADR 0016)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

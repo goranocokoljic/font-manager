@@ -1,4 +1,4 @@
-# Contributing to Font Manager
+# Contributing to Font Fu
 
 Thank you for helping. This guide tells you how to build the project, which rules every
 change must keep, and how to send a pull request. Please also read the
@@ -52,7 +52,7 @@ A pull request that breaks one of these rules is not merged.
    only way in. The desktop UI, the CLI, the MCP server and the plugins only pass requests
    through. If the UI needs to compute something about fonts, add it to the core.
 2. **Never touch the user's files without being asked.** The library is an index over
-   folders the user chose. Font Manager moves, renames or deletes a font file only when
+   folders the user chose. Font Fu moves, renames or deletes a font file only when
    the user asks, and the user can undo it. Deleting means the OS trash, never a
    permanent delete.
 3. **Never turn off a font the app did not turn on.** The database records which fonts
@@ -121,7 +121,7 @@ Only add data you are allowed to share under the project license. Name the sourc
 
 ## License
 
-Font Manager is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE),
+Font Fu is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE),
 at your option. Unless you say otherwise, every contribution you submit is dual-licensed
 under the same terms, without any additional terms or conditions. Fonts in the test
 corpus are OFL, Apache or UFL only.

@@ -1,5 +1,5 @@
-You are running a **review pass** of the Font Manager UI/UX improvement loop — the critic,
-not the generator. Font Manager is a Tauri + Vue desktop app. Work autonomously; do not ask
+You are running a **review pass** of the Font Fu UI/UX improvement loop — the critic,
+not the generator. Font Fu is a Tauri + Vue desktop app. Work autonomously; do not ask
 questions — decide, and log the decision.
 
 0. Confirm you are on the `redesign` branch; if not, stop and do nothing else.

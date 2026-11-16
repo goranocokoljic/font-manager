@@ -272,7 +272,7 @@ export class MissingFontsPanel {
   private errorText(e: unknown): string {
     if (e instanceof NotRunningError) return this.strings.notRunning;
     if (e instanceof FmApiError) return e.message;
-    return `Font Manager: ${String(e)}`;
+    return `Font Fu: ${String(e)}`;
   }
 
   private render(): void {

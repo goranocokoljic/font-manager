@@ -16,7 +16,7 @@
 //!
 //! E29.4: the plugin IPC endpoint (ADR 0016) goes on serving after the close
 //! handler hid the window, and in a start at login before the window was
-//! ever shown; after Quit a client is told "Font Manager is not running" at
+//! ever shown; after Quit a client is told "Font Fu is not running" at
 //! once. The IPC client is this test binary again, running only `ipc_child`.
 //! Font: Caesar Dressing (session), activated by that second process.
 // The probes are FFI. The whole file is test code: its helpers fail the test
@@ -564,7 +564,7 @@ fn second_process_ipc(name: &IpcName, family: Option<FamilyId>, tag: &str) -> St
 /// E29.4 criteria 1 and 3: with the window hidden to the tray, a second
 /// process activates a font over the IPC endpoint and the OS font list has
 /// it; after Quit the endpoint is gone and a client is told at once that
-/// Font Manager is not running.
+/// Font Fu is not running.
 #[test]
 fn closing_the_window_keeps_the_ipc_endpoint_serving_and_quit_ends_it() {
     assert!(

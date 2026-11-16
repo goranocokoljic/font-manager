@@ -209,7 +209,7 @@ fn adding_a_folder_scans_it_and_the_ui_commands_work_on_the_real_index() -> Test
     let (_app, webview, events) = app(&home)?;
 
     let info: Value = call(&webview, "get_app_info", json!({}))?;
-    assert_eq!(info["name"], "Font Manager");
+    assert_eq!(info["name"], "Font Fu");
 
     // Add a folder, scan it: progress and the library change arrive as events.
     let source: Source = call(

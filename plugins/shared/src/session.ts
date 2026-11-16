@@ -199,7 +199,7 @@ export class DocumentWatcher {
       this.toldNotRunning = false;
       this.ui.notify(e.message);
     } else {
-      this.ui.notify(`Font Manager: ${String(e)}`);
+      this.ui.notify(`Font Fu: ${String(e)}`);
     }
   }
 }

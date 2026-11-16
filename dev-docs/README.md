@@ -1,4 +1,4 @@
-# Font Manager — GitHub backlog seed
+# Font Fu — GitHub backlog seed
 
 `issues.json` holds the whole backlog from the Task Breakdown (36 epics, 171 stories);
 `create_issues.py` pushes it to a GitHub repository with real sub-issues and real

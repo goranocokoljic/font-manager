@@ -258,7 +258,7 @@ describe('MissingFontsPanel', () => {
     expect(rows(container).map((r) => r[0])).toEqual(['Barlow-Italic']);
   });
 
-  it('says when Font Manager is not running', async () => {
+  it('says when Font Fu is not running', async () => {
     const { fake, panel, container } = setup();
     fake.listening = false;
     await panel.refresh();

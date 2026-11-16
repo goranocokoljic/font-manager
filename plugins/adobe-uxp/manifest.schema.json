@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "manifest.schema.json",
-  "title": "Font Manager UXP plugin manifest",
+  "title": "Font Fu UXP plugin manifest",
   "description": "The rules the plugin's source manifest.json keeps: manifest v5, InDesign and Photoshop with minimum versions (the build emits one manifest per host, host as an object), and the network to http://localhost only (UXP drops 127.0.0.1 from the list; an entry without a port matches any port).",
   "type": "object",
   "required": [

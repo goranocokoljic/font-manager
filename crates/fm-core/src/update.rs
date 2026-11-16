@@ -25,7 +25,7 @@ pub fn support(distribution: &Distribution) -> UpdateSupport {
         )),
         Distribution::NeedsAdmin => Some(
             "This copy is in a folder your account cannot change (installed for all users), \
-             and Font Manager never asks for administrator rights, so Check for updates is \
+             and Font Fu never asks for administrator rights, so Check for updates is \
              not shown. Install new versions from the releases page; the per-user installer \
              (.exe on Windows) updates itself."
                 .to_owned(),

@@ -262,7 +262,7 @@ pub fn parse(data: &[u8]) -> ParsedFile {
             FontFormat::Bitmap,
             "Bitmap fonts (.fon, .fnt, BDF, PCF) are detected but not parsed.",
         ),
-        _ => broken_file(None, "The file is not a font format Font Manager can read."),
+        _ => broken_file(None, "The file is not a font format Font Fu can read."),
     }
 }
 

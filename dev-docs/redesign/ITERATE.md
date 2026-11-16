@@ -1,4 +1,4 @@
-You are running one iteration of the Font Manager UI/UX improvement loop. Font Manager is
+You are running one iteration of the Font Fu UI/UX improvement loop. Font Fu is
 a Tauri + Vue desktop app. Work autonomously; do not ask questions — decide, and log the
 decision.
 

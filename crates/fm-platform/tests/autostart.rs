@@ -39,7 +39,7 @@ mod windows {
     #[test]
     fn the_run_value_is_seen_by_another_process_and_removed_again() {
         let name = format!("org.fontmanager.test-autostart-{}", std::process::id());
-        let program = Path::new(r"C:\Font Manager Test\fm-app.exe");
+        let program = Path::new(r"C:\Font Fu Test\fm-app.exe");
         let entry = WindowsAutostart::new(RUN_KEY, &name, program);
         let _cleanup = Cleanup(&entry);
         assert!(reg_query(&name).is_none());
@@ -48,7 +48,7 @@ mod windows {
         let seen = reg_query(&name).expect("reg sees the value");
         assert!(seen.contains("REG_SZ"), "{seen}");
         assert!(
-            seen.contains(r#""C:\Font Manager Test\fm-app.exe" --autostart"#),
+            seen.contains(r#""C:\Font Fu Test\fm-app.exe" --autostart"#),
             "{seen}"
         );
         assert!(entry.is_enabled().expect("read"));

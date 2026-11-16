@@ -213,7 +213,7 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
     name: 'Keep running in the tray when the window is closed',
   });
   await expect(keep).toBeChecked();
-  await expect(keep).toHaveAccessibleDescription(/closing the window quits Font Manager/);
+  await expect(keep).toHaveAccessibleDescription(/closing the window quits Font Fu/);
   await keep.focus();
   await page.keyboard.press('Space');
   await expect(keep).not.toBeChecked();
@@ -227,7 +227,7 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
   await tab(page, 'About').click();
   await expect(page.getByRole('heading', { name: 'Platform notes' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Platform notes' })).toContainText(
-    'no StatusNotifier host), so closing the window quits Font Manager',
+    'no StatusNotifier host), so closing the window quits Font Fu',
   );
 });
 

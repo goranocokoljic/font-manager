@@ -1,4 +1,4 @@
-# Font Manager — guide for coding agents
+# Font Fu — guide for coding agents
 
 A free, open-source, cross-platform font manager (Windows, macOS, Linux). Rust core,
 Tauri 2 + Vue 3 desktop shell, CLI and MCP server over one typed API. Read this before

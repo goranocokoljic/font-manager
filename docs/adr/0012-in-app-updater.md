@@ -48,7 +48,7 @@ it. Flatpak and package managers already install updates for their copies.
 |-|---------|-------|-------|
 | Updates itself | the .exe (NSIS) installer, per user | the app (from the .dmg) | the AppImage (`APPIMAGE` set) |
 | Update artifact | the .exe, run in passive mode | `.app.tar.gz` | the AppImage |
-| Folders that must be writable | the program's folder | the folder holding `Font Manager.app`, and the bundle itself | the AppImage's folder |
+| Folders that must be writable | the program's folder | the folder holding `Font Fu.app`, and the bundle itself | the AppImage's folder |
 | Hidden, with a platform note | the .msi (per machine, Program Files); any copy in a folder the user cannot write; a build with `FM_PACKAGED_BY` | the app where the account cannot change its folder or the bundle (a standard account and `/Applications`; a bundle owned by root or another account); a build with `FM_PACKAGED_BY` | an AppImage in a read-only folder; Flatpak; a system package (.deb, .rpm); a build with `FM_PACKAGED_BY` |
 
   **Never admin rights (rule 4).** Tauri's updater would elevate in two

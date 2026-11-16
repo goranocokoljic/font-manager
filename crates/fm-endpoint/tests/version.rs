@@ -149,8 +149,8 @@ fn a_different_major_is_refused_with_both_versions_and_the_service_is_not_called
     assert_eq!(
         message,
         format!(
-            "The client speaks API {client} but Font Manager serves API {API_VERSION}: \
-             update Font Manager to a version that serves API {}.x.",
+            "The client speaks API {client} but Font Fu serves API {API_VERSION}: \
+             update Font Fu to a version that serves API {}.x.",
             client.major
         )
     );

@@ -85,7 +85,7 @@ fn clear_stale(path: &Path) -> io::Result<()> {
     if connect_path(path).is_ok() {
         return Err(io::Error::new(
             io::ErrorKind::AddrInUse,
-            format!("another Font Manager listens on {}", path.display()),
+            format!("another Font Fu listens on {}", path.display()),
         ));
     }
     match fs::remove_file(path) {

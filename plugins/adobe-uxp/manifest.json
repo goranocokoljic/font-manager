@@ -2,7 +2,7 @@
   "$schema": "./manifest.schema.json",
   "manifestVersion": 5,
   "id": "org.fontmanager.uxp",
-  "name": "Font Manager",
+  "name": "Font Fu",
   "version": "0.1.0",
   "main": "index.html",
   "host": [
@@ -20,7 +20,7 @@
       "type": "panel",
       "id": "fmPanel",
       "label": {
-        "default": "Font Manager"
+        "default": "Font Fu"
       },
       "minimumSize": {
         "width": 230,

@@ -1,4 +1,4 @@
-//! Font Manager endpoint client (E25.4, ADR 0015).
+//! Font Fu endpoint client (E25.4, ADR 0015).
 //!
 //! [`Client`] implements [`fm_api::Api`] by calling the running app's local
 //! API: every service method is one `POST /v1/<method>` with the request as

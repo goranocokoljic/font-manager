@@ -1,6 +1,6 @@
 [package]
 name = "fm-app"
-description = "Font Manager desktop shell (Tauri 2)."
+description = "Font Fu desktop shell (Tauri 2)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,4 +1,4 @@
-//! `fm` — the Font Manager command-line tool.
+//! `fm` — the Font Fu command-line tool.
 //!
 //! On start it looks for the running app ([`fm_cli::link::reach`]): when
 //! the app's local API answers, every command goes through it (endpoint

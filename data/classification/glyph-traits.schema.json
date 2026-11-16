@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/classification/glyph-traits.schema.json",
-  "title": "Font Manager glyph trait catalog",
+  "title": "Font Fu glyph trait catalog",
   "description": "The distinctive glyph traits the detectors compute and the letter picker shows (E49): one entry per trait, each with its values, their labels and a drawn example.",
   "type": "object",
   "additionalProperties": false,

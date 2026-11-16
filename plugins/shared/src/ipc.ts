@@ -174,7 +174,7 @@ export function ipcTransport(host: IpcHost): Transport {
         if (hello?.major !== API_VERSION.major) {
           throw new FmApiError({
             code: 'unsupported',
-            message: 'This plugin does not fit the version of Font Manager that is running.',
+            message: 'This plugin does not fit the version of Font Fu that is running.',
             detail: `app API major ${String(hello?.major)}, plugin ${API_VERSION.major}`,
           });
         }

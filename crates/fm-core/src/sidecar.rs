@@ -62,7 +62,7 @@ use crate::grouping::family_key;
 pub const SIDECAR_DIR: &str = ".fontlibrary";
 
 /// The highest format version this build reads and writes. A sidecar with
-/// a higher version was written by a newer Font Manager and is only read,
+/// a higher version was written by a newer Font Fu and is only read,
 /// never rewritten.
 ///
 /// Version 2 adds `pins` (virtual styles, E10.2), version 3 the family's
@@ -197,7 +197,7 @@ impl Sidecar {
 pub enum Parsed {
     /// A sidecar this build can merge and rewrite.
     Sidecar(Sidecar),
-    /// A sidecar from a newer Font Manager: its version.
+    /// A sidecar from a newer Font Fu: its version.
     Newer(u32),
     /// Not a sidecar: why.
     Unreadable(String),

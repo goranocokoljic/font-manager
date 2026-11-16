@@ -28,9 +28,9 @@ shell builds the item and its menu with Tauri's tray API from those answers.
   no `gdbus`, or a tray toolkit that fails (the AppIndicator library missing)
   → no tray item, closing the window quits as before, and Settings → About →
   Platform notes says so.
-- **The menu.** Open Font Manager; the active-font count, updated from
+- **The menu.** Open Font Fu; the active-font count, updated from
   `Event::ActivationChanged` (never polled); Deactivate session fonts (permanent
-  ones stay); Quit Font Manager. Native menus, so the OS gives keyboard access.
+  ones stay); Quit Font Fu. Native menus, so the OS gives keyboard access.
 - **Closing.** "Keep running in the tray when the window is closed" (Settings →
   Activation, on by default) and an available tray hide the main window; any
   other case closes it and the app quits.

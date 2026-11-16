@@ -105,8 +105,7 @@ fn refused(result: Result<(), ApiError>) -> ApiError {
     let e = result.expect_err("the package must be refused");
     assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
     assert!(
-        e.message
-            .contains("not signed with Font Manager's release key"),
+        e.message.contains("not signed with Font Fu's release key"),
         "not a user-facing refusal: {e:?}"
     );
     e

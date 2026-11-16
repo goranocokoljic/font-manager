@@ -35,9 +35,9 @@ pub const FONTS_KEY: &str = r"Software\Microsoft\Windows NT\CurrentVersion\Fonts
 /// Where the activator records the values it wrote.
 pub const LEDGER_KEY: &str = r"Software\FontManager\Activation";
 
-/// Value names are `<PostScript name> (Font Manager)`, then
-/// `<PostScript name> (Font Manager 2)` and up when the name is taken.
-const NAME_TAG: &str = "Font Manager";
+/// Value names are `<PostScript name> (Font Fu)`, then
+/// `<PostScript name> (Font Fu 2)` and up when the name is taken.
+const NAME_TAG: &str = "Font Fu";
 /// More same-named values than this for one PostScript name is a bug, not a
 /// font library.
 const MAX_SUFFIX: u32 = 1000;
@@ -499,7 +499,7 @@ mod tests {
         );
 
         assert_eq!(regs.len(), 1);
-        assert_eq!(regs[0].handle, OsString::from("A-Regular (Font Manager)"));
+        assert_eq!(regs[0].handle, OsString::from("A-Regular (Font Fu)"));
         assert_eq!(regs[0].mode, Mode::Permanent);
         assert_eq!(
             s.fonts().get_string(&regs[0].handle).ok().flatten(),
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn a_name_taken_by_a_foreign_value_gets_a_suffix_and_the_foreign_value_stays() {
         let s = Scratch::new();
-        let foreign = OsString::from("A-Regular (Font Manager)");
+        let foreign = OsString::from("A-Regular (Font Fu)");
         let _ = s
             .fonts()
             .set_string(&foreign, OsStr::new(r"C:\Other\A.ttf"));
@@ -544,7 +544,7 @@ mod tests {
             s.activator
                 .activate(&[face(&path, "A-Regular")], Mode::Permanent),
         );
-        assert_eq!(regs[0].handle, OsString::from("A-Regular (Font Manager 2)"));
+        assert_eq!(regs[0].handle, OsString::from("A-Regular (Font Fu 2)"));
 
         // The foreign value is not ours: deactivating it by name does nothing.
         let foreign_reg = Registration {
@@ -720,7 +720,7 @@ mod tests {
         let s = Scratch::new();
         let path = s.font("NoName.ttf");
         let regs = activated(s.activator.activate(&[face(&path, " ")], Mode::Session));
-        assert_eq!(regs[0].handle, OsString::from("NoName (Font Manager)"));
+        assert_eq!(regs[0].handle, OsString::from("NoName (Font Fu)"));
     }
 
     #[test]
@@ -804,9 +804,9 @@ mod tests {
         assert_eq!(
             handles,
             vec![
-                OsString::from("Foo (Font Manager)"),
-                OsString::from("FooBold (Font Manager)"),
-                OsString::from("C (Font Manager)"),
+                OsString::from("Foo (Font Fu)"),
+                OsString::from("FooBold (Font Fu)"),
+                OsString::from("C (Font Fu)"),
             ]
         );
         assert_eq!(s.activator.list_active(), Ok(regs.clone()));
@@ -828,7 +828,7 @@ mod tests {
         let forged = Registration {
             path: path.clone(),
             mode: Mode::Permanent,
-            handle: OsString::from("Foo (Font Manager)\0tail"),
+            handle: OsString::from("Foo (Font Fu)\0tail"),
         };
         let outcomes = s.activator.deactivate(&[forged]).unwrap_or_default();
         assert_eq!(outcomes[0].status, OutcomeStatus::NotOurs);

@@ -52,7 +52,7 @@ export function applyCopiedFontCommand(
       message(result.applied ? `${result.font} applied` : result.message);
     } catch (e) {
       // A Sketch API that threw; never into Sketch's event loop.
-      message(`Font Manager: ${String(e)}`);
+      message(`Font Fu: ${String(e)}`);
     }
   };
 }

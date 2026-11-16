@@ -125,7 +125,7 @@ impl Index {
     ///
     /// A damaged file is not an error: it is moved to `index.db.corrupt` and a
     /// fresh index takes its place, with the sources restored from the backup
-    /// ([`Opened::rebuilt`]). An index written by a newer Font Manager is an
+    /// ([`Opened::rebuilt`]). An index written by a newer Font Fu is an
     /// [`ErrorCode::Unsupported`] error and is left untouched.
     pub fn open(path: &Path) -> FmResult<Opened> {
         if let Some(dir) = path.parent() {
@@ -242,7 +242,7 @@ impl Index {
         if current > SCHEMA_VERSION {
             return Err(Damage::Other(
                 FmError::unsupported(
-                    "The library index was made by a newer Font Manager. Update the app to open it.",
+                    "The library index was made by a newer Font Fu. Update the app to open it.",
                 )
                 .with_detail(format!(
                     "schema version {current}, this build knows {SCHEMA_VERSION}"

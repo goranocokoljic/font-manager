@@ -128,7 +128,7 @@ describe('OpenDocument', () => {
     const { fake, ui, release, plugin } = setup();
     await plugin.onOpenDocument({ actionContext: { document: { kind: 'other' } } });
     expect(fake.requests).toEqual([]);
-    expect(ui.message).toHaveBeenCalledWith('Font Manager: Error: not a document');
+    expect(ui.message).toHaveBeenCalledWith('Font Fu: Error: not a document');
     expect(release).toHaveBeenCalledTimes(1);
   });
 });
@@ -186,7 +186,7 @@ describe('CloseDocument', () => {
 });
 
 describe('app not running', () => {
-  it('says "Font Manager is not running" once and does nothing else', async () => {
+  it('says "Font Fu is not running" once and does nothing else', async () => {
     const settings = mockSettings();
     const fake = fakeEndpoint();
     fake.discovery = null;
@@ -289,7 +289,7 @@ describe('Apply Copied Font (Font Switch)', () => {
       },
     });
     await plugin.onApplyCopiedFont();
-    expect(ui.message).toHaveBeenCalledWith('Font Manager: Error: no document');
+    expect(ui.message).toHaveBeenCalledWith('Font Fu: Error: no document');
   });
 });
 

@@ -1,13 +1,13 @@
 # AI assistants
 
-An AI assistant such as Claude Code or Claude Desktop can use Font Manager through the
+An AI assistant such as Claude Code or Claude Desktop can use Font Fu through the
 Model Context Protocol (MCP). MCP is a standard way for an assistant to call tools in a
 program on your computer. The assistant can search your library, read font details, check
 language coverage, render previews and pick fonts for a brief. It can change nothing until
 you allow it, tool by tool.
 
-Everything happens on this computer. Font Manager answers only while it runs, only on
-this computer, and only to a program that knows the token of the local API. Font Manager
+Everything happens on this computer. Font Fu answers only while it runs, only on
+this computer, and only to a program that knows the token of the local API. Font Fu
 makes no network calls of its own for this (see [Getting started](getting-started.md)).
 
 ## Turn it on
@@ -18,12 +18,12 @@ makes no network calls of its own for this (see [Getting started](getting-starte
    the token of the local API. Keep them secret, like a password.
 
 Turn the switch off to stop all assistants at once. A request that an assistant sends
-while the switch is off gets this answer: "Open Font Manager and turn on AI assistants in
+while the switch is off gets this answer: "Open Font Fu and turn on AI assistants in
 Settings."
 
 ## Connect Claude Code
 
-Claude Code talks to Font Manager over HTTP, on the address that Settings shows.
+Claude Code talks to Font Fu over HTTP, on the address that Settings shows.
 
 1. In Settings → AI assistants, click **Copy Claude Code command**.
 2. Paste the command into a terminal and run it. It looks like this:
@@ -35,16 +35,16 @@ Claude Code talks to Font Manager over HTTP, on the address that Settings shows.
 3. Start Claude Code. Type `/mcp` to see that `font-manager` is connected, then ask it,
    for example, to find a serif family with Cyrillic.
 
-The address changes each time Font Manager starts, so this connection stops working after
-a restart of Font Manager. Then remove the old entry with `claude mcp remove font-manager`,
+The address changes each time Font Fu starts, so this connection stops working after
+a restart of Font Fu. Then remove the old entry with `claude mcp remove font-manager`,
 copy the command again, and run it again.
 
 ## Connect Claude Desktop
 
 Claude Desktop cannot call an HTTP address of its own. It starts a small program instead,
-`fm-mcp-stdio`, which comes with Font Manager. That program finds the running Font Manager
+`fm-mcp-stdio`, which comes with Font Fu. That program finds the running Font Fu
 and its token itself. So the Claude Desktop snippet holds no token and no port, and it
-keeps working after a restart of Font Manager.
+keeps working after a restart of Font Fu.
 
 1. In Settings → AI assistants, click **Copy Claude Desktop config**.
 2. In Claude Desktop, open **Settings → Developer → Edit Config**. This opens
@@ -54,9 +54,9 @@ keeps working after a restart of Font Manager.
 4. Quit Claude Desktop fully, also from the tray or the menu bar, and start it again.
 5. In a new chat, the tools icon lists `font-manager`.
 
-If Font Manager is not running when Claude Desktop starts, the tools are listed but every
-call answers "Open Font Manager and turn on AI assistants in Settings." Start Font
-Manager and ask again. Claude Desktop does not have to restart.
+If Font Fu is not running when Claude Desktop starts, the tools are listed but every
+call answers "Open Font Fu and turn on AI assistants in Settings." Start Font
+Fu and ask again. Claude Desktop does not have to restart.
 
 Other assistants that read the same kind of file (an `mcpServers` block with a command
 and arguments) can use the same entry.
@@ -100,7 +100,7 @@ on and tell the assistant to try again.
 ## Allow or deny a deactivation
 
 Deactivating a font can break a document that is open in another program. So
-**Deactivate fonts** asks you every time, also when its switch is on. The Font Manager
+**Deactivate fonts** asks you every time, also when its switch is on. The Font Fu
 window comes to the front, also when it is minimized or hidden in the tray, and a message
 shows at the bottom of it:
 
@@ -111,29 +111,29 @@ answer in 60 seconds, it counts as Deny, and nothing changes. The assistant gets
 result either way.
 
 Windows and some Linux desktops (GNOME) do not let an app in the background take the
-focus. Then the Font Manager button on the taskbar flashes, or the desktop shows that Font
-Manager needs your attention. Click it to see the message. On macOS the Dock icon bounces
+focus. Then the Font Fu button on the taskbar flashes, or the desktop shows that Font
+Fu needs your attention. Click it to see the message. On macOS the Dock icon bounces
 if the window cannot come to the front.
 
 ## Keep it safe
 
-- The switch is off after every install. Nothing can reach Font Manager until you turn it
+- The switch is off after every install. Nothing can reach Font Fu until you turn it
   on.
 - Every assistant on this computer shares the same switches. There is no switch per
   assistant.
 - Only you can change the switches and answer the Allow / Deny message, in the Font
-  Manager window. A program that has the token cannot do it through the local API, so an
+  Fu window. A program that has the token cannot do it through the local API, so an
   assistant cannot allow itself a tool.
-- The switches guard what an assistant does through its Font Manager tools. They do not
+- The switches guard what an assistant does through its Font Fu tools. They do not
   guard a program that runs on your computer with your rights. An assistant that may run
   commands on your computer can also run the `fm` command line, which does not ask for
   the switches. Give such an assistant only the access you would give any program.
-- Font Manager never deactivates a font that it did not activate, also when an assistant
+- Font Fu never deactivates a font that it did not activate, also when an assistant
   asks for it.
 - **Export web fonts** and **Activate fonts** let an assistant write files into any folder
   you name to it, and create the folder when it is missing. It never replaces a file
   that is already there unless it asks for that.
-- A snippet with the token works until Font Manager makes a new token. To make a new
+- A snippet with the token works until Font Fu makes a new token. To make a new
   token, open Settings → **Local API** and click **Regenerate**. Then copy the
   snippets again.
 

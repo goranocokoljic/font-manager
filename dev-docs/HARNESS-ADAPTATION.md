@@ -1,7 +1,7 @@
-# Adapting tr-harness for the Font Manager repository
+# Adapting tr-harness for the Font Fu repository
 
 **Purpose.** This file briefs Claude Code (or any engineer) on how tr-harness must change to
-drive development of the Font Manager — a free, open-source, cross-platform font manager in
+drive development of Font Fu — a free, open-source, cross-platform font manager in
 Rust (Windows, macOS, Linux) with a Tauri 2 + Vue 3 UI. Read it fully before touching the
 harness; every section is a requirement unless marked "optional".
 

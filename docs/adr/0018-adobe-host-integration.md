@@ -4,7 +4,7 @@ Status: Accepted (2026-10-29, E30.0)
 
 ## Context
 
-E29 and E30 make the design apps tell Font Manager which fonts a document
+E29 and E30 make the design apps tell Font Fu which fonts a document
 needs, so the app activates them (E29.2) and offers to deactivate them when
 the document closes. The plugins were written against Adobe's documentation
 and tested against mocks. E30.0 is the spike that runs them in the real
@@ -93,7 +93,7 @@ way that works is the folder Photoshop scans when developer mode is on:
    `%APPDATA%\Adobe\UXP\Plugins\External\org.fontmanager.photoshop_0.1.0\`
    (macOS: `~/Library/Application Support/Adobe/UXP/Plugins/External/`),
    folder name `<id>_<version>`.
-3. Start Photoshop. Plugins → Font Manager. The log that names the scanned
+3. Start Photoshop. Plugins → Font Fu. The log that names the scanned
    folders and the manifest errors is
    `%APPDATA%\Adobe\Adobe Photoshop 2025\Logs\UXPLogs_*.log`.
 

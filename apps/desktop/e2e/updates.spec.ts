@@ -11,7 +11,7 @@ test('nothing is checked until the user clicks; a major update asks twice', asyn
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await updates.getByRole('button', { name: 'Check for updates' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Font Manager 1.0.0 is available' });
+  const dialog = page.getByRole('dialog', { name: 'Font Fu 1.0.0 is available' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Release notes')).toContainText('The first stable release.');
   await expect(dialog).toContainText('You have version 0.1.0.');
@@ -28,17 +28,15 @@ test('nothing is checked until the user clicks; a major update asks twice', asyn
   await expect(second.getByRole('button', { name: 'Install version 1.0.0' })).toBeFocused();
 
   await second.getByRole('button', { name: 'Install version 1.0.0' }).click();
-  await expect(second.getByRole('status')).toContainText('Font Manager restarts');
+  await expect(second.getByRole('status')).toContainText('Font Fu restarts');
 });
 
 test('an unsigned package is refused with a message', async ({ page }) => {
   await page.goto(about(4));
   await page.getByRole('button', { name: 'Check for updates' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Font Manager 0.1.1 is available' });
+  const dialog = page.getByRole('dialog', { name: 'Font Fu 0.1.1 is available' });
   await dialog.getByRole('button', { name: 'Install and restart' }).click();
-  await expect(dialog.getByRole('alert')).toContainText(
-    "not signed with Font Manager's release key",
-  );
+  await expect(dialog.getByRole('alert')).toContainText("not signed with Font Fu's release key");
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Updates' })).toContainText(

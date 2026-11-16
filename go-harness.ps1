@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# go-harness.ps1 — drive Font Manager stories from GitHub issue to green PR,
+# go-harness.ps1 — drive Font Fu stories from GitHub issue to green PR,
 # one lane at a time, with a pinned status panel at the bottom of the terminal.
 #
 # Adapted from tr-harness (toprope / profile). What stays: a fresh headless
@@ -1164,7 +1164,7 @@ function Get-GraduationAdvice {
     $candJson = ConvertTo-Json @($Active | ForEach-Object { [ordered]@{ id = $_.id; title = $_.title; category = $_.category; severity = $_.severity; rule = $_.rule; rationale = $_.rationale; occurrences = $_.occurrences; source_issues = @($_.source_issues); file_globs = @($_.file_globs); last_seen = $_.last_seen } }) -Depth 6
     $gradList = if ($Graduated.Count) { ($Graduated | ForEach-Object { "- [$($_.category)] $($_.title): $($_.rule)" }) -join "`n" } else { '(none yet)' }
     $prompt = @"
-You are the honest curator of the code-review knowledge base of the Font Manager repository
+You are the honest curator of the code-review knowledge base of the Font Fu repository
 (Rust core, Tauri 2 + Vue 3 shell). Below are its ACTIVE lessons: each recurred in >= 2 stories
 and is already injected into the implementer for matching files. GRADUATING a lesson compiles it
 into dev-docs/review-rules.md, which CLAUDE.md imports into EVERY agent's context on EVERY run.

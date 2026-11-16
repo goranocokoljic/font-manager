@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/subsets/presets.schema.json",
-  "title": "Font Manager web font subset presets",
+  "title": "Font Fu web font subset presets",
   "description": "The named character sets a web font export can keep (latin, cyrillic, ...). Each is a list of CSS unicode-range values.",
   "type": "object",
   "additionalProperties": false,

@@ -12,7 +12,7 @@ use common::{Served, fake_server};
 use fm_api::{API_VERSION, ApiError, ErrorCode, LibraryService as _};
 use fm_client::Client;
 
-const LOST: &str = "The connection to Font Manager was lost.";
+const LOST: &str = "The connection to Font Fu was lost.";
 
 #[test]
 fn every_call_sends_the_token_and_the_api_version() {
@@ -47,7 +47,7 @@ fn an_app_of_another_major_is_unsupported() {
     // comes back as it is.
     let refusal = ApiError::new(
         ErrorCode::Unsupported,
-        "The client speaks API 0.22.0 but Font Manager serves API 1.0.0: update the client to a version built for API 1.x.",
+        "The client speaks API 0.22.0 but Font Fu serves API 1.0.0: update the client to a version built for API 1.x.",
     );
     let json = serde_json::to_string(&refusal).unwrap();
     let (addr, _, server) = fake_server(
@@ -116,7 +116,7 @@ fn something_that_is_not_the_endpoint_is_an_error_not_a_panic() {
         );
         assert_eq!(
             e.message,
-            "Font Manager sent an answer this program cannot read."
+            "Font Fu sent an answer this program cannot read."
         );
     }
 }
@@ -131,7 +131,7 @@ fn an_app_that_quit_after_connect_is_an_error() {
     assert_eq!(e.code, ErrorCode::Io);
     assert_eq!(
         e.message,
-        "Font Manager is not running, or its local API does not answer."
+        "Font Fu is not running, or its local API does not answer."
     );
     // The event stream of an app that is gone is a closed subscription.
     let events = fm_api::EventSource::subscribe(client);

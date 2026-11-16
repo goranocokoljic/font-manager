@@ -3,7 +3,7 @@
     "name": "English"
   },
   "app": {
-    "name": "Font Manager",
+    "name": "Font Fu",
     "openSettings": "Open settings",
     "showConflicts": "Show font conflicts",
     "helpAction": "Help: {page}",
@@ -42,9 +42,9 @@
     "internal": "{message}"
   },
   "shell": {
-    "helpWindowTitle": "Font Manager Help",
+    "helpWindowTitle": "Font Fu Help",
     "helpMenu": "Help",
-    "about": "About Font Manager",
+    "about": "About Font Fu",
     "settings": "Settings…",
     "fileMenu": "File",
     "helpPages": {
@@ -56,10 +56,10 @@
       "mcp": "AI assistants"
     },
     "tray": {
-      "tooltip": "Font Manager",
-      "open": "Open Font Manager",
+      "tooltip": "Font Fu",
+      "open": "Open Font Fu",
       "deactivateSession": "Deactivate session fonts",
-      "quit": "Quit Font Manager",
+      "quit": "Quit Font Fu",
       "active": {
         "zero": "No fonts active",
         "one": "{count} font active",
@@ -182,7 +182,7 @@
       "full": "Compare holds {max} fonts. Remove one to add {name}.",
       "loading": "Looking for similar fonts…",
       "none": "No other font in the library looks like {name}.",
-      "error": "Font Manager could not find similar fonts. {message}"
+      "error": "Font Fu could not find similar fonts. {message}"
     },
     "toasts": {
       "already": "{name} is already pinned to Compare.",
@@ -1426,9 +1426,9 @@
       "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it.",
       "downloadFolder": "Folder for installed fonts",
       "downloadFolderNone": "Not chosen yet. The first Install asks for it.",
-      "downloadFolderHint": "Install puts the fonts it downloads into this folder. Font Manager writes into no other folder without asking.",
+      "downloadFolderHint": "Install puts the fonts it downloads into this folder. Font Fu writes into no other folder without asking.",
       "fetchMissing": "Download fonts a document needs from the catalogs you turned on",
-      "fetchMissingHint": "When a design app opens a document with a font your library does not have, Font Manager looks it up in the font lists it already has and installs the family into the folder above. It downloads only from catalogs you turned on.",
+      "fetchMissingHint": "When a design app opens a document with a font your library does not have, Font Fu looks it up in the font lists it already has and installs the family into the folder above. It downloads only from catalogs you turned on.",
       "fetchMissingNeeds": "Choose the folder for installed fonts and turn a catalog on first.",
       "change": "Change…"
     },
@@ -1500,9 +1500,9 @@
       "conflictReplace": "Replace the other font for this session without asking",
       "reactivateOnLaunch": "Reactivate on launch: activate the last session's fonts again when the app starts",
       "keepInTray": "Keep running in the tray when the window is closed",
-      "keepInTrayHint": "Session fonts stay active while the app runs in the tray. Turned off, closing the window quits Font Manager and ends session activations.",
+      "keepInTrayHint": "Session fonts stay active while the app runs in the tray. Turned off, closing the window quits Font Fu and ends session activations.",
       "startAtLogin": "Start at login",
-      "startAtLoginHint": "Font Manager starts in the tray when you log in, without opening its window.",
+      "startAtLoginHint": "Font Fu starts in the tray when you log in, without opening its window.",
       "startAtLoginFailed": "Start at login could not be changed."
     },
     "appearance": {
@@ -1522,7 +1522,7 @@
       "logsFolderLabel": "logs folder"
     },
     "localApi": {
-      "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Manager through this address while the app runs. Each request needs the token.",
+      "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Fu through this address while the app runs. Each request needs the token.",
       "address": "Address",
       "addressLabel": "local API address",
       "notRunning": "Not running.",
@@ -1537,9 +1537,9 @@
       "regenerated": "A new token was made. The old token no longer works."
     },
     "mcp": {
-      "note": "AI assistants such as Claude Code can use Font Manager through the Model Context Protocol (MCP). They reach it on this computer only, while the app runs, with the local API token.",
+      "note": "AI assistants such as Claude Code can use Font Fu through the Model Context Protocol (MCP). They reach it on this computer only, while the app runs, with the local API token.",
       "enable": "Allow AI assistants (MCP server)",
-      "enableHint": "Off by default. When off, Font Manager does not answer MCP requests.",
+      "enableHint": "Off by default. When off, Font Fu does not answer MCP requests.",
       "address": "Address",
       "addressLabel": "MCP server address",
       "addressHint": "The address changes each time the app starts. Copy the snippet again after a restart.",
@@ -1575,20 +1575,20 @@
     "check": "Check for updates",
     "showVersion": "Show version {version}",
     "checking": "Checking for updates…",
-    "upToDate": "Font Manager is up to date.",
+    "upToDate": "Font Fu is up to date.",
     "available": "Version {version} is available.",
-    "checkAutomatically": "Check automatically when Font Manager starts",
-    "checkAutomaticallyHint": "Font Manager contacts its release server only when you check or when this is on. Nothing installs until you confirm it.",
+    "checkAutomatically": "Check automatically when Font Fu starts",
+    "checkAutomaticallyHint": "Font Fu contacts its release server only when you check or when this is on. Nothing installs until you confirm it.",
     "dialog": {
-      "title": "Font Manager {version} is available",
+      "title": "Font Fu {version} is available",
       "currentVersion": "You have version {version}.",
       "released": "Released {date}.",
-      "installQuits": "Installing quits Font Manager, which ends session activations, and starts the new version.",
+      "installQuits": "Installing quits Font Fu, which ends session activations, and starts the new version.",
       "releaseNotes": "Release notes",
       "noNotes": "This release has no notes.",
       "majorTitle": "Install a major update?",
-      "majorLead": "Version {version} is a major update from {current}. It can change how Font Manager works and what its settings mean. Install it only if you are ready for that.",
-      "installing": "Installing… Font Manager restarts when it is done.",
+      "majorLead": "Version {version} is a major update from {current}. It can change how Font Fu works and what its settings mean. Install it only if you are ready for that.",
+      "installing": "Installing… Font Fu restarts when it is done.",
       "later": "Later",
       "installVersion": "Install version {version}",
       "installAndRestart": "Install and restart"
@@ -1636,7 +1636,7 @@
     "pairingsList": "Suggested pairings",
     "pairingsLoading": "Looking for pairings…",
     "pairingsNone": "No font in your library pairs with this family yet.",
-    "pairingsError": "Font Manager could not suggest pairings. {message}",
+    "pairingsError": "Font Fu could not suggest pairings. {message}",
     "browseCatalogs": "Browse catalogs",
     "sectionLater": "This section comes in a later update.",
     "textHint": "Reading test · three sizes, your line length",
@@ -2021,7 +2021,7 @@
       "action": "Install",
       "actionLabel": "Install {name}",
       "proposeTitle": "Where should installed fonts go?",
-      "propose": "Font Manager puts the fonts you install into one folder: {folder}. It makes the folder when you select Use this folder.",
+      "propose": "Font Fu puts the fonts you install into one folder: {folder}. It makes the folder when you select Use this folder.",
       "useFolder": "Use this folder",
       "choose": "Choose…",
       "folderTitle": "Choose the folder for installed fonts",
@@ -2061,7 +2061,7 @@
     "results": "Similar fonts",
     "loading": "Looking for similar fonts…",
     "none": "No other font in the library looks like {name}.",
-    "error": "Font Manager could not find similar fonts. {message}",
+    "error": "Font Fu could not find similar fonts. {message}",
     "score": "{percent}% similar",
     "noScore": "No score",
     "resultLabel": "{name}, {score}",
@@ -2092,7 +2092,7 @@
       "other": "Activate {count} fonts"
     },
     "allActive": "Every font of this document that the library has is active.",
-    "missingNote": "Missing fonts are not in the library. Font Manager does not download them.",
+    "missingNote": "Missing fonts are not in the library. Font Fu does not download them.",
     "empty": "This document names no fonts."
   },
   "mcpConfirm": {

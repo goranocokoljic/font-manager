@@ -1,6 +1,6 @@
 [package]
 name = "fm-client"
-description = "Font Manager endpoint client: fm_api::Api over the running app's local API (ADR 0015), for the CLI and the MCP shim."
+description = "Font Fu endpoint client: fm_api::Api over the running app's local API (ADR 0015), for the CLI and the MCP shim."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

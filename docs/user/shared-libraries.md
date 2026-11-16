@@ -2,23 +2,23 @@
 
 A team can share one font library through a synced folder: Dropbox, iCloud Drive,
 OneDrive, Google Drive for desktop or a network share (SMB). Each person adds the same
-folder to Font Manager. The sync tool copies the fonts. Font Manager reads them in place,
+folder to Font Fu. The sync tool copies the fonts. Font Fu reads them in place,
 as with every other folder (see [Sources](sources.md)).
 
-Font Manager has no server and no accounts. The sync tool does all the copying. Font
-Manager makes no network calls of its own for a shared folder.
+Font Fu has no server and no accounts. The sync tool does all the copying. Font
+Fu makes no network calls of its own for a shared folder.
 
 ## Before you start
 
 - Every teammate adds the **same** folder: the top folder of the shared fonts. Do not
-  add a parent folder on one computer and a folder inside it on another. Font Manager
+  add a parent folder on one computer and a folder inside it on another. Font Fu
   finds your tags, ratings and notes by the path of each font inside the folder that
   you added, so the folder must be the same on every computer.
 - Keep the fonts **available offline**. A file that is only in the cloud is not on your
-  disk. Font Manager cannot read it until the sync tool downloads it, and an app cannot
+  disk. Font Fu cannot read it until the sync tool downloads it, and an app cannot
   use an active font that is not on the disk. Each section below tells you how to keep
   the files on the disk.
-- When the sync tool changes a file while Font Manager runs, Font Manager usually sees
+- When the sync tool changes a file while Font Fu runs, Font Fu usually sees
   the change at once. It also rescans all folders every hour, and when you select
   **Rescan**. To change the interval, open the settings and go to **Advanced**.
 
@@ -63,7 +63,7 @@ To keep the fonts offline:
 
 OneDrive is part of Windows. On macOS it is an app from the App Store or from
 microsoft.com. **Microsoft has no OneDrive client for Linux.** Clients from other people
-are available. Font Manager can read a folder that such a client keeps on the disk, but
+are available. Font Fu can read a folder that such a client keeps on the disk, but
 Microsoft does not support them.
 
 | System | How to add the folder |
@@ -113,39 +113,39 @@ When the share is not connected:
   select **Rescan**.
 - A font that you activated from the share stops working in other apps.
 - **Move to trash** does not work on a network drive on Windows, because it has no trash.
-  Font Manager does not delete the file.
+  Font Fu does not delete the file.
 
-A network share sends no change events to Font Manager. Font Manager finds changes at
+A network share sends no change events to Font Fu. Font Fu finds changes at
 the next rescan.
 
 ## The `.fontlibrary` folder
 
 Your tags, ratings, favorites, notes, collections and licenses are in the library of your
-computer. Font Manager also writes them into a folder with the name `.fontlibrary`, in
+computer. Font Fu also writes them into a folder with the name `.fontlibrary`, in
 the top of each folder that you added. This folder has one small JSON file (a text file)
 for each family: a sidecar. The sync tool copies the sidecars to your teammates with the
-fonts. When Font Manager on another computer reads a changed sidecar, it adds the changes
+fonts. When Font Fu on another computer reads a changed sidecar, it adds the changes
 to that library.
 
-- Font Manager writes only into `.fontlibrary`. It does not change the font files.
-- Font Manager writes no sidecars for **System fonts**, and does not change the sidecars
+- Font Fu writes only into `.fontlibrary`. It does not change the font files.
+- Font Fu writes no sidecars for **System fonts**, and does not change the sidecars
   of a paused folder.
 - **Do not edit or delete a sidecar while the folder syncs.** Make changes in Font
-  Manager. A sidecar that Font Manager cannot read shows in **Problems**, and Font
-  Manager does not write that file again until it can read it.
-- A sidecar that a newer version of Font Manager wrote is only read, never written.
-  Update Font Manager on every computer of the team.
+  Fu. A sidecar that Font Fu cannot read shows in **Problems**, and Font
+  Fu does not write that file again until it can read it.
+- A sidecar that a newer version of Font Fu wrote is only read, never written.
+  Update Font Fu on every computer of the team.
 
 ## Conflicts
 
-Two people can change the same font before their computers sync. Font Manager adds both
+Two people can change the same font before their computers sync. Font Fu adds both
 changes together:
 
 - Tags and collections: what each person added stays, and what each person removed goes.
   These never conflict.
 - Favorite, rating, notes, family notes and license: when only one person changed a
-  value, Font Manager takes it. When both people changed it to different values, your
-  value stays and the other value is a **conflict**. Font Manager does not lose it.
+  value, Font Fu takes it. When both people changed it to different values, your
+  value stays and the other value is a **conflict**. Font Fu does not lose it.
 
 Some sync tools cannot add two versions of a file together. They keep both, and give
 the second file a new name, a **conflicted copy**:
@@ -157,7 +157,7 @@ the second file a new name, a **conflicted copy**:
 | Google Drive | `<name> (1).json` |
 | iCloud Drive | `<name> 2.json` |
 
-Font Manager reads a conflicted copy as one more version of the sidecar. It writes the
+Font Fu reads a conflicted copy as one more version of the sidecar. It writes the
 result to the sidecar of the family, and it does not change the copy. When no conflict of
 that family shows in **Problems** any more, you can delete the copy.
 
@@ -168,7 +168,7 @@ that family shows in **Problems** any more, you can delete the copy.
    **This computer** and the value on the **Other computer**.
 3. Select **Keep mine** to keep your value, or **Use theirs** to take the other value.
 
-Font Manager writes your choice to the sidecar. The other computer takes it at its next
+Font Fu writes your choice to the sidecar. The other computer takes it at its next
 sync, and it does not show a new conflict.
 
 ## Share a project set
@@ -188,15 +188,15 @@ for more.
 
 ## Limits
 
-- **No locking.** Two people can change the same font at the same time. Font Manager
+- **No locking.** Two people can change the same font at the same time. Font Fu
   shows a conflict; it cannot stop the second change.
 - **No admin controls.** Each person who can write to the folder can change the tags,
-  ratings and notes of the team. Font Manager has no roles and no permissions of its own.
+  ratings and notes of the team. Font Fu has no roles and no permissions of its own.
   Use the permissions of the sync tool or the server.
 - **A read-only share keeps your metadata local.** When you cannot write to the folder,
-  Font Manager cannot write sidecars. Your tags, ratings and notes stay in the library
+  Font Fu cannot write sidecars. Your tags, ratings and notes stay in the library
   of your computer, and your teammates do not get them. You still get the changes of the
-  people who can write. When you can write to the folder again, Font Manager writes your
+  people who can write. When you can write to the folder again, Font Fu writes your
   changes at the next change or rescan.
 - **One value for the team.** A sidecar does not keep a value for each person. A rating
   or note is the value of the team.
