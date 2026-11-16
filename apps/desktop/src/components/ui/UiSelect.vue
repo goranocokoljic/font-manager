@@ -33,8 +33,20 @@ const props = withDefaults(
     fit?: boolean;
     /** The parent filters: typing emits `search` and the options are shown as they come. */
     remote?: boolean;
+    /**
+     * Off but still on the Tab path (E51.4): `aria-disabled`, it neither opens nor changes,
+     * and a press does not focus it; its `title` (from the parent) says why.
+     */
+    inactive?: boolean;
   }>(),
-  { disabled: false, placeholder: '', searchable: undefined, fit: true, remote: false },
+  {
+    disabled: false,
+    placeholder: '',
+    searchable: undefined,
+    fit: true,
+    remote: false,
+    inactive: false,
+  },
 );
 const emit = defineEmits<{
   'update:modelValue': [value: T];
@@ -79,7 +91,7 @@ function scrollActiveIntoView(): void {
 }
 
 function show(): void {
-  if (props.disabled || open.value) return;
+  if (props.disabled || props.inactive || open.value) return;
   query.value = '';
   const at = props.options.findIndex((o) => o.value === props.modelValue);
   active.value =
@@ -146,6 +158,11 @@ const isPrintable = (e: KeyboardEvent) =>
 
 function onKey(e: KeyboardEvent): void {
   if (props.disabled) return;
+  // Off: Tab moves on, every other key changes nothing.
+  if (props.inactive) {
+    if (e.key !== 'Tab') e.preventDefault();
+    return;
+  }
   const k = e.key;
   if (!open.value) {
     if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Enter' || k === ' ') {
@@ -216,11 +233,16 @@ function onKey(e: KeyboardEvent): void {
 }
 
 watch(
-  () => props.disabled,
-  (disabled) => {
-    if (disabled) hide();
+  () => props.disabled || props.inactive,
+  (off) => {
+    if (off) hide();
   },
 );
+
+/** A press on a Select that is off does not focus it. */
+function onPress(e: Event): void {
+  if (props.inactive) e.preventDefault();
+}
 watch(query, (q) => {
   if (props.remote && open.value) emit('search', q);
 });
@@ -244,9 +266,12 @@ defineExpose({ focus: () => trigger.value?.focus() });
     :aria-controls="open ? listId : undefined"
     :aria-activedescendant="activeId"
     :disabled="disabled"
+    :aria-disabled="inactive ? 'true' : undefined"
     :data-value="modelValue == null ? undefined : String(modelValue)"
     @click="toggle"
     @keydown="onKey"
+    @pointerdown="onPress"
+    @mousedown="onPress"
   >
     <span class="body">
       <template v-if="fit">
@@ -343,6 +368,9 @@ defineExpose({ focus: () => trigger.value?.focus() });
 }
 .ui-select:disabled {
   opacity: 0.55;
+}
+.ui-select[aria-disabled='true'] {
+  cursor: not-allowed;
 }
 /* Every label in one grid cell: the button is as wide as the longest, the chosen one shows. */
 .body {

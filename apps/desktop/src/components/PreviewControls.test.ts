@@ -146,17 +146,12 @@ describe('PreviewControls', () => {
     );
   });
 
-  it('picking the language it already shows puts that pangram up too', async () => {
+  it('picking the language it already shows presses the Pangram chip', async () => {
     const { wrapper, store } = controls();
     await flushPromises();
     const language = selectLabelled(wrapper, 'Language');
-    store.update('all', { sample: 'custom', customText: 'Hamburg' });
-    await flushPromises();
-    await pickOption(language, store.settingsFor('all').language);
-    expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'pangram' });
-
-    store.applyPreset('all', 'alphabet');
-    await flushPromises();
+    // The default: the pangram on the Word layout. The picker applies (E51.4).
+    expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'word' });
     await pickOption(language, store.settingsFor('all').language);
     expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'pangram' });
   });
@@ -372,6 +367,96 @@ describe('PreviewSizeSlider', () => {
         .wrapper.find('input[aria-label="Size slider"]')
         .exists(),
     ).toBe(true);
+  });
+});
+
+describe('controls that do not apply (E51.4)', () => {
+  const sizeSlider = (w: { get: (s: string) => ReturnType<typeof field> }) =>
+    w.get('input[aria-label="Size slider"]');
+
+  it('turns the size slider off in Waterfall, says why, and keeps the stored size', async () => {
+    const store = usePreviewStore();
+    store.update('all', { sizePx: 44 });
+    const slider = mount(PreviewSizeSlider, {
+      props: { view: 'all', mode: 'waterfall' },
+      attachTo: document.body,
+    });
+    const input = sizeSlider(slider);
+    expect(input.attributes('aria-disabled')).toBe('true');
+    // Off, not disabled: it stays on the Tab path so its tooltip can be read.
+    expect(input.attributes('disabled')).toBeUndefined();
+    expect(input.attributes('title')).toBe(
+      'Size is fixed in Waterfall — switch to List or Grid to change it',
+    );
+    expect(slider.get('.size').classes()).toContain('off');
+    const why = document.getElementById(input.attributes('aria-describedby')!);
+    expect(why?.textContent).toBe(input.attributes('title'));
+    // Neither a drag nor a key moves it; the stored size stays.
+    await input.setValue('90');
+    expect(store.settingsFor('all').sizePx).toBe(44);
+    expect((input.element as HTMLInputElement).value).toBe('44');
+    const key = new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true });
+    input.element.dispatchEvent(key);
+    expect(key.defaultPrevented).toBe(true);
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    input.element.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(false);
+    const press = new MouseEvent('mousedown', { cancelable: true, bubbles: true });
+    input.element.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+    // Back in List the same size applies again.
+    await slider.setProps({ mode: 'list' });
+    expect(input.attributes('aria-disabled')).toBeUndefined();
+    expect(input.attributes('title')).toBeUndefined();
+    await input.setValue('60');
+    expect(store.settingsFor('all').sizePx).toBe(60);
+    slider.unmount();
+  });
+
+  it('turns the size slider off for Paragraph in List, on for Word', async () => {
+    const store = usePreviewStore();
+    const slider = mount(PreviewSizeSlider, { props: { view: 'all', mode: 'list' } });
+    expect(sizeSlider(slider).attributes('aria-disabled')).toBeUndefined();
+    store.applyPreset('all', 'paragraph');
+    await flushPromises();
+    expect(sizeSlider(slider).attributes('aria-disabled')).toBe('true');
+    expect(sizeSlider(slider).attributes('title')).toBe(
+      'Paragraph is set at the body size — change it in Preview options',
+    );
+    store.applyPreset('all', 'word');
+    await flushPromises();
+    expect(sizeSlider(slider).attributes('aria-disabled')).toBeUndefined();
+    slider.unmount();
+  });
+
+  it('turns the Language picker off outside Pangram and keeps the stored language', async () => {
+    const { wrapper, store } = controls('all', { mode: 'list' });
+    await flushPromises();
+    store.chooseLanguage('all', 'de');
+    await flushPromises();
+    const picker = () => selectLabelled(wrapper, 'Language');
+    expect(picker().attributes('aria-disabled')).toBeUndefined();
+    store.applyPreset('all', 'alphabet');
+    await flushPromises();
+    expect(picker().attributes('aria-disabled')).toBe('true');
+    expect(picker().attributes('disabled')).toBeUndefined();
+    expect(picker().attributes('title')).toBe(
+      'Language applies to the Pangram preset — switch to Pangram',
+    );
+    expect(wrapper.get('[data-testid="language-picker"]').classes()).toContain('off');
+    // A press or a key opens nothing and changes nothing.
+    await picker().trigger('click');
+    expect(picker().attributes('aria-expanded')).toBe('false');
+    await picker().trigger('keydown', { key: 'ArrowDown' });
+    expect(picker().attributes('aria-expanded')).toBe('false');
+    await picker().trigger('keydown', { key: 'e' });
+    expect(store.settingsFor('all').language).toBe('de');
+    expect(store.settingsFor('all').preset).toBe('alphabet');
+    // Pangram again: the same language, and the picker is on.
+    store.applyPreset('all', 'pangram');
+    await flushPromises();
+    expect(picker().attributes('aria-disabled')).toBeUndefined();
+    expect(store.settingsFor('all').language).toBe('de');
   });
 });
 

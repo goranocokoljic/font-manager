@@ -16,7 +16,7 @@ import { poolSize } from '../list/virtual';
 import { waterfallRowPx } from '../list/waterfall';
 import { sampleTextFor } from '../preview/sampleText';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
-import { previewRowHeight, usePreviewStore } from '../stores/preview';
+import { listPreview, previewRowHeight, usePreviewStore } from '../stores/preview';
 import { useSettingsStore } from '../stores/settings';
 import { useViewsStore, type ViewMode } from '../stores/views';
 import CatalogDownload from './CatalogDownload.vue';
@@ -41,7 +41,11 @@ const mode = computed<CatalogMode>(() => {
 });
 
 const catalog = computed(() => store.current);
-const preview = computed(() => previews.settingsFor(CATALOG_VIEW));
+/** The view's settings; the list and the cards set Paragraph at the body size (E51.4). */
+const preview = computed(() => {
+  const settings = previews.settingsFor(CATALOG_VIEW);
+  return mode.value === 'waterfall' ? settings : listPreview(settings);
+});
 const textOf = (f: CatalogFamily) =>
   sampleTextFor(preview.value, f.name, (code) => previews.pangramText(code));
 
@@ -234,7 +238,7 @@ const surfaceClass = computed(() =>
       @close="downloadClosed"
     />
     <CatalogInstall v-if="store.install && store.install.catalog === catalog.id" />
-    <PreviewControls :view="CATALOG_VIEW" inline-size />
+    <PreviewControls :view="CATALOG_VIEW" :mode="mode" inline-size />
 
     <div v-if="!catalog.enabled" class="empty" data-testid="catalog-off">
       <p>{{ t('catalogs.off', { name: catalog.name }) }}</p>

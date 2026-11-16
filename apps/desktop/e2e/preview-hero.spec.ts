@@ -248,19 +248,22 @@ test.describe('the preview row', () => {
     expect((await optionLabels(language))[0]).toBe('Serbian (Cyrillic)');
   });
 
-  test('the language it already shows puts its pangram up too', async ({ page }) => {
+  test('the language it already shows presses the Pangram chip', async ({ page }) => {
     const wall = await openWall(page);
     const language = row(page).getByLabel('Language');
-    await field(page).fill('Hamburg');
+    // The default pangram on the Word chip: the picker applies (E51.4).
     await selectOption(language, { label: 'English' });
     await expect(field(page)).toHaveValue('The quick brown fox jumps over the lazy dog');
     await expect(wall).toHaveAttribute('data-preset', 'pangram');
+    await expect(chip(page, 'Pangram')).toHaveAttribute('aria-pressed', 'true');
 
+    // Outside Pangram it is off (E51.4): a press does not open it.
     await chip(page, 'Alphabet').click();
     await expect(wall).toHaveAttribute('data-preset', 'alphabet');
-    await selectOption(language, { label: 'English' });
-    await expect(wall).toHaveAttribute('data-preset', 'pangram');
-    await expect(chip(page, 'Pangram')).toHaveAttribute('aria-pressed', 'true');
+    await expect(language).toHaveAttribute('aria-disabled', 'true');
+    await language.click({ force: true });
+    await expect(language).toHaveAttribute('aria-expanded', 'false');
+    await expect(wall).toHaveAttribute('data-preset', 'alphabet');
   });
 
   test('the options popover opens from the row, closes on a press outside and on Escape', async ({

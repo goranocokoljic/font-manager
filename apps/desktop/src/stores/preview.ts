@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import type { Density, LanguagePreset, SizeBasis } from '../api/types';
 import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
-import { PARAGRAPH_LINE_HEIGHT, PARAGRAPH_PX, type WallPreset } from '../list/grid';
+import { PARAGRAPH_LINE_HEIGHT, PARAGRAPH_PX, wallLayout, type WallPreset } from '../list/grid';
 import {
   FALLBACK_LANGUAGE,
   isLanguageCode,
@@ -174,6 +174,18 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     bodyLineHeight: clampSetting(r.bodyLineHeight, LINE_HEIGHT, d.bodyLineHeight),
     hideMissing: typeof r.hideMissing === 'boolean' ? r.hideMissing : d.hideMissing,
   };
+}
+
+/**
+ * The settings a list of rows renders with (Lines, the Layout split's list, a catalog's
+ * list): the reading rows (the Paragraph preset, or your own long text) are set at the body
+ * size and line height, as on the wall, so the size slider has nothing to change (E51.4).
+ * Every other preset returns `settings` itself.
+ */
+export function listPreview(settings: PreviewSettings): PreviewSettings {
+  if (wallLayout(settings.preset, settings.sample, settings.customText) !== 'paragraph')
+    return settings;
+  return { ...settings, sizePx: settings.bodySizePx, lineHeight: settings.bodyLineHeight };
 }
 
 /**
