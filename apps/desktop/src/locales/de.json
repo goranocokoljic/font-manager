@@ -263,6 +263,14 @@
     "addLetter": "{letter} hinzufügen",
     "preset": "Vorlage",
     "noPangram": "Für diese Sprache gibt es noch kein Pangramm",
+    "inactive": {
+      "sizeTable": "In der Tabelle bestimmt der Streifen die Größe — nutze seinen Größenregler",
+      "sizeWaterfall": "Im Wasserfall ist die Größe fest — wechsle zu Liste oder Raster, um sie zu ändern",
+      "sizeLayout": "Die Größe gilt nicht für das Layout — ändere sie im Layout",
+      "sizeParagraph": "Absatz steht in der Fließtextgröße — ändere sie in den Vorschauoptionen",
+      "language": "Die Sprache gilt nur für Pangramm — wechsle zu Pangramm",
+      "languageLayout": "Die Sprache gilt nicht für das Layout"
+    },
     "presets": {
       "word": "Wort",
       "pangram": "Pangramm",

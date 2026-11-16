@@ -8,6 +8,7 @@ import {
   PREVIEW_STORAGE_KEY,
   RECENT_LANGUAGES_KEY,
   RECENT_LANGUAGES_MAX,
+  listPreview,
   normalizePreview,
   previewRowHeight,
   usePreviewStore,
@@ -382,5 +383,25 @@ describe('the Letters preset (E49.7)', () => {
     store.update('all', { letters: 'ROag' });
     await nextTick();
     expect(search).not.toHaveBeenCalled();
+  });
+});
+
+describe('the lists set Paragraph at the body size (E51.4)', () => {
+  it('gives the reading rows the body size and line height, and leaves the rest alone', () => {
+    const base = {
+      ...DEFAULT_PREVIEW,
+      sizePx: 64,
+      lineHeight: 1.1,
+      bodySizePx: 19,
+      bodyLineHeight: 1.6,
+    };
+    const word = { ...base, preset: 'word' as const, sample: 'custom' as const, customText: 'Hi' };
+    expect(listPreview(word)).toBe(word);
+    const paragraph = { ...base, preset: 'paragraph' as const, sample: 'paragraph' as const };
+    expect(listPreview(paragraph)).toMatchObject({ sizePx: 19, lineHeight: 1.6 });
+    // The stored size is kept: the next preset takes it again.
+    expect(paragraph.sizePx).toBe(64);
+    const long = { ...word, customText: 'x'.repeat(120) };
+    expect(listPreview(long)).toMatchObject({ sizePx: 19, lineHeight: 1.6 });
   });
 });

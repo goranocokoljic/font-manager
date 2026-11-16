@@ -61,7 +61,7 @@ import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { useLibraryViewsStore } from '../stores/libraryViews';
-import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import { ALL_FONTS_VIEW, listPreview, usePreviewStore } from '../stores/preview';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useQuickLookStore } from '../stores/quickLook';
 import { useCatalogsStore } from '../stores/catalogs';
@@ -116,6 +116,8 @@ watch(
   { immediate: true },
 );
 const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
+/** What the lists of rows render (Lines, the Layout split's list): Paragraph at the body size. */
+const listSettings = computed(() => listPreview(preview.settingsFor(ALL_FONTS_VIEW)));
 /**
  * The wall shows its reading rows (E43.1): the Paragraph preset, or your own long text. The
  * switch is a view switch of the motion table: the wall and the rows crossfade.
@@ -677,6 +679,7 @@ async function openFace(face: FaceId): Promise<void> {
           </UiIconButton>
           <PreviewSizeSlider
             :view="ALL_FONTS_VIEW"
+            :mode="mode"
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
           />
         </header>
@@ -690,6 +693,7 @@ async function openFace(face: FaceId): Promise<void> {
           <CollectionHeader />
           <PreviewControls
             :view="ALL_FONTS_VIEW"
+            :mode="mode"
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
             :font-count="search.total"
             @leave="focusList"
@@ -707,11 +711,7 @@ async function openFace(face: FaceId): Promise<void> {
             <!-- The Layout mode is a split (E50.3): the same list as Lines, the pane beside it. -->
             <LayoutSplit v-else-if="mode === 'layout'" key="layout">
               <template #list>
-                <FontList
-                  :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-                  @cursor-face="showFace"
-                  @open="openRow"
-                />
+                <FontList :preview="listSettings" @cursor-face="showFace" @open="openRow" />
               </template>
               <template #head>
                 <p v-if="layoutFace" class="face" data-testid="layout-face">
@@ -784,7 +784,7 @@ async function openFace(face: FaceId): Promise<void> {
             <FontList
               v-else
               key="list"
-              :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+              :preview="listSettings"
               @cursor-face="showFace"
               @open="openRow"
             />
