@@ -241,13 +241,13 @@ export function wallTraitValue(family: FamilyId, trait: GlyphTraitInfo): string 
 export const MOCK_NO_FILE_DRAG = 'Dragging font files out needs the desktop app.';
 
 export const mockAppInfo: AppInfo = {
-  name: 'Font Manager (mock)',
+  name: 'Font Fu (mock)',
   version: '0.1.0',
   apiVersion: API_VERSION,
   platform: 'linux',
   // What fm-core says on a Linux desktop without a StatusNotifier host (lifecycle.rs).
   platformNotes: [
-    'This desktop shows no tray items (no StatusNotifier host), so closing the window quits Font Manager and ends session activations. KDE Plasma and GNOME with the AppIndicator extension show the tray item.',
+    'This desktop shows no tray items (no StatusNotifier host), so closing the window quits Font Fu and ends session activations. KDE Plasma and GNOME with the AppIndicator extension show the tray item.',
     'Apps that are already running can take up to 30 seconds to see a font you activate; some see it only after a restart.',
   ],
 };
@@ -646,7 +646,7 @@ export const mockUpdates = {
 /** The mock's local API address (the Rust mock reports the same). */
 export const MOCK_ENDPOINT_URL = 'http://127.0.0.1:47613';
 /** Where the mock app keeps the stdio shim (the Rust mock's `MOCK_MCP_SHIM`). */
-export const MOCK_MCP_SHIM = '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio';
+export const MOCK_MCP_SHIM = '/Applications/Font Fu.app/Contents/MacOS/fm-mcp-stdio';
 
 /** A 64-hex-digit token for the `generation`th regeneration; distinct for each. */
 export function mockEndpointToken(generation: number): string {
@@ -2172,7 +2172,7 @@ export function mockCatalogFamilies(extra = 0): CatalogFamily[] {
 }
 
 /** The folder the mock's first Install proposes (`suggestedDownloadFolder`). */
-export const MOCK_SUGGESTED_DOWNLOAD_FOLDER = '/Users/demo/Documents/Font Manager Fonts';
+export const MOCK_SUGGESTED_DOWNLOAD_FOLDER = '/Users/demo/Documents/Font Fu Fonts';
 
 /** What the mock's `installFamily` needs from the rest of the mock client. */
 interface MockInstallHooks {
@@ -3397,7 +3397,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         throw {
           code: 'io' as const,
           message:
-            'Font Manager could not reach its release server. Check your connection and try again.',
+            'Font Fu could not reach its release server. Check your connection and try again.',
           detail: 'dns error',
         };
       const found =
@@ -3431,7 +3431,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         throw {
           code: 'permissionDenied' as const,
           message:
-            "The update was not installed: it is not signed with Font Manager's release key. Download Font Manager from its releases page instead.",
+            "The update was not installed: it is not signed with Font Fu's release key. Download Font Fu from its releases page instead.",
           detail: 'Minisign(InvalidSignature)',
         };
       options.onInstall?.({ ...req });
@@ -4252,7 +4252,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         throw {
           code: 'unsupported' as const,
           message:
-            'Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.',
+            'Font Fu reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.',
           detail: `${req.path}: unknown document type`,
         };
       if (/damaged/i.test(req.path))

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/unicode-blocks/blocks.schema.json",
-  "title": "Font Manager Unicode block table",
+  "title": "Font Fu Unicode block table",
   "description": "The Unicode blocks, copied from Blocks.txt of the Unicode Character Database. The glyph map groups a face's characters by these blocks.",
   "type": "object",
   "additionalProperties": false,

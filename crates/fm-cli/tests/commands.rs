@@ -30,7 +30,7 @@ fn version_prints_the_app_and_api_versions() {
     let (exit, out, err) = fm(&["version"]);
     assert_eq!((exit, err.as_str()), (Exit::Success, ""));
     assert!(out.contains(&format!("API {API_VERSION}")), "{out}");
-    assert!(out.starts_with("Font Manager "), "{out}");
+    assert!(out.starts_with("Font Fu "), "{out}");
 
     let (exit, out, err) = fm(&["version", "--json"]);
     assert_eq!((exit, err.as_str()), (Exit::Success, ""));
@@ -703,7 +703,7 @@ fn deactivate_never_deregisters_a_font_activated_outside_the_app() {
 #[test]
 fn direct_link_mode_refuses_to_activate_or_deactivate() {
     let api = MockApi::new();
-    let message = "fm: Font Manager must be running to activate fonts; start it and try again\n";
+    let message = "fm: Font Fu must be running to activate fonts; start it and try again\n";
     let (exit, out, err) = fm_linked(&api, Link::Direct, &["activate", "Inter"]);
     assert_eq!(
         (exit, out.as_str(), err.as_str()),
@@ -809,10 +809,7 @@ fn sets_import_refuses_a_file_that_is_missing_or_not_an_export() {
     let (exit, out, err) = fm_on(&api, &["sets", "import", &file.display().to_string()]);
     let _ = std::fs::remove_file(&file);
     assert_eq!((exit, out.as_str()), (Exit::Usage, ""));
-    assert!(
-        err.contains("is not a set exported by Font Manager"),
-        "{err}"
-    );
+    assert!(err.contains("is not a set exported by Font Fu"), "{err}");
     assert_eq!(api.list_sets().unwrap().len(), sets, "no set was made");
 }
 

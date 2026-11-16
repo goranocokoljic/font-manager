@@ -66,11 +66,11 @@ export function devBuild(version, sha) {
   return { version: `${version}-${h}`, label: `${version}+${h}`, tag: `nightly-${version}-${h}` };
 }
 
-/** The release name of one installer: font-manager_0.1.0-1a2b3c4_windows_x64.msi. */
+/** The release name of one installer: font-fu_0.1.0-1a2b3c4_windows_x64.msi. */
 export function assetName(build, os, arch, ext) {
   if (!BUNDLES[os]) throw new Error(`unknown os: ${os}`);
   if (!/^(x64|arm64)$/.test(arch)) throw new Error(`unknown arch: ${arch}`);
-  return `font-manager_${build.version}_${os}_${arch}${ext}`;
+  return `font-fu_${build.version}_${os}_${arch}${ext}`;
 }
 
 /**

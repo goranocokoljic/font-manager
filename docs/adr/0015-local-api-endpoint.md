@@ -115,7 +115,7 @@ endpoint, the CLI and the MCP server negotiate the same way.
   contract it was built against. Not `major.minor.patch` → 400
   `invalidRequest`. Another major → 422 `unsupported` with one sentence
   naming both versions and what to update: "The client speaks API 1.0.0 but
-  Font Manager serves API 0.22.0: update Font Manager to a version that
+  Font Fu serves API 0.22.0: update Font Fu to a version that
   serves API 1.x." (an older client is told to update the client). No
   header → served, as before E25.3. The check runs after the token, so a
   program without the token learns nothing more than `/v1/version` says.
@@ -195,9 +195,9 @@ code or HTTP crate of their own.
   mismatch) comes back as it is; an answer whose `Fm-Api-Version` names
   another major is refused by the client itself
   (`fm_api::check_server_version`, the same sentence).
-- **Failures.** No answer → `io` "Font Manager is not running, or its local
+- **Failures.** No answer → `io` "Font Fu is not running, or its local
   API does not answer."; a connection lost mid-call or an answer cut short
-  → `io` "The connection to Font Manager was lost."; an answer that is not
+  → `io` "The connection to Font Fu was lost."; an answer that is not
   the local API → `internal`. Never a panic.
 - **Events.** `subscribe` returns once the server's `: stream open` frame
   arrived, so the subscription sees every event sent after it. When the
@@ -252,7 +252,7 @@ start a process (Claude Desktop). It reads `endpoint.json` as the CLI does,
 asks the app for the token and the switch, and forwards JSON-RPC unchanged
 between stdin/stdout and `/mcp` with rmcp's stdio and streamable HTTP client
 transports. When the app is not running or the switch is off, it answers one
-JSON-RPC error ("Open Font Manager and turn on AI assistants in Settings.")
+JSON-RPC error ("Open Font Fu and turn on AI assistants in Settings.")
 and exits non-zero. The bundle ships it as a Tauri `externalBin` beside the
 app's executable. Settings adds a Claude Desktop snippet with a command that
 must still work while the app is closed (`fm_platform::mcp_shim`):
@@ -260,7 +260,7 @@ must still work while the app is closed (`fm_platform::mcp_shim`):
 | OS | Command in the snippet |
 |----|------------------------|
 | Windows | `<install dir>\fm-mcp-stdio.exe` |
-| macOS | `Font Manager.app/Contents/MacOS/fm-mcp-stdio` |
+| macOS | `Font Fu.app/Contents/MacOS/fm-mcp-stdio` |
 | Linux, AppImage | `$APPIMAGE --mcp-stdio`: the executable's folder is a mount that exists only while the app runs and is renamed at every start (as for the login entry, ADR 0011), so the AppImage starts the app's executable, which runs the shim and no window |
 | Linux, other | `fm-mcp-stdio` beside the executable |
 

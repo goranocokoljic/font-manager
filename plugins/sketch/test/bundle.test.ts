@@ -103,7 +103,7 @@ describe('docs/sketch-plugin.md', () => {
     expect(page).toMatch(/^## Install the plugin$/m);
     expect(page).toMatch(/^## What it does$/m);
     expect(page).toContain('Double-click `font-manager.sketchplugin`');
-    expect(page).toContain('font-manager_<version>_sketch-plugin.zip');
+    expect(page).toContain('font-fu_<version>_sketch-plugin.zip');
   });
 });
 

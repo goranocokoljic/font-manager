@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/themes/theme.schema.json",
-  "title": "Font Manager theme file",
+  "title": "Font Fu theme file",
   "description": "One named theme of the app: a light and a dark token set. Each file in data/themes but this one follows it.",
   "type": "object",
   "additionalProperties": false,

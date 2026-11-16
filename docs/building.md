@@ -1,4 +1,4 @@
-# Building Font Manager from source
+# Building Font Fu from source
 
 This page tells you how to build the release installers yourself from a release tag, and
 how to check that a download from the releases page is the one we built.
@@ -123,7 +123,7 @@ The release workflow (`.github/workflows/release.yml`) runs the same script with
 `--updater`. That also writes the updater artifacts and signs them with the updater key
 (the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; the
 public half is in `tauri.conf.json`). Your own build does not need the key. A copy you
-build yourself still checks for updates; a package manager that builds Font Manager sets
+build yourself still checks for updates; a package manager that builds Font Fu sets
 `FM_PACKAGED_BY=<its name>` at build time to turn that off (ADR 0012).
 
 ## What is reproducible, and what is not
@@ -188,9 +188,9 @@ shasum -a 256 -c --ignore-missing SHA256SUMS
 Then check the signature and the notarization. Open the .dmg, then:
 
 ```sh
-codesign --verify --deep --strict --verbose=2 "/Volumes/Font Manager/Font Manager.app"
-spctl --assess --type execute --verbose "/Volumes/Font Manager/Font Manager.app"
-xcrun stapler validate "/Volumes/Font Manager/Font Manager.app"
+codesign --verify --deep --strict --verbose=2 "/Volumes/Font Fu/Font Fu.app"
+spctl --assess --type execute --verbose "/Volumes/Font Fu/Font Fu.app"
+xcrun stapler validate "/Volumes/Font Fu/Font Fu.app"
 ```
 
 `spctl` must say `accepted` and `source=Notarized Developer ID`.
@@ -198,7 +198,7 @@ xcrun stapler validate "/Volumes/Font Manager/Font Manager.app"
 **Windows (PowerShell)**
 
 ```powershell
-$file = 'font-manager_0.1.0_windows_x64.msi'
+$file = 'font-fu_0.1.0_windows_x64.msi'
 $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
 Select-String -Path SHA256SUMS -SimpleMatch "$hash  $file"
 ```

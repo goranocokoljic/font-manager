@@ -314,7 +314,7 @@ mod tests {
         // A path with a space and, on Windows, backslashes: both must survive
         // as one JSON string.
         let program = std::env::temp_dir()
-            .join("Font Manager")
+            .join("Font Fu")
             .join("fm-mcp-stdio.exe");
         let st = status(
             true,

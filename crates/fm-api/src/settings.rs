@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(Settings::default().download_folder, None);
         let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old file");
         assert_eq!(old.download_folder, None, "a config.json from before E22.7");
-        let folder = std::env::temp_dir().join("Font Manager Fonts");
+        let folder = std::env::temp_dir().join("Font Fu Fonts");
         let folder = folder.to_string_lossy().into_owned();
         let set: SettingsUpdate =
             serde_json::from_value(serde_json::json!({ "downloadFolder": folder }))

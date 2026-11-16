@@ -81,7 +81,7 @@ fn a_missing_file_is_not_found_and_other_json_is_invalid() {
         std::fs::write(&path, bytes).expect("write");
         let err = load(&path).expect_err(name);
         assert_eq!(err.code(), ErrorCode::InvalidRequest, "{name}");
-        assert_eq!(err.message(), "This file is not a Font Manager set file.");
+        assert_eq!(err.message(), "This file is not a Font Fu set file.");
     }
 }
 

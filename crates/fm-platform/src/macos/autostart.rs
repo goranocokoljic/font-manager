@@ -130,7 +130,7 @@ impl Autostart for MacosAutostart {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 format!(
-                    "{} exists and was not written by Font Manager",
+                    "{} exists and was not written by Font Fu",
                     self.file().display()
                 ),
             ));
@@ -209,10 +209,7 @@ mod tests {
     fn enable_and_disable_write_and_remove_the_agent() {
         let dir = TestDir::new("agent-cycle");
         let agents = dir.path().join("LaunchAgents");
-        let entry = entry(
-            &agents,
-            "/Applications/Font Manager.app/Contents/MacOS/fm-app",
-        );
+        let entry = entry(&agents, "/Applications/Font Fu.app/Contents/MacOS/fm-app");
         assert!(!entry.is_enabled().expect("read"));
         assert!(!entry.disable().expect("nothing yet"));
         entry.enable().expect("on");
@@ -231,7 +228,7 @@ mod tests {
         let dir = TestDir::new("agent-foreign");
         let entry = entry(
             dir.path(),
-            "/Applications/Font Manager.app/Contents/MacOS/fm-app",
+            "/Applications/Font Fu.app/Contents/MacOS/fm-app",
         );
         let foreign = "<plist><dict><key>Label</key><string>something.else</string></dict></plist>";
         fs::write(entry.file(), foreign).expect("seed");

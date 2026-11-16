@@ -103,7 +103,7 @@ part that differs per catalog needs one narrow seam.
   "Download…" into one folder, then activation, in one call on the user's "Install". The
   folder is `Settings::download_folder`: the one folder the app writes into without a
   choice per download. The user chooses it once (rule 2): the first Install proposes
-  `<Documents>/Font Manager Fonts` and makes it only when the user takes it (or picks
+  `<Documents>/Font Fu Fonts` and makes it only when the user takes it (or picks
   another with the native picker); Settings → Online catalogs changes it. It is never a
   system font folder (`fm_platform::paths::system_font_folders`, or a `system` source):
   that is `Conflict` before any request (rule 4), as are no folder and an off catalog.

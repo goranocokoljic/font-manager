@@ -13,7 +13,7 @@ describe('sketchUi', () => {
     const yes = mockAlerts(0);
     expect(await sketchUi(mockUi(), yes.newAlert).confirm('Deactivate?')).toBe(true);
     expect(yes.shown[0]).toEqual({
-      message: 'Font Manager',
+      message: 'Font Fu',
       informative: 'Deactivate?',
       buttons: ['Deactivate', 'Keep'],
     });

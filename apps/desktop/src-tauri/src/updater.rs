@@ -77,13 +77,13 @@ pub fn is_signature_error(e: &UpdaterError) -> bool {
 
 /// The error the user sees when a download or install fails. A package
 /// whose signature does not match is refused as not coming from Font
-/// Manager; nothing of it is installed.
+/// Fu; nothing of it is installed.
 pub fn install_error(e: UpdaterError) -> ApiError {
     if is_signature_error(&e) {
         ApiError::new(
             ErrorCode::PermissionDenied,
-            "The update was not installed: it is not signed with Font Manager's release key. \
-             Download Font Manager from its releases page instead.",
+            "The update was not installed: it is not signed with Font Fu's release key. \
+             Download Font Fu from its releases page instead.",
         )
         .with_detail(e.to_string())
     } else {
@@ -104,7 +104,7 @@ pub fn verify(update: &Update, bytes: &[u8]) -> ApiResult<()> {
 fn check_error(e: UpdaterError) -> ApiError {
     ApiError::new(
         ErrorCode::Io,
-        "Font Manager could not reach its release server. Check your connection and try again.",
+        "Font Fu could not reach its release server. Check your connection and try again.",
     )
     .with_detail(e.to_string())
 }
@@ -115,7 +115,7 @@ fn not_offered(support: &UpdateSupport) -> ApiError {
         support
             .reason
             .clone()
-            .unwrap_or_else(|| "This copy of Font Manager does not update itself.".to_owned()),
+            .unwrap_or_else(|| "This copy of Font Fu does not update itself.".to_owned()),
     )
 }
 

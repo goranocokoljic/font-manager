@@ -779,7 +779,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// The answer of a service that is not built yet.
 /// The answer to a PDF specimen without a printer (the CLI's direct link).
-pub const PDF_NEEDS_APP: &str = "PDF export needs the Font Manager app running.";
+pub const PDF_NEEDS_APP: &str = "PDF export needs the Font Fu app running.";
 
 /// The path of a set file request: it must be absolute, so a set file is
 /// never written relative to wherever the app happens to run.
@@ -838,7 +838,7 @@ impl LibraryService for CoreApi {
         );
         platform_notes.extend(crate::update::support(&fm_platform::updater::distribution()).reason);
         Ok(AppInfo {
-            name: "Font Manager".into(),
+            name: "Font Fu".into(),
             version: env!("CARGO_PKG_VERSION").into(),
             api_version: API_VERSION,
             platform: match Os::current() {

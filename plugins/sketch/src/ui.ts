@@ -24,7 +24,7 @@ export function sketchUi(ui: SketchUiModule, newAlert: () => NativeAlert): Plugi
     notify: (message) => ui.message(message),
     async confirm(message) {
       const alert = newAlert();
-      alert.setMessageText('Font Manager');
+      alert.setMessageText('Font Fu');
       alert.setInformativeText(message);
       alert.addButtonWithTitle('Deactivate');
       alert.addButtonWithTitle('Keep');

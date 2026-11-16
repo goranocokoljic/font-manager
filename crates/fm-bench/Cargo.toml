@@ -1,6 +1,6 @@
 [package]
 name = "fm-bench"
-description = "Font Manager performance driver: times fm-core start, scan, rescan and search for scripts/bench.sh."
+description = "Font Fu performance driver: times fm-core start, scan, rescan and search for scripts/bench.sh."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

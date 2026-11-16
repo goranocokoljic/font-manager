@@ -82,8 +82,8 @@ impl LinuxAutostart {
             "[Desktop Entry]\n\
              Type=Application\n\
              Version=1.0\n\
-             Name=Font Manager\n\
-             Comment=Starts Font Manager in the tray when you log in\n\
+             Name=Font Fu\n\
+             Comment=Starts Font Fu in the tray when you log in\n\
              Exec={exec}\n\
              Terminal=false\n\
              NoDisplay=true\n\
@@ -160,7 +160,7 @@ impl Autostart for LinuxAutostart {
                 return Err(io::Error::new(
                     io::ErrorKind::AlreadyExists,
                     format!(
-                        "{} exists and was not written by Font Manager",
+                        "{} exists and was not written by Font Fu",
                         self.file().display()
                     ),
                 ));
@@ -268,11 +268,11 @@ mod tests {
     #[test]
     fn the_entry_launches_the_program_with_the_argument_at_login() {
         let dir = TestDir::new("xdg-entry");
-        let text = entry(dir.path(), "/opt/Font Manager/fm-app").desktop_entry();
+        let text = entry(dir.path(), "/opt/Font Fu/fm-app").desktop_entry();
         assert!(text.starts_with("[Desktop Entry]\n"), "{text}");
         assert!(text.contains("\nType=Application\n"), "{text}");
         assert!(
-            text.contains("\nExec=\"/opt/Font Manager/fm-app\" --autostart\n"),
+            text.contains("\nExec=\"/opt/Font Fu/fm-app\" --autostart\n"),
             "{text}"
         );
         assert!(text.contains("\nX-FontManager-Autostart=true\n"), "{text}");

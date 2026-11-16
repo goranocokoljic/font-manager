@@ -3522,13 +3522,13 @@ fn a_mock_install_downloads_once_into_the_download_folder_and_activates_the_fami
     folder("/System/Library/Fonts/Mine");
     assert_eq!(install().expect_err("system").code, ErrorCode::Conflict);
 
-    folder("/Users/demo/Documents/Font Manager Fonts");
+    folder("/Users/demo/Documents/Font Fu Fonts");
     let sources = api.list_sources().expect("sources").len();
     let got = install().expect("install");
     assert!(!got.already_installed);
     assert_eq!(
         got.download.folder,
-        "/Users/demo/Documents/Font Manager Fonts/Inter"
+        "/Users/demo/Documents/Font Fu Fonts/Inter"
     );
     assert_eq!(api.list_sources().expect("sources").len(), sources + 1);
     assert!(!got.faces.is_empty());

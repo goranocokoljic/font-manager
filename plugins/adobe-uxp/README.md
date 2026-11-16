@@ -1,7 +1,7 @@
-# Font Manager for InDesign and Photoshop (UXP)
+# Font Fu for InDesign and Photoshop (UXP)
 
 A UXP plugin for InDesign 18.5+ and Photoshop 24.1+. It has no font logic:
-it tells the running Font Manager app which fonts a document uses, and the
+it tells the running Font Fu app which fonts a document uses, and the
 app finds and activates them (E29.2).
 
 - **Open.** When a document opens (InDesign `afterOpen`, Photoshop `open`),
@@ -26,8 +26,8 @@ app finds and activates them (E29.2).
   view is `MissingFontsPanel` in `plugins/shared/`; its texts are in
   `plugins/shared/src/panel-strings.ts`.
 - **App not running.** When the app does not answer or refuses the token,
-  the plugin shows "Font Manager is not running" once and does nothing else.
-- **Font Switch (E34).** A font dragged from Font Manager onto the panel is
+  the plugin shows "Font Fu is not running" once and does nothing else.
+- **Font Switch (E34).** A font dragged from Font Fu onto the panel is
   applied to the selected text (InDesign) or the selected text layers
   (Photoshop). With no text selected it says "Select some text first"; for a
   font the app does not have, "<name> is not active". The adapters and the
@@ -69,7 +69,7 @@ apps scan instead:
    (macOS: `~/Library/Application Support/Adobe/UXP/Plugins/External/`);
    for InDesign, `dist/indesign/` to `org.fontmanager.indesign_0.1.0`. The
    folder name is `<id>_<version>`.
-3. Start the app. The plugin is under Plugins → Font Manager. Font Manager
+3. Start the app. The plugin is under Plugins → Font Fu. Font Fu
    must be running with its local API on (Settings → Local API).
 
 When the panel does not appear, the manifest error is in

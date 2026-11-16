@@ -1,4 +1,4 @@
-// "Font Manager is not running" is said once, until a call gets through
+// "Font Fu is not running" is said once, until a call gets through
 // again. Sketch runs every action handler in a fresh script, so the
 // `DocumentWatcher` of one action does not know what the last one said; the
 // flag lives in Sketch's session variables (`sketch/settings`) instead.

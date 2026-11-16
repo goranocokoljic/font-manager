@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Font Manager for Illustrator: a hidden CEP extension that starts with
+<!-- Font Fu for Illustrator: a hidden CEP extension that starts with
      Illustrator, with Node on for the app's pipe or socket (ADR 0016). -->
-<ExtensionManifest Version="11.0" ExtensionBundleId="org.fontmanager.illustrator" ExtensionBundleVersion="0.1.0" ExtensionBundleName="Font Manager" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ExtensionManifest Version="11.0" ExtensionBundleId="org.fontmanager.illustrator" ExtensionBundleVersion="0.1.0" ExtensionBundleName="Font Fu" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
     <Extension Id="org.fontmanager.illustrator.watcher" Version="0.1.0" />
   </ExtensionList>

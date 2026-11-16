@@ -57,11 +57,7 @@ impl FmError {
 
     /// A bug. `detail` says where; the user sees a generic sentence.
     pub fn internal(detail: impl Into<String>) -> Self {
-        Self::new(
-            ErrorCode::Internal,
-            "Something went wrong inside Font Manager.",
-        )
-        .with_detail(detail)
+        Self::new(ErrorCode::Internal, "Something went wrong inside Font Fu.").with_detail(detail)
     }
 
     /// A file or OS call on `path` failed. `message` is the sentence for the
@@ -163,12 +159,12 @@ mod tests {
     #[test]
     fn message_is_for_people_detail_is_for_developers() {
         let e = FmError::internal("index.rs:42: row without a family");
-        assert_eq!(e.message(), "Something went wrong inside Font Manager.");
+        assert_eq!(e.message(), "Something went wrong inside Font Fu.");
         assert!(!e.message().contains("index.rs"));
         assert_eq!(e.detail(), Some("index.rs:42: row without a family"));
         assert_eq!(
             e.to_string(),
-            "Something went wrong inside Font Manager. (index.rs:42: row without a family)"
+            "Something went wrong inside Font Fu. (index.rs:42: row without a family)"
         );
     }
 

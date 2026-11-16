@@ -141,13 +141,13 @@ mod tests {
 
     #[test]
     fn labels_come_from_the_locale_then_english_then_the_key() {
-        assert_eq!(text("en", "shell.tray.open"), "Open Font Manager");
-        assert_eq!(text("de", "shell.tray.open"), "Font Manager öffnen");
+        assert_eq!(text("en", "shell.tray.open"), "Open Font Fu");
+        assert_eq!(text("de", "shell.tray.open"), "Font Fu öffnen");
         assert_eq!(
             text("de", "shell.helpPages.keyboard-shortcuts"),
             "Tastenkürzel"
         );
-        assert_eq!(text("xx", "shell.tray.quit"), "Quit Font Manager");
+        assert_eq!(text("xx", "shell.tray.quit"), "Quit Font Fu");
         assert_eq!(text("de", "shell.nope"), "shell.nope");
     }
 

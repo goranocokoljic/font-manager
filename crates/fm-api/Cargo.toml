@@ -1,6 +1,6 @@
 [package]
 name = "fm-api"
-description = "Font Manager application API: typed, versioned request/response types and service traits."
+description = "Font Fu application API: typed, versioned request/response types and service traits."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

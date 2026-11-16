@@ -139,7 +139,7 @@ function prepareHome(opts) {
     env.APPDATA = roaming;
     env.USERNAME = 'fm-bench'; // its own IPC pipe, beside a running app
     // Tauri picks the WebView2 user-data folder from the known-folder API,
-    // not from LOCALAPPDATA, so a running Font Manager would share it and
+    // not from LOCALAPPDATA, so a running Font Fu would share it and
     // WebView2 refuses a second environment with other arguments
     // (0x8007139F). This variable overrides the folder the app passes.
     env.WEBVIEW2_USER_DATA_FOLDER = path.join(local, 'FontManager', 'EBWebView');

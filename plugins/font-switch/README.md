@@ -1,6 +1,6 @@
 # @fm/font-switch
 
-Font Switch (E34) in the design apps: a font dragged from Font Manager (or
+Font Switch (E34) in the design apps: a font dragged from Font Fu (or
 copied with "Copy for Font Switch") is applied to the text selection of the
 app. One adapter per host, behind one interface:
 
@@ -51,7 +51,7 @@ them copies an adapter.
 - `plugins/adobe-uxp/` (E30.1): its panel is a drop target, with
   `inDesignAdapter` in InDesign and `photoshopAdapter` in Photoshop.
 - `plugins/sketch/` (E31.1): Sketch has no panel to drop on, so the menu
-  command "Plugins › Font Manager › Apply Copied Font" applies the font on
+  command "Plugins › Font Fu › Apply Copied Font" applies the font on
   the clipboard (what "Copy for Font Switch" puts there) with `sketchAdapter`.
 - `plugins/adobe-cep-illustrator/` (E30.2): the extension is hidden and has
   no panel, so nothing can be dropped on it yet. `illustratorAdapter` is ready

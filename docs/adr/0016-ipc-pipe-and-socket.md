@@ -122,5 +122,5 @@ major); a client compares `hello`'s major with its own as
   off), Settings → About → Platform notes says plugins need the window open
   (`fm_core::lifecycle::platform_notes`). After Quit,
   `fm_platform::ipc::connect` fails at once with an error that starts
-  "Font Manager is not running" (`ipc::NOT_RUNNING`) and keeps the OS
+  "Font Fu is not running" (`ipc::NOT_RUNNING`) and keeps the OS
   error's kind.

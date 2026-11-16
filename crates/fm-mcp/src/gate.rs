@@ -35,7 +35,7 @@ impl ToolGate for RefuseMutations {
     fn check(&self, _api: &dyn Api, call: &McpToolCall) -> Result<(), ApiError> {
         Err(ApiError::new(
             ErrorCode::PermissionDenied,
-            "Font Manager does not allow AI assistants to change fonts here.",
+            "Font Fu does not allow AI assistants to change fonts here.",
         )
         .with_detail(format!("tool {} refused by the tool gate", call.tool)))
     }

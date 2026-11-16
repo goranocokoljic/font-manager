@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/pairings/pairings.schema.json",
-  "title": "Font Manager curated pairings",
+  "title": "Font Fu curated pairings",
   "description": "Pairs of font families that go well together; the pairing model (data/pairings/model.json) learns from them. pairings.json follows it.",
   "type": "object",
   "additionalProperties": false,

@@ -275,7 +275,7 @@ mod tests {
         let paths = paths_in(&dir);
         let store = SettingsStore::new(&paths);
         assert_eq!(store.get_settings().expect("read").download_folder, None);
-        let folder = dir.path().join("Font Manager Fonts");
+        let folder = dir.path().join("Font Fu Fonts");
         let folder = folder.to_string_lossy().into_owned();
         store
             .update_settings(SettingsUpdate {
@@ -295,7 +295,7 @@ mod tests {
             serde_json::from_str(&fs::read_to_string(paths.config_file()).expect("file"))
                 .expect("json");
         assert_eq!(json["downloadFolder"], folder.as_str());
-        assert!(!dir.path().join("Font Manager Fonts").exists(), "not made");
+        assert!(!dir.path().join("Font Fu Fonts").exists(), "not made");
     }
 
     #[test]

@@ -102,7 +102,7 @@ fn print_on_this_thread(dir: &Path, html: &Path, out: &Path) -> Result<(), Print
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("STATIC"),
-            w!("Font Manager PDF"),
+            w!("Font Fu PDF"),
             WS_OVERLAPPEDWINDOW,
             0,
             0,

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/unicode-names/names.schema.json",
-  "title": "Font Manager Unicode character names",
+  "title": "Font Fu Unicode character names",
   "description": "The Name property of every named code point, copied from UnicodeData.txt of the Unicode Character Database. The glyph detail shows it (LATIN SMALL LETTER G).",
   "type": "object",
   "additionalProperties": false,

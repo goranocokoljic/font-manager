@@ -2,7 +2,7 @@
   "name": "@fm/adobe-cep-illustrator",
   "private": true,
   "type": "module",
-  "description": "Font Manager's CEP extension for Illustrator.",
+  "description": "Font Fu's CEP extension for Illustrator.",
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit",

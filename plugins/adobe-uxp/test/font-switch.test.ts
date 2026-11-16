@@ -55,6 +55,6 @@ describe('Font Switch in the panel', () => {
     expect(main).toContain('fontSwitchDropTarget(');
     expect(main).toContain('inDesignAdapter(');
     expect(main).toContain('photoshopAdapter(');
-    expect(indexHtml).toContain('Drop a font from Font Manager here');
+    expect(indexHtml).toContain('Drop a font from Font Fu here');
   });
 });

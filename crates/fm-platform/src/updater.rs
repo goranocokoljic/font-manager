@@ -93,7 +93,7 @@ pub fn distribution_for(
 
 /// The folders an update writes into, all of which this user must be able to
 /// write: the program's folder on Windows (the installer replaces it); on
-/// macOS the folder holding `Font Manager.app` and the bundle itself (the
+/// macOS the folder holding `Font Fu.app` and the bundle itself (the
 /// updater swaps the bundle, and moving a folder to another parent needs
 /// write access to it); the AppImage's folder on Linux. `None` when it
 /// cannot be told.
@@ -154,9 +154,9 @@ mod tests {
 
     // Forward slashes: Windows reads them as separators, and so does the
     // test on macOS and Linux.
-    const WIN_DIR: &str = "C:/Users/u/AppData/Local/Programs/Font Manager";
-    const WIN_EXE: &str = "C:/Users/u/AppData/Local/Programs/Font Manager/font-manager.exe";
-    const MAC_EXE: &str = "/Applications/Font Manager.app/Contents/MacOS/font-manager";
+    const WIN_DIR: &str = "C:/Users/u/AppData/Local/Programs/Font Fu";
+    const WIN_EXE: &str = "C:/Users/u/AppData/Local/Programs/Font Fu/font-manager.exe";
+    const MAC_EXE: &str = "/Applications/Font Fu.app/Contents/MacOS/font-manager";
     const LINUX_EXE: &str = "/tmp/.mount_FontMa/usr/bin/font-manager";
 
     fn exe(os: Os) -> &'static Path {
@@ -224,7 +224,7 @@ mod tests {
             vec![
                 PathBuf::from(WIN_DIR),
                 PathBuf::from("/Applications"),
-                PathBuf::from("/Applications/Font Manager.app"),
+                PathBuf::from("/Applications/Font Fu.app"),
                 PathBuf::from("/home/u/Apps"),
             ]
         );
@@ -245,7 +245,7 @@ mod tests {
         // root or another account: swapping it would ask for admin rights.
         let only_parent = |p: &Path| p == Path::new("/Applications");
         assert_eq!(on(Os::MacOs, &none, &only_parent), Distribution::NeedsAdmin);
-        let only_bundle = |p: &Path| p == Path::new("/Applications/Font Manager.app");
+        let only_bundle = |p: &Path| p == Path::new("/Applications/Font Fu.app");
         assert_eq!(on(Os::MacOs, &none, &only_bundle), Distribution::NeedsAdmin);
     }
 

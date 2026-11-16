@@ -35,7 +35,7 @@ pub const WINDOW_ONLY: &[&str] = &[
 pub fn window_only(method: &str) -> ApiError {
     ApiError::new(
         ErrorCode::PermissionDenied,
-        "Only the Font Manager window can change what AI assistants may do.",
+        "Only the Font Fu window can change what AI assistants may do.",
     )
     .with_detail(format!("{method} is not served to programs"))
 }

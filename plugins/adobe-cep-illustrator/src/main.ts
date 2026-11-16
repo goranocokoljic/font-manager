@@ -44,7 +44,7 @@ const nodeRequire = cep.cep_node?.require ?? cep.require;
 
 function transports(): Transport[] {
   // Without Node (a manifest edited to turn it off) the app cannot be found:
-  // the extension says "Font Manager is not running".
+  // the extension says "Font Fu is not running".
   if (!nodeRequire) return [];
   const os = nodeRequire('os') as NodeOs;
   const fs = nodeRequire('fs') as NodeFs;

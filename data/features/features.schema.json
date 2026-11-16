@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/features/features.schema.json",
-  "title": "Font Manager feature catalog",
+  "title": "Font Fu feature catalog",
   "description": "Every registered OpenType layout feature tag with a friendly name, a group and a sample text. features.json follows it.",
   "type": "object",
   "additionalProperties": false,

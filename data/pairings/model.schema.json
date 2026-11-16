@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/pairings/model.schema.json",
-  "title": "Font Manager pairing model",
+  "title": "Font Fu pairing model",
   "description": "The logistic pairing model that `cargo run -p fm-core --example train_pairings` writes from pairings.json and fixtures/fonts. Generated: do not edit by hand.",
   "type": "object",
   "additionalProperties": false,

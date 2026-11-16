@@ -172,9 +172,7 @@ describe('Similar to the base in the Compare sheet (E48.3)', () => {
     findSimilar.mockRejectedValueOnce({ code: 'internal', message: 'Broken.', detail: '' });
     s.onlyThis(f(1));
     await flushPromises();
-    expect(band().get('[role="alert"]').text()).toContain(
-      'Font Manager could not find similar fonts.',
-    );
+    expect(band().get('[role="alert"]').text()).toContain('Font Fu could not find similar fonts.');
   });
 
   it('plays the row-to-face move for an added face, and not under reduced motion', async () => {

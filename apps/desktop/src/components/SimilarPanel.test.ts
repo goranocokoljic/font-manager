@@ -123,7 +123,7 @@ describe('SimilarPanel', () => {
     const { wrapper } = await setup({ similar: 'fail' });
     expect(wrapper.findAll('button.result')).toHaveLength(0);
     expect(wrapper.get('[role="alert"]').text()).toBe(
-      'Font Manager could not find similar fonts. Finding similar fonts is not available yet.',
+      'Font Fu could not find similar fonts. Finding similar fonts is not available yet.',
     );
   });
 });

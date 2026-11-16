@@ -262,7 +262,7 @@ pub fn handle(api: &dyn Api, line: &[u8]) -> Vec<u8> {
                 &ApiError::new(
                     ErrorCode::Unsupported,
                     format!(
-                        "The client sent message version {v}, but Font Manager speaks version {ENVELOPE_VERSION}."
+                        "The client sent message version {v}, but Font Fu speaks version {ENVELOPE_VERSION}."
                     ),
                 ),
             );
@@ -295,16 +295,13 @@ pub fn handle(api: &dyn Api, line: &[u8]) -> Vec<u8> {
             &id,
             &ApiError::new(
                 ErrorCode::Unsupported,
-                format!("Font Manager has no method `{method}`."),
+                format!("Font Fu has no method `{method}`."),
             ),
         ),
         Err(_) => error_reply(
             &id,
-            &ApiError::new(
-                ErrorCode::Internal,
-                "The request failed inside Font Manager.",
-            )
-            .with_detail(format!("`{method}` panicked")),
+            &ApiError::new(ErrorCode::Internal, "The request failed inside Font Fu.")
+                .with_detail(format!("`{method}` panicked")),
         ),
     }
 }

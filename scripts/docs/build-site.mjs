@@ -63,7 +63,7 @@ function layout(title, nav, body) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} · Font Manager Help</title>
+<title>${escapeHtml(title)} · Font Fu Help</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -105,7 +105,7 @@ export function buildSite({ src = SOURCE_DIR, out = DEFAULT_OUT, pages = PAGES }
   for (const page of rendered) {
     writeFileSync(join(out, `${page.slug}.html`), layout(page.title, navList(rendered, page.slug), page.html));
   }
-  const index = `<h1>Font Manager Help</h1>\n<ul>\n${rendered
+  const index = `<h1>Font Fu Help</h1>\n<ul>\n${rendered
     .map((p) => `<li><a href="${p.slug}.html">${escapeHtml(p.title)}</a></li>`)
     .join('\n')}\n</ul>`;
   writeFileSync(join(out, 'index.html'), layout('Help', navList(rendered, 'index'), index));

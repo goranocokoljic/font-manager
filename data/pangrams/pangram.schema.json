@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/pangrams/pangram.schema.json",
-  "title": "Font Manager pangram file",
+  "title": "Font Fu pangram file",
   "description": "Pangrams for the preview, one per language preset of data/charsets at most. pangrams.json follows it.",
   "type": "object",
   "additionalProperties": false,

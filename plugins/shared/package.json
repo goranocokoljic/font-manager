@@ -2,7 +2,7 @@
   "name": "@fm/plugin-shared",
   "private": true,
   "type": "module",
-  "description": "Framework-free client of the Font Manager local API for the design-app plugins.",
+  "description": "Framework-free client of the Font Fu local API for the design-app plugins.",
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts",

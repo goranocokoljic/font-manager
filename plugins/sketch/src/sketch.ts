@@ -93,7 +93,7 @@ export function sketchPlugin(host: SketchPluginHost): SketchHandlers {
       await work();
     } catch (e) {
       // A Sketch API that threw; never into Sketch's event loop.
-      ui.notify(`Font Manager: ${String(e)}`);
+      ui.notify(`Font Fu: ${String(e)}`);
     } finally {
       release();
     }

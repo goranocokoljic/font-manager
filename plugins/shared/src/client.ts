@@ -18,7 +18,7 @@ import {
 } from './api';
 
 /** The one message a plugin shows when it cannot reach the app. */
-export const NOT_RUNNING = 'Font Manager is not running';
+export const NOT_RUNNING = 'Font Fu is not running';
 
 /** An answer of `fetch`, the part the client reads. */
 export interface HttpAnswer {
@@ -113,7 +113,7 @@ export function toApiError(value: unknown, detail: string): ApiError {
   if (typeof e.code === 'string' && typeof e.message === 'string') return e as ApiError;
   return {
     code: 'internal',
-    message: 'Font Manager gave an answer the plugin does not understand.',
+    message: 'Font Fu gave an answer the plugin does not understand.',
     detail,
   };
 }

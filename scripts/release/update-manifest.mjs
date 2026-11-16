@@ -87,7 +87,7 @@ export function findReleaseFiles(bundleDir, os, arch, version) {
 
 /** Which updater artifact a release asset name is: `{ os, arch, installer, isDefault }`. */
 export function artifactOf(name, version) {
-  const prefix = `font-manager_${version}_`;
+  const prefix = `font-fu_${version}_`;
   if (!name.startsWith(prefix)) return null;
   const m = /^(windows|macos|linux)_(x64|arm64)(.+)$/.exec(name.slice(prefix.length));
   if (!m) return null;

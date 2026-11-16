@@ -1,6 +1,6 @@
 [package]
 name = "fm-mcp"
-description = "Font Manager MCP server adapter over fm-api."
+description = "Font Fu MCP server adapter over fm-api."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

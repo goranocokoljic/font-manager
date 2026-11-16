@@ -106,15 +106,15 @@ describe('assetName', () => {
   test('names every installer kind with version, OS and arch', () => {
     assert.equal(
       assetName(build, 'windows', 'x64', '.msi'),
-      'font-manager_0.1.0-1a2b3c4_windows_x64.msi',
+      'font-fu_0.1.0-1a2b3c4_windows_x64.msi',
     );
     assert.equal(
       assetName(build, 'macos', 'arm64', '.dmg'),
-      'font-manager_0.1.0-1a2b3c4_macos_arm64.dmg',
+      'font-fu_0.1.0-1a2b3c4_macos_arm64.dmg',
     );
     assert.equal(
       assetName(build, 'linux', 'x64', '.AppImage'),
-      'font-manager_0.1.0-1a2b3c4_linux_x64.AppImage',
+      'font-fu_0.1.0-1a2b3c4_linux_x64.AppImage',
     );
   });
 
@@ -129,34 +129,34 @@ describe('findInstallers', () => {
 
   test('finds the .msi and the NSIS .exe on Windows', () => {
     const root = bundle([
-      'msi/Font Manager_0.1.0_x64_en-US.msi',
-      'nsis/Font Manager_0.1.0_x64-setup.exe',
+      'msi/Font Fu_0.1.0_x64_en-US.msi',
+      'nsis/Font Fu_0.1.0_x64-setup.exe',
       'nsis/unrelated.nsi',
     ]);
     try {
       const found = findInstallers(root, 'windows', 'x64', build);
       assert.deepEqual(
         found.map((f) => f.name),
-        ['font-manager_0.1.0-1a2b3c4_windows_x64.msi', 'font-manager_0.1.0-1a2b3c4_windows_x64.exe'],
+        ['font-fu_0.1.0-1a2b3c4_windows_x64.msi', 'font-fu_0.1.0-1a2b3c4_windows_x64.exe'],
       );
-      assert.ok(found[1].from.endsWith('Font Manager_0.1.0_x64-setup.exe'));
+      assert.ok(found[1].from.endsWith('Font Fu_0.1.0_x64-setup.exe'));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
   test('finds the .dmg on macOS and the AppImage on Linux', () => {
-    const root = bundle(['dmg/Font Manager_0.1.0_aarch64.dmg', 'appimage/font-manager_0.1.0_amd64.AppImage']);
+    const root = bundle(['dmg/Font Fu_0.1.0_aarch64.dmg', 'appimage/font-manager_0.1.0_amd64.AppImage']);
     try {
-      assert.equal(findInstallers(root, 'macos', 'arm64', build)[0].name, 'font-manager_0.1.0-1a2b3c4_macos_arm64.dmg');
-      assert.equal(findInstallers(root, 'linux', 'x64', build)[0].name, 'font-manager_0.1.0-1a2b3c4_linux_x64.AppImage');
+      assert.equal(findInstallers(root, 'macos', 'arm64', build)[0].name, 'font-fu_0.1.0-1a2b3c4_macos_arm64.dmg');
+      assert.equal(findInstallers(root, 'linux', 'x64', build)[0].name, 'font-fu_0.1.0-1a2b3c4_linux_x64.AppImage');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
   test('fails when an installer is missing', () => {
-    const root = bundle(['msi/Font Manager_0.1.0_x64_en-US.msi']);
+    const root = bundle(['msi/Font Fu_0.1.0_x64_en-US.msi']);
     try {
       assert.throws(() => findInstallers(root, 'windows', 'x64', build), /expected one \*-setup\.exe .* found 0/);
       assert.throws(() => findInstallers(join(root, 'nope'), 'linux', 'x64', build), /found 0/);
@@ -166,7 +166,7 @@ describe('findInstallers', () => {
   });
 
   test('fails when a stale second installer would make the pick ambiguous', () => {
-    const root = bundle(['dmg/Font Manager_0.0.9_aarch64.dmg', 'dmg/Font Manager_0.1.0_aarch64.dmg']);
+    const root = bundle(['dmg/Font Fu_0.0.9_aarch64.dmg', 'dmg/Font Fu_0.1.0_aarch64.dmg']);
     try {
       assert.throws(() => findInstallers(root, 'macos', 'arm64', build), /found 2/);
     } finally {
@@ -189,7 +189,7 @@ describe('CLI', () => {
         SCRIPT, 'collect', '--os', 'linux', '--arch', 'x64', '--sha', SHA, '--bundle', root, '--out', out,
       ]);
       const [name] = readdirSync(out);
-      assert.match(name, /^font-manager_\d+\.\d+\.\d+-1a2b3c4_linux_x64\.AppImage$/);
+      assert.match(name, /^font-fu_\d+\.\d+\.\d+-1a2b3c4_linux_x64\.AppImage$/);
       assert.equal(readFileSync(join(out, name), 'utf8'), 'appimage/font-manager_0.1.0_amd64.AppImage');
     } finally {
       rmSync(root, { recursive: true, force: true });

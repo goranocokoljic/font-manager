@@ -103,11 +103,11 @@ mod tests {
         let entry = WindowsAutostart::new(
             RUN_KEY,
             "x",
-            Path::new(r"C:\Program Files\Font Manager\fm-app.exe"),
+            Path::new(r"C:\Program Files\Font Fu\fm-app.exe"),
         );
         assert_eq!(
             entry.command(),
-            r#""C:\Program Files\Font Manager\fm-app.exe" --autostart"#
+            r#""C:\Program Files\Font Fu\fm-app.exe" --autostart"#
         );
         assert!(is_ours(entry.command()));
         assert!(!is_ours(OsStr::new(r"C:\Other\app.exe")));

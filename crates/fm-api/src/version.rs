@@ -129,7 +129,7 @@ fn negotiate(major: u32, served: ApiVersion, client: ApiVersion) -> ApiResult<()
     }
     let update = if client.major > major {
         format!(
-            "update Font Manager to a version that serves API {}.x",
+            "update Font Fu to a version that serves API {}.x",
             client.major
         )
     } else {
@@ -137,7 +137,7 @@ fn negotiate(major: u32, served: ApiVersion, client: ApiVersion) -> ApiResult<()
     };
     Err(ApiError::new(
         ErrorCode::Unsupported,
-        format!("The client speaks API {client} but Font Manager serves API {served}: {update}."),
+        format!("The client speaks API {client} but Font Fu serves API {served}: {update}."),
     ))
 }
 
@@ -250,8 +250,8 @@ mod tests {
         assert_eq!(
             e.message,
             format!(
-                "The client speaks API {client} but Font Manager serves API {API_VERSION}: \
-                 update Font Manager to a version that serves API {}.x.",
+                "The client speaks API {client} but Font Fu serves API {API_VERSION}: \
+                 update Font Fu to a version that serves API {}.x.",
                 client.major
             )
         );
@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(e.code, ErrorCode::Unsupported);
         assert_eq!(
             e.message,
-            "The client speaks API 1.9.0 but Font Manager serves API 2.1.0: update the client to a version built for API 2.x."
+            "The client speaks API 1.9.0 but Font Fu serves API 2.1.0: update the client to a version built for API 2.x."
         );
         assert!(negotiate(2, v(2, 1, 0), v(2, 0, 7)).is_ok());
     }
@@ -281,7 +281,7 @@ mod tests {
         assert_eq!(
             e.message,
             format!(
-                "The client speaks API {API_VERSION} but Font Manager serves API {newer}: update the client to a version built for API {}.x.",
+                "The client speaks API {API_VERSION} but Font Fu serves API {newer}: update the client to a version built for API {}.x.",
                 newer.major
             )
         );

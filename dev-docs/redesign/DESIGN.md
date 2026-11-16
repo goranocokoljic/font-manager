@@ -1,4 +1,4 @@
-# Font Manager — Design North Star
+# Font Fu — Design North Star
 
 This file is the single source of truth for every UI/UX iteration. Read it fully before
 changing anything. When a decision here conflicts with what is currently in the code, this

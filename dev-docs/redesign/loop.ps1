@@ -1,4 +1,4 @@
-# Font Manager UI/UX iteration loop (Windows / PowerShell).
+# Font Fu UI/UX iteration loop (Windows / PowerShell).
 # Usage (from the repo root):  .\dev-docs\redesign\loop.ps1 -Start 1 -Count 10
 # Every 5th iteration runs REVIEW.md (the critic) instead of ITERATE.md (the generator);
 # both prompts live next to this script. Run it in its own terminal, not in a go-harness lane.

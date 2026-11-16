@@ -15,11 +15,11 @@ use fm_api::{ApiResult, Event, FaceId};
 use fm_platform::{AUTOSTART_ARG, Os, TraySupport};
 
 /// The tray menu item that shows the main window.
-pub const MENU_OPEN: &str = "Open Font Manager";
+pub const MENU_OPEN: &str = "Open Font Fu";
 /// The tray menu item that deactivates every session font.
 pub const MENU_DEACTIVATE_SESSION: &str = "Deactivate session fonts";
 /// The tray menu item that quits the app.
-pub const MENU_QUIT: &str = "Quit Font Manager";
+pub const MENU_QUIT: &str = "Quit Font Fu";
 
 /// The menu item that opens Settings, in the menu bar and the tray.
 pub const MENU_SETTINGS: &str = "Settings…";
@@ -157,7 +157,7 @@ pub fn restore_session(
 /// The platform note for an app whose window quits it when closed: the
 /// design-app plugins (E29) reach the app over its IPC endpoint, which ends
 /// with the app.
-pub const PLUGINS_NEED_THE_WINDOW: &str = "Plugins in design apps can reach Font Manager only \
+pub const PLUGINS_NEED_THE_WINDOW: &str = "Plugins in design apps can reach Font Fu only \
                                            while its window is open, because closing the window \
                                            quits it.";
 
@@ -178,12 +178,12 @@ pub fn platform_notes(
         notes.push(match os {
             Os::Linux => {
                 "This desktop shows no tray items (no StatusNotifier host), so closing the \
-                          window quits Font Manager and ends session activations. KDE Plasma and \
+                          window quits Font Fu and ends session activations. KDE Plasma and \
                           GNOME with the AppIndicator extension show the tray item."
                     .to_owned()
             }
             Os::Windows | Os::MacOs => "The tray item could not be made, so closing the window \
-                                        quits Font Manager and ends session activations."
+                                        quits Font Fu and ends session activations."
                 .to_owned(),
         });
     }
@@ -200,8 +200,8 @@ pub fn platform_notes(
     }
     if sandboxed {
         notes.push(
-            "Inside the Flatpak sandbox Font Manager cannot add itself to the apps that \
-             start when you log in, so Start at login is not shown. Add Font Manager in \
+            "Inside the Flatpak sandbox Font Fu cannot add itself to the apps that \
+             start when you log in, so Start at login is not shown. Add Font Fu in \
              your desktop's startup settings instead."
                 .to_owned(),
         );

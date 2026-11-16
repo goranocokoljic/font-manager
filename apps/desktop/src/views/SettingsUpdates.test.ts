@@ -58,7 +58,7 @@ describe('Updates (Settings → About)', () => {
     await c.updateSettings({ checkUpdatesAutomatically: true });
     const w = await mountAt('/');
     expect(check).toHaveBeenCalledTimes(1);
-    expect(dialog(w).text()).toContain('Font Manager 0.1.1 is available');
+    expect(dialog(w).text()).toContain('Font Fu 0.1.1 is available');
     w.unmount();
   });
 
@@ -86,7 +86,7 @@ describe('Updates (Settings → About)', () => {
     client();
     const w = await mountAt('/settings?section=about');
     await checkNow(w);
-    expect(w.get('.updates [role="status"]').text()).toBe('Font Manager is up to date.');
+    expect(w.get('.updates [role="status"]').text()).toBe('Font Fu is up to date.');
     expect(dialog(w).exists()).toBe(false);
     w.unmount();
   });
@@ -104,7 +104,7 @@ describe('Updates (Settings → About)', () => {
     const w = await mountAt('/settings?section=about');
     await checkNow(w);
     const d = dialog(w);
-    expect(d.get('#fm-update-title').text()).toBe('Font Manager 0.1.1 is available');
+    expect(d.get('#fm-update-title').text()).toBe('Font Fu 0.1.1 is available');
     expect(d.text()).toContain('You have version 0.1.0.');
     expect(d.get('[aria-label="Release notes"]').text()).toContain('Scans skip unreadable folders');
     expect(installs).toEqual([]);
@@ -120,7 +120,7 @@ describe('Updates (Settings → About)', () => {
     await button(w, 'Install and restart')!.trigger('click');
     await flushPromises();
     expect(installs).toEqual([{ version: '0.1.1', confirmMajor: false }]);
-    expect(dialog(w).get('[role="status"]').text()).toContain('Font Manager restarts');
+    expect(dialog(w).get('[role="status"]').text()).toContain('Font Fu restarts');
     w.unmount();
   });
 
@@ -142,7 +142,7 @@ describe('Updates (Settings → About)', () => {
 
     await button(w, 'Show version 1.0.0')!.trigger('click');
     await flushPromises();
-    expect(dialog(w).get('#fm-update-title').text()).toBe('Font Manager 1.0.0 is available');
+    expect(dialog(w).get('#fm-update-title').text()).toBe('Font Fu 1.0.0 is available');
     await button(w, 'Install and restart')!.trigger('click');
     await flushPromises();
     await button(w, 'Install version 1.0.0')!.trigger('click');
@@ -158,7 +158,7 @@ describe('Updates (Settings → About)', () => {
     await button(w, 'Install and restart')!.trigger('click');
     await flushPromises();
     expect(dialog(w).get('[role="alert"]').text()).toContain(
-      "not signed with Font Manager's release key",
+      "not signed with Font Fu's release key",
     );
     expect(installs).toEqual([]);
     expect(button(w, 'Install and restart')!.attributes('disabled')).toBeUndefined();

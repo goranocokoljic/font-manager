@@ -1114,7 +1114,7 @@ fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
     assert_eq!(labels()[0], "Getting started");
     assert_eq!(
         chrome(),
-        ("Help".to_owned(), vec!["About Font Manager".to_owned()])
+        ("Help".to_owned(), vec!["About Font Fu".to_owned()])
     );
 
     send(
@@ -1137,7 +1137,7 @@ fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
     );
     assert_eq!(
         chrome(),
-        ("Hilfe".to_owned(), vec!["Über Font Manager".to_owned()])
+        ("Hilfe".to_owned(), vec!["Über Font Fu".to_owned()])
     );
 
     let err = send(
@@ -1182,11 +1182,11 @@ fn set_shell_locale_relabels_the_tray_menu() {
     assert_eq!(
         labels(),
         [
-            "Open Font Manager",
+            "Open Font Fu",
             "Settings…",
             "No fonts active",
             "Deactivate session fonts",
-            "Quit Font Manager",
+            "Quit Font Fu",
         ]
     );
 
@@ -1200,11 +1200,11 @@ fn set_shell_locale_relabels_the_tray_menu() {
     assert_eq!(
         labels(),
         [
-            "Font Manager öffnen",
+            "Font Fu öffnen",
             "Einstellungen…",
             "Keine Schriften aktiv",
             "Sitzungsschriften deaktivieren",
-            "Font Manager beenden",
+            "Font Fu beenden",
         ]
     );
 }

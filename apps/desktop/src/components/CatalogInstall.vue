@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The progress line of an Install in the catalog browser (E22.7). The first Install, before a
-// download folder is set, proposes `<Documents>/Font Manager Fonts` with "Use this folder"
+// download folder is set, proposes `<Documents>/Font Fu Fonts` with "Use this folder"
 // and "Choose…" (the native folder picker). Then it says downloading, scanning, done
 // ("Installed Alegreya: 6 styles active") or why it failed. The core does the work; this
 // line only shows the store's state.

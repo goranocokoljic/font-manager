@@ -1,6 +1,6 @@
 # go-harness — user manual
 
-`go-harness.ps1` drives Font Manager stories from a GitHub issue to a green,
+`go-harness.ps1` drives Font Fu stories from a GitHub issue to a green,
 reviewed, ready PR. It is tr-harness (toprope, profile) adapted to this repo,
 as briefed in `dev-docs/HARNESS-ADAPTATION.md`.
 

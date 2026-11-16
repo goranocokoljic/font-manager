@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Font Manager does not work as it should.
+description: Something in Font Fu does not work as it should.
 labels: ['bug']
 body:
   - type: markdown
@@ -27,7 +27,7 @@ body:
   - type: input
     id: app-version
     attributes:
-      label: Font Manager version
+      label: Font Fu version
       description: Settings → About shows it. For a nightly build, the full name, for example `0.1.0-1a2b3c4`.
     validations:
       required: true

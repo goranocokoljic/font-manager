@@ -3,7 +3,7 @@
     "name": "Deutsch"
   },
   "app": {
-    "name": "Font Manager",
+    "name": "Font Fu",
     "openSettings": "Einstellungen öffnen",
     "showConflicts": "Schriftkonflikte anzeigen",
     "helpAction": "Hilfe: {page}",
@@ -42,9 +42,9 @@
     "internal": "Etwas ist schiefgegangen. Die Protokolldatei enthält die Einzelheiten."
   },
   "shell": {
-    "helpWindowTitle": "Font Manager – Hilfe",
+    "helpWindowTitle": "Font Fu – Hilfe",
     "helpMenu": "Hilfe",
-    "about": "Über Font Manager",
+    "about": "Über Font Fu",
     "settings": "Einstellungen…",
     "fileMenu": "Datei",
     "helpPages": {
@@ -56,10 +56,10 @@
       "mcp": "KI-Assistenten"
     },
     "tray": {
-      "tooltip": "Font Manager",
-      "open": "Font Manager öffnen",
+      "tooltip": "Font Fu",
+      "open": "Font Fu öffnen",
       "deactivateSession": "Sitzungsschriften deaktivieren",
-      "quit": "Font Manager beenden",
+      "quit": "Font Fu beenden",
       "active": {
         "zero": "Keine Schriften aktiv",
         "one": "{count} Schrift aktiv",
@@ -182,7 +182,7 @@
       "full": "Der Vergleich fasst {max} Schriften. Entferne eine, um {name} hinzuzufügen.",
       "loading": "Ähnliche Schriften werden gesucht …",
       "none": "Keine andere Schrift der Bibliothek sieht aus wie {name}.",
-      "error": "Font Manager konnte keine ähnlichen Schriften finden. {message}"
+      "error": "Font Fu konnte keine ähnlichen Schriften finden. {message}"
     },
     "toasts": {
       "already": "{name} ist bereits zum Vergleich angeheftet.",
@@ -1426,9 +1426,9 @@
       "connectsHint": "Wenn Sie {name} einschalten, verbindet sich die App mit dem Internet, um die Schriftliste zu laden. Vorschauen werden beim Durchsuchen geladen.",
       "downloadFolder": "Ordner für installierte Schriften",
       "downloadFolderNone": "Noch nicht gewählt. Das erste Installieren fragt danach.",
-      "downloadFolderHint": "Installieren legt die geladenen Schriften in diesen Ordner. In keinen anderen Ordner schreibt Font Manager, ohne zu fragen.",
+      "downloadFolderHint": "Installieren legt die geladenen Schriften in diesen Ordner. In keinen anderen Ordner schreibt Font Fu, ohne zu fragen.",
       "fetchMissing": "Schriften, die ein Dokument braucht, aus den eingeschalteten Katalogen laden",
-      "fetchMissingHint": "Öffnet ein Designprogramm ein Dokument mit einer Schrift, die deine Bibliothek nicht hat, sucht Font Manager sie in den bereits geladenen Schriftlisten und installiert die Familie in den Ordner oben. Geladen wird nur aus Katalogen, die du eingeschaltet hast.",
+      "fetchMissingHint": "Öffnet ein Designprogramm ein Dokument mit einer Schrift, die deine Bibliothek nicht hat, sucht Font Fu sie in den bereits geladenen Schriftlisten und installiert die Familie in den Ordner oben. Geladen wird nur aus Katalogen, die du eingeschaltet hast.",
       "fetchMissingNeeds": "Wähle zuerst den Ordner für installierte Schriften und schalte einen Katalog ein.",
       "change": "Ändern…"
     },
@@ -1500,9 +1500,9 @@
       "conflictReplace": "Die andere Schrift ohne Nachfrage für diese Sitzung ersetzen",
       "reactivateOnLaunch": "Beim Start erneut aktivieren: die Schriften der letzten Sitzung wieder aktivieren, wenn die App startet",
       "keepInTray": "Im Infobereich weiterlaufen, wenn das Fenster geschlossen wird",
-      "keepInTrayHint": "Sitzungsschriften bleiben aktiv, solange die App im Infobereich läuft. Ist das aus, beendet das Schließen des Fensters Font Manager und die Sitzungsaktivierungen.",
+      "keepInTrayHint": "Sitzungsschriften bleiben aktiv, solange die App im Infobereich läuft. Ist das aus, beendet das Schließen des Fensters Font Fu und die Sitzungsaktivierungen.",
       "startAtLogin": "Bei der Anmeldung starten",
-      "startAtLoginHint": "Font Manager startet bei deiner Anmeldung im Infobereich, ohne sein Fenster zu öffnen.",
+      "startAtLoginHint": "Font Fu startet bei deiner Anmeldung im Infobereich, ohne sein Fenster zu öffnen.",
       "startAtLoginFailed": "„Bei der Anmeldung starten“ konnte nicht geändert werden."
     },
     "appearance": {
@@ -1522,7 +1522,7 @@
       "logsFolderLabel": "Protokollordner"
     },
     "localApi": {
-      "note": "Andere Programme auf diesem Computer, etwa der Befehl fm und Plug-ins für Design-Apps, erreichen Font Manager über diese Adresse, solange die App läuft. Jede Anfrage braucht das Token.",
+      "note": "Andere Programme auf diesem Computer, etwa der Befehl fm und Plug-ins für Design-Apps, erreichen Font Fu über diese Adresse, solange die App läuft. Jede Anfrage braucht das Token.",
       "address": "Adresse",
       "addressLabel": "Adresse der lokalen API",
       "notRunning": "Läuft nicht.",
@@ -1537,9 +1537,9 @@
       "regenerated": "Ein neues Token wurde erzeugt. Das alte Token gilt nicht mehr."
     },
     "mcp": {
-      "note": "KI-Assistenten wie Claude Code können Font Manager über das Model Context Protocol (MCP) nutzen. Sie erreichen die App nur auf diesem Computer, während sie läuft, und mit dem Token der lokalen API.",
+      "note": "KI-Assistenten wie Claude Code können Font Fu über das Model Context Protocol (MCP) nutzen. Sie erreichen die App nur auf diesem Computer, während sie läuft, und mit dem Token der lokalen API.",
       "enable": "KI-Assistenten erlauben (MCP-Server)",
-      "enableHint": "Standardmäßig aus. Wenn aus, beantwortet Font Manager keine MCP-Anfragen.",
+      "enableHint": "Standardmäßig aus. Wenn aus, beantwortet Font Fu keine MCP-Anfragen.",
       "address": "Adresse",
       "addressLabel": "Adresse des MCP-Servers",
       "addressHint": "Die Adresse ändert sich bei jedem Start der App. Kopieren Sie das Snippet nach einem Neustart erneut.",
@@ -1575,20 +1575,20 @@
     "check": "Nach Updates suchen",
     "showVersion": "Version {version} anzeigen",
     "checking": "Suche nach Updates…",
-    "upToDate": "Font Manager ist auf dem neuesten Stand.",
+    "upToDate": "Font Fu ist auf dem neuesten Stand.",
     "available": "Version {version} ist verfügbar.",
-    "checkAutomatically": "Automatisch suchen, wenn Font Manager startet",
-    "checkAutomaticallyHint": "Font Manager kontaktiert seinen Release-Server nur, wenn du suchst oder wenn das hier an ist. Nichts wird installiert, bevor du es bestätigst.",
+    "checkAutomatically": "Automatisch suchen, wenn Font Fu startet",
+    "checkAutomaticallyHint": "Font Fu kontaktiert seinen Release-Server nur, wenn du suchst oder wenn das hier an ist. Nichts wird installiert, bevor du es bestätigst.",
     "dialog": {
-      "title": "Font Manager {version} ist verfügbar",
+      "title": "Font Fu {version} ist verfügbar",
       "currentVersion": "Du hast Version {version}.",
       "released": "Veröffentlicht am {date}.",
-      "installQuits": "Die Installation beendet Font Manager und damit die Sitzungsaktivierungen und startet die neue Version.",
+      "installQuits": "Die Installation beendet Font Fu und damit die Sitzungsaktivierungen und startet die neue Version.",
       "releaseNotes": "Versionshinweise",
       "noNotes": "Diese Version hat keine Hinweise.",
       "majorTitle": "Ein großes Update installieren?",
-      "majorLead": "Version {version} ist ein großes Update gegenüber {current}. Es kann ändern, wie Font Manager funktioniert und was seine Einstellungen bedeuten. Installiere es nur, wenn du dafür bereit bist.",
-      "installing": "Wird installiert… Font Manager startet neu, wenn es fertig ist.",
+      "majorLead": "Version {version} ist ein großes Update gegenüber {current}. Es kann ändern, wie Font Fu funktioniert und was seine Einstellungen bedeuten. Installiere es nur, wenn du dafür bereit bist.",
+      "installing": "Wird installiert… Font Fu startet neu, wenn es fertig ist.",
       "later": "Später",
       "installVersion": "Version {version} installieren",
       "installAndRestart": "Installieren und neu starten"
@@ -1636,7 +1636,7 @@
     "pairingsList": "Vorgeschlagene Paarungen",
     "pairingsLoading": "Paarungen werden gesucht…",
     "pairingsNone": "Noch keine Schrift in deiner Bibliothek passt zu dieser Familie.",
-    "pairingsError": "Font Manager konnte keine Paarungen vorschlagen. {message}",
+    "pairingsError": "Font Fu konnte keine Paarungen vorschlagen. {message}",
     "browseCatalogs": "Kataloge durchsuchen",
     "sectionLater": "Dieser Bereich kommt in einem späteren Update.",
     "textHint": "Lesetest · drei Größen, Ihre Zeilenlänge",
@@ -2021,7 +2021,7 @@
       "action": "Installieren",
       "actionLabel": "{name} installieren",
       "proposeTitle": "Wohin sollen installierte Schriften?",
-      "propose": "Font Manager legt die Schriften, die Sie installieren, in einen Ordner: {folder}. Der Ordner wird angelegt, wenn Sie Diesen Ordner verwenden wählen.",
+      "propose": "Font Fu legt die Schriften, die Sie installieren, in einen Ordner: {folder}. Der Ordner wird angelegt, wenn Sie Diesen Ordner verwenden wählen.",
       "useFolder": "Diesen Ordner verwenden",
       "choose": "Auswählen…",
       "folderTitle": "Ordner für installierte Schriften auswählen",
@@ -2061,7 +2061,7 @@
     "results": "Ähnliche Schriften",
     "loading": "Ähnliche Schriften werden gesucht …",
     "none": "Keine andere Schrift der Bibliothek sieht wie {name} aus.",
-    "error": "Font Manager konnte keine ähnlichen Schriften finden. {message}",
+    "error": "Font Fu konnte keine ähnlichen Schriften finden. {message}",
     "score": "{percent} % ähnlich",
     "noScore": "Keine Bewertung",
     "resultLabel": "{name}, {score}",
@@ -2092,7 +2092,7 @@
       "other": "{count} Schriften aktivieren"
     },
     "allActive": "Jede Schrift dieses Dokuments, die die Bibliothek hat, ist aktiv.",
-    "missingNote": "Fehlende Schriften sind nicht in der Bibliothek. Font Manager lädt sie nicht herunter.",
+    "missingNote": "Fehlende Schriften sind nicht in der Bibliothek. Font Fu lädt sie nicht herunter.",
     "empty": "Dieses Dokument nennt keine Schriften."
   },
   "mcpConfirm": {

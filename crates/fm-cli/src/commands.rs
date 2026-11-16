@@ -427,7 +427,7 @@ pub fn activation_exit(outcomes: &[ActivationOutcome]) -> Exit {
 pub fn needs_the_app() -> Failure {
     ApiError::new(
         ErrorCode::Unsupported,
-        "Font Manager must be running to activate fonts; start it and try again",
+        "Font Fu must be running to activate fonts; start it and try again",
     )
     .into()
 }
@@ -517,7 +517,7 @@ pub fn import_set(api: &dyn Api, file: &Path) -> Result<ImportSetResponse, Failu
     let export: SetExport = serde_json::from_str(&text).map_err(|e| {
         ApiError::new(
             ErrorCode::InvalidRequest,
-            format!("{} is not a set exported by Font Manager.", file.display()),
+            format!("{} is not a set exported by Font Fu.", file.display()),
         )
         .with_detail(e.to_string())
     })?;

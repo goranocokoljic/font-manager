@@ -171,7 +171,7 @@ test('an error from the core shows a plain message', async ({ page }) => {
   await page.goto('/?mockSimilar=2#/family/1?face=1');
   await page.getByRole('button', { name: 'Find similar' }).click();
   await expect(panel(page).getByRole('alert')).toHaveText(
-    'Font Manager could not find similar fonts. Finding similar fonts is not available yet.',
+    'Font Fu could not find similar fonts. Finding similar fonts is not available yet.',
   );
   await expect(results(page)).toHaveCount(0);
 });

@@ -2,7 +2,7 @@
   "name": "@fm/adobe-uxp",
   "private": true,
   "type": "module",
-  "description": "Font Manager's UXP plugin for InDesign and Photoshop.",
+  "description": "Font Fu's UXP plugin for InDesign and Photoshop.",
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit",

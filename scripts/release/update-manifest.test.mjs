@@ -48,9 +48,9 @@ function bundle(files) {
 }
 
 const ALL_ASSETS = [
-  `font-manager_${V}_windows_x64.exe`,
-  `font-manager_${V}_macos_arm64.app.tar.gz`,
-  `font-manager_${V}_linux_x64.AppImage`,
+  `font-fu_${V}_windows_x64.exe`,
+  `font-fu_${V}_macos_arm64.app.tar.gz`,
+  `font-fu_${V}_linux_x64.AppImage`,
 ].map((name) => ({ name, signature: SIG }));
 
 const manifest = () =>
@@ -78,20 +78,20 @@ describe('buildManifest', () => {
     ]);
     // Windows updates from the per-user .exe (NSIS) installer.
     assert.deepEqual(m.platforms['windows-x86_64'], m.platforms['windows-x86_64-nsis']);
-    assert.equal(m.platforms['windows-x86_64'].url, `${BASE}/font-manager_${V}_windows_x64.exe`);
+    assert.equal(m.platforms['windows-x86_64'].url, `${BASE}/font-fu_${V}_windows_x64.exe`);
     assert.equal(
       m.platforms['darwin-aarch64'].url,
-      `${BASE}/font-manager_${V}_macos_arm64.app.tar.gz`,
+      `${BASE}/font-fu_${V}_macos_arm64.app.tar.gz`,
     );
     for (const p of Object.values(m.platforms)) assert.equal(p.signature, SIG);
   });
 
   test('refuses a file that is not an updater artifact of this version', () => {
     for (const name of [
-      `font-manager_${V}_macos_arm64.dmg`,
+      `font-fu_${V}_macos_arm64.dmg`,
       // The per-machine .msi never updates in place (rule 4).
-      `font-manager_${V}_windows_x64.msi`,
-      `font-manager_0.1.0_linux_x64.AppImage`,
+      `font-fu_${V}_windows_x64.msi`,
+      `font-fu_0.1.0_linux_x64.AppImage`,
       'latest.json',
     ]) {
       assert.throws(
@@ -134,44 +134,44 @@ describe('checkManifest', () => {
 
 describe('artifactOf', () => {
   test('names the OS, CPU and installer kind of each updater artifact', () => {
-    assert.deepEqual(artifactOf(`font-manager_${V}_windows_x64.exe`, V), {
+    assert.deepEqual(artifactOf(`font-fu_${V}_windows_x64.exe`, V), {
       os: 'windows',
       arch: 'x64',
       installer: 'nsis',
       isDefault: true,
     });
-    assert.equal(artifactOf(`font-manager_${V}_windows_x64.msi`, V), null);
-    assert.equal(artifactOf(`font-manager_${V}_linux_arm64.AppImage`, V).arch, 'arm64');
-    assert.equal(artifactOf(`font-manager_${V}_macos_arm64.dmg`, V), null);
+    assert.equal(artifactOf(`font-fu_${V}_windows_x64.msi`, V), null);
+    assert.equal(artifactOf(`font-fu_${V}_linux_arm64.AppImage`, V).arch, 'arm64');
+    assert.equal(artifactOf(`font-fu_${V}_macos_arm64.dmg`, V), null);
   });
 });
 
 describe('findReleaseFiles', () => {
   test('gathers the installers and the signed updater artifacts of each OS', () => {
     const root = bundle([
-      'nsis/Font Manager_0.2.0_x64-setup.exe',
-      'nsis/Font Manager_0.2.0_x64-setup.exe.sig',
-      'msi/Font Manager_0.2.0_x64_en-US.msi',
-      'dmg/Font Manager_0.2.0_aarch64.dmg',
-      'macos/Font Manager.app.tar.gz',
-      'macos/Font Manager.app.tar.gz.sig',
+      'nsis/Font Fu_0.2.0_x64-setup.exe',
+      'nsis/Font Fu_0.2.0_x64-setup.exe.sig',
+      'msi/Font Fu_0.2.0_x64_en-US.msi',
+      'dmg/Font Fu_0.2.0_aarch64.dmg',
+      'macos/Font Fu.app.tar.gz',
+      'macos/Font Fu.app.tar.gz.sig',
       'appimage/font-manager_0.2.0_amd64.AppImage',
       'appimage/font-manager_0.2.0_amd64.AppImage.sig',
     ]);
     const names = (os, arch) => findReleaseFiles(root, os, arch, V).map((f) => f.name).sort();
     assert.deepEqual(names('windows', 'x64'), [
-      `font-manager_${V}_windows_x64.exe`,
-      `font-manager_${V}_windows_x64.exe.sig`,
-      `font-manager_${V}_windows_x64.msi`,
+      `font-fu_${V}_windows_x64.exe`,
+      `font-fu_${V}_windows_x64.exe.sig`,
+      `font-fu_${V}_windows_x64.msi`,
     ]);
     assert.deepEqual(names('macos', 'arm64'), [
-      `font-manager_${V}_macos_arm64.app.tar.gz`,
-      `font-manager_${V}_macos_arm64.app.tar.gz.sig`,
-      `font-manager_${V}_macos_arm64.dmg`,
+      `font-fu_${V}_macos_arm64.app.tar.gz`,
+      `font-fu_${V}_macos_arm64.app.tar.gz.sig`,
+      `font-fu_${V}_macos_arm64.dmg`,
     ]);
     assert.deepEqual(names('linux', 'x64'), [
-      `font-manager_${V}_linux_x64.AppImage`,
-      `font-manager_${V}_linux_x64.AppImage.sig`,
+      `font-fu_${V}_linux_x64.AppImage`,
+      `font-fu_${V}_linux_x64.AppImage.sig`,
     ]);
   });
 
@@ -222,7 +222,7 @@ describe('the release build', () => {
     assert.match(yml, /gh release create "\$TAG" release-assets\/\*/);
     // E31.2: the Sketch plugin zip is built once and attached with the installers.
     assert.match(yml, /pnpm --filter @fm\/sketch-plugin build/);
-    assert.match(yml, /release-assets\/font-manager_\$\{\{ needs\.plan\.outputs\.version \}\}_sketch-plugin\.zip/);
+    assert.match(yml, /release-assets\/font-fu_\$\{\{ needs\.plan\.outputs\.version \}\}_sketch-plugin\.zip/);
     assert.match(yml, /needs: \[plan, installer, sketch-plugin\]/);
   });
 
@@ -240,9 +240,9 @@ describe('the CLI', () => {
       writeFileSync(join(dir, name), name);
       writeFileSync(join(dir, `${name}.sig`), `${SIG}\n`);
     }
-    writeFileSync(join(dir, `font-manager_${V}_macos_arm64.dmg`), 'dmg');
+    writeFileSync(join(dir, `font-fu_${V}_macos_arm64.dmg`), 'dmg');
     // The Sketch plugin zip (E31.2) is attached unsigned: it is not an updater artifact.
-    writeFileSync(join(dir, `font-manager_${V}_sketch-plugin.zip`), 'zip');
+    writeFileSync(join(dir, `font-fu_${V}_sketch-plugin.zip`), 'zip');
     writeFileSync(join(dir, 'SHA256SUMS'), 'sums');
     const notes = join(tmp(), 'notes.md');
     writeFileSync(notes, '- Faster scans.\n');

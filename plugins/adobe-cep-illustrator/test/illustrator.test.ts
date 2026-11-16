@@ -124,7 +124,7 @@ describe('watchIllustrator', () => {
     expect(fake.calls('document_closed')).toEqual([{ document: 'Illustrator: /work/Poster.ai' }]);
     expect(dialogs).toEqual([
       {
-        title: 'Font Manager',
+        title: 'Font Fu',
         message: 'Deactivate 2 fonts used only by Poster.ai? Font4-Bold, Font9-Bold',
         buttons: ['Keep them', 'Deactivate'],
       },

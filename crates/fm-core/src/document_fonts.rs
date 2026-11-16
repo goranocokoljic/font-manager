@@ -40,7 +40,8 @@ pub const UNREADABLE: &str = "This document's fonts could not be read.";
 
 /// The sentence the user sees for a file that is not a document this module
 /// reads.
-pub const UNSUPPORTED: &str = "Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.";
+pub const UNSUPPORTED: &str =
+    "Font Fu reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.";
 
 /// The format of `path`, from its extension (any case); `None` when it is not
 /// a document this module reads.
@@ -63,7 +64,7 @@ pub fn format_of(path: &Path) -> Option<DocumentFormat> {
 pub fn document_fonts(path: &Path) -> FmResult<DocumentFonts> {
     let Some(format) = format_of(path) else {
         return Err(FmError::unsupported(UNSUPPORTED).with_detail(format!(
-            "{}: not a document type Font Manager reads",
+            "{}: not a document type Font Fu reads",
             path.display()
         )));
     };

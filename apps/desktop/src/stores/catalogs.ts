@@ -437,7 +437,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
 
   /**
    * The Install button of a family of the open catalog (E22.7). With a download folder set it
-   * installs at once; the first time it proposes `<Documents>/Font Manager Fonts` and waits
+   * installs at once; the first time it proposes `<Documents>/Font Fu Fonts` and waits
    * for the user to use it or choose another folder.
    */
   async function askInstall(family: CatalogFamily): Promise<void> {

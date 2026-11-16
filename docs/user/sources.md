@@ -1,14 +1,14 @@
 # Sources
 
-A source is a folder that Font Manager reads fonts from. The library is the list of
+A source is a folder that Font Fu reads fonts from. The library is the list of
 all fonts in all sources.
 
 ## Add a folder
 
 Select **Add folder** under **Sources** in the sidebar, or open the settings and go to
-**Sources**. Choose a folder. Font Manager reads it and all the folders inside it.
+**Sources**. Choose a folder. Font Fu reads it and all the folders inside it.
 
-The files stay where they are. Font Manager does not copy, move or change them.
+The files stay where they are. Font Fu does not copy, move or change them.
 
 To share fonts with a team through Dropbox, iCloud Drive, OneDrive, Google Drive or a
 network share, read [Shared libraries](shared-libraries.md).
@@ -28,17 +28,17 @@ Each folder in the sidebar has these buttons:
 | **Pause** | Hides the fonts of the folder from the library and stops reading it. **Resume** brings them back. |
 | **Remove** | Takes the folder out of the library. The files stay on your disk. |
 
-While Font Manager reads a folder, a progress bar shows how many files it has read.
+While Font Fu reads a folder, a progress bar shows how many files it has read.
 
 ## Automatic rescans
 
-In the settings, under **Advanced**, you can tell Font Manager to rescan all folders
+In the settings, under **Advanced**, you can tell Font Fu to rescan all folders
 every few minutes. Set the interval to 0 to turn it off.
 
 ## Fonts that cannot be read
 
-When a file is damaged or is not a font that Font Manager can read, the font shows a
-health mark in the list. Font Manager does not delete or change the file.
+When a file is damaged or is not a font that Font Fu can read, the font shows a
+health mark in the list. Font Fu does not delete or change the file.
 
 ## Problems
 
@@ -49,13 +49,13 @@ Select it to open the **Problems** view. The view lists:
 |-------|---------------|
 | **Duplicates** | The same font is in two or more files. The list names the copy to keep. |
 | **Broken files** | The file is damaged or has no Unicode character map. |
-| **Legacy formats** | Font Manager can read the font but cannot activate it, for example a Type 1 font. |
+| **Legacy formats** | Font Fu can read the font but cannot activate it, for example a Type 1 font. |
 | **Sidecar conflicts** | Another computer changed the same rating, note or license to a different value. See [Shared libraries](shared-libraries.md#conflicts). |
 | **Activation conflicts** | An active font has the same PostScript name as an installed font or another active font. |
 | **Folders and index** | A source folder is missing, or the library index was damaged and replaced. |
 
 Select a group at the top of the view, or in the sidebar, to see only that group.
-Font Manager does not change any file when it lists a problem.
+Font Fu does not change any file when it lists a problem.
 
 ### Resolve duplicates
 
@@ -63,11 +63,11 @@ Under **Resolve duplicates**, each duplicate font shows all its copies. The copy
 marked **Recommended** is the newest version, or the copy in your library folder.
 
 1. Select **Keep this one** next to the copy you want to keep.
-2. Font Manager shows the copies that will move to the trash. Nothing has moved yet.
+2. Font Fu shows the copies that will move to the trash. Nothing has moved yet.
 3. Select **Move to trash** to continue, or **Cancel** to stop.
 
 The other copies go to the trash of your system: the Recycle Bin on Windows, the
-Trash on macOS and Linux. Font Manager never deletes a file.
+Trash on macOS and Linux. Font Fu never deletes a file.
 
 To undo, select **Undo** in the message at the bottom of the window. The message
 stays for 10 seconds. After that, use **Undo** in the **History** list of the
@@ -94,21 +94,21 @@ use it at once.
 
 1. Open the catalog and find the family.
 2. Select **Install** next to the family.
-3. The first time, Font Manager asks where installed fonts go. It proposes the
-   folder **Font Manager Fonts** in your Documents folder.
-   - Select **Use this folder**. Font Manager makes the folder.
+3. The first time, Font Fu asks where installed fonts go. It proposes the
+   folder **Font Fu Fonts** in your Documents folder.
+   - Select **Use this folder**. Font Fu makes the folder.
    - Or select **Choose…** and select another folder.
 
-Font Manager remembers the folder. It is the one folder that Font Manager puts
+Font Fu remembers the folder. It is the one folder that Font Fu puts
 fonts into without asking each time. It is never a system font folder. Later,
 **Install** starts at once.
 
 A line above the list tells you what happens: downloading, adding to the
 library, then the result, for example "Installed Alegreya: 6 styles active".
-Font Manager adds the folder to your library if it is not there yet. It
+Font Fu adds the folder to your library if it is not there yet. It
 activates the styles in the mode that you set under **Settings** → **Activation**.
 
-If the family is already in your library, Font Manager downloads nothing. It
+If the family is already in your library, Font Fu downloads nothing. It
 activates the styles that are there, and the line tells you so.
 
 To change the folder, open **Settings** → **Online catalogs** and select
@@ -116,13 +116,13 @@ To change the folder, open **Settings** → **Online catalogs** and select
 
 ### Download the fonts a document needs
 
-Font Manager can install a family for you when a design app opens a document
+Font Fu can install a family for you when a design app opens a document
 that needs a font your library does not have. Turn it on in **Settings** →
 **Online catalogs**: select **Download fonts a document needs from the catalogs
 you turned on**. The switch works only when the folder for installed fonts is
 chosen and at least one catalog is on.
 
-Font Manager downloads only from the catalogs you turned on. It looks for the
+Font Fu downloads only from the catalogs you turned on. It looks for the
 family only in the font lists it already has; refresh a catalog to get its
 newest list. The family goes into the folder for installed fonts, the same as
 **Install**. See [Fonts a document needs](activation.md#fonts-a-document-needs).
@@ -140,19 +140,19 @@ select each time, and it does not activate them.
    style**.
 5. Select **Download**.
 
-Font Manager puts the files into a new folder with the name of the family, inside
+Font Fu puts the files into a new folder with the name of the family, inside
 the folder you selected. Then it reads the folder again, and the family shows in
-your library. A file that is already there stays as it is. Font Manager never
-replaces it. If the download fails, Font Manager writes no file.
+your library. A file that is already there stays as it is. Font Fu never
+replaces it. If the download fails, Font Fu writes no file.
 
-Font Manager remembers where each downloaded family came from: the catalog, the
+Font Fu remembers where each downloaded family came from: the catalog, the
 version and the date. It also remembers each file by its contents, so it still
 knows the file after you move it to another folder of your library.
 
 ### Check for updates
 
-Font Manager never checks for updates on its own. To check, open a catalog and
-select **Check for updates**. Font Manager gets the lists of the catalogs that
+Font Fu never checks for updates on its own. To check, open a catalog and
+select **Check for updates**. Font Fu gets the lists of the catalogs that
 you downloaded from again, and compares each downloaded family with its catalog.
 **Refresh** compares them too.
 
@@ -161,7 +161,7 @@ you downloaded from again, and compares each downloaded family with its catalog.
 - A family that the catalog no longer has is shown as **No longer in the
   catalog**. Your files stay as they are.
 
-To get the update, download the family again into another folder. Font Manager
+To get the update, download the family again into another folder. Font Fu
 never replaces a file that is already there.
 
 Next: [Activation](activation.md).

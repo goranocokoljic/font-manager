@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/goranocokoljic/font-manager/data/licenses/permissions.schema.json",
-  "title": "Font Manager license permissions",
+  "title": "Font Fu license permissions",
   "description": "What a font's license lets a user do, in plain words: one rule per recognized open license, declared license type and embedding permission. permissions.json follows it.",
   "type": "object",
   "additionalProperties": false,

@@ -1,6 +1,6 @@
 [package]
 name = "fm-platform"
-description = "Font Manager platform layer: the FontActivator trait, per-OS implementations, app paths, tray and IPC transport."
+description = "Font Fu platform layer: the FontActivator trait, per-OS implementations, app paths, tray and IPC transport."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

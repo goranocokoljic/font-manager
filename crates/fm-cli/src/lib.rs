@@ -26,7 +26,7 @@ pub use generate::{
 };
 pub use output::{Output, VersionReport};
 
-/// Font Manager on the command line.
+/// Font Fu on the command line.
 #[derive(Debug, Parser)]
 #[command(name = "fm", version, about, after_help = EXIT_CODES)]
 pub struct Cli {

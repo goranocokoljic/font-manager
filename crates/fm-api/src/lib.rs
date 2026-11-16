@@ -1,4 +1,4 @@
-//! Font Manager application API.
+//! Font Fu application API.
 //!
 //! The only entrance to `fm-core`: typed, versioned request/response types and
 //! service traits. The desktop UI, `fm-cli`, `fm-mcp` and the plugin endpoint

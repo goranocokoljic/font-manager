@@ -1627,7 +1627,7 @@ pub const MOCK_NO_FILE_DRAG: &str = "Dragging font files out needs the desktop a
 impl LibraryService for MockApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
         Ok(AppInfo {
-            name: "Font Manager (mock)".into(),
+            name: "Font Fu (mock)".into(),
             version: env!("CARGO_PKG_VERSION").into(),
             api_version: API_VERSION,
             platform: if cfg!(windows) {
@@ -4051,7 +4051,7 @@ impl OrganizationService for MockApi {
         let export: SetExport = serde_json::from_str(&text).map_err(|e| {
             ApiError::new(
                 ErrorCode::InvalidRequest,
-                "This file is not a Font Manager set file.",
+                "This file is not a Font Fu set file.",
             )
             .with_detail(e.to_string())
         })?;
@@ -4958,7 +4958,7 @@ impl WorkflowService for MockApi {
             _ => {
                 return Err(ApiError::new(
                     ErrorCode::Unsupported,
-                    "Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.",
+                    "Font Fu reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.",
                 )
                     .with_detail(format!("{}: unknown document type", req.path)));
             }
@@ -5196,7 +5196,7 @@ impl SettingsService for MockApi {
 
 /// Where the mock's app keeps the stdio shim: a fixed path (the mock touches
 /// no OS).
-pub const MOCK_MCP_SHIM: &str = "/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio";
+pub const MOCK_MCP_SHIM: &str = "/Applications/Font Fu.app/Contents/MacOS/fm-mcp-stdio";
 
 /// The mock's MCP status: `/mcp` on the mock endpoint, with short snippets
 /// in the shape the core writes (`fm_core::mcp`).

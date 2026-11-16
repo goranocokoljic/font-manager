@@ -1,7 +1,7 @@
-# Font Manager for Sketch
+# Font Fu for Sketch
 
 A Sketch plugin (Sketch 70 and later, macOS). It has no font logic: it tells
-the running Font Manager app which fonts a document uses, and the app finds
+the running Font Fu app which fonts a document uses, and the app finds
 and activates them (E29.2). It does what the Adobe plugins
 (`plugins/adobe-uxp/`, `plugins/adobe-cep-illustrator/`) do, through the
 same `@fm/plugin-shared` code.
@@ -18,10 +18,10 @@ same `@fm/plugin-shared` code.
   first 8, then "and N more"; the count only from an app older than E30.5);
   Deactivate calls `deactivate` with those faces, Keep
   leaves them active.
-- **App not running.** It says "Font Manager is not running" once and does
+- **App not running.** It says "Font Fu is not running" once and does
   nothing else, until the app answers again. Sketch runs every action in a
   fresh script, so that "once" is kept in a Sketch session variable.
-- **Font Switch (E34).** Plugins › Font Manager › Apply Copied Font applies
+- **Font Switch (E34).** Plugins › Font Fu › Apply Copied Font applies
   the font on the clipboard (what the app's "Copy for Font Switch" copies, or
   a PostScript name) to the selected text layers. Sketch gives a plugin no
   panel to drop a font on, so the clipboard is the way in. With no text layer
@@ -53,7 +53,7 @@ Vite builds the bundle (`build/bundle.ts`, `build/zip.ts`):
   same bytes (sorted entries, fixed time stamps and permissions).
 
 CI builds it on all three platforms; the release workflow attaches the zip as
-`font-manager_<version>_sketch-plugin.zip`. The manifest has no `appcast`, so
+`font-fu_<version>_sketch-plugin.zip`. The manifest has no `appcast`, so
 the plugin has no update feed and Sketch never calls the network for it.
 Double-click the `.sketchplugin` to install it. The user page is
 [`docs/sketch-plugin.md`](../../docs/sketch-plugin.md).

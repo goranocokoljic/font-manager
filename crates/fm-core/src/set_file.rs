@@ -41,7 +41,7 @@ pub fn save(path: &Path, export: &SetExport) -> FmResult<PathBuf> {
 /// Reads the set file at `path`. A missing file is `NotFound`, one that is
 /// too large or not a set export is `InvalidRequest`.
 pub fn load(path: &Path) -> FmResult<SetExport> {
-    let not_a_set = || FmError::invalid("This file is not a Font Manager set file.");
+    let not_a_set = || FmError::invalid("This file is not a Font Fu set file.");
     let len = std::fs::metadata(path)
         .map_err(|e| FmError::io("The set file could not be opened.", path, &e))?
         .len();

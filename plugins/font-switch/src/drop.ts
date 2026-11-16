@@ -12,7 +12,7 @@ export const FONT_SWITCH_MIME = 'application/x-fm-font-switch';
 export const NO_ADAPTER = 'Font Switch does not work in this app';
 
 /** The answer when the clipboard holds no font. */
-export const COPY_A_FONT = 'Copy a font in Font Manager first (Copy for Font Switch)';
+export const COPY_A_FONT = 'Copy a font in Font Fu first (Copy for Font Switch)';
 
 /** The part of a `DataTransfer` the drop reads. */
 export interface DropData {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "manifest.schema.json",
-  "title": "Font Manager Sketch plugin manifest",
+  "title": "Font Fu Sketch plugin manifest",
   "description": "The rules the bundled Contents/Sketch/manifest.json keeps: the org.fontmanager.sketch identifier, the workspace version, a minimum Sketch version, two commands (one with the OpenDocument and CloseDocument handlers, Font Switch's \"Apply Copied Font\" in the plugin's menu), and no other key (so no appcast: the plugin has no update feed and never calls the network).",
   "type": "object",
   "required": [

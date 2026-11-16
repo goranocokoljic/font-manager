@@ -1,7 +1,7 @@
 ---
 name: go-cycle
 description: |
-  One Font Manager story, one stage at a time, driven by go-harness.ps1:
+  One Font Fu story, one stage at a time, driven by go-harness.ps1:
   build (read → branch → implement → preflight → draft PR), ci-fix (repair a
   red CI matrix), sync (merge main and resolve conflicts), review
   (/fm-review loop, max 3 cycles), finalize (tick

@@ -74,7 +74,7 @@ fn canvas_fonts(canvas: &[u8], fonts: &mut Fonts) -> Res<()> {
 fn inflate(chunk: &[u8]) -> Res<Vec<u8>> {
     if chunk.starts_with(&ZSTD) {
         return Err(Bad::unsupported(
-            "the Figma file is zstd-compressed, which Font Manager cannot read yet",
+            "the Figma file is zstd-compressed, which Font Fu cannot read yet",
         ));
     }
     read_capped(&mut DeflateDecoder::new(chunk), MAX_ENTRY, "Figma chunk")

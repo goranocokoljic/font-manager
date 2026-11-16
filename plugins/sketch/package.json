@@ -2,7 +2,7 @@
   "name": "@fm/sketch-plugin",
   "private": true,
   "type": "module",
-  "description": "Font Manager's Sketch plugin.",
+  "description": "Font Fu's Sketch plugin.",
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit",

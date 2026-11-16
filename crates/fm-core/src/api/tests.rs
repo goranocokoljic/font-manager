@@ -1400,7 +1400,7 @@ fn bad_source_requests_are_errors_not_panics() {
         Some(Event::ScanFinished { added: 0, .. })
     ));
     let info = lib.api.app_info().expect("info");
-    assert_eq!(info.name, "Font Manager");
+    assert_eq!(info.name, "Font Fu");
     assert_eq!(info.api_version, API_VERSION);
 }
 
@@ -4343,7 +4343,7 @@ fn a_specimen_refuses_an_unknown_family_a_pdf_and_no_path() {
         })
         .expect_err("pdf");
     assert_eq!(e.code, ErrorCode::Unsupported);
-    assert_eq!(e.message, "PDF export needs the Font Manager app running.");
+    assert_eq!(e.message, "PDF export needs the Font Fu app running.");
     let e = lib
         .api
         .export_specimen(SpecimenRequest {
@@ -4852,7 +4852,7 @@ fn a_collection_specimen_refuses_empty_unknown_restricted_and_a_pdf_without_the_
         })
         .expect_err("pdf");
     assert_eq!(e.code, ErrorCode::Unsupported);
-    assert_eq!(e.message, "PDF export needs the Font Manager app running.");
+    assert_eq!(e.message, "PDF export needs the Font Fu app running.");
     let e = lib
         .api
         .export_collection_specimen(CollectionSpecimenRequest {
@@ -5263,7 +5263,7 @@ fn listing_of(dir: &Path) -> Vec<String> {
 #[test]
 fn an_install_downloads_into_the_download_folder_added_once_and_activates_its_faces() {
     let (lib, _source, server) = downloading("catalog-install");
-    let folder = lib.dir.path().join("Font Manager Fonts");
+    let folder = lib.dir.path().join("Font Fu Fonts");
     set_download_folder(&lib, &folder);
     assert!(!folder.exists(), "made only by the install");
 
@@ -5929,7 +5929,7 @@ fn a_font_argument_names_faces_by_id_postscript_full_or_family_name() {
 #[test]
 fn the_app_offers_claude_desktop_its_stdio_shim() {
     let lib = Lib::new("mcp-shim");
-    let shim = lib.paths.data.join("Font Manager").join("fm-mcp-stdio");
+    let shim = lib.paths.data.join("Font Fu").join("fm-mcp-stdio");
     let api = Lib::new("mcp-shim-on")
         .api
         .with_endpoint_in(lib.paths.data.clone())
@@ -7140,7 +7140,7 @@ fn fetching(
     on: bool,
 ) -> (Lib, crate::test_support::LocalServer) {
     let (lib, _source, server) = downloading_from(label, server);
-    set_download_folder(&lib, &lib.dir.path().join("Font Manager Fonts"));
+    set_download_folder(&lib, &lib.dir.path().join("Font Fu Fonts"));
     set_fetch_missing(&lib, on);
     (lib, server)
 }
@@ -7179,7 +7179,7 @@ fn with_the_fetch_switch_off_a_missing_font_stays_unmatched_and_nothing_is_fetch
     assert_eq!(res.unmatched, lato_fonts());
     assert!(res.fetched.is_empty());
     assert_eq!(server.hits(), hits, "no request");
-    assert!(listing_of_or_none(&lib.dir.path().join("Font Manager Fonts").join("Lato")).is_empty());
+    assert!(listing_of_or_none(&lib.dir.path().join("Font Fu Fonts").join("Lato")).is_empty());
 }
 
 #[test]
@@ -7248,7 +7248,7 @@ fn a_missing_font_whose_family_is_cached_is_downloaded_once_activated_and_matche
     assert!(offer.contains(&res.matched[1].face), "{offer:?}");
 
     // The files went into the download folder, recorded as a download.
-    let folder = lib.dir.path().join("Font Manager Fonts").join("Lato");
+    let folder = lib.dir.path().join("Font Fu Fonts").join("Lato");
     assert_eq!(listing_of(&folder), ["Lato-Bold.ttf", "Lato-Regular.ttf"]);
     assert_eq!(
         lib.api.list_catalog_downloads().expect("downloads").len(),
@@ -7332,7 +7332,7 @@ fn a_failing_download_leaves_its_font_unmatched_and_the_others_are_fine() {
     assert_eq!(res.outcomes.len(), 1);
     assert_eq!(res.outcomes[0].outcome, OutcomeStatus::Done);
     assert!(
-        listing_of_or_none(&lib.dir.path().join("Font Manager Fonts").join("Lato")).is_empty(),
+        listing_of_or_none(&lib.dir.path().join("Font Fu Fonts").join("Lato")).is_empty(),
         "a failed request writes nothing"
     );
 }

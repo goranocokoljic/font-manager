@@ -49,7 +49,7 @@ pub fn init() -> Result<Startup, ApiError> {
         data = %paths.data.display(),
         cache = %paths.cache.display(),
         logs = %paths.logs.display(),
-        "font manager starting"
+        "Font Fu starting"
     );
     let previous_crash = crash::take_unreported(&paths.logs);
     if let Some(log) = &previous_crash {

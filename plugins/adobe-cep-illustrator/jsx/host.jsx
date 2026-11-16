@@ -1,4 +1,4 @@
-// Font Manager's ExtendScript side in Illustrator (ES3: no JSON object).
+// Font Fu's ExtendScript side in Illustrator (ES3: no JSON object).
 // The panel calls these through CSInterface's evalScript; each returns a
 // string: JSON for the data, "yes"/"no" for the question.
 
@@ -149,13 +149,13 @@ function fmDocumentFonts(key) {
 
 /** A message that does not ask anything. */
 function fmTell(message) {
-  alert(message, 'Font Manager');
+  alert(message, 'Font Fu');
   return '';
 }
 
 /** The deactivate offer: "yes" for Deactivate, "no" for Keep them. */
 function fmAsk(message) {
-  var w = new Window('dialog', 'Font Manager');
+  var w = new Window('dialog', 'Font Fu');
   w.add('statictext', undefined, message);
   var buttons = w.add('group');
   buttons.add('button', undefined, 'Keep them', { name: 'cancel' });
