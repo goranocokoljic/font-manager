@@ -17,6 +17,8 @@ const NEW_FONT: &str = "google-static/asap/Asap_Condensed-ExtraLightItalic.ttf";
 fn watched(label: &str, settings: WatchSettings) -> (Lib, Source) {
     let (mut lib, source, _) = Lib::scanned(label);
     lib.api = lib.api.with_watch_settings(settings);
+    // The first sync runs on its own thread; this waits for it.
+    lib.api.sync_watch();
     (lib, source)
 }
 

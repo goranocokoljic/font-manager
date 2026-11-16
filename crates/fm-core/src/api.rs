@@ -180,7 +180,7 @@ pub struct CoreApi {
     file_drag: Mutex<Option<DragSupport>>,
     /// The folder watcher (E51.1); `None` until [`CoreApi::with_watcher`]
     /// starts it (the app does, the CLI and most tests do not).
-    watching: Option<watch::Watching>,
+    watching: Option<Arc<watch::Watching>>,
 }
 
 impl std::fmt::Debug for CoreApi {

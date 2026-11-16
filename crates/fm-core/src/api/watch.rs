@@ -9,6 +9,9 @@
 //!   is registered without a scan; the user's scan reads a new one, and the
 //!   periodic rescan catches what changed while the app was closed. A paused
 //!   source is not watched; resuming it rescans it at once (`watch.rs`).
+//!   The first sync, of every source at start, runs on a thread of its own
+//!   (`fm-watch-start`): registering a large tree (inotify watches every
+//!   subfolder) must not delay the first page (rule 8, cold start).
 //! - **Every update** is applied to the index and sent as one
 //!   [`Event::LibraryChanged`] naming the faces it added, removed and read
 //!   again, as a scan does. Faces of a source whose sidecars changed count
@@ -101,11 +104,19 @@ impl CoreApi {
         };
         match Watcher::start_sink(sink, settings) {
             Ok(watcher) => {
-                self.watching = Some(Watching {
+                let watching = Arc::new(Watching {
                     watcher,
                     known: Mutex::new(HashMap::new()),
                 });
-                self.sync_watch();
+                let (index, first) = (Arc::clone(&self.index), Arc::clone(&watching));
+                let started = std::thread::Builder::new()
+                    .name("fm-watch-start".into())
+                    .spawn(move || sync_with(&index, &first));
+                if let Err(e) = started {
+                    tracing::warn!(error = %e, "watching on the calling thread");
+                    sync_with(&self.index, &watching);
+                }
+                self.watching = Some(watching);
             }
             Err(e) => tracing::warn!(error = %e, "folders are not watched"),
         }
@@ -115,17 +126,22 @@ impl CoreApi {
     /// Brings what the watcher watches in line with the sources of the
     /// index. Never called with the index locked: the watcher thread may be
     /// waiting for it.
+    /// While the first sync still runs, this waits for it.
     pub(super) fn sync_watch(&self) {
-        let Some(watching) = &self.watching else {
-            return;
-        };
-        // The guard must go before `sync`: a temporary in a `match`
-        // scrutinee would live to the end of the match.
-        let sources = self.lock().sources();
-        match sources {
-            Ok(sources) => watching.sync(&sources),
-            Err(e) => tracing::warn!(error = %e, "watched sources not updated"),
+        if let Some(watching) = &self.watching {
+            sync_with(&self.index, watching);
         }
+    }
+}
+
+/// [`Watching::sync`] with the sources of `index`.
+fn sync_with(index: &Mutex<Index>, watching: &Watching) {
+    // The guard must go before `sync`: a temporary in a `match` scrutinee
+    // would live to the end of the match.
+    let sources = lock(index).sources();
+    match sources {
+        Ok(sources) => watching.sync(&sources),
+        Err(e) => tracing::warn!(error = %e, "watched sources not updated"),
     }
 }
 

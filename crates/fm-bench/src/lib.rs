@@ -115,7 +115,6 @@ pub fn serve_with(
     activator: Arc<dyn FontActivator>,
 ) -> BenchResult<(Started, logging::LogGuard, CoreApi)> {
     let paths = home_paths(home);
-    let watched_folders = watch_folders(home, &paths)?;
     let begin = Instant::now();
     let config = startup::prepare(&paths)?;
     let log = logging::init(&paths.logs, config.log_level)?;
@@ -130,21 +129,20 @@ pub fn serve_with(
         },
         ..ListFamiliesRequest::default()
     })?;
+    let ms = ms(begin.elapsed());
     let started = Started {
-        ms: ms(begin.elapsed()),
+        ms,
         families: res.total,
         page: res.items.len(),
-        watched_folders,
+        watched_folders: api.list_sources()?.len(),
     };
     Ok((started, log, api))
 }
 
-/// Makes the index in `home` hold at least [`WATCHED_FOLDERS`] sources,
-/// adding empty folders under `<home>/watched` (outside the timed start),
-/// and returns how many it holds.
-fn watch_folders(home: &Path, paths: &AppPaths) -> BenchResult<usize> {
-    std::fs::create_dir_all(&paths.data)?;
-    let mut index = Index::open(&paths.data.join(INDEX_FILE))?.index;
+/// Makes `index` hold at least [`WATCHED_FOLDERS`] sources, adding empty
+/// folders under `<home>/watched`. The first scan does it, so the timed
+/// starts open the index once, as the app does.
+fn watch_folders(home: &Path, index: &mut Index) -> BenchResult<()> {
     let mut sources = index.sources()?.len();
     let mut n = 0;
     while sources < WATCHED_FOLDERS {
@@ -158,7 +156,7 @@ fn watch_folders(home: &Path, paths: &AppPaths) -> BenchResult<usize> {
         index.add_source(&known, SourceKind::Watched)?;
         sources += 1;
     }
-    Ok(sources)
+    Ok(())
 }
 
 /// What a scan or rescan did.
@@ -210,7 +208,9 @@ pub fn first_scan(library: &Path, home: &Path) -> BenchResult<Scanned> {
     let source = index
         .add_source(&library.to_string_lossy(), SourceKind::Watched)?
         .id;
-    rescan(&mut index, source, library, FileIndex::new())
+    let scanned = rescan(&mut index, source, library, FileIndex::new())?;
+    watch_folders(home, &mut index)?;
+    Ok(scanned)
 }
 
 /// The rescan the app runs at start and after watcher events, on the index a
