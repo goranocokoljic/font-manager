@@ -77,7 +77,13 @@ pub struct Started {
     pub families: u32,
     /// Rows on the first page.
     pub page: usize,
+    /// Source folders the started API watches (E51.1): [`WATCHED_FOLDERS`].
+    pub watched_folders: usize,
 }
+
+/// The source folders a start watches (E51.1): the library and empty
+/// folders in the bench home, as a user's library spread over four folders.
+pub const WATCHED_FOLDERS: usize = 4;
 
 /// What the app does first ([`startup::init`] without the per-user
 /// folders): app folders and settings, logging, the index with its
@@ -99,12 +105,22 @@ pub fn start_with(
     home: &Path,
     activator: Arc<dyn FontActivator>,
 ) -> BenchResult<(Started, logging::LogGuard)> {
-    let begin = Instant::now();
+    serve_with(home, activator).map(|(started, log, _api)| (started, log))
+}
+
+/// [`start_with`], returning the started API too: the idle run keeps it, and
+/// with it the folder watcher, while its memory is sampled.
+pub fn serve_with(
+    home: &Path,
+    activator: Arc<dyn FontActivator>,
+) -> BenchResult<(Started, logging::LogGuard, CoreApi)> {
     let paths = home_paths(home);
+    let begin = Instant::now();
     let config = startup::prepare(&paths)?;
     let log = logging::init(&paths.logs, config.log_level)?;
     let index = startup::open_index(&paths)?.index;
-    let api = CoreApi::open(&paths, index, activator);
+    // The app watches every source for its lifetime (E51.1).
+    let api = CoreApi::open(&paths, index, activator).with_watcher();
     api.start()?;
     let res = api.list_families(ListFamiliesRequest {
         page: Page {
@@ -113,12 +129,34 @@ pub fn start_with(
         },
         ..ListFamiliesRequest::default()
     })?;
+    let ms = ms(begin.elapsed());
     let started = Started {
-        ms: ms(begin.elapsed()),
+        ms,
         families: res.total,
         page: res.items.len(),
+        watched_folders: api.list_sources()?.len(),
     };
-    Ok((started, log))
+    Ok((started, log, api))
+}
+
+/// Makes `index` hold at least [`WATCHED_FOLDERS`] sources, adding empty
+/// folders under `<home>/watched`. The first scan does it, so the timed
+/// starts open the index once, as the app does.
+fn watch_folders(home: &Path, index: &mut Index) -> BenchResult<()> {
+    let mut sources = index.sources()?.len();
+    let mut n = 0;
+    while sources < WATCHED_FOLDERS {
+        n += 1;
+        let folder = home.join("watched").join(n.to_string());
+        let known = folder.to_string_lossy();
+        if index.sources()?.iter().any(|s| s.path == known) {
+            continue;
+        }
+        std::fs::create_dir_all(&folder)?;
+        index.add_source(&known, SourceKind::Watched)?;
+        sources += 1;
+    }
+    Ok(())
 }
 
 /// What a scan or rescan did.
@@ -170,7 +208,9 @@ pub fn first_scan(library: &Path, home: &Path) -> BenchResult<Scanned> {
     let source = index
         .add_source(&library.to_string_lossy(), SourceKind::Watched)?
         .id;
-    rescan(&mut index, source, library, FileIndex::new())
+    let scanned = rescan(&mut index, source, library, FileIndex::new())?;
+    watch_folders(home, &mut index)?;
+    Ok(scanned)
 }
 
 /// The rescan the app runs at start and after watcher events, on the index a

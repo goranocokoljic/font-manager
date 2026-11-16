@@ -1695,7 +1695,10 @@ pub fn serve(
             };
             // The glyph trait pass (E49.4) resumes in the background and runs
             // again after every scan.
-            let core = Arc::new(core.with_trait_pass());
+            // The folder watcher (E51.1) follows every source for the app's
+            // lifetime; it starts after the trait pass, which measures what
+            // it adds. The endpoint and the MCP server share this API.
+            let core = Arc::new(core.with_trait_pass().with_watcher());
             if let Err(e) = core.start() {
                 tracing::warn!(error = %e, "activation start-up failed");
             }

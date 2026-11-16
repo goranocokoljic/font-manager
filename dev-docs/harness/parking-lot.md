@@ -490,5 +490,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-11-16
 
+- [E51.1 #599] crates/fm-core/src/scanner/watch.rs:74 — `WatchSettings::from_config` now only forwards to `from_settings`; outside the scanner tests nothing calls it.
+- [E51.1 #599] crates/fm-core/src/scanner/watch.rs:495 — on Linux an exhausted inotify watch limit is only a `warn!`; fonts in the unwatched folders appear at the next periodic rescan, and no ADR mentions it.
+- [E51.1 #599] crates/fm-core/src/scanner/watch.rs:505 — `Worker::unwatch` matches nested sources by their added paths, not canonical paths; sources nested only through a symlink can drop each other's inotify watches.
 - [E51.4 #602] apps/desktop/src/components/SimilarPanel.vue:203 — the similar panel still sizes the Paragraph preset from `Math.min(preview.sizePx, 32)`, not from the body size the lists now use.
 - [E51.4 #602] apps/desktop/src/components/ui/ — the app has no tooltip component, so every `title`-only hint (toolbar icon buttons, controls that are off) is shown on mouse hover only, never on keyboard focus.

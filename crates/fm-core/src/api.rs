@@ -178,6 +178,9 @@ pub struct CoreApi {
     /// Whether the shell can drag font files out of its window (E44.4);
     /// `None` without a shell. Feeds [`AppInfo::file_drag`].
     file_drag: Mutex<Option<DragSupport>>,
+    /// The folder watcher (E51.1); `None` until [`CoreApi::with_watcher`]
+    /// starts it (the app does, the CLI and most tests do not).
+    watching: Option<Arc<watch::Watching>>,
 }
 
 impl std::fmt::Debug for CoreApi {
@@ -256,6 +259,7 @@ impl CoreApi {
             trait_pass: None,
             tray: Mutex::new(None),
             file_drag: Mutex::new(None),
+            watching: None,
         }
     }
 
@@ -473,6 +477,8 @@ impl CoreApi {
     /// Scans `sources` on the scan thread, one job each, and returns the
     /// first job (a job with no source when there is nothing to scan).
     fn start_scan(&self, sources: Vec<Source>) -> ApiResult<JobId> {
+        // A source added without `add_source` (a catalog download folder).
+        self.sync_watch();
         let jobs: Vec<JobId> = sources
             .iter()
             .map(|_| JobId(self.next_job.fetch_add(1, Ordering::Relaxed)))
@@ -582,6 +588,7 @@ impl CoreApi {
     /// index holds the scan; its events go out as from the scan thread. A
     /// failed scan is an error (and a `JobFailed` event).
     fn scan_and_wait(&self, source: &Source) -> ApiResult<JobId> {
+        self.sync_watch();
         let job = JobId(self.next_job.fetch_add(1, Ordering::Relaxed));
         let scan = Scan {
             index: Arc::clone(&self.index),
@@ -856,7 +863,9 @@ impl LibraryService for CoreApi {
         if !req.path.trim().is_empty() && !path.is_dir() {
             return Err(FmError::not_found(format!("The folder {}", req.path)).into());
         }
-        Ok(self.lock().add_source(&req.path, SourceKind::Watched)?)
+        let source = self.lock().add_source(&req.path, SourceKind::Watched)?;
+        self.sync_watch();
+        Ok(source)
     }
 
     fn remove_source(&self, source: SourceId) -> ApiResult<()> {
@@ -866,6 +875,7 @@ impl LibraryService for CoreApi {
             index.remove_source(source)?;
             faces
         };
+        self.sync_watch();
         self.forget_files();
         let mut removed: Vec<FaceId> = removed.into_keys().collect();
         removed.sort();
@@ -886,6 +896,7 @@ impl LibraryService for CoreApi {
             let source = index.set_source_paused(req.source, req.paused)?;
             (source, index.faces_of_source(req.source)?)
         };
+        self.sync_watch();
         // A paused source's faces leave the library view; resumed, they come back.
         let mut faces: Vec<FaceId> = faces.into_keys().collect();
         faces.sort();
@@ -924,6 +935,7 @@ impl LibraryService for CoreApi {
     fn rebuild_index(&self) -> ApiResult<JobId> {
         let sources = self.lock().rebuild()?;
         self.forget_files();
+        self.sync_watch();
         self.start_scan(sources.into_iter().filter(|s| !s.paused).collect())
     }
 
@@ -2116,3 +2128,4 @@ mod fetch_missing;
 mod install;
 #[cfg(test)]
 mod tests;
+mod watch;
