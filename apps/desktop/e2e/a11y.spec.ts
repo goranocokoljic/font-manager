@@ -393,7 +393,7 @@ async function violations(page: Page): Promise<string[]> {
   return found;
 }
 
-const VIEW_MODES = ['List', 'Table', 'Grid', 'Waterfall', 'Layout'];
+const VIEW_MODES = ['List', 'Grid', 'Table', 'Waterfall', 'Layout'];
 const FAMILY_SECTIONS = [
   'Styles',
   'Text',
@@ -640,10 +640,10 @@ test('every action of the keyboard model works without a mouse', async ({ page }
   const modes = page.getByRole('group', { name: 'View mode' });
   for (const [key, mode] of [
     ['3', 'Table'],
-    ['1', 'Grid'],
+    ['2', 'Grid'],
     ['4', 'Waterfall'],
     ['5', 'Layout'],
-    ['2', 'List'],
+    ['1', 'List'],
   ] as const) {
     await page.keyboard.press(key);
     await expect(modes.getByRole('button', { name: mode })).toHaveAttribute('aria-pressed', 'true');

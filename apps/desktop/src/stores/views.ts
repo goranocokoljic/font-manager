@@ -32,7 +32,12 @@ export interface ViewState {
   layout: string;
 }
 
-const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall', 'layout'];
+/**
+ * The view modes in the order of the toolbar's view switch, the 1–5 keys and the shortcut
+ * sheet (E51.3): Lines · Wall · Table · Waterfall · Layout. A saved view keeps its mode by name,
+ * so this order is free to change.
+ */
+export const VIEW_MODES: readonly ViewMode[] = ['list', 'grid', 'table', 'waterfall', 'layout'];
 
 /** The layout presets, in the order of the picker. */
 export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
@@ -71,7 +76,7 @@ export function normalizeView(raw: unknown): ViewState {
     ? (r.preset as LayoutPreset)
     : 'book';
   return {
-    mode: MODES.includes(r.mode as ViewMode) ? (r.mode as ViewMode) : 'list',
+    mode: VIEW_MODES.includes(r.mode as ViewMode) ? (r.mode as ViewMode) : 'list',
     table: normalizeTable(r.table),
     preset,
     layout: isLayoutId(r.layout) ? r.layout : preset,

@@ -82,7 +82,7 @@ test('grid cards and table rows show the same dot', async ({ page }) => {
   await page.keyboard.press('a');
   await expect(dot(page, 'Sample 2')).toHaveAttribute('data-activation', 'session');
 
-  await page.keyboard.press('1');
+  await page.keyboard.press('2');
   const grid = page.getByRole('listbox', { name: 'Font grid' });
   const card = grid.getByRole('option', { name: /^Sample 2,/ });
   await expect(card.locator('[data-activation]')).toHaveAttribute('data-activation', 'session');
@@ -226,7 +226,7 @@ test('a click on the dot toggles the session; a permanent dot opens its menu', a
 test('the same dot in Lines, the Wall, the Table and the Family page hero', async ({ page }) => {
   const tree = await open(page);
   await expect(tree.getByTestId('activation-dot').first()).toBeVisible();
-  await page.keyboard.press('1');
+  await page.keyboard.press('2');
   const grid = page.getByRole('listbox', { name: 'Font grid' });
   const card = grid.getByRole('option', { name: /^Sample 2,/ });
   await card.getByTestId('activation-dot').click();
@@ -268,11 +268,11 @@ test('@screens the three dot states in every view', async ({ page }) => {
     }
   };
   await shoot('lines');
-  await page.keyboard.press('1');
+  await page.keyboard.press('2');
   await shoot('wall');
   await page.keyboard.press('3');
   await shoot('table');
-  await page.keyboard.press('2');
+  await page.keyboard.press('1');
   await dot(page, 'Sample 1').click();
   await expect(page.getByRole('menu', { name: 'Activation of Sample 1' })).toBeVisible();
   await page.screenshot({ path: `${dir}/dots-menu-1000x700.png` });

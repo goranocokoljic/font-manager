@@ -486,6 +486,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E50.13 #584] crates/fm-core/src/index/problems.rs:99 — `missing_source` runs `fs::metadata` on each source under the index lock in `list_problems`; an offline network share stalls the index.
 - [E50.13 #584] crates/fm-core/src/index/sources.rs:123 — `add_source` stores an endpoint path as given (no normalization), so a raw endpoint client can store `D:/Fonts`, which Explorer may not open reliably.
 - [E50.10 #581] apps/desktop/src/components/FontPreviewRow.vue:230 — weight scrubbing on a sample line is pointer-only; keyboard users have the hero's Axes slider but no per-line equivalent.
+- [E51.3 #601] apps/desktop/e2e/activation.spec.ts:271 — the `dots-wall` screenshot is taken right after the key press, mid-transition, so the Wall cards overlap in `dots-wall-1000x700.png`.
 
 ## 2026-11-16
 
