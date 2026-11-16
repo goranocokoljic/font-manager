@@ -64,6 +64,12 @@ export const useSearchStore = defineStore('search', () => {
    */
   const foundry = ref<string | null>(null);
   /**
+   * Only these faces (E51.2): "Show" on the notice of fonts the folder watcher added, with
+   * the chip's name ("New in Fonts · 3"). Sent as `SearchRequest.faces`; not a `Filters`
+   * field, so a smart collection does not take it. Null for every face.
+   */
+  const only = shallowRef<{ faces: FaceId[]; label: string } | null>(null);
+  /**
    * The likeness sort (E49.9): while set the API orders the results by how close each
    * family's drawing of the character is to the reference face's. It replaces the view's
    * sort without changing it, so removing it brings that sort back. Not a filter.
@@ -111,6 +117,7 @@ export const useSearchStore = defineStore('search', () => {
       hasFilters(filters.value) ||
       traits.value.length > 0 ||
       foundry.value !== null ||
+      only.value !== null ||
       likeGlyph.value !== null ||
       hiding.value,
   );
@@ -119,7 +126,10 @@ export const useSearchStore = defineStore('search', () => {
   const traitPart = (list: readonly TraitFilter[]) =>
     list.length ? { glyphTraits: [...list] } : {};
   /** The foundry filter of a request: left out when there is none. */
-  const foundryPart = () => (foundry.value !== null ? { foundries: [foundry.value] } : {});
+  const foundryPart = () => ({
+    ...(foundry.value !== null ? { foundries: [foundry.value] } : {}),
+    ...(only.value !== null ? { faces: [...only.value.faces] } : {}),
+  });
 
   /** The rule that keeps only the families rendering `text` completely. */
   const rendersText = (text: string): RuleGroup => ({
@@ -166,6 +176,7 @@ export const useSearchStore = defineStore('search', () => {
       hasFilters(f) ||
       chosenTraits.length > 0 ||
       foundry.value !== null ||
+      only.value !== null ||
       rule !== null ||
       like !== null;
     // A likeness sort decides the order itself.
@@ -393,6 +404,27 @@ export const useSearchStore = defineStore('search', () => {
     setFoundry(isFoundry(name) ? null : name);
   }
 
+  /**
+   * "Show" on the watcher's notice (E51.2): the wall lists only `faces`, under a chip named
+   * `label`; the text and every other filter are cleared so none hides them.
+   */
+  function showOnly(faces: readonly FaceId[], label: string): void {
+    text.value = '';
+    query.value = '';
+    traits.value = [];
+    foundry.value = null;
+    likeGlyph.value = null;
+    only.value = { faces: [...faces], label };
+    setFilters({});
+  }
+
+  /** Takes the "only these faces" filter off (its chip's ×). */
+  function clearOnly(): void {
+    if (only.value === null) return;
+    only.value = null;
+    void run();
+  }
+
   /** Replaces the chosen filters and searches at once (a chip click is not typing). */
   function setFilters(next: Filters): void {
     filters.value = next;
@@ -405,6 +437,7 @@ export const useSearchStore = defineStore('search', () => {
     query.value = '';
     traits.value = [];
     foundry.value = null;
+    only.value = null;
     setFilters({});
   }
 
@@ -435,6 +468,7 @@ export const useSearchStore = defineStore('search', () => {
     filters,
     traits,
     foundry,
+    only,
     likeGlyph,
     traitCatalog,
     hits,
@@ -458,6 +492,8 @@ export const useSearchStore = defineStore('search', () => {
     setFoundry,
     isFoundry,
     toggleFoundry,
+    showOnly,
+    clearOnly,
     chooseTraitValue,
     countTraitValues,
     loadTraitCatalog,

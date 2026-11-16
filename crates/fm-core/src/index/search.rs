@@ -190,6 +190,10 @@ impl Index {
             .as_deref()
             .filter(|names| !names.is_empty())
             .map(|names| foundries::Wanted::new(&cache.foundries, names));
+        let only: Option<HashSet<u32>> = req
+            .faces
+            .as_ref()
+            .map(|faces| faces.iter().map(|f| f.0).collect());
         let fts = query
             .fts_match()
             .map(|expr| self.fts_candidates(&expr))
@@ -232,6 +236,10 @@ impl Index {
                     }
                     // And a face of another foundry (E50.11).
                     if foundries.as_ref().is_some_and(|f| !f.holds(row.foundry)) {
+                        return None;
+                    }
+                    // And a face outside the ones asked for (E51.2).
+                    if only.as_ref().is_some_and(|faces| !faces.contains(&row.id)) {
                         return None;
                     }
                     let mut failed = failed(&req.filters, &row.text, &row.facts)

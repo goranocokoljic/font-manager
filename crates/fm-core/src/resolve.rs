@@ -171,6 +171,7 @@ impl DuplicateResolver {
         drop(index);
         if !removed.is_empty() {
             (self.emit)(Event::LibraryChanged {
+                from_watcher: false,
                 source: None,
                 added: Vec::new(),
                 removed,
@@ -267,6 +268,7 @@ impl DuplicateResolver {
         drop(index);
         if !added.is_empty() {
             (self.emit)(Event::LibraryChanged {
+                from_watcher: false,
                 source: None,
                 added,
                 removed: Vec::new(),

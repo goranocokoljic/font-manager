@@ -147,6 +147,12 @@ pub struct SearchRequest {
     /// value. `None` or an empty list: every foundry.
     #[serde(default)]
     pub foundries: Option<Vec<String>>,
+    /// Only these faces (E51.2: "Show" on the notice of fonts the folder
+    /// watcher added). Like the foundries, a face outside them is no result
+    /// and counts under no filter value; an unknown id matches nothing.
+    /// `None`: every face. An empty list: no face.
+    #[serde(default)]
+    pub faces: Option<Vec<FaceId>>,
 }
 
 /// The name `list_foundries` gives the faces with no foundry (E50.11); a

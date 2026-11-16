@@ -88,6 +88,11 @@ pub enum Event {
         removed: Vec<FaceId>,
         /// Faces whose data changed.
         updated: Vec<FaceId>,
+        /// The folder watcher made the change (E51.2): files came or went
+        /// while the app ran, not a scan, a source change or a user edit.
+        /// The UI tells the user of the fonts it added.
+        #[serde(default)]
+        from_watcher: bool,
     },
     /// Faces were activated or deactivated.
     #[serde(rename_all = "camelCase")]

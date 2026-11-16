@@ -1139,7 +1139,13 @@ added: FaceId[];
 /**  Faces removed. */
 removed: FaceId[]; 
 /**  Faces whose data changed. */
-updated: FaceId[] } | 
+updated: FaceId[]; 
+/**
+ *  The folder watcher made the change (E51.2): files came or went
+ *  while the app ran, not a scan, a source change or a user edit.
+ *  The UI tells the user of the fonts it added.
+ */
+fromWatcher?: boolean } | 
 /**  Faces were activated or deactivated. */
 { type: "activationChanged"; 
 /**  Now active. */
@@ -3353,6 +3359,13 @@ export type SearchRequest = {
 	 *  value. `None` or an empty list: every foundry.
 	 */
 	foundries?: string[] | null,
+	/**
+	 *  Only these faces (E51.2: "Show" on the notice of fonts the folder
+	 *  watcher added). Like the foundries, a face outside them is no result
+	 *  and counts under no filter value; an unknown id matches nothing.
+	 *  `None`: every face. An empty list: no face.
+	 */
+	faces?: FaceId[] | null,
 };
 
 /**  Search results grouped by family. */

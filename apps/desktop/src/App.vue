@@ -14,6 +14,7 @@ import { useActions, useCommandsStore, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
 import { useThemesStore } from './stores/themes';
 import { useUpdatesStore } from './stores/updates';
+import { useWatchNoticeStore } from './stores/watchNotice';
 
 const settings = useSettingsStore();
 const updates = useUpdatesStore();
@@ -69,6 +70,11 @@ onMounted(() => {
     .catch((e: unknown) => console.warn('the shell menu cannot open Settings', e));
 });
 onUnmounted(() => stopShellNavigate?.());
+
+// The folder watcher's notice (E51.2): "3 fonts added from Fonts", with Show, on every page.
+const watchNotice = useWatchNoticeStore();
+onMounted(() => void watchNotice.start(() => router.push({ name: 'home' })));
+onUnmounted(() => void watchNotice.stop());
 
 // The one check without a click: only when the user turned "Check automatically" on.
 onMounted(async () => {

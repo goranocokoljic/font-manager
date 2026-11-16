@@ -6,6 +6,8 @@
 // Under the cards: the dashed zone that opens the folder picker (also the empty state), the problems strip and the System
 // fonts card. Removing asks once; it removes the index entries only (rule 2). Every fact
 // shown (missing, cloud, last scan, counts) comes from fm-api; this file only lays it out.
+// The count and the last scan follow the library-change events (E51.2: the folder watcher
+// rescans a folder by itself), and the Watch switch says "Watching" or "Paused".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { Source, SourceId } from '../api/types';
@@ -34,12 +36,19 @@ function folderName(source: Source): string {
   return parts.at(-1) ?? source.path;
 }
 
+/** A last scan this recent reads "scanned just now". */
+const JUST_NOW_MS = 60_000;
+
 /** The second line on the right: the last scan, the running one, or why there is none. */
 function scanLine(source: Source): string {
   if (sources.progressOf(source.id)) return t('settings.sources.scanningNow');
   if (source.missing) return t('settings.sources.notFound');
   if (!source.lastScanned) return t('settings.sources.neverScanned');
-  return t('settings.sources.scanned', { when: formatRelativeTime(new Date(source.lastScanned)) });
+  const when = new Date(source.lastScanned);
+  // A watcher rescan or a scan of the last minute (E51.2): "scanned just now".
+  if (Math.abs(Date.now() - when.getTime()) < JUST_NOW_MS)
+    return t('settings.sources.scannedJustNow');
+  return t('settings.sources.scanned', { when: formatRelativeTime(when) });
 }
 
 /** The first line on the right: the font count, or how far the running scan is. */
@@ -163,7 +172,10 @@ function onConfirmKey(e: KeyboardEvent, id: SourceId): void {
           />
         </div>
         <div class="watch">
-          <span aria-hidden="true">{{ t('settings.sources.watch') }}</span>
+          <!-- The switch maps to the source's paused flag (E51.2); its label says which. -->
+          <span aria-hidden="true" data-testid="watch-state">{{
+            source.paused ? t('settings.sources.paused') : t('settings.sources.watching')
+          }}</span>
           <UiSwitch
             :checked="!source.paused"
             :aria-label="t('settings.sources.watchLabel', { name: folderName(source) })"

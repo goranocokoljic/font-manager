@@ -1706,6 +1706,7 @@ impl LibraryService for MockApi {
         }
         st.sources.retain(|s| s.id != source);
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: Some(source),
             added: Vec::new(),
             removed,
@@ -2013,6 +2014,7 @@ impl LibraryService for MockApi {
             }
             st.resolutions.push(resolution.clone());
             st.emit(Event::LibraryChanged {
+                from_watcher: false,
                 source: None,
                 added: Vec::new(),
                 removed,
@@ -2234,6 +2236,7 @@ impl LibraryService for MockApi {
         st.resolutions[i] = r.clone();
         if !back.is_empty() {
             st.emit(Event::LibraryChanged {
+                from_watcher: false,
                 source: None,
                 added: back,
                 removed: Vec::new(),
@@ -2256,6 +2259,7 @@ impl LibraryService for MockApi {
             .ok_or_else(|| ApiError::not_found(format!("Sidecar conflict {}", req.id)))?;
         let c = st.sidecar_conflicts.remove(i);
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
@@ -2676,6 +2680,13 @@ impl SearchService for MockApi {
                 let name = st.foundry_of(hit.family.foundry.as_deref().unwrap_or_default());
                 wanted.iter().any(|w| w.trim().eq_ignore_ascii_case(&name))
             });
+        }
+        // Only the faces asked for (E51.2); a family keeps its faces among them.
+        if let Some(only) = &req.faces {
+            for hit in &mut hits {
+                hit.faces.retain(|f| only.contains(f));
+            }
+            hits.retain(|hit| !hit.faces.is_empty());
         }
         if let Some(reference) = req.like_glyph {
             // The stand-in distance of `find_similar_glyph`, the reference
@@ -3800,6 +3811,7 @@ impl OrganizationService for MockApi {
             }
         }
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
@@ -3825,6 +3837,7 @@ impl OrganizationService for MockApi {
         let used: BTreeSet<TagId> = st.face_tags.values().flatten().copied().collect();
         st.tags.retain(|t| used.contains(&t.id));
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
@@ -3927,6 +3940,7 @@ impl OrganizationService for MockApi {
             }
         }
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
@@ -4143,6 +4157,7 @@ impl OrganizationService for MockApi {
             .map(|f| f.detail.face.id)
             .collect();
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
@@ -4199,6 +4214,7 @@ impl OrganizationService for MockApi {
             updated.push(face.detail.face.id);
         }
         st.emit(Event::LibraryChanged {
+            from_watcher: false,
             source: None,
             added: Vec::new(),
             removed: Vec::new(),

@@ -29,6 +29,7 @@ const {
   languages,
   traits,
   foundry,
+  only,
   rendersText,
   chips: active,
   labels,
@@ -55,6 +56,7 @@ const filtering = computed(
     hasFilters(search.filters) ||
     traits.value.length > 0 ||
     foundry.value !== null ||
+    only.value !== null ||
     rendersText.value,
 );
 
@@ -67,6 +69,7 @@ function stopHiding(): void {
 function clearAll(): void {
   search.traits = [];
   search.foundry = null;
+  search.only = null;
   search.setFilters({});
   stopHiding();
 }
@@ -289,12 +292,30 @@ async function save(): Promise<void> {
         </svg>
       </button>
       <button
+        v-if="only"
+        type="button"
+        class="chip active"
+        data-testid="only-chip"
+        :class="{
+          spilled: active.length + languages.length + traits.length + (foundry ? 1 : 0) >= fit,
+        }"
+        :aria-label="t('chips.remove', { name: only })"
+        @click="remove(() => search.clearOnly())"
+      >
+        {{ only }}
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </button>
+      <button
         v-if="rendersText"
         type="button"
         class="chip active"
         data-testid="renders-text-chip"
         :class="{
-          spilled: active.length + languages.length + traits.length + (foundry ? 1 : 0) >= fit,
+          spilled:
+            active.length + languages.length + traits.length + (foundry ? 1 : 0) + (only ? 1 : 0) >=
+            fit,
         }"
         :aria-label="t('chips.remove', { name: t('chips.rendersText') })"
         @click="remove(stopHiding)"

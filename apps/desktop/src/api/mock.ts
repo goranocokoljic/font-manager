@@ -1310,6 +1310,25 @@ export const mockDuplicates: DuplicateGroup[] = [
 /** Id of the first extra face and family; above every sample id. */
 export const EXTRA_ID_BASE = 1000;
 
+/** The first face and family id of the families the mock watcher adds (E51.2). */
+export const WATCHER_ID_BASE = 900_000;
+
+/** The folder watcher of a mock client (E51.2): adds new families, removes faces. */
+export interface MockWatcher {
+  /** Adds `count` one-style families to `source` (the first watched folder); their faces. */
+  add(count?: number, source?: SourceId): FaceId[];
+  /** Deletes these faces, as when their files are deleted. */
+  remove(faces: FaceId[]): void;
+}
+
+let watcherHooks: MockWatcher | undefined;
+
+/** The watcher of the mock client made last (tests). */
+export function mockWatcher(): MockWatcher {
+  if (!watcherHooks) throw new Error('no mock client yet');
+  return watcherHooks;
+}
+
 /** Styles of an extra family, the most common first; a family takes the first N. */
 const EXTRA_STYLES = [
   { style: 'Regular', weight: 400, slant: 'upright' },
@@ -2840,6 +2859,77 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     else byFamily.set(f.face.family, [f]);
   }
   const familyIds = [...byFamily.keys()];
+  // The folder watcher (E51.2): `window.__fmMockWatcherAdd(families, source?)` "copies"
+  // new families of one style into a watched folder and sends the watcher's library
+  // change, as fm-core does; `window.__fmMockWatcherRemove(faces)` deletes faces again.
+  let watcherFamilies = 0;
+  /** The folder of each face the watcher added; the sample faces have none in the mock. */
+  const watcherSource = new Map<FaceId, SourceId>();
+  const watcherAdd = (count = 1, sourceId?: SourceId): FaceId[] => {
+    const into = sources.find((s) => (sourceId == null ? s.kind === 'watched' : s.id === sourceId));
+    if (!into) throw new Error('no watched folder');
+    const added: FaceId[] = [];
+    for (let k = 0; k < count; k++) {
+      const n = ++watcherFamilies;
+      const [detail] = extraFamily(WATCHER_ID_BASE - EXTRA_ID_BASE + n - 1, 1);
+      const name = `Arrival ${n}`;
+      detail!.face.familyName = name;
+      detail!.face.postscriptName = `Arrival${n}-Regular`;
+      detail!.path = `${into.path}/Arrival${n}-Regular.ttf`;
+      watcherSource.set(detail!.face.id, into.id);
+      faces.push(detail!);
+      byId.set(detail!.face.id, detail!);
+      byFamily.set(detail!.face.family, [detail!]);
+      familyIds.push(detail!.face.family);
+      added.push(detail!.face.id);
+    }
+    into.faceCount += count;
+    into.lastScanned = nowStamp();
+    lastSearch = null;
+    emit({
+      type: 'libraryChanged',
+      source: into.id,
+      added,
+      removed: [],
+      updated: [],
+      fromWatcher: true,
+    });
+    return added;
+  };
+  const watcherRemove = (ids: FaceId[]): void => {
+    const removed = ids.filter((id) => byId.has(id));
+    let source: SourceId | null = null;
+    for (const id of removed) {
+      const d = byId.get(id)!;
+      const from = watcherSource.get(id) ?? sources.find((x) => x.kind === 'watched')?.id ?? null;
+      source = from;
+      watcherSource.delete(id);
+      byId.delete(id);
+      faces.splice(faces.indexOf(d), 1);
+      const left = (byFamily.get(d.face.family) ?? []).filter((x) => x !== d);
+      if (left.length) byFamily.set(d.face.family, left);
+      else {
+        byFamily.delete(d.face.family);
+        familyIds.splice(familyIds.indexOf(d.face.family), 1);
+      }
+      const s = sources.find((x) => x.id === from);
+      if (s) {
+        s.faceCount = Math.max(0, s.faceCount - 1);
+        s.lastScanned = nowStamp();
+      }
+    }
+    lastSearch = null;
+    emit({ type: 'libraryChanged', source, added: [], removed, updated: [], fromWatcher: true });
+  };
+  watcherHooks = { add: watcherAdd, remove: watcherRemove };
+  if (typeof window !== 'undefined') {
+    const w = window as {
+      __fmMockWatcherAdd?: typeof watcherAdd;
+      __fmMockWatcherRemove?: typeof watcherRemove;
+    };
+    w.__fmMockWatcherAdd = watcherAdd;
+    w.__fmMockWatcherRemove = watcherRemove;
+  }
   const find = (id: FaceId) => byId.get(id);
   const summary = (f: FaceDetail): FaceSummary => ({
     ...structuredClone(f.face),
@@ -3574,6 +3664,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const wanted = req.foundries ?? [];
       if (wanted.length > 0)
         paged = { ...paged, all: paged.all.filter((h) => inFoundries(h, wanted)) };
+      // Only the faces asked for (E51.2), as fm-core: a family keeps its faces among them.
+      if (req.faces != null) {
+        const only = new Set(req.faces);
+        paged = {
+          ...paged,
+          all: paged.all
+            .map((h) => ({ ...h, faces: h.faces.filter((f) => only.has(f)) }))
+            .filter((h) => h.faces.length > 0),
+        };
+      }
       if (like) {
         if (!find(like.face)) throw notFound(like.face);
         paged = { ...paged, all: likenessOrder(paged.all, like.face) };

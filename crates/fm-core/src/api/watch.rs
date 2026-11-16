@@ -179,7 +179,11 @@ impl WatchSink for LibrarySink {
         if !borrowed {
             fm_platform::memory::release_free_memory();
         }
-        if let Some(event) = applied? {
+        if let Some(mut event) = applied? {
+            // The UI tells the user of fonts the watcher added (E51.2).
+            if let Event::LibraryChanged { from_watcher, .. } = &mut event {
+                *from_watcher = true;
+            }
             let read = matches!(&event, Event::LibraryChanged { added, updated, .. }
                 if !added.is_empty() || !updated.is_empty());
             self.events.send(&event);
@@ -259,6 +263,7 @@ fn with_sidecars(
     removed.sort();
     updated.sort();
     Some(Event::LibraryChanged {
+        from_watcher: false,
         source: Some(source),
         added,
         removed,

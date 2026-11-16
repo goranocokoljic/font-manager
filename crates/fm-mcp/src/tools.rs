@@ -986,6 +986,7 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                 .map(TraitFilter::try_from)
                 .collect::<Result<Vec<_>, _>>()?;
             to_json(&api.search(SearchRequest {
+                faces: None,
                 order: None,
                 query: a.query,
                 filters,

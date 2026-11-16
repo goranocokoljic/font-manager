@@ -254,11 +254,14 @@ fn a_scan_reports_progress_then_the_library_change() {
         source: changed,
         added,
         removed,
+        from_watcher,
         ..
     }) = events.last()
     else {
         panic!("last event: {events:?}");
     };
+    // A scan's change is not the watcher's: the UI shows no notice for it (E51.2).
+    assert!(!from_watcher);
     assert!(events.len() - 1 > finished, "the change follows the finish");
     assert_eq!(*changed, Some(source.id));
     assert!(added.len() >= 6, "{added:?}");
@@ -2166,6 +2169,7 @@ fn changes_name_added_removed_gone_and_reread_faces() {
         added,
         removed,
         updated,
+        ..
     }) = changes(SourceId(7), &before, &after, &rescan)
     else {
         panic!("a change");
@@ -3985,6 +3989,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
     let mut variable: Vec<String> = lib
         .api
         .search(SearchRequest {
+            faces: None,
             glyph_traits: None,
             order: None,
             query: String::new(),
@@ -4648,6 +4653,7 @@ fn page_families(page: &str) -> Vec<String> {
 fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
     lib.api
         .search(SearchRequest {
+            faces: None,
             glyph_traits: None,
             order: None,
             query: String::new(),
@@ -7728,4 +7734,53 @@ fn foundry_aliases_fold_on_the_fixture_corpus() {
     };
     assert_eq!(again, updated);
 }
+/// E51.2: `faces` narrows a search to the faces asked for ("Show" on the
+/// watcher's notice); the other filters still apply, an unknown id matches
+/// nothing and an empty list matches no face.
+#[test]
+fn a_search_for_faces_lists_only_those_faces() {
+    let (lib, _, _) = Lib::scanned("api-search-faces");
+    let search = |faces: Option<Vec<FaceId>>, query: &str| {
+        lib.api
+            .search(SearchRequest {
+                query: query.to_owned(),
+                faces,
+                page: Page {
+                    offset: 0,
+                    limit: 1000,
+                },
+                ..SearchRequest::default()
+            })
+            .expect("search")
+    };
+    let all = search(None, "");
+    assert!(all.families.len() >= 3, "{all:?}");
+    // One face of the first family, every face of the second.
+    let first = &all.families[0];
+    let second = &all.families[1];
+    let mut wanted = vec![first.faces[0]];
+    wanted.extend(second.faces.iter().copied());
+    let found = search(Some(wanted.clone()), "");
+    assert_eq!(found.total, 2, "{found:?}");
+    let mut got: Vec<FaceId> = found
+        .families
+        .iter()
+        .flat_map(|h| h.faces.clone())
+        .collect();
+    got.sort();
+    wanted.sort();
+    assert_eq!(got, wanted);
+    // The query still applies on top.
+    let named = search(Some(wanted), &second.family.name);
+    assert!(
+        named
+            .families
+            .iter()
+            .all(|h| h.family.id == second.family.id),
+        "{named:?}"
+    );
+    assert_eq!(search(Some(vec![FaceId(u32::MAX)]), "").total, 0);
+    assert_eq!(search(Some(Vec::new()), "").total, 0);
+}
+
 mod watching;

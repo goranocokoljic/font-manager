@@ -89,6 +89,17 @@ fn removed(event: &Event) -> &[FaceId] {
     }
 }
 
+/// The watcher sent `event` (E51.2).
+fn by_watcher(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::LibraryChanged {
+            from_watcher: true,
+            ..
+        }
+    )
+}
+
 /// The faces `events` add, in all. A copy the OS reports in two parts
 /// (created, then written) may land as two refreshes; the face is added once.
 fn gained(events: &[Event]) -> usize {
@@ -113,12 +124,15 @@ fn a_copied_font_is_listed_within_2_s_and_gone_after_its_delete() {
     assert!(took < WITHIN, "the copy took {took:?} to be listed");
     let events = changes_of(&rx, source.id, Duration::from_millis(1500));
     assert_eq!(gained(&events), 1, "{events:?}");
+    // The UI tells the watcher's changes from a scan's by this flag (E51.2).
+    assert!(events.iter().all(by_watcher), "{events:?}");
 
     std::fs::remove_file(&path).expect("delete");
     let took = until(|| family_total(&lib.api) == before).expect("gone within 5 s");
     assert!(took < WITHIN, "the delete took {took:?} to leave the list");
     let events = changes_of(&rx, source.id, Duration::from_millis(1500));
     assert_eq!(lost(&events), 1, "{events:?}");
+    assert!(events.iter().all(by_watcher), "{events:?}");
 
     // The watcher never touched a font file of the library (ADR 0004).
     for folder in FOLDERS {
