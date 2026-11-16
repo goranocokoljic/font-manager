@@ -177,8 +177,15 @@ export const useLibraryStore = defineStore('library', () => {
     // A newer change supersedes this one, so it must also refetch this one's families.
     for (const id of [...removed, ...updated]) watchTouched.add(id);
     const touched = watchTouched;
+    // Activation rounds that started before this change; one landing during the fetch may have
+    // been missed by its pages, so the list is fetched again (as `fetchFamilies` does).
+    let activated: number;
     try {
-      const list = await listAll(useClient(), by);
+      let list: FamilySummary[];
+      do {
+        activated = activationRound;
+        list = await listAll(useClient(), by);
+      } while (activated !== activationRound && mine === generation && round === watchRound);
       if (mine !== generation || round !== watchRound) return;
       // A new order fetched the list again meanwhile: that answer cannot tell which faces
       // this change made stale, so the library is read afresh.
@@ -194,7 +201,7 @@ export const useLibraryStore = defineStore('library', () => {
         const stale =
           !now ||
           facesMoved(before.get(id), now) ||
-          (faces.get(id) ?? []).some((f) => touched.has(f.id)) ||
+          (faces.get(id) ?? []).some((f) => touched.has(f.id) || unsettled.has(f.id)) ||
           // A family asked for and not answered yet may hold a changed face.
           (pending.has(id) && touched.size > 0);
         if (!stale) continue;
@@ -206,6 +213,9 @@ export const useLibraryStore = defineStore('library', () => {
         else void request(id).catch(() => undefined);
       }
       watchTouched.clear();
+      // This change superseded the activation rounds before it (see `refreshActivation`):
+      // their faces were asked for again above, with the list that holds their state.
+      if (activated === activationRound) unsettled.clear();
     } catch (e) {
       if (mine === generation && round === watchRound) error.value = e as ApiError;
     }
@@ -220,25 +230,29 @@ export const useLibraryStore = defineStore('library', () => {
     const mine = generation;
     const round = ++activationRound;
     const by = order.value;
+    // A watcher change after this round started (E51.2) reads the list and the faces again,
+    // with this round's state in them: an answer of this round must not overwrite them.
+    const watch = watchRound;
+    const live = () => mine === generation && round === activationRound && watch === watchRound;
     // A new order fetches the list again; an answer in the old order must not win.
-    const current = () => mine === generation && round === activationRound && by === order.value;
+    const current = () => live() && by === order.value;
     const client = useClient();
     // A newer round supersedes this one, so it must also refetch this one's faces.
     for (const id of changed) unsettled.add(id);
     try {
       const list = await listAll(client, by);
       if (current()) families.value = list;
-      if (mine !== generation || round !== activationRound) return;
+      if (!live()) return;
       const stale = [...faces]
         .filter(([, fs]) => fs.some((f) => unsettled.has(f.id)))
         .map(([id]) => id);
       await Promise.all(
         stale.map(async (id) => {
           const family = await client.getFamily(id);
-          if (mine === generation && round === activationRound) faces.set(id, family.faces);
+          if (live()) faces.set(id, family.faces);
         }),
       );
-      if (mine === generation && round === activationRound) unsettled.clear();
+      if (live()) unsettled.clear();
     } catch {
       // The list keeps the state it had; the next refresh brings it up to date.
     }

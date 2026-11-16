@@ -170,6 +170,39 @@ describe('library store', () => {
     await store.stop();
   });
 
+  it('an activation round already on its way does not undo a watcher change (E51.2)', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const face = (await store.facesOf(store.families[0]!.id))[0]!;
+    // The activation round's family list is held until the watcher's list has landed.
+    const list = client.listFamilies.bind(client);
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    client.listFamilies = async (req) => {
+      const answer = await list(req); // read now, before the watcher adds the family
+      if (++calls === 1) await held;
+      return answer;
+    };
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'session' });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    mockWatcher().add(1);
+    await vi.waitFor(() => expect(store.families.some((f) => f.name === 'Arrival 1')).toBe(true));
+    release();
+    await flushPromises();
+    await new Promise((r) => setTimeout(r, 10));
+    await flushPromises();
+    expect(store.families.some((f) => f.name === 'Arrival 1')).toBe(true);
+    // The activation still shows: the watcher's list was read after it.
+    expect(store.families[0]!.activation).not.toBe('inactive');
+    await vi.waitFor(() =>
+      expect(store.faces.get(store.families[0]!.id)?.[0]?.active).toBe('session'),
+    );
+    await store.stop();
+  });
+
   it('keeps the error of a failed load', async () => {
     client = createMockClient();
     client.listFamilies = () =>
