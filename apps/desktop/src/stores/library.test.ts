@@ -1,7 +1,8 @@
+import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, EXTRA_ID_BASE } from '../api/mock';
+import { createMockClient, EXTRA_ID_BASE, mockWatcher } from '../api/mock';
 import { useLibraryStore } from './library';
 
 let client: FmClient;
@@ -68,6 +69,48 @@ describe('library store', () => {
     expect(list).toHaveBeenCalledTimes(3);
   });
 
+  it('applies a watcher change in place: loaded faces stay, the new family appears (E51.2)', async () => {
+    client = createMockClient({ extraFaces: 2, stylesPerFamily: 4 });
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const kept = await store.facesOf(EXTRA_ID_BASE);
+    const family = vi.spyOn(client, 'getFamily');
+    const [added] = mockWatcher().add(1);
+    await vi.waitFor(() => expect(store.families.some((f) => f.name === 'Arrival 1')).toBe(true));
+    await flushPromises();
+    // The expanded family keeps the very same faces: its style rows and the selection stay.
+    expect(store.faces.get(EXTRA_ID_BASE)).toBe(kept);
+    expect(family).not.toHaveBeenCalled();
+    expect(added).toBeDefined();
+  });
+
+  it('refetches, in place, only the loaded family a watcher removal touched (E51.2)', async () => {
+    client = createMockClient({ extraFaces: 2, stylesPerFamily: 4 });
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const first = await store.facesOf(EXTRA_ID_BASE);
+    const other = await store.facesOf(EXTRA_ID_BASE + 1);
+    const family = vi.spyOn(client, 'getFamily');
+    mockWatcher().remove([first[0]!.id]);
+    await vi.waitFor(() => expect(store.faces.get(EXTRA_ID_BASE)).toHaveLength(3));
+    expect(store.faces.get(EXTRA_ID_BASE + 1)).toBe(other);
+    expect(family).toHaveBeenCalledTimes(1);
+    expect(family).toHaveBeenCalledWith(EXTRA_ID_BASE);
+  });
+
+  it('forgets the faces of a family the watcher removed entirely (E51.2)', async () => {
+    client = createMockClient({ extraFaces: 1 });
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const faces = await store.facesOf(EXTRA_ID_BASE);
+    mockWatcher().remove(faces.map((f) => f.id));
+    await vi.waitFor(() => expect(store.families.some((f) => f.id === EXTRA_ID_BASE)).toBe(false));
+    expect(store.faces.has(EXTRA_ID_BASE)).toBe(false);
+  });
+
   it('reloads when the library changes', async () => {
     client = createMockClient();
     setClient(client);
@@ -124,6 +167,39 @@ describe('library store', () => {
       expect(activeOf(second!.id, b.id)).toBe('session');
       expect(activeOf(first!.id, a.id)).toBe('session');
     });
+    await store.stop();
+  });
+
+  it('an activation round already on its way does not undo a watcher change (E51.2)', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const face = (await store.facesOf(store.families[0]!.id))[0]!;
+    // The activation round's family list is held until the watcher's list has landed.
+    const list = client.listFamilies.bind(client);
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    client.listFamilies = async (req) => {
+      const answer = await list(req); // read now, before the watcher adds the family
+      if (++calls === 1) await held;
+      return answer;
+    };
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'session' });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    mockWatcher().add(1);
+    await vi.waitFor(() => expect(store.families.some((f) => f.name === 'Arrival 1')).toBe(true));
+    release();
+    await flushPromises();
+    await new Promise((r) => setTimeout(r, 10));
+    await flushPromises();
+    expect(store.families.some((f) => f.name === 'Arrival 1')).toBe(true);
+    // The activation still shows: the watcher's list was read after it.
+    expect(store.families[0]!.activation).not.toBe('inactive');
+    await vi.waitFor(() =>
+      expect(store.faces.get(store.families[0]!.id)?.[0]?.active).toBe('session'),
+    );
     await store.stop();
   });
 

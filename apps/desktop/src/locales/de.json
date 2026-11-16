@@ -1443,12 +1443,14 @@
       "scanningCount": "{done} von {total} Schriften",
       "scanningNow": "wird eingelesen …",
       "scanned": "eingelesen {when}",
+      "scannedJustNow": "gerade eingelesen",
       "neverScanned": "noch nicht eingelesen",
       "notFound": "Ordner nicht gefunden",
       "scanningBadge": "Wird eingelesen",
       "missingBadge": "Fehlt",
       "scanningLabel": "{name} wird eingelesen",
-      "watch": "Beobachten",
+      "watching": "Überwacht",
+      "paused": "Pausiert",
       "watchLabel": "{name} beobachten",
       "rescanLabel": "{name} neu einlesen",
       "showLabel": "{name} im Dateimanager zeigen",
@@ -2134,5 +2136,14 @@
     "matchByLetters": "Nach Buchstaben suchen…",
     "hintPick": "Unterstrichenen Buchstaben anklicken, um seine Form zu wählen",
     "hintNarrowed": "{letters} eingegrenzt · Buchstaben anklicken zum Ändern"
+  },
+  "watcher": {
+    "added": {
+      "one": "{count} Schrift aus {source} hinzugefügt",
+      "other": "{count} Schriften aus {source} hinzugefügt"
+    },
+    "show": "Zeigen",
+    "chip": "Neu in {source} · {count}",
+    "unknownSource": "einem überwachten Ordner"
   }
 }

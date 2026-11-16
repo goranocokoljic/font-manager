@@ -466,6 +466,7 @@ impl CoreApi {
     fn updated(&self, faces: &[FaceId]) {
         if !faces.is_empty() {
             self.send(Event::LibraryChanged {
+                from_watcher: false,
                 source: None,
                 added: Vec::new(),
                 removed: Vec::new(),
@@ -762,6 +763,7 @@ fn changes(
     removed.sort();
     updated.sort();
     Some(Event::LibraryChanged {
+        from_watcher: false,
         source: Some(source),
         added,
         removed,
@@ -881,6 +883,7 @@ impl LibraryService for CoreApi {
         removed.sort();
         if !removed.is_empty() {
             self.send(Event::LibraryChanged {
+                from_watcher: false,
                 source: Some(source),
                 added: Vec::new(),
                 removed,
@@ -907,6 +910,7 @@ impl LibraryService for CoreApi {
                 (faces, Vec::new())
             };
             self.send(Event::LibraryChanged {
+                from_watcher: false,
                 source: Some(req.source),
                 added,
                 removed,
@@ -1151,6 +1155,7 @@ impl CoreApi {
         updated.sort();
         if !updated.is_empty() {
             self.send(Event::LibraryChanged {
+                from_watcher: false,
                 source: None,
                 added: Vec::new(),
                 removed: Vec::new(),
@@ -1665,6 +1670,7 @@ impl WorkflowService for CoreApi {
         let coverage = brief::coverage_reason(&req.languages);
         let index = self.lock();
         let found = index.search(&SearchRequest {
+            faces: None,
             glyph_traits: None,
             order: None,
             query: String::new(),

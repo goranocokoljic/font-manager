@@ -4053,3 +4053,28 @@ fn mock_foundries_list_filter_and_merge() {
         ErrorCode::NotFound
     );
 }
+
+/// E51.2: `faces` keeps only the faces asked for, as fm-core does.
+#[test]
+fn a_search_for_faces_keeps_only_those_faces() {
+    let api = api();
+    let all = api.search(SearchRequest::default()).unwrap();
+    let first = &all.families[0];
+    let wanted = vec![first.faces[0]];
+    let found = api
+        .search(SearchRequest {
+            faces: Some(wanted.clone()),
+            ..SearchRequest::default()
+        })
+        .unwrap();
+    assert_eq!(found.total, 1);
+    assert_eq!(found.families[0].family.id, first.family.id);
+    assert_eq!(found.families[0].faces, wanted);
+    let none = api
+        .search(SearchRequest {
+            faces: Some(Vec::new()),
+            ..SearchRequest::default()
+        })
+        .unwrap();
+    assert_eq!(none.total, 0);
+}

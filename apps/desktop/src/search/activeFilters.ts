@@ -29,6 +29,8 @@ export function useActiveFilters() {
   const foundry = computed(() =>
     search.foundry === null ? null : t('chips.foundry', { name: search.foundry }),
   );
+  /** The fonts the watcher added, after "Show" on its notice (E51.2): "New in Fonts · 3". */
+  const only = computed(() => search.only?.label ?? null);
   /** The count line's switch hides the families missing glyphs of your text (E43.3). */
   const rendersText = computed(() => search.hiding);
   /** Every chosen filter's name, in the order the chips show them. */
@@ -37,8 +39,9 @@ export function useActiveFilters() {
     ...languages.value.map((code) => languageName(search.languages, code)),
     ...traits.value.map(traitLineLabel),
     ...(foundry.value ? [foundry.value] : []),
+    ...(only.value ? [only.value] : []),
     ...(rendersText.value ? [t('chips.rendersText')] : []),
   ]);
 
-  return { groups, languages, traits, foundry, rendersText, chips, labels };
+  return { groups, languages, traits, foundry, only, rendersText, chips, labels };
 }

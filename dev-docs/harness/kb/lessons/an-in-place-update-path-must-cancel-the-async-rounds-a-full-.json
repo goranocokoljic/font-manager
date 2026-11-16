@@ -1,0 +1,18 @@
+{
+  "id": "an-in-place-update-path-must-cancel-the-async-rounds-a-full-",
+  "title": "An in-place update path must cancel the async rounds a full refresh used to cancel",
+  "category": "correctness",
+  "rule": "When a store event that used to trigger a full refresh (which bumps a generation counter) gets a cheaper in-place path, list every other async round in the store that the generation bump used to drop (activation reloads, face fetches, order changes) and make the new path supersede them too: bump their counter or have their staleness check read the new path's counter, and let the new path take over their pending work. Add a test that holds the older round's request until the new path has landed, then releases it and asserts the new state is still on screen.",
+  "rationale": "E51.2 (#600): applyWatcherChange replaced refresh() for watcher events but did not bump `generation`, so an activation round already in flight wrote its older family list over the watcher's and the newly added family left the lists again.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    600
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-11-16T04:44:41.122Z",
+  "last_seen": "2026-11-16T04:44:41.122Z"
+}

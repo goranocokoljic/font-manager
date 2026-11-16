@@ -1443,12 +1443,14 @@
       "scanningCount": "{done} of {total} fonts",
       "scanningNow": "scanning…",
       "scanned": "scanned {when}",
+      "scannedJustNow": "scanned just now",
       "neverScanned": "not scanned yet",
       "notFound": "folder not found",
       "scanningBadge": "Scanning",
       "missingBadge": "Missing",
       "scanningLabel": "Scanning {name}",
-      "watch": "Watch",
+      "watching": "Watching",
+      "paused": "Paused",
       "watchLabel": "Watch {name}",
       "rescanLabel": "Rescan {name}",
       "showLabel": "Show {name} in the file manager",
@@ -2134,5 +2136,14 @@
     "matchByLetters": "Match by letters…",
     "hintPick": "click an underlined letter for its shape",
     "hintNarrowed": "{letters} narrowed · click a letter to change"
+  },
+  "watcher": {
+    "added": {
+      "one": "{count} font added from {source}",
+      "other": "{count} fonts added from {source}"
+    },
+    "show": "Show",
+    "chip": "New in {source} · {count}",
+    "unknownSource": "a watched folder"
   }
 }

@@ -497,3 +497,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E51.4 #602] apps/desktop/src/components/ui/ — the app has no tooltip component, so every `title`-only hint (toolbar icon buttons, controls that are off) is shown on mouse hover only, never on keyboard focus.
 - [E51.5 #603] dev-docs/redesign/DESIGN.md:71 — DESIGN.md (also :143) still describes the `data-density` Comfortable/Compact switch as part of the design system.
 - [E51.5 #603] apps/desktop/src/components/SourcesSidebar.vue:104 — sidebar row buttons use `size="sm"` (24 px targets) though rows are now always 30 px; the 24 px rationale no longer applies.
+- [E51.2 #600] apps/desktop/src/components/FilterChips.vue:504 — a spilled chip (`visibility: hidden`) cannot be reached by keyboard and the "+N" drawer does not list the foundry, renders-text or new-fonts chips; "Clear all" is the only way to remove them.
+- [E51.2 #600] apps/desktop/src/stores/libraryViews.ts:51 — the active sidebar view is judged from `search.filters` alone and ignores the narrowings outside `Filters` (foundry, now the watcher's "only these faces").

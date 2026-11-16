@@ -3,7 +3,7 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockMoreSources, mockPickedFolders } from '../api/mock';
+import { createMockClient, mockMoreSources, mockPickedFolders, mockWatcher } from '../api/mock';
 import { createAppRouter } from '../router';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -141,10 +141,29 @@ describe('Settings › Sources (E50.13)', () => {
     await flushPromises();
     expect(spy).toHaveBeenLastCalledWith({ source: 1, paused: true });
     expect(watch().attributes('aria-checked')).toBe('false');
+    expect(card(wrapper, 'Fonts').get('[data-testid="watch-state"]').text()).toBe('Paused');
     await watch().trigger('click');
     await flushPromises();
     expect(spy).toHaveBeenLastCalledWith({ source: 1, paused: false });
     expect(watch().attributes('aria-checked')).toBe('true');
+    expect(card(wrapper, 'Fonts').get('[data-testid="watch-state"]').text()).toBe('Watching');
+    wrapper.unmount();
+  });
+
+  it('updates the count and "scanned just now" from the watcher event, with a toast (E51.2)', async () => {
+    const { wrapper } = await mountSources();
+    expect(card(wrapper, 'Fonts').get('.count').text()).toBe('7 fonts');
+    expect(card(wrapper, 'Fonts').get('.when').text()).not.toBe('scanned just now');
+    const list = vi.spyOn(client, 'listSources');
+    mockWatcher().add(2);
+    await until(() => card(wrapper, 'Fonts').get('.count').text() === '9 fonts');
+    expect(card(wrapper, 'Fonts').get('.when').text()).toBe('scanned just now');
+    // The cards follow the event; nothing polls.
+    expect(list).toHaveBeenCalled();
+    await until(() => document.querySelector('[data-testid="toast"]') !== null);
+    expect(document.querySelector('[data-testid="toast"]')!.textContent).toContain(
+      '2 fonts added from Fonts',
+    );
     wrapper.unmount();
   });
 
