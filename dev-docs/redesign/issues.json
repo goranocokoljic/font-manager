@@ -25,6 +25,10 @@
     {
       "title": "After the designers' test",
       "description": "What the first designers at WMG hit in a week of use: families not legible as families, icons and the activation dot too small, a toolbar that changes shape per view, a Layout mode that shows one font, a Characters section that does not scale and clips descenders, a Sources screen that looks like a form, and no way to browse by foundry. Boards 9–11 on the concept canvas are the targets."
+    },
+    {
+      "title": "Launch",
+      "description": "Everything that must be right before the first public release of Font Fu. E54 is part one; more pre-launch epics will follow."
     }
   ],
   "labels": [
@@ -122,6 +126,11 @@
       "name": "designers-test",
       "color": "5319E7",
       "description": "Fixes from the first designers' test (E50)"
+    },
+    {
+      "name": "launch",
+      "color": "0E8A16",
+      "description": "Before the public release (E54 and later)"
     }
   ],
   "epics": [
@@ -1415,6 +1424,213 @@
             "The density button leaves the toolbar, the density option leaves Settings, and the compact row and card styles, `list/density.ts`'s compact branch and the `density` icon are deleted; every list renders at the comfortable metrics",
             "`fm-api` is not changed (rule 6, 'never remove a field'): `Settings.density` and `Density::Compact` stay in the contract and a stored `compact` is read without error and ignored by the UI; a test loads settings with `density: compact` and gets comfortable rows",
             "The toolbar after this story is title · search · filter chips · view switch · compare · size, and E50.2's 'identical in every mode' test is updated to it; en and de strings for density are removed; no dead code or unused CSS is left (the lint job proves it)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E54",
+      "title": "Before launch, part one — right-click, tags, an exact language filter, one toolbar, Preview options, row actions, Similar",
+      "phase": 3,
+      "track": "ui",
+      "milestone": "Launch",
+      "depends": [
+        "E50",
+        "E51"
+      ],
+      "labels": [
+        "launch"
+      ],
+      "summary": "Seven things found while using the app before the public release; more pre-launch epics will follow. (1) Right-click shows the webview's own menu almost everywhere (Back, Forward, Reload on fonts; Emoji and Import passwords in text fields): only the Characters grid and the Foundries sidebar prevent it today. The app shows a menu only where it has one; text fields get Cut, Copy, Paste and Select all. (2) The Tags group in the sidebar lists every tag but a tag is only a drop target; filtering by tag needs the Filters popover. A click on a tag filters, and the popover keeps its tag filter. (3) The language filter keeps fonts that lack required letters. Cause, in crates/fm-core/src/coverage.rs: NEAR_MISS = 5, so a face that lacks up to five base characters of the chosen presets still passes. Serbian (Latin) differs from basic Latin by ten code points (Č Ć Đ Š Ž in both cases), so a face lacking four of the ten passes: the fixture Neuton-Light lacks Ć Đ ć đ and is kept (checked against its cmap). Decision (Goran, 17 Nov 2026): for a language, one missing letter disqualifies the font; whoever needs a font for a language needs all of its letters. Pasted text keeps today's allowance for now: a font lacking a few of its characters is still shown with what it lacks. (4) The catalog views (Google Fonts, Fontshare, the Adobe Fonts note) have their own toolbar: text buttons for the view mode and a plain search input, where the library has the segmented control with icons, SearchBox and the size slider; and the language of the pangram cannot be chosen there. (5) The Preview options popover is a plain column of fields; it gets a designed layout and loses Text colour, Background and Surface. Decision (Goran, 17 Nov 2026): previews always use the colours the theme defines. (6) The actions that appear at the right of a hovered row are small and their tooltips do not show (they are native `title` attributes; the app has no tooltip of its own), and the Similar icon, a lens with '≈' inside, does not read at 16 px. (7) The Similar panel does not say what it is, and its ranking lets in fonts that were never measured. Cause, in crates/fm-core/src/similar.rs and index/search/similar.rs: a face without a glyph fingerprint (an icon font has no Latin letters to draw) is still a candidate; every component it lacks counts as half alike, and its OS/2 weight and width class are the defaults (400, 5) that most fonts share, so such a pair reaches about 77% and outranks measured pairs, although the module comment says it never does. That is how Font Awesome is '71% similar' to a display serif. There is also no floor: the best N are shown however weak, and classification is all-or-nothing at 3 of 11 points, so an unrelated sans can tie with a sibling of the reference family.",
+      "stories": [
+        {
+          "id": "E54.1",
+          "title": "No webview menu anywhere: right-click shows the app's menu or nothing",
+          "size": "S",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "a right-click (and the Menu key, Shift+F10) anywhere in the window never shows the webview's own menu: no Back, Forward, Reload, Save as, Print, Emoji, Import passwords or Inspect in a release build on Windows (WebView2), macOS (WKWebView) and Linux (WebKitGTK)",
+            "one window-level handler does it; no per-component `@contextmenu.prevent` is added for this, and the two existing menus (Characters grid, Foundries sidebar) open as before",
+            "on font rows, cards, table rows, the family page, the sidebar and the toolbar a right-click does nothing",
+            "in a debug build the developer tools stay reachable by their keyboard shortcut",
+            "a Playwright spec asserts the default is prevented on the list, a card, the sidebar, the toolbar and a text field; the PR records a manual check on the three systems"
+          ]
+        },
+        {
+          "id": "E54.2",
+          "title": "Text fields: the app's own Cut, Copy, Paste, Select all menu",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E54.1"
+          ],
+          "criteria": [
+            "a right-click in any text field (search, preview text, rename, notes, settings, the catalog search) opens the app's menu with exactly Cut, Copy, Paste and Select all; Cut and Copy are disabled without a selection, Cut and Paste in a read-only field",
+            "the menu is the same component, look and motion as the app's other menus, opens at the pointer, is keyboard-complete (arrows, Enter, Esc) and returns focus and the caret to the field",
+            "each item does what its keyboard shortcut does, on the three systems; the shortcuts themselves are untouched",
+            "if reading the clipboard for Paste needs a dependency that is not in the spec's library table, stop and ask before adding it (CLAUDE.md)",
+            "a Playwright spec covers copy, cut and select all in the search field and the preview field, and the disabled states"
+          ]
+        },
+        {
+          "id": "E54.3",
+          "title": "Filter by tag from the sidebar",
+          "size": "M",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "clicking a tag in the sidebar's Tags group filters the list to the fonts that carry it; the tag shows as pressed (aria-pressed); clicking it again clears it; several tags can be on at once and combine exactly as the tag filter in the Filters popover does",
+            "it is the same filter, held once in the search store: the sidebar, the Filters popover and the filter chips above the list always agree, and removing the chip releases the tag in the sidebar",
+            "the tag filter stays in the Filters popover as it is today",
+            "tags become buttons: reachable by Tab and the arrow keys, toggled by Space and Enter, with the face count in the accessible name as now",
+            "dropping fonts on a tag still tags them, with the ring and the '31 → 34' count; a drop never toggles the filter",
+            "it works in All fonts, in a collection, in a library view and in a foundry; the catalogs ignore it; a Playwright spec covers click, a second tag, clearing from the chip, and a drop on a pressed tag"
+          ]
+        },
+        {
+          "id": "E54.4",
+          "title": "Exact language filter: one missing letter disqualifies the font",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "with language presets the `supports` filter returns a face only when it maps every base character of every chosen preset; a face that lacks one is not a result and is not offered as a near miss",
+            "pasted text ('covers this text') keeps today's rule: a face lacking up to NEAR_MISS characters of the text is still a result and lists what it lacks; the constant stays, used by that path only, and its comment says so",
+            "a test on the fixtures: Neuton-Light, which lacks Ć Đ ć đ, is not a result for sr-Latn, hr or bs; a fixture face with all 62 base characters is; a face lacking exactly one base character of a preset is not; the pasted-text tests pass unchanged",
+            "everything that counts by language follows the exact rule: the language counts in Filters, drop counts, smart collections with a language rule (an existing one shows its new, smaller count after the update without a rescan), the brief and pairing workflows, `fm search --supports` and the MCP search tool",
+            "no existing fm-api field is removed or renamed; MockApi (Rust) and the TypeScript mock follow the same two rules",
+            "the coverage report (which lists every missing character of a face) and the tofu line on a row (E43.4) are unchanged",
+            "the ADR or spec section that covers E3.8 is amended in the same PR with the decision and its date (Goran, 17 Nov 2026), and notes that the pasted-text allowance is to be reconsidered; docs/user and the module comments in coverage.rs and index/search.rs describe the two rules; search stays under 50 ms on the reference library"
+          ]
+        },
+        {
+          "id": "E54.5",
+          "title": "Catalog views use the library's toolbar",
+          "size": "M",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "Google Fonts and Fontshare show the view mode with the same segmented control, icons, order and slide as the library, the same search component and the size slider in the same place; no text buttons for the view mode remain",
+            "switching between the library and a catalog does not move or resize any shared control (the E50.2 rule): a Playwright spec compares their boxes in both views at 1280 and 1024 px wide",
+            "Refresh and Check for updates follow DESIGN.md for toolbar actions (icon buttons with a tooltip and an accessible name); the 'refreshed' date never pushes a control out of the bar in the longest locale",
+            "a view mode or control that has no effect in a catalog is disabled with its reason, not hidden (the E51.4 rule)",
+            "the Adobe Fonts note keeps the same bar height and title style, with no controls that do nothing"
+          ]
+        },
+        {
+          "id": "E54.6",
+          "title": "Choose the pangram's language in the catalog views",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E54.5"
+          ],
+          "criteria": [
+            "the PR says why the language cannot be chosen in a catalog today (the picker is mounted there through PreviewControls) and fixes that cause",
+            "choosing a language in Google Fonts or Fontshare shows that language's pangram on every card and row, and the choice is remembered for the catalog view apart from the library's",
+            "a family whose preview font lacks letters of the pangram shows them the way library rows do (E43.4), never in a fallback font",
+            "a language without a pangram is marked in the picker as in the library; a Playwright spec on the mock covers choosing Serbian (Latin) in a catalog"
+          ]
+        },
+        {
+          "id": "E54.7",
+          "title": "Board: the Preview options popover",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "dev-docs/design/redesign/ gains the target images of the popover in Paper and in one dark theme, exported at 2× as the README says, with the README table updated",
+            "the board groups the controls (sample and alignment; size, auto size, line height, tracking; metrics and outline) and has no colour controls at all: no Text colour, no Background, no Surface",
+            "DESIGN.md gets a short 'Preview options' section: the groups, which controls are sliders with a number field, what a control looks like while it has no effect in the current view mode, and the rule that preview colours come from the theme"
+          ]
+        },
+        {
+          "id": "E54.8",
+          "title": "Build the Preview options popover; remove Text colour, Background and Surface",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E54.7"
+          ],
+          "criteria": [
+            "the popover matches the board within the tolerance REVIEW.md sets, in every theme, and opens and closes per MOTION.md",
+            "Text colour, Background colour and Surface are gone from the popover, the command palette and the shortcuts sheet; every preview (list, wall, table, layout, family page, compare, catalogs) draws in the theme's text colour on the theme's surface",
+            "their fields leave the preview store; a stored value from an earlier version is ignored on load without an error, and nothing else in the saved view preferences is lost",
+            "fm-api is untouched: a foreground or background parameter that the CLI, MCP or render_preview accepts keeps working; the UI simply always sends the theme's colours",
+            "the unused strings are removed in every locale; the popover is keyboard-complete and passes the a11y and contrast specs; the Playwright specs that set a colour or a surface are updated or removed with a reason in the PR"
+          ]
+        },
+        {
+          "id": "E54.9",
+          "title": "Row actions: larger, with the app's own tooltips, and a new Similar icon",
+          "size": "M",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "the actions shown on a hovered or focused row, card and table row (activate, quick collection, compare, similar and the rest) use the target and glyph sizes DESIGN.md sets for row actions, no smaller than a 32 px target with a 20 px glyph, and do not change the row's height or shift its text",
+            "the app gets one tooltip primitive, used by UiIconButton everywhere: it shows the action's name and its shortcut on hover within 400 ms and at once on keyboard focus, hides on press and Esc, never covers the button, follows the theme and MOTION.md, and is exposed to assistive technology as the button's description; native `title` attributes are removed from icon buttons so no tooltip shows twice",
+            "the PR says why the native tooltips did not show on row actions",
+            "Similar gets a new icon in icons.ts that reads at 16 and 20 px: the lens is dropped; proposed is a bold '≈' (two waves), with the alternative of two overlapping letter outlines; the choice is recorded in DESIGN.md and used in the list, the family page, the command palette and the shortcuts sheet",
+            "iconButtons.test.ts covers the tooltip; a Playwright spec hovers each row action and reads its tooltip; the a11y spec passes"
+          ]
+        },
+        {
+          "id": "E54.10",
+          "title": "The Similar panel says what it is",
+          "size": "S",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "the panel opens with a header in the size and weight of the view titles: 'Similar to' and the reference font's name, the new Similar icon, the number of results, and a visible way back ('Back to library' with its shortcut) beside the close button",
+            "the reference font is set apart from the results as its own labelled block ('Reference'), not as the first row of the list",
+            "each result keeps its name, percentage and the 'why' line; the percentage bar has an accessible name; the 'Fallback' badge is explained by a tooltip or replaced by words that say what it means",
+            "when nothing is close enough (E54.11) the panel says so in plain words and offers to go back",
+            "the header and block follow DESIGN.md and MOTION.md; the Playwright spec for the panel is updated; no number or reason is computed in the component"
+          ]
+        },
+        {
+          "id": "E54.11",
+          "title": "Similar ranks only measured fonts: no icon fonts, no weak matches",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "a face without a glyph fingerprint is never a candidate for a reference that has one, and is never ranked above a measured face; the claim in similar.rs that a pair compared on less never outranks one compared on everything becomes true and has a test that fails on today's code",
+            "symbol and icon faces are not candidates for a text face, and the other way round",
+            "results below a floor are not returned; the floor is one named constant with a comment that says how it was chosen, and the answer can be empty",
+            "a reference without a fingerprint answers an empty list with a reason the UI can show, instead of a metrics-only ranking",
+            "a test on the fixtures: for a serif reference no icon or symbol face appears, and the closest results are measured faces; MockApi and the TypeScript mock follow; the CLI and the MCP find_similar tool return the same list; no fm-api field is removed or renamed; ranking 10,000 faces stays inside the search budget"
+          ]
+        },
+        {
+          "id": "E54.12",
+          "title": "Similar: a small set of pairs a designer agrees with",
+          "size": "S",
+          "track": "data",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "fixtures/similar/expected.json lists at least 20 reference faces from fixtures/fonts, each with faces that should rank near it and faces that should rank far, chosen by eye by a person and covering serif, sans, slab, script, display and mono",
+            "it includes the cases seen in use: a sibling family of the reference must rank above an unrelated sans; a handwriting face must not rank near a display serif",
+            "a schema sits next to it and a test validates the file; a README says how the pairs were chosen and how to add one"
+          ]
+        },
+        {
+          "id": "E54.13",
+          "title": "Similar: tune the score against the agreed pairs",
+          "size": "M",
+          "track": "core",
+          "depends": [
+            "E54.11",
+            "E54.12"
+          ],
+          "criteria": [
+            "a test reads fixtures/similar/expected.json and asserts, per reference, that every 'near' face ranks above every 'far' face; it fails on the weights of today and passes after the change",
+            "the weights and tolerances in similar.rs are re-tuned, and classification stops being all-or-nothing where two classes are close (serif and slab, sans and mono); each changed constant keeps a comment with its reason",
+            "the percentage shown still means the same on every OS (plain f32 arithmetic over stored values) and no rescan is needed after the update",
+            "the PR lists, for five references, the top five before and after"
           ]
         }
       ]
