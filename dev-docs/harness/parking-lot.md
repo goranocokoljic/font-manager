@@ -515,3 +515,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E54.5 #615] apps/desktop/src/components/PreviewControls.vue:45 — the `inlineSize` prop has no caller left; only PreviewControls.test.ts:366 uses it.
 - [E54.5 #615] apps/desktop/src/views/HomeView.vue:631 — in a narrow column the library's filter chips row is moved down with `order: 1`, so its Tab order differs from its reading order.
 - [E54.2 #612] apps/desktop/src/styles/theme.css:128 — in dark mode the accent ring (#ab4b96) is ~2.5:1 against the hover tint and ~3.0:1 against --fm-surface-2, so the inset-ring-on-hover menu pattern (FamilyCharacters .menu) is under 3:1 on its inner edge.
+- [E54.9 #619] apps/desktop/src/views/FamilyView.vue:381 — the family page's Compare shows no shortcut in its tooltip while Tag and Similar beside it show T and S.
+- [E54.9 #619] apps/desktop/src/components/FontGrid.vue:811 — the wall card's "like this" letter buttons are card actions that still use a native `title` (text buttons, not UiIconButton).
+- [E54.9 #619] apps/desktop/src/components/ui/UiTooltip.vue:27 — the tooltip has its own copy of UiPopover's place-and-clamp math and no resize handler; two copies to keep in step.

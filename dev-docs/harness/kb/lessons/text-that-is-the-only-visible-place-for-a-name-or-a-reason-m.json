@@ -1,0 +1,20 @@
+{
+  "id": "text-that-is-the-only-visible-place-for-a-name-or-a-reason-m",
+  "title": "Text that is the only visible place for a name or a reason must wrap, never ellipsize",
+  "category": "accessibility",
+  "rule": "When a tooltip, hint or popover is the only place on screen that shows an action's full name or the reason a control is off (an icon button's tooltip, a disabled reason), let its text wrap inside a max width (`overflow-wrap: anywhere`, no `white-space: nowrap`, no `text-overflow: ellipsis`) and keep only a short key chip unbreakable. Test it in Playwright with a long name: assert the text element's scrollWidth and scrollHeight do not exceed its client box, and check the test fails with the old one-line CSS. `toHaveText` reads DOM text and passes while the drawn text is cut.",
+  "rationale": "E54.9 (#619): the new icon-button tooltip was one 320 px line with an ellipsis, so 'Find the fonts similar to JetBrains Mono Regul…' and a full-Compare disabled reason lost their end; the native title it replaced wrapped, and the e2e text check passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    619
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/ui/**",
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-17T13:50:12.973Z",
+  "last_seen": "2026-11-17T13:50:12.973Z"
+}
