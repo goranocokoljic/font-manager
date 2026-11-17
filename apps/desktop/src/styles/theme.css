@@ -51,6 +51,8 @@
   --fm-z-sticky: 2;
   --fm-z-popover: 10;
   --fm-z-toast: 20;
+  /* The tooltip of an icon button (E54.9) is over everything, a toast and a sheet too. */
+  --fm-z-tooltip: 30;
 
   /* Controls. */
   --fm-control-height: 28px;

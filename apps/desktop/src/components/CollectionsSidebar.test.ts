@@ -65,7 +65,7 @@ describe('collections sidebar', () => {
   it('lists the collections with their counts, and makes one from the New button', async () => {
     const w = await mountSidebar();
     expect(count(w, 'Clients')).toBe('0 fonts');
-    await w.get('button[title="Make a collection"]').trigger('click');
+    await w.get('button[aria-label="New collection"]').trigger('click');
     await flushPromises();
     const input = w.get('input[aria-label="New collection name"]');
     expect(document.activeElement).toBe(input.element);

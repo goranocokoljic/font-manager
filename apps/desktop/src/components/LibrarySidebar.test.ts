@@ -154,7 +154,7 @@ describe('an empty section', () => {
     expect(w.get('[data-testid="collections-empty"]').text()).toBe('No collections yet');
     expect(w.findAll('.side-quiet')).toHaveLength(1);
     await client.createCollection({ name: 'One' });
-    await w.get('button[title="Make a collection"]').trigger('click');
+    await w.get('button[aria-label="New collection"]').trigger('click');
     await flushPromises();
     expect(w.find('[data-testid="collections-empty"]').exists()).toBe(false);
   });

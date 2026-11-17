@@ -8,6 +8,7 @@ import { FaceLoader, setFaceLoader } from '../preview/faceLoader';
 import { useCompareStore } from '../stores/compare';
 import { useSearchStore } from '../stores/search';
 import CompareSheet from './CompareSheet.vue';
+import { tooltipOf } from './ui/testing';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
@@ -131,14 +132,12 @@ describe('Similar to the base in the Compare sheet (E48.3)', () => {
     expect(s.pins.map((p) => p.id)).toEqual([300, 303]);
   });
 
-  it('with a full set the icon is disabled with the reason in its title', async () => {
+  it('with a full set the icon is disabled with the reason in its tooltip', async () => {
     const { wrapper, s } = await mountWith([f(0), f(1), f(6), f(7)]);
     const row = (id: number) =>
       wrapper.get(`[data-testid="similar-row"][data-face="${id}"] [data-testid="similar-compare"]`);
     expect(row(302).attributes('disabled')).toBeDefined();
-    expect(row(302).attributes('title')).toBe(
-      'Compare holds 4 fonts. Remove one to add Family 2 Style 2.',
-    );
+    expect(tooltipOf(row(302))).toBe('Compare holds 4 fonts. Remove one to add Family 2 Style 2.');
     await row(302).trigger('click');
     expect(s.pins).toHaveLength(4);
     // A face in the set can still be removed.

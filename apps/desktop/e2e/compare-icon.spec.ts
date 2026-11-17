@@ -50,12 +50,12 @@ test('a wall card shows the icon on hover, adds and removes, and keeps it while 
   // Hidden at rest.
   await page.mouse.move(2, 2);
   await expect.poll(() => opacity(icon)).toBe(0);
-  // Shown on hover; a 28 px target.
+  // Shown on hover; a 32 px target, a row action (E54.9).
   await card.hover();
   await expect.poll(() => opacity(icon)).toBe(1);
   const box = (await icon.boundingBox())!;
-  expect(Math.round(box.width)).toBe(28);
-  expect(Math.round(box.height)).toBe(28);
+  expect(Math.round(box.width)).toBe(32);
+  expect(Math.round(box.height)).toBe(32);
   await expect(icon).toHaveAttribute('aria-label', `Add ${name} to Compare`);
   await expect(icon).toHaveAttribute('data-in-set', 'false');
 

@@ -52,11 +52,9 @@ onMounted(() => void store.load());
             :data-testid="`catalog-turn-on-${c.id}`"
             :label="t('catalogs.turnOnLabel', { name: c.name })"
             :title="`${t('catalogs.turnOn')} — ${t('catalogs.connects')}`"
-            :aria-describedby="`catalog-connects-${c.id}`"
             :disabled="store.busy === c.id"
             @click="store.setEnabled(c.id, true)"
           />
-          <span :id="`catalog-connects-${c.id}`" class="sr-only">{{ t('catalogs.connects') }}</span>
         </span>
       </div>
       <div class="side-row" :class="{ current: store.open === 'adobeFonts' }">

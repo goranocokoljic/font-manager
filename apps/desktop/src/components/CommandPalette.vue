@@ -7,7 +7,8 @@ import { t } from '../i18n';
 import { highlight } from '../keyboard/fuzzy';
 import { ACTIONS, ariaShortcut, formatChord } from '../keyboard/keymap';
 import { setPaletteOrigin } from '../keyboard/returnFocus';
-import { useActions, useCommandsStore, type PaletteItem } from '../stores/commands';
+import { ACTION_ICONS, useActions, useCommandsStore, type PaletteItem } from '../stores/commands';
+import UiIcon from './ui/UiIcon.vue';
 
 const commands = useCommandsStore();
 const input = ref<HTMLInputElement | null>(null);
@@ -154,6 +155,9 @@ function onKeyDown(e: KeyboardEvent): void {
           @click="choose(item)"
         >
           <span class="group">{{ item.action.group }}</span>
+          <span class="icon" aria-hidden="true"
+            ><UiIcon v-if="ACTION_ICONS[item.action.id]" :name="ACTION_ICONS[item.action.id]!"
+          /></span>
           <span class="title">
             <template v-for="(part, k) in highlight(item.action.title, item.indices)" :key="k">
               <mark v-if="part.match">{{ part.text }}</mark>
@@ -230,6 +234,14 @@ function onKeyDown(e: KeyboardEvent): void {
   width: 88px;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
+}
+/* The action's icon (E54.9), in a fixed slot so the titles line up with or without one. */
+.icon {
+  flex: none;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  color: var(--fm-muted);
 }
 .title {
   flex: 1;

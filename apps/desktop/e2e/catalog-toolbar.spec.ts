@@ -122,7 +122,9 @@ test("the catalog's bar has the library's children; no text button for the view 
     const b = page.getByTestId(testId);
     await expect(b).toHaveAccessibleName(name);
     await expect(b).toHaveText('');
-    await expect(b).toHaveAttribute('title', /\S/);
+    // Its tooltip (E54.9) is its description; no native title.
+    await expect(b).toHaveAccessibleDescription(/\S/);
+    await expect(b).not.toHaveAttribute('title');
     await expect(b.locator('svg')).toHaveCount(1);
   }
 });

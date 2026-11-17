@@ -2,7 +2,8 @@
 import { computed } from 'vue';
 import { ICONS, type IconName } from './icons';
 
-const props = defineProps<{ name: IconName }>();
+// `size` 20 is the row actions' glyph (E54.9): the same 16 px drawing, scaled.
+const props = withDefaults(defineProps<{ name: IconName; size?: 16 | 20 }>(), { size: 16 });
 const markup = computed(() => ICONS[props.name]);
 </script>
 
@@ -11,8 +12,8 @@ const markup = computed(() => ICONS[props.name]);
   <!-- eslint-disable vue/no-v-html -->
   <svg
     class="ui-icon"
-    width="16"
-    height="16"
+    :width="size"
+    :height="size"
     viewBox="0 0 16 16"
     fill="none"
     stroke="currentColor"

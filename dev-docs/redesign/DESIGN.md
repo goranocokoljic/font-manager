@@ -132,6 +132,25 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   the Field. Build once, reuse everywhere; when a later change needs a component that exists,
   it uses it and improves it in place. Grep for native controls before shipping.
 - **Icons:** one set (Lucide), 16 px, 1.5 stroke.
+- **Row actions (E54.9):** the actions a hovered or focused list row, wall card or table row
+  shows (Activate, Compare, Similar and the rest) are `UiIconButton size="lg"`: a **32 px
+  target around a 20 px glyph** (the 16 px drawing scaled). They sit in the row's existing
+  space — a list row is at least 32 px high, a table row is 32 px — so they never change a
+  row's height or move its text. Every other icon button keeps 28 px / 16 px (`sm` 24 px).
+- **Tooltips (E54.9):** one primitive, `UiTooltip`, owned by `UiIconButton`; no icon button
+  sets a native `title`. It shows the action's name and its shortcut (a quiet `kbd`), comes
+  up 300 ms after the pointer rests (at once while another one was up a moment ago) and at
+  once on a keyboard focus, and hides on a press, on Esc, on leave and on blur. It sits above
+  the button (below without room), never over it, on `--fm-surface-2` with the popover's
+  border and shadow, and fades at `--fm-motion-fast`. It is the button's `aria-describedby`.
+  Native `title` tooltips were not dependable on row actions: the webview draws them, not
+  the app, so whether and when one shows differs per webview (WebView2, WKWebView,
+  WebKitGTK) and it needs a long rest of the pointer; the actions are visible only while
+  their row is hovered, inside a draggable row; and a keyboard focus never shows one.
+- **Similar's icon (E54.9):** a bold "≈" — two waves, 2 px stroke — chosen over two
+  overlapping letter outlines, which blur into one shape at 16 px. The old lens with a small
+  "≈" read as Search. The same icon is used in list rows, on the family page, in the
+  command palette and in the shortcut sheet (`ACTION_ICONS` in `stores/commands.ts`).
 - **Motion:** hover/active 120 ms, panel open/close 200 ms, easing `cubic-bezier(.2,0,0,1)`.
   Nothing bounces.
 - **Hover:** every hover tint is `--fm-hover` (a low-alpha overlay that reads on any surface).

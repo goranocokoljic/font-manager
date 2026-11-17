@@ -3,7 +3,13 @@
 // whose content is only an icon (a UiIcon, an inline svg, or a lone symbol such as ×) fails
 // here. Three files are the exception: UiIconButton itself, and the segments of a segmented
 // control and the steppers of a number field, which are parts of one control, not buttons.
-import { describe, expect, it } from 'vitest';
+// E54.9 adds the tooltip: the app's own `UiTooltip`, never a native `title`.
+import { mount, type VueWrapper } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent, h, nextTick } from 'vue';
+import UiIconButton from './UiIconButton.vue';
+import { tooltipOf, tooltipShortcut } from './testing';
+import { HOVER_DELAY_MS, resetTooltips } from './tooltip';
 
 const sources = import.meta.glob<string>('/src/**/*.vue', {
   query: '?raw',
@@ -75,5 +81,207 @@ describe('icon buttons (E50.6)', () => {
         iconOnlyButtons(source).map(([line, tag]) => `${path.slice(5)}:${line} ${tag}`),
       );
     expect(offenders, 'use UiIconButton for these').toEqual([]);
+  });
+});
+
+// E54.9: the app's one tooltip, on every icon button.
+describe('the icon button tooltip (E54.9)', () => {
+  let wrappers: VueWrapper[] = [];
+  const mountButton = (props: Record<string, unknown> = {}) => {
+    const w = mount(UiIconButton, {
+      props: { icon: 'similar', label: 'Find similar to Inter', shortcut: 'S', ...props },
+      attachTo: document.body,
+    });
+    wrappers.push(w);
+    return w;
+  };
+  /** The tooltip layer of a button, through its aria-describedby. */
+  const layer = (w: VueWrapper) => {
+    const ids = (w.attributes('aria-describedby') ?? '').split(' ');
+    const el = ids
+      .map((id) => document.getElementById(id))
+      .find((e) => e?.getAttribute('role') === 'tooltip');
+    if (!el) throw new Error('no tooltip');
+    return el;
+  };
+  const shown = (w: VueWrapper) => layer(w).style.display !== 'none';
+  const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k }));
+  const press = () => window.dispatchEvent(new Event('pointerdown'));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetTooltips();
+  });
+  afterEach(() => {
+    for (const w of wrappers) w.unmount();
+    wrappers = [];
+    vi.useRealTimers();
+  });
+
+  it('has no native title; the tooltip is its description, with the name and the shortcut', () => {
+    const w = mountButton();
+    expect(w.attributes('title')).toBeUndefined();
+    expect(w.attributes('aria-label')).toBe('Find similar to Inter');
+    expect(tooltipOf(w)).toBe('Find similar to Inter');
+    expect(tooltipShortcut(w)).toBe('S');
+    // The description assistive technology reads: the name, a pause, the key.
+    expect(layer(w).textContent).toBe('Find similar to Inter, S');
+    expect(shown(w)).toBe(false);
+  });
+
+  it('says more than the label with a title, and keeps a caller’s own description', () => {
+    const w = mountButton({ title: 'Compare is full', 'aria-describedby': 'hint' });
+    expect(w.attributes('title')).toBeUndefined();
+    expect(tooltipOf(w)).toBe('Compare is full');
+    expect(w.attributes('aria-describedby')?.split(' ')[0]).toBe('hint');
+  });
+
+  it('comes up after a rest of the pointer, within 400 ms, and goes when it leaves', async () => {
+    const w = mountButton();
+    await w.trigger('pointerenter', { pointerType: 'mouse' });
+    expect(shown(w)).toBe(false);
+    expect(HOVER_DELAY_MS).toBeLessThanOrEqual(400);
+    vi.advanceTimersByTime(HOVER_DELAY_MS);
+    await nextTick();
+    expect(shown(w)).toBe(true);
+    await w.trigger('pointerleave');
+    expect(shown(w)).toBe(false);
+  });
+
+  it('a pointer that leaves before the delay shows nothing', async () => {
+    const w = mountButton();
+    await w.trigger('pointerenter', { pointerType: 'mouse' });
+    await w.trigger('pointerleave');
+    vi.advanceTimersByTime(1000);
+    await nextTick();
+    expect(shown(w)).toBe(false);
+  });
+
+  it('comes up at once on a keyboard focus, not on a focus by click', async () => {
+    const w = mountButton();
+    key('Tab');
+    await w.trigger('focus');
+    expect(shown(w)).toBe(true);
+    await w.trigger('blur');
+    expect(shown(w)).toBe(false);
+    press();
+    await w.trigger('focus');
+    expect(shown(w)).toBe(false);
+  });
+
+  it('hides on a press, by pointer or by key, and on Esc', async () => {
+    const w = mountButton();
+    key('Tab');
+    await w.trigger('focus');
+    expect(shown(w)).toBe(true);
+    await w.trigger('pointerdown');
+    expect(shown(w)).toBe(false);
+
+    await w.trigger('blur');
+    key('Tab');
+    await w.trigger('focus');
+    expect(shown(w)).toBe(true);
+    await w.trigger('keydown', { key: 'Enter' });
+    expect(shown(w)).toBe(false);
+
+    await w.trigger('blur');
+    key('Tab');
+    await w.trigger('focus');
+    expect(shown(w)).toBe(true);
+    key('Escape');
+    await nextTick();
+    expect(shown(w)).toBe(false);
+  });
+
+  it('shows one tooltip at a time; the next one along a row comes up at once', async () => {
+    const a = mountButton({ label: 'Activate' });
+    const b = mountButton({ label: 'Compare' });
+    await a.trigger('pointerenter', { pointerType: 'mouse' });
+    vi.advanceTimersByTime(HOVER_DELAY_MS);
+    await nextTick();
+    expect(shown(a)).toBe(true);
+    await a.trigger('pointerleave');
+    await b.trigger('pointerenter', { pointerType: 'mouse' });
+    expect(shown(b), 'no second wait right after one closed').toBe(true);
+    key('Tab');
+    await a.trigger('focus');
+    expect(shown(a)).toBe(true);
+    expect(shown(b), 'the one before closes').toBe(false);
+  });
+
+  it('a touch shows no tooltip', async () => {
+    const w = mountButton();
+    await w.trigger('pointerenter', { pointerType: 'touch' });
+    vi.advanceTimersByTime(1000);
+    await nextTick();
+    expect(shown(w)).toBe(false);
+  });
+
+  it('sits above the button, below it without room, inside the window, never over it', async () => {
+    const rect = (left: number, top: number, w: number, h: number) =>
+      ({
+        left,
+        top,
+        right: left + w,
+        bottom: top + h,
+        width: w,
+        height: h,
+        x: left,
+        y: top,
+      }) as DOMRect;
+    const width = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(120);
+    const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(24);
+    const place = async (button: DOMRect) => {
+      const w = mountButton();
+      vi.spyOn(w.element, 'getBoundingClientRect').mockReturnValue(button);
+      key('Tab');
+      await w.trigger('focus');
+      await nextTick();
+      await nextTick();
+      const s = layer(w).style;
+      const box = rect(parseFloat(s.left), parseFloat(s.top), 120, 24);
+      await w.trigger('blur');
+      return box;
+    };
+    const overlaps = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+    const mid = rect(400, 300, 32, 32);
+    const above = await place(mid);
+    expect(above.bottom).toBeLessThanOrEqual(mid.top);
+    expect(above.left + 60).toBe(mid.left + 16);
+    expect(overlaps(above, mid)).toBe(false);
+
+    const top = rect(400, 2, 32, 32);
+    const below = await place(top);
+    expect(below.top).toBeGreaterThanOrEqual(top.bottom);
+    expect(overlaps(below, top)).toBe(false);
+
+    const edge = rect(window.innerWidth - 20, 300, 32, 32);
+    const inside = await place(edge);
+    expect(inside.right).toBeLessThanOrEqual(window.innerWidth);
+    expect(overlaps(inside, edge)).toBe(false);
+    width.mockRestore();
+    height.mockRestore();
+  });
+
+  it('a count beside the icon stays the button’s only text', () => {
+    const Wrap = defineComponent(
+      () => () =>
+        h(UiIconButton, { icon: 'compare', label: 'Compare, 2 fonts' }, () => h('span', '2')),
+    );
+    const w = mount(Wrap, { attachTo: document.body });
+    expect(w.get('button').text()).toBe('2');
+    w.unmount();
+  });
+
+  it('a row action is a 32 px target around a 20 px glyph (size="lg")', () => {
+    const w = mountButton({ size: 'lg' });
+    expect(w.classes()).toContain('lg');
+    expect(w.get('svg').attributes('width')).toBe('20');
+    expect(w.get('svg').attributes('height')).toBe('20');
+    expect(mountButton().get('svg').attributes('width')).toBe('16');
+    const style = sources['/src/components/ui/UiIconButton.vue']!;
+    expect(style).toMatch(/\.ui-icon-button\.lg \{\s*min-width: 32px;\s*height: 32px;/);
   });
 });

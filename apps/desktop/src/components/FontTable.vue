@@ -11,6 +11,7 @@
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
+import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
 import type { FaceId } from '../api/types';
 import {
   ACTIVATION_LABEL,
@@ -71,6 +72,8 @@ const views = useViewsStore();
 
 /** Row and header height in CSS px. */
 const rowPx = TABLE_ROW_PX;
+// The compare row action's tooltip names its key (E54.9).
+const compareKey = formatChord(chordOf(ACTIONS.compare)!);
 
 const config = computed(() => views.tableFor(props.view));
 const columns = computed(() => visibleColumns(config.value));
@@ -440,7 +443,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                   v-if="rowFace(item.row)"
                   class="row-compare"
                   data-testid="row-compare"
+                  size="lg"
                   tabindex="-1"
+                  :shortcut="compareKey"
                   :face="rowFace(item.row)!"
                   :scope="item.row.kind === 'family' ? 'family' : 'face'"
                   @toggle="viewport?.focus({ preventScroll: true })"

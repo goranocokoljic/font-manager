@@ -9,7 +9,20 @@ import {
   type MaybeRefOrGetter,
 } from 'vue';
 import { fuzzyMatch } from '../keyboard/fuzzy';
+import type { IconName } from '../components/ui/icons';
 import { ACTIONS, bindingsFor, chordOf, type Chord } from '../keyboard/keymap';
+
+/**
+ * The icon of an action that also has a button with an icon (E54.9): the palette and the
+ * shortcut sheet show the same icon as the row action, so Similar's "≈" reads the same in the
+ * list, on the family page, in the palette and in the sheet.
+ */
+export const ACTION_ICONS: Readonly<Partial<Record<string, IconName>>> = {
+  [ACTIONS.activateSession]: 'power',
+  [ACTIONS.compare]: 'compare',
+  [ACTIONS.tag]: 'tag',
+  [ACTIONS.similar]: 'similar',
+};
 
 /** Something the user can do, listed in the command palette. */
 export interface Action {

@@ -672,7 +672,7 @@ test('"Print..." prints one panel alone, as live text in its fonts, and the PDF 
 
   // The button has a label and is on the Tab path right after the panel's layout picker.
   const print = second.getByRole('button', { name: 'Print panel 2', exact: true });
-  await expect(print).toHaveAttribute('title', /Print/);
+  await expect(print).toHaveAccessibleDescription(/Print/);
   await second.getByRole('combobox', { name: 'Layout' }).focus();
   await page.keyboard.press('Tab');
   await expect(print).toBeFocused();
@@ -789,7 +789,7 @@ test('a 300 px rail lists the context roles as cards: name, lock, font picker, s
   await expect(lock).toHaveAttribute('aria-pressed', 'false');
   await lock.click();
   await expect(lock).toHaveAttribute('aria-pressed', 'true');
-  await expect(lock).toHaveAttribute('title', /^Locked/);
+  await expect(lock).toHaveAccessibleDescription(/^Locked/);
   await expect(roleCard(page, 'Body').getByRole('button', { name: 'Lock Body' })).toHaveAttribute(
     'aria-pressed',
     'false',

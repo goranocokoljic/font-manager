@@ -13,6 +13,7 @@ import CatalogBrowser from './CatalogBrowser.vue';
 import OnlineCatalogsSidebar from './OnlineCatalogsSidebar.vue';
 import ToastMessage from './ToastMessage.vue';
 import { useToastStore } from '../stores/toast';
+import { tooltipOf } from './ui/testing';
 
 let wrappers: VueWrapper[] = [];
 /** The font files the face loader was asked for, by CSS family name. */
@@ -62,10 +63,10 @@ describe('OnlineCatalogsSidebar with catalogs', () => {
     await flushPromises();
     expect(sidebar.get('[data-testid="catalog-googleFonts"]').text()).toBe('Google Fonts');
     const on = sidebar.get('[data-testid="catalog-turn-on-googleFonts"]');
-    expect(on.attributes('title')).toContain('Turn on');
+    expect(tooltipOf(on)).toContain('Turn on');
     expect(on.attributes('aria-label')).toBe('Turn on Google Fonts');
-    const hint = sidebar.get(`#${on.attributes('aria-describedby')}`);
-    expect(hint.text()).toBe('Connects to the internet');
+    // The tooltip (E54.9) is its description and says it connects.
+    expect(tooltipOf(on)).toContain('Connects to the internet');
     // Every catalog of list_catalogs is listed, each with its own switch (E22.5 added Fontshare).
     expect(sidebar.get('[data-testid="catalog-fontshare"]').text()).toBe('Fontshare');
     expect(sidebar.get('[data-testid="catalog-turn-on-fontshare"]').attributes('aria-label')).toBe(
@@ -214,11 +215,9 @@ describe('CatalogBrowser', () => {
       expect(b.text()).toBe('');
     }
     expect(refresh.attributes('aria-label')).toBe('Refresh');
-    expect(refresh.attributes('title')).toBe(
-      'Fetch the list of Google Fonts again from the internet',
-    );
+    expect(tooltipOf(refresh)).toBe('Fetch the list of Google Fonts again from the internet');
     expect(check.attributes('aria-label')).toBe('Check for updates');
-    expect(check.attributes('title')).toMatch(/^Compare the families you downloaded/);
+    expect(tooltipOf(check)).toMatch(/^Compare the families you downloaded/);
     // The date shortens in a narrow bar: its full text is its tooltip.
     const date = w.get('[data-testid="catalog-refreshed"]');
     expect(date.attributes('title')).toBe(date.text());
@@ -334,7 +333,7 @@ describe('CatalogBrowser: Install (E22.7)', () => {
       expect(download.classes()).toContain('ui-icon-button');
       expect(download.text(), 'an icon, no text').toBe('');
       expect(download.attributes('aria-label')).toBe('Download Lato…');
-      expect(download.attributes('title')).toBe('Download Lato…');
+      expect(tooltipOf(download)).toBe('Download Lato…');
       expect(
         item.findAll('button').map((b) => b.text()),
         'no text button is left',
