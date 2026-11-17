@@ -482,3 +482,57 @@ describe('the foundry filter (E50.12)', () => {
     expect(requests.at(-1)!.foundries).toBeUndefined();
   });
 });
+
+describe('the sidebar tag filter (E54.3)', () => {
+  const tagged = () =>
+    createMockClient({
+      extraFaces: 2,
+      stylesPerFamily: 4,
+      faceTags: { 1: ['display'], 6: ['display', 'body'] },
+    });
+
+  it('adds a tag to filters.tags, a second tag combines, a second click takes it off', async () => {
+    const search = await setup(tagged());
+    const tags = await client.listTags();
+    const display = tags.find((t) => t.name === 'display')!.id;
+    const body = tags.find((t) => t.name === 'body')!.id;
+
+    search.toggleTag(display);
+    await flushPromises();
+    expect(search.filters.tags).toEqual([display]);
+    expect(requests.at(-1)!.filters?.tags).toEqual([display]);
+    expect(search.isTag(display)).toBe(true);
+    expect(search.isTag(body)).toBe(false);
+    expect(search.active).toBe(true);
+
+    search.toggleTag(body);
+    await flushPromises();
+    expect(requests.at(-1)!.filters?.tags).toEqual([display, body]);
+    expect(search.isTag(body)).toBe(true);
+
+    search.toggleTag(display);
+    search.toggleTag(body);
+    await flushPromises();
+    expect(search.filters.tags).toBeUndefined();
+    expect(search.isTag(display)).toBe(false);
+    expect(search.hits).toBeNull();
+  });
+
+  it('keeps the other filters, the open collection too', async () => {
+    const search = await setup(tagged());
+    const display = (await client.listTags()).find((t) => t.name === 'display')!.id;
+    search.setFilters({ collection: 7, favorite: true });
+    search.toggleTag(display);
+    await flushPromises();
+    expect(requests.at(-1)!.filters).toEqual({ collection: 7, favorite: true, tags: [display] });
+  });
+
+  it('reads a tag the Filters popover chose, and is released when the chips clear it', async () => {
+    const search = await setup(tagged());
+    const display = (await client.listTags()).find((t) => t.name === 'display')!.id;
+    search.setFilters({ tags: [display] });
+    expect(search.isTag(display)).toBe(true);
+    search.setFilters({});
+    expect(search.isTag(display)).toBe(false);
+  });
+});
