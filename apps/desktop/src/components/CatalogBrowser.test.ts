@@ -171,7 +171,7 @@ describe('CatalogBrowser', () => {
 
   it("shows the library's view switch; Table and Layout are off with the reason (E54.5)", async () => {
     const { w } = await opened({ catalog: 'offline' });
-    const segs = w.findAll('.segmented button');
+    const segs = w.get('[role="group"][aria-label="View mode"]').findAll('button');
     // The library's order and icons (E51.3), no text buttons.
     expect(segs.map((b) => b.attributes('aria-label'))).toEqual([
       'List',

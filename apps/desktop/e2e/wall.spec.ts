@@ -32,10 +32,12 @@ async function openWall(page: Page, query = '?mockLibrary=wall'): Promise<Locato
 
 /** Moves the size slider as a drag does: an input event at each value. */
 const setSize = (page: Page, value: number) =>
-  page.getByRole('slider', { name: 'Size slider' }).evaluate((el: HTMLInputElement, v) => {
-    el.value = String(v);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  }, value);
+  page
+    .getByRole('slider', { name: 'Size slider', exact: true })
+    .evaluate((el: HTMLInputElement, v) => {
+      el.value = String(v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
 
 const cards = (wall: Locator) => wall.getByRole('option');
 
@@ -144,7 +146,7 @@ test.describe('the wall', () => {
 
   test('the slider has the 24–120 range on the wall only', async ({ page }) => {
     await openWall(page);
-    const slider = page.getByRole('slider', { name: 'Size slider' });
+    const slider = page.getByRole('slider', { name: 'Size slider', exact: true });
     await expect(slider).toHaveAttribute('min', '24');
     await expect(slider).toHaveAttribute('max', '120');
     await page

@@ -35,6 +35,8 @@ export type ControlState = { applies: true } | { applies: false; reason: Message
 export interface Applicability {
   size: ControlState;
   language: ControlState;
+  /** Preview options' Line height (E54.8): off where every card is a single line. */
+  lineHeight: ControlState;
 }
 
 const APPLIES: ControlState = { applies: true };
@@ -47,7 +49,14 @@ const SIZE_OFF: Partial<Record<PreviewSurface, MessageKey>> = {
   layoutPane: 'preview.inactive.sizeLayout',
 };
 
-/** The size slider and the Language picker on `surface` with `preset` on the rows. */
+/**
+ * The wall's presets whose cards hold one line of text (board 12-preview-options-inactive.png:
+ * Word). The wall gives them no line height of their own and nothing wraps, so the setting
+ * changes nothing there. A list still spaces its rows by it, so it applies in every other mode.
+ */
+const SINGLE_LINE_ON_WALL: readonly PreviewPreset[] = ['word', 'numerals', 'letters'];
+
+/** The size slider, the Language picker and Line height on `surface` with `preset` on the rows. */
 export function applicability(surface: PreviewSurface, preset: PreviewPreset): Applicability {
   const sizeOff = SIZE_OFF[surface];
   const size = sizeOff
@@ -61,7 +70,11 @@ export function applicability(surface: PreviewSurface, preset: PreviewPreset): A
       : preset === 'pangram'
         ? APPLIES
         : off('preview.inactive.language');
-  return { size, language };
+  const lineHeight =
+    surface === 'grid' && SINGLE_LINE_ON_WALL.includes(preset)
+      ? off('preview.inactive.lineHeightSingle')
+      : APPLIES;
+  return { size, language, lineHeight };
 }
 
 /** The settings the preset is read from (a slice of `PreviewSettings`). */

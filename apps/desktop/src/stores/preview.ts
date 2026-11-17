@@ -53,7 +53,6 @@ export const TRACKING = { min: -0.2, max: 1, step: 0.01 } as const;
 export const CUSTOM_TEXT_MAX = 1000;
 
 export type Alignment = 'start' | 'center' | 'end';
-export type Surface = 'auto' | 'light' | 'dark';
 /** Auto size (E16.2): off, or the metric every row's size is matched on. */
 export type AutoSize = 'off' | SizeBasis;
 
@@ -73,12 +72,6 @@ export interface PreviewSettings {
   lineHeight: number;
   trackingEm: number;
   align: Alignment;
-  /** CSS hex color of the sample text; `null` uses the surface's text color. */
-  textColor: string | null;
-  /** CSS hex color behind the rows; `null` uses the surface's background. */
-  backgroundColor: string | null;
-  /** `auto` follows the app theme. */
-  surface: Surface;
   /** Scales each row so every face's x-height (or cap height) matches at `sizePx`. */
   autoSize: AutoSize;
   /** Draws each row's baseline, x-height and cap-height lines (E16.1). */
@@ -106,9 +99,6 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   lineHeight: 1.2,
   trackingEm: 0,
   align: 'start',
-  textColor: null,
-  backgroundColor: null,
-  surface: 'auto',
   autoSize: 'off',
   metrics: false,
   outline: false,
@@ -118,9 +108,7 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
 });
 
 const ALIGNMENTS: readonly Alignment[] = ['start', 'center', 'end'];
-const SURFACES: readonly Surface[] = ['auto', 'light', 'dark'];
 const AUTO_SIZES: readonly AutoSize[] = ['off', 'xHeight', 'capHeight'];
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Keeps `value` inside `bounds`, rounded to its step; anything not a finite number gives `fallback`. */
 export function clampSetting(
@@ -139,11 +127,12 @@ function pick<T extends string>(value: unknown, allowed: readonly T[], fallback:
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
 
-function color(value: unknown): string | null {
-  return typeof value === 'string' && HEX_COLOR.test(value) ? value.toLowerCase() : null;
-}
-
-/** A complete, valid settings object from anything (a saved entry, a partial update). */
+/**
+ * A complete, valid settings object from anything (a saved entry, a partial update). Only the
+ * known fields are read, so a field an earlier version saved (the text and background
+ * colours and the surface, removed in E54.8: previews always take the theme's colours) is
+ * dropped without an error, and the next save leaves it out.
+ */
 export function normalizePreview(raw: unknown): PreviewSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<
     Record<keyof PreviewSettings, unknown>
@@ -164,9 +153,6 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     lineHeight: clampSetting(r.lineHeight, LINE_HEIGHT, d.lineHeight),
     trackingEm: clampSetting(r.trackingEm, TRACKING, d.trackingEm),
     align: pick(r.align, ALIGNMENTS, d.align),
-    textColor: color(r.textColor),
-    backgroundColor: color(r.backgroundColor),
-    surface: pick(r.surface, SURFACES, d.surface),
     autoSize: pick(r.autoSize, AUTO_SIZES, d.autoSize),
     metrics: typeof r.metrics === 'boolean' ? r.metrics : d.metrics,
     outline: typeof r.outline === 'boolean' ? r.outline : d.outline,
@@ -236,8 +222,8 @@ function browserStorage(): Storage | undefined {
 }
 
 /**
- * Preview settings (sample text, size, spacing, colors, surface, auto size, metrics lines,
- * outline) for each view. Every row
+ * Preview settings (sample text, size, spacing, alignment, auto size, metrics lines, outline)
+ * for each view; the colours are always the theme's (E54.8). Every row
  * of a view's list reads them, so a change applies to all rows at once; they are saved per
  * view as a view preference. The pangrams come from `list_languages`.
  */

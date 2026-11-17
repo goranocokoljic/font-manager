@@ -1,14 +1,15 @@
 <script setup lang="ts">
 // The row above a font list (E41.2): the preview field with its hint, the preset chips,
-// the Language picker and one button for the Preview options popover, which holds the rest:
-// sample, size, auto size, line height, tracking, the metrics lines and outline toggles,
-// alignment, colors and the preview surface. Every change goes to the preview store for
-// `view`, which every row of that list reads.
+// the Language picker and one button for the Preview options popover (E54.8, board 12),
+// which holds the rest in three groups: Text (sample, align), Size and spacing (size, auto
+// size, line height, tracking) and Guides (metric lines, outlines). There are no colour
+// controls: every preview draws in the theme's text colour on the theme's surface. Every
+// change goes to the preview store for `view`, which every row of that list reads.
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { locale, t } from '../i18n';
 import { FmSlide } from '../motion';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
-import { wallLayout, type WallPreset } from '../list/grid';
+import { cardText, wallLayout, type WallPreset } from '../list/grid';
 import { languageName } from '../search/chips';
 import { chosenValue, traitForGlyph } from '../search/traits';
 import { useActions } from '../stores/commands';
@@ -18,10 +19,17 @@ import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import { LETTERS_HINT, SAMPLE_KINDS, sampleTextFor } from '../preview/sampleText';
-import { applicability, previewPreset, type PreviewSurface } from '../preview/applicability';
+import {
+  applicability,
+  previewPreset,
+  type ControlState,
+  type PreviewSurface,
+} from '../preview/applicability';
 import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import UiNumberField from './ui/UiNumberField.vue';
+import UiSegmentedControl, { type SegmentOption } from './ui/UiSegmentedControl.vue';
 import UiSelect from './ui/UiSelect.vue';
+import UiSwitch from './ui/UiSwitch.vue';
 import {
   BODY_SIZE,
   LINE_HEIGHT,
@@ -32,7 +40,6 @@ import {
   type Alignment,
   type AutoSize,
   type PreviewSettings,
-  type Surface,
 } from '../stores/preview';
 
 const props = defineProps<{
@@ -57,7 +64,7 @@ void store.loadPangrams();
 // A select is labelled by `for`: wrapped in its label, its option texts would join the name.
 const uid = useId();
 const s = computed(() => store.settingsFor(props.view));
-/** The popover (line height, tracking, colours…) is one click away, closed by default. */
+/** The popover (sample, size, spacing, guides) is one click away, closed by default. */
 const optionsOpen = ref(false);
 const optionsId = `${uid}-options`;
 const toggle = ref<HTMLElement | null>(null);
@@ -350,11 +357,21 @@ function typed(key: NumberKey, value: number | '', commit: boolean): void {
   else if (value >= b.min && value <= b.max) set({ [key]: value });
 }
 
-// The labels are read where they are shown (`preview.aligns.*`) or when the options are
-// built (`preview.autoSizes.*`, `preview.surfaces.*`), so they follow the language.
-const alignments: Alignment[] = ['start', 'center', 'end'];
-const autoSizes: AutoSize[] = ['off', 'xHeight', 'capHeight'];
-const surfaces: Surface[] = ['auto', 'light', 'dark'];
+// The labels are read when the options are built, so they follow the language.
+const ALIGN_ICONS = { start: 'alignStart', center: 'alignCenter', end: 'alignEnd' } as const;
+const alignOptions = computed<SegmentOption<Alignment>[]>(() =>
+  (['start', 'center', 'end'] as const).map((value) => ({
+    value,
+    label: t(`preview.aligns.${value}`),
+    icon: ALIGN_ICONS[value],
+  })),
+);
+const autoSizeOptions = computed<SegmentOption<AutoSize>[]>(() =>
+  (['off', 'xHeight', 'capHeight'] as const).map((value) => ({
+    value,
+    label: t(`preview.autoSizes.${value}`),
+  })),
+);
 const languageOptions = computed(() =>
   store.languagePicks.map((lang) => ({
     value: lang.code,
@@ -363,28 +380,113 @@ const languageOptions = computed(() =>
     title: lang.pangram ? undefined : t('preview.noPangram'),
   })),
 );
-const autoSizeOptions = computed(() =>
-  autoSizes.map((value) => ({ value, label: t(`preview.autoSizes.${value}`) })),
-);
-const surfaceOptions = computed(() =>
-  surfaces.map((value) => ({ value, label: t(`preview.surfaces.${value}`) })),
+
+/**
+ * Where the popover's Size and Line height have an effect (E54.8). Size: in the popover it
+ * sets the body size of the reading rows too, so only the view mode can turn it off (the
+ * table's strip, the fixed waterfall, the layout pane); the preset is read as Word for that.
+ * Line height: off on the wall while every card is a single line.
+ */
+const sizeState = computed(() => applicability(props.mode ?? 'list', 'word').size);
+const lineHeightState = computed(
+  () => applicability(props.mode ?? 'list', previewPreset(s.value)).lineHeight,
 );
 
-/** What a color well shows while its setting is `null` (the surface's own color). */
-function isDarkSurface(): boolean {
-  if (s.value.surface !== 'auto') return s.value.surface === 'dark';
-  const theme = document.documentElement.dataset.theme;
-  if (theme === 'light' || theme === 'dark') return theme === 'dark';
-  return globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+/** One slider row of Size and spacing: a range input and a number field with the same value. */
+interface SliderRow {
+  id: 'size' | 'lineHeight' | 'tracking';
+  label: string;
+  slider: string;
+  field: string;
+  key: NumberKey;
+  bounds: { readonly min: number; readonly max: number; readonly step: number };
+  value: number;
+  decimals?: number;
+  unit?: string;
+  state: ControlState;
 }
-const textWell = computed(() => s.value.textColor ?? (isDarkSurface() ? '#ececec' : '#1a1a1a'));
-const backgroundWell = computed(
-  () => s.value.backgroundColor ?? (isDarkSurface() ? '#1c1c1e' : '#ffffff'),
-);
+const sliderRows = computed<SliderRow[]>(() => [
+  {
+    id: 'size',
+    label: t('preview.size'),
+    // Not "Size slider": that names the toolbar's, which sizes the same setting.
+    slider: t('preview.textSizeSlider'),
+    field: t('preview.sizeInPixels'),
+    key: KEY.value.size,
+    bounds: size.value,
+    value: shownSize.value,
+    unit: t('preview.units.px'),
+    state: sizeState.value,
+  },
+  {
+    id: 'lineHeight',
+    label: t('preview.lineHeight'),
+    slider: t('preview.lineHeightSlider'),
+    field: t('preview.lineHeight'),
+    key: KEY.value.lineHeight,
+    bounds: LINE_HEIGHT,
+    value: shownLineHeight.value,
+    decimals: 2,
+    state: lineHeightState.value,
+  },
+  {
+    id: 'tracking',
+    label: t('preview.tracking'),
+    slider: t('preview.trackingSlider'),
+    field: t('preview.trackingInEm'),
+    key: KEY.value.tracking,
+    bounds: TRACKING,
+    value: s.value.trackingEm,
+    decimals: 2,
+    unit: t('preview.units.em'),
+    state: { applies: true },
+  },
+]);
+/** Size and spacing in the board's order: Size, Auto size, Line height, Tracking. */
+const rowsInOrder = computed<Array<SliderRow | 'autoSize'>>(() => {
+  const [size, ...spacing] = sliderRows.value;
+  return [size!, 'autoSize', ...spacing];
+});
 
-function colorFrom(e: Event): string {
-  return (e.target as HTMLInputElement).value;
+/** The Guides group: each a switch with a one-line description under its label. */
+const guides = computed(() => [
+  { key: 'metrics' as const, label: t('preview.metrics'), hint: t('preview.metricsHint') },
+  { key: 'outline' as const, label: t('preview.outline'), hint: t('preview.outlineHint') },
+]);
+const why = (row: SliderRow) => (row.state.applies ? undefined : t(row.state.reason));
+
+/** A slider or field whose setting has no effect takes no change; the stored value stays. */
+function slideRow(row: SliderRow, e: Event): void {
+  const input = e.target as HTMLInputElement;
+  if (!row.state.applies) {
+    input.valueAsNumber = row.value;
+    return;
+  }
+  slid(row.key, e);
 }
+function typeRow(row: SliderRow, value: number | '', commit: boolean): void {
+  if (row.state.applies) typed(row.key, value, commit);
+}
+/** Tab and Shift+Tab pass; the keys that would move a slider without effect do nothing. */
+function rowKey(row: SliderRow, e: KeyboardEvent): void {
+  if (!row.state.applies && e.key !== 'Tab') e.preventDefault();
+}
+/** A press on a slider without effect neither moves it nor focuses it. */
+function rowPointer(row: SliderRow, e: MouseEvent): void {
+  if (!row.state.applies) e.preventDefault();
+}
+
+/**
+ * The popover's live specimen (board 12): the start of the text the rows show, one line, in
+ * the UI face, with the alignment, tracking, outlines and metric lines chosen now. Its size
+ * is its own: the specimen shows how the settings look, the rows show the size.
+ */
+const specimenText = computed(() => {
+  const text = letters.value
+    ? glyphs.value.join(' ')
+    : sampleTextFor(s.value, t('preview.options'), store.pangramText);
+  return cardText(text, 16) || t('preview.presets.word');
+});
 </script>
 
 <template>
@@ -526,135 +628,135 @@ function colorFrom(e: Event): string {
         ref="panel"
         class="more"
         role="group"
-        :aria-label="t('preview.options')"
+        :aria-labelledby="`${uid}-options-title`"
+        data-testid="preview-options"
         @keydown.esc="closeOptions"
       >
-        <div class="field">
-          <label :for="`${uid}-sample`">{{ t('preview.sample') }}</label>
-          <UiSelect
-            :id="`${uid}-sample`"
-            :model-value="s.sample"
-            :options="SAMPLE_KINDS"
-            @update:model-value="set({ sample: $event })"
-          />
+        <div class="head">
+          <span :id="`${uid}-options-title`" class="title">{{ t('preview.options') }}</span>
+          <UiButton @click="store.reset(view)">{{ t('common.reset') }}</UiButton>
         </div>
-        <div class="field">
-          <span>{{ t('preview.size') }}</span>
-          <UiNumberField
-            class="number"
-            :aria-label="t('preview.sizeInPixels')"
-            :min="size.min"
-            :max="size.max"
-            :step="size.step"
-            :model-value="shownSize"
-            @update:model-value="typed(KEY.size, $event, false)"
-            @commit="typed(KEY.size, $event, true)"
-          />
-        </div>
-        <div class="field">
-          <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
-            t('preview.autoSize')
-          }}</label>
-          <UiSelect
-            :id="`${uid}-auto-size`"
-            :model-value="s.autoSize"
-            :options="autoSizeOptions"
-            @update:model-value="set({ autoSize: $event })"
-          />
-        </div>
-        <div class="field">
-          <span>{{ t('preview.lineHeight') }}</span>
-          <UiNumberField
-            class="number"
-            :aria-label="t('preview.lineHeight')"
-            :min="LINE_HEIGHT.min"
-            :max="LINE_HEIGHT.max"
-            :step="LINE_HEIGHT.step"
-            :model-value="shownLineHeight"
-            @update:model-value="typed(KEY.lineHeight, $event, false)"
-            @commit="typed(KEY.lineHeight, $event, true)"
-          />
-        </div>
-        <div class="field" role="group" :aria-labelledby="`${uid}-tracking`">
-          <span :id="`${uid}-tracking`">{{ t('preview.tracking') }}</span>
-          <input
-            type="range"
-            :aria-label="t('preview.trackingSlider')"
-            :min="TRACKING.min"
-            :max="TRACKING.max"
-            :step="TRACKING.step"
-            :value="s.trackingEm"
-            @input="slid(KEY.tracking, $event)"
-          />
-          <UiNumberField
-            class="number"
-            :aria-label="t('preview.trackingInEm')"
-            :min="TRACKING.min"
-            :max="TRACKING.max"
-            :step="TRACKING.step"
-            :model-value="s.trackingEm"
-            @update:model-value="typed(KEY.tracking, $event, false)"
-            @commit="typed(KEY.tracking, $event, true)"
-          />
-        </div>
-        <label class="field" :title="t('preview.metricsHint')">
-          <input
-            type="checkbox"
-            :checked="s.metrics"
-            @change="set({ metrics: ($event.target as HTMLInputElement).checked })"
-          />
-          <span>{{ t('preview.metrics') }}</span>
-        </label>
-        <label class="field">
-          <input
-            type="checkbox"
-            :checked="s.outline"
-            @change="set({ outline: ($event.target as HTMLInputElement).checked })"
-          />
-          <span>{{ t('preview.outline') }}</span>
-        </label>
-
-        <div class="field" role="group" :aria-label="t('preview.alignment')">
-          <UiButton
-            v-for="a in alignments"
-            :key="a"
-            :aria-pressed="s.align === a"
-            @click="set({ align: a })"
-          >
-            {{ t(`preview.aligns.${a}`) }}
-          </UiButton>
+        <div
+          class="specimen"
+          :class="{ outline: s.outline }"
+          :style="{ justifyContent: s.align, letterSpacing: `${s.trackingEm}em` }"
+          aria-hidden="true"
+          data-testid="options-specimen"
+        >
+          <span class="specimen-text" dir="auto">
+            <template v-if="s.metrics">
+              <span class="guide cap" />
+              <span class="guide x" />
+              <span class="guide base" />
+            </template>
+            {{ specimenText }}
+          </span>
         </div>
 
-        <label class="field">
-          <span>{{ t('preview.text') }}</span>
-          <input
-            type="color"
-            :aria-label="t('preview.textColor')"
-            :value="textWell"
-            @input="set({ textColor: colorFrom($event) })"
-          />
-        </label>
-        <label class="field">
-          <span>{{ t('preview.background') }}</span>
-          <input
-            type="color"
-            :aria-label="t('preview.backgroundColor')"
-            :value="backgroundWell"
-            @input="set({ backgroundColor: colorFrom($event) })"
-          />
-        </label>
-        <div class="field">
-          <label :for="`${uid}-surface`">{{ t('preview.surface') }}</label>
-          <UiSelect
-            :id="`${uid}-surface`"
-            :model-value="s.surface"
-            :options="surfaceOptions"
-            @update:model-value="set({ surface: $event })"
-          />
-        </div>
-        <UiButton @click="store.reset(view)">
-          {{ t('common.reset') }}
-        </UiButton>
+        <section class="group" :aria-labelledby="`${uid}-g-text`">
+          <h3 :id="`${uid}-g-text`" class="heading">{{ t('preview.groups.text') }}</h3>
+          <div class="row">
+            <label :for="`${uid}-sample`" class="label">{{ t('preview.sample') }}</label>
+            <span class="wide">
+              <UiSelect
+                :id="`${uid}-sample`"
+                :fit="false"
+                :model-value="s.sample"
+                :options="SAMPLE_KINDS"
+                @update:model-value="set({ sample: $event })"
+              />
+            </span>
+          </div>
+          <div class="row">
+            <span class="label" aria-hidden="true">{{ t('preview.align') }}</span>
+            <UiSegmentedControl
+              class="align"
+              :model-value="s.align"
+              :options="alignOptions"
+              :label="t('preview.align')"
+              @update:model-value="set({ align: $event })"
+            />
+          </div>
+        </section>
+
+        <section class="group" :aria-labelledby="`${uid}-g-size`">
+          <h3 :id="`${uid}-g-size`" class="heading">{{ t('preview.groups.sizeSpacing') }}</h3>
+          <template v-for="row in rowsInOrder" :key="row === 'autoSize' ? row : row.id">
+            <div v-if="row === 'autoSize'" class="row">
+              <span class="label" aria-hidden="true" :title="t('preview.autoSizeHint')">{{
+                t('preview.autoSize')
+              }}</span>
+              <UiSegmentedControl
+                :model-value="s.autoSize"
+                :options="autoSizeOptions"
+                :label="t('preview.autoSize')"
+                :title="t('preview.autoSizeHint')"
+                @update:model-value="set({ autoSize: $event })"
+              />
+            </div>
+            <template v-else>
+              <!-- A group per row, so a row without effect is one disabled control: its faded
+                   label is part of an inactive component (WCAG 1.4.3 exempts it). -->
+              <div
+                class="row slider-row"
+                :class="{ off: !row.state.applies }"
+                role="group"
+                :aria-labelledby="`${uid}-${row.id}-label`"
+                :aria-disabled="row.state.applies ? undefined : 'true'"
+                :data-testid="`options-${row.id}`"
+              >
+                <span :id="`${uid}-${row.id}-label`" class="label" aria-hidden="true">{{
+                  row.label
+                }}</span>
+                <input
+                  type="range"
+                  :aria-label="row.slider"
+                  :aria-disabled="row.state.applies ? undefined : 'true'"
+                  :aria-describedby="why(row) ? `${uid}-${row.id}-why` : undefined"
+                  :min="row.bounds.min"
+                  :max="row.bounds.max"
+                  :step="row.bounds.step"
+                  :value="row.value"
+                  @input="slideRow(row, $event)"
+                  @keydown="rowKey(row, $event)"
+                  @pointerdown="rowPointer(row, $event)"
+                  @mousedown="rowPointer(row, $event)"
+                />
+                <UiNumberField
+                  class="number"
+                  :aria-label="row.field"
+                  :aria-describedby="why(row) ? `${uid}-${row.id}-why` : undefined"
+                  :min="row.bounds.min"
+                  :max="row.bounds.max"
+                  :step="row.bounds.step"
+                  :decimals="row.decimals"
+                  :inactive="!row.state.applies"
+                  :model-value="row.value"
+                  @update:model-value="typeRow(row, $event, false)"
+                  @commit="typeRow(row, $event, true)"
+                />
+                <span class="unit" aria-hidden="true">{{ row.unit }}</span>
+              </div>
+              <p v-if="why(row)" :id="`${uid}-${row.id}-why`" class="why">{{ why(row) }}</p>
+            </template>
+          </template>
+        </section>
+
+        <section class="group" :aria-labelledby="`${uid}-g-guides`">
+          <h3 :id="`${uid}-g-guides`" class="heading">{{ t('preview.groups.guides') }}</h3>
+          <div v-for="g in guides" :key="g.key" class="row toggle-row">
+            <span class="toggle-text">
+              <span :id="`${uid}-${g.key}`">{{ g.label }}</span>
+              <span :id="`${uid}-${g.key}-hint`" class="desc">{{ g.hint }}</span>
+            </span>
+            <UiSwitch
+              :checked="s[g.key]"
+              :aria-labelledby="`${uid}-${g.key}`"
+              :aria-describedby="`${uid}-${g.key}-hint`"
+              @click="set({ [g.key]: !s[g.key] })"
+            />
+          </div>
+        </section>
       </div>
     </FmSlide>
   </div>
@@ -867,52 +969,157 @@ function colorFrom(e: Event): string {
   display: inline-flex;
   flex: none;
 }
-/* In the group's DOM, not a <body> layer: unlike UiPopover it takes the focus and tab order. */
+/* In the group's DOM, not a <body> layer: unlike UiPopover it takes the focus and the tab
+   order, and it is taller than UiPopover's 320 px cap. Board 12: 424 px wide, 16 px inset. */
 .more {
   position: absolute;
   top: 100%;
   z-index: var(--fm-z-popover);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--fm-gap) 16px;
+  flex-direction: column;
   box-sizing: border-box;
-  width: min(400px, calc(100% - 52px));
-  max-height: 60vh;
-  padding: 12px;
+  width: min(424px, calc(100% - 52px));
+  max-height: calc(100vh - 160px);
+  padding: 12px 16px 14px;
   overflow-y: auto;
   border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
+  border-radius: var(--fm-radius-lg);
   background-color: var(--fm-surface-2);
+  color: var(--fm-fg);
   box-shadow: var(--fm-shadow-2);
+  font-size: var(--fm-text-md);
   inset-inline-end: 26px;
 }
-.field {
+.head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  min-height: 32px;
+  margin-inline-end: -8px;
 }
-.field > span,
-.field > label {
+.title {
+  font-weight: 600;
+}
+/* The live specimen: the theme's text on the theme's ground, one line, no border. */
+.specimen {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 64px;
+  margin: 8px 0 4px;
+  padding: 0 14px;
+  overflow: hidden;
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-well);
+  font-family: var(--fm-font-ui);
+  font-size: 34px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.specimen-text {
+  position: relative;
+  font-weight: 600;
+}
+.specimen.outline .specimen-text {
+  -webkit-text-stroke: 1px currentColor;
+  -webkit-text-fill-color: transparent;
+}
+/* Metric lines across the specimen, from the UI face's metrics at line-height 1: the
+   baseline 0.865 em from the top, cap height 0.727 em and x-height 0.545 em above it. */
+.guide {
+  position: absolute;
+  inset-inline: -100vw;
+  height: 0;
+  border-top: 1px dashed var(--fm-border-strong);
+}
+.guide.cap {
+  top: 0.138em;
+}
+.guide.x {
+  top: 0.32em;
+}
+.guide.base {
+  top: 0.865em;
+  border-top-style: solid;
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0 6px;
+}
+.group + .group {
+  border-top: 1px solid var(--fm-border);
+}
+.heading {
+  margin: 0 0 4px;
   color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.field .number {
-  width: 7em;
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
 }
-input[type='range'] {
-  width: 96px;
+.label {
+  flex: none;
+  width: 103px;
 }
-input[type='checkbox'] {
-  margin: 0;
+/* UiSelect renders two roots (its button and its list), so a wrapper gives it the row. */
+.wide {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.wide > :deep(.ui-select) {
+  flex: 1;
+}
+.slider-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
   accent-color: var(--fm-accent);
 }
-input[type='color'] {
-  width: 28px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
+.slider-row .number {
+  flex: none;
+  width: 104px;
+}
+.unit {
+  flex: none;
+  width: 20px;
+  color: var(--fm-muted);
+}
+/* No effect here (E51.4, E54.8): the same place and size, at 40 %: label, slider and field. */
+.slider-row.off .label,
+.slider-row.off input[type='range'],
+.slider-row.off .unit {
+  opacity: 0.4;
+}
+.slider-row.off input[type='range'] {
+  cursor: not-allowed;
+}
+.why {
+  margin: 0 0 4px;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.toggle-row {
+  justify-content: space-between;
+  min-height: 44px;
+}
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+}
+.desc {
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+/* The align icons point to the start: mirrored with the reading direction. */
+[dir='rtl'] .align :deep(svg) {
+  transform: scaleX(-1);
 }
 .chip:focus-visible,
 .more :focus-visible {

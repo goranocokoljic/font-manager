@@ -35,6 +35,7 @@
 
   "ci": {
     "required_checks": ["ci / windows", "ci / macos", "ci / linux"],
+    "light_check": "ci / light",
     "bench_check": "bench / bench",
     "bench_workflow": "bench.yml",
     "bench_artifact": "bench-report",

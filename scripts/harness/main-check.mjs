@@ -19,7 +19,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { loadConfig, gh, ghJson, parseArgs, isMain } from './lib.mjs';
+import { loadConfig, gh, ghJson, parseArgs, isMain, withLight } from './lib.mjs';
 import { excerpt } from './ci-wait.mjs';
 
 const DEAD = new Set(['cancelled', 'timed_out', 'action_required', 'stale', 'startup_failure']);
@@ -48,11 +48,14 @@ export function classifyJobs(jobs) {
   return { kind: failed.every((f) => f.infra) ? 'infra' : 'test', failed };
 }
 
-/** The verdict for the fix PR's checks: every required job green, any red, or still running. */
-export function prVerdict(checks, required) {
+/**
+ * The verdict for the fix PR's checks: every required job green, any red, or
+ * still running. The `light` job counts for the OS jobs ci.yml skipped.
+ */
+export function prVerdict(checks, required, light = null) {
   const want = required.map((n) => n.toLowerCase().split('/').pop().trim());
   const byName = {};
-  for (const c of checks ?? []) byName[String(c.name).toLowerCase()] = String(c.state ?? '').toUpperCase();
+  for (const c of withLight(checks ?? [], required, light, 'state')) byName[String(c.name).toLowerCase()] = String(c.state ?? '').toUpperCase();
   const states = want.map((w) => byName[w] ?? 'PENDING');
   if (states.some((s) => ['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ERROR', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(s))) return 'red';
   if (states.every((s) => s === 'SUCCESS')) return 'green';
@@ -94,7 +97,7 @@ function prStatus(pr, cfg) {
   const checks = ghJson(['pr', 'checks', String(pr), '--json', 'name,state'], { allowFail: true }) ?? [];
   const out = {};
   for (const c of checks) out[c.name] = c.state;
-  return { status: prVerdict(checks, cfg.ci.required_checks), pr: Number(pr), sha: v.headRefOid, mergeable: v.mergeable, checks: out };
+  return { status: prVerdict(checks, cfg.ci.required_checks, cfg.ci.light_check), pr: Number(pr), sha: v.headRefOid, mergeable: v.mergeable, checks: out };
 }
 
 function main() {

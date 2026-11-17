@@ -217,10 +217,16 @@
     "customText": "Type to preview",
     "heroPlaceholder": "Type to preview",
     "options": "Preview options",
+    "groups": {
+      "text": "Text",
+      "sizeSpacing": "Size and spacing",
+      "guides": "Guides"
+    },
     "customPlaceholder": "Type a sample",
     "size": "Size",
     "sizeGlyph": "A",
     "sizeSlider": "Size slider",
+    "textSizeSlider": "Text size slider",
     "sizeInPixels": "Size in pixels",
     "autoSize": "Auto size",
     "autoSizeHint": "Scale each row so every font's x-height or cap height matches at this size",
@@ -230,27 +236,23 @@
       "capHeight": "Cap height"
     },
     "lineHeight": "Line height",
+    "lineHeightSlider": "Line height slider",
     "tracking": "Tracking",
     "trackingSlider": "Tracking slider",
     "trackingInEm": "Tracking in em",
-    "metrics": "Metrics",
-    "metricsHint": "Draw each row's baseline, x-height and cap-height lines",
-    "outline": "Outline",
-    "alignment": "Alignment",
+    "metrics": "Metric lines",
+    "metricsHint": "Baseline, x-height and cap height",
+    "outline": "Outlines",
+    "outlineHint": "Draw glyphs as outlines",
+    "align": "Align",
     "aligns": {
       "start": "Start",
       "center": "Center",
       "end": "End"
     },
-    "text": "Text",
-    "textColor": "Text color",
-    "background": "Background",
-    "backgroundColor": "Background color",
-    "surface": "Surface",
-    "surfaces": {
-      "auto": "Follow theme",
-      "light": "Light",
-      "dark": "Dark"
+    "units": {
+      "px": "px",
+      "em": "em"
     },
     "strip": {
       "region": "Preview strip",
@@ -269,7 +271,8 @@
       "sizeLayout": "Size does not apply to the layout — change it in the layout",
       "sizeParagraph": "Paragraph is set at the body size — change it in Preview options",
       "language": "Language applies to the Pangram preset — switch to Pangram",
-      "languageLayout": "Language does not apply to the layout"
+      "languageLayout": "Language does not apply to the layout",
+      "lineHeightSingle": "No effect while the preview is a single line."
     },
     "presets": {
       "word": "Word",
