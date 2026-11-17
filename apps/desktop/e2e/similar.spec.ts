@@ -156,15 +156,97 @@ test('the command palette lists the action with its key and runs it', async ({ p
   await expectResults(page);
 });
 
-test('no similar face shows a plain message', async ({ page }) => {
-  await open(page, '?mockSimilar=1', '/?face=1');
+/** Saves the panel at both review viewports when FM_SCREENS_DIR is set. */
+async function shoot(page: Page, name: string): Promise<void> {
+  if (!process.env.FM_SCREENS_DIR) return;
+  for (const [w, h] of [
+    [1280, 800],
+    [1000, 700],
+  ] as const) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.screenshot({ path: `${process.env.FM_SCREENS_DIR}/${name}-${w}x${h}.png` });
+  }
+}
+
+test('@screens the header says what the panel is; the reference is its own block (E54.10)', async ({
+  page,
+}) => {
+  await open(page, '?mockFaces=3&mockStyles=4', '/?face=1');
+  await page.getByRole('main').focus();
+  await page.keyboard.press('s');
+  const region = panel(page, 'Similar to Inter Regular');
+  await expect(region).toBeVisible();
+  await expectResults(page);
+
+  // Header: the icon, the title at the view titles' size and weight, the count, the way back.
+  const head = region.locator('header');
+  await expect(head.getByTestId('similar-icon')).toBeVisible();
+  const title = head.getByRole('heading', { name: 'Similar to Inter Regular' });
+  const viewTitle = page.locator('h1.title').first();
+  for (const prop of ['font-size', 'font-weight'])
+    await expect(title).toHaveCSS(
+      prop,
+      await viewTitle.evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop),
+    );
+  const rows = await results(page).getByRole('button').count();
+  await expect(head.getByTestId('similar-count')).toHaveText(`${rows} fonts`);
+  const back = head.getByRole('button', { name: /^Back to library/ });
+  await expect(back).toBeVisible();
+  await expect(back.locator('kbd')).toHaveText('Esc');
+  await expect(back).toHaveAttribute('aria-keyshortcuts', 'Escape');
+  const close = head.getByRole('button', { name: 'Close the similar fonts' });
+  const [b, c] = [await back.boundingBox(), await close.boundingBox()];
+  expect(b && c && c.x - (b.x + b.width)).toBeLessThan(16); // side by side
+
+  // The reference: a labelled block above the list, not one of its rows.
+  const reference = region.getByRole('region', { name: 'Reference' });
+  await expect(reference).toBeVisible();
+  await expect(reference).toContainText('Inter Regular');
+  await expect(results(page).getByRole('button', { name: /^Inter Regular,/ })).toHaveCount(0);
+  const [r, l] = [await reference.boundingBox(), await results(page).boundingBox()];
+  expect(r && l && r.y + r.height).toBeLessThanOrEqual(l?.y ?? 0);
+
+  // Each bar has a name and a value.
+  const bar = results(page).getByRole('button').first().getByTestId('similar-bar');
+  await expect(bar).toHaveAttribute('role', 'meter');
+  await expect(bar).toHaveAttribute('aria-label', /^Similarity: \d+%$/);
+  await expect(bar).toHaveAttribute('aria-valuenow', /^\d+$/);
+  // No bare "Fallback" badge in the panel.
+  await expect(region.getByTestId('fallback-hint')).toHaveCount(0);
+
+  await shoot(page, 'similar');
+
+  await back.click();
+  await expect(panel(page)).toBeHidden();
+});
+
+test('@screens nothing close enough says so in plain words and offers the way back', async ({
+  page,
+}) => {
+  const tree = await open(page, '?mockSimilar=1', '/?face=1');
   await expect(page.getByTestId('selected-row')).toContainText('Inter');
   await page.getByRole('main').focus();
   await page.keyboard.press('s');
-  await expect(panel(page).getByRole('status')).toHaveText(
-    'No other font in the library looks like Inter Regular.',
-  );
+  const status = panel(page).getByTestId('similar-empty').getByRole('status');
+  await expect(status.getByRole('heading', { name: 'Nothing is close enough' })).toBeVisible();
+  await expect(status).toContainText('No font in the library looks close enough to this one.');
   await expect(results(page)).toHaveCount(0);
+  await shoot(page, 'similar-empty');
+  await panel(page)
+    .getByTestId('similar-empty')
+    .getByRole('button', { name: /^Back to library/ })
+    .click();
+  await expect(panel(page)).toBeHidden();
+  await expect(tree).toBeVisible();
+});
+
+test('a font that cannot be compared says why', async ({ page }) => {
+  await open(page, '?mockSimilar=3', '/?face=1');
+  await page.getByRole('main').focus();
+  await page.keyboard.press('s');
+  const status = panel(page).getByTestId('similar-empty').getByRole('status');
+  await expect(status.getByRole('heading', { name: 'This font cannot be compared' })).toBeVisible();
+  await expect(status).toContainText('it does not draw the Latin letters');
 });
 
 test('an error from the core shows a plain message', async ({ page }) => {

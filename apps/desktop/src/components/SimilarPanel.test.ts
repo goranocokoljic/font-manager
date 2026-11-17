@@ -1,11 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient, type MockOptions } from '../api/mock';
 import { FaceLoader, faceFamily, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW } from '../stores/preview';
+import { useSamplesStore } from '../stores/samples';
 import { useSimilarStore } from '../stores/similar';
 import SimilarPanel from './SimilarPanel.vue';
 
@@ -111,12 +112,91 @@ describe('SimilarPanel', () => {
     expect(wrapper.find('[role="region"]').exists()).toBe(false);
   });
 
-  it('says so when no face is similar', async () => {
-    const { wrapper } = await setup({ similar: 'none' });
+  it('says in plain words when nothing is close enough, and offers the way back', async () => {
+    const { wrapper, similar } = await setup({ similar: 'none' });
     expect(wrapper.findAll('button.result')).toHaveLength(0);
-    expect(wrapper.get('[role="status"]').text()).toBe(
-      'No other font in the library looks like Inter Regular.',
+    const status = wrapper.get('[data-testid="similar-empty"] [role="status"]');
+    expect(status.get('h2').text()).toBe('Nothing is close enough');
+    expect(status.text()).toContain('No font in the library looks close enough to this one.');
+    expect(wrapper.find('[data-testid="similar-count"]').text()).toBe('0 fonts');
+    const back = wrapper.get('[data-testid="similar-empty-back"]');
+    expect(back.text()).toBe('Back to library Esc');
+    await back.trigger('click');
+    expect(similar.open).toBe(false);
+  });
+
+  it('says why a face cannot be compared', async () => {
+    const { wrapper } = await setup({ similar: 'unmeasured' });
+    const status = wrapper.get('[data-testid="similar-empty"] [role="status"]');
+    expect(status.get('h2').text()).toBe('This font cannot be compared');
+    expect(status.text()).toContain('This font cannot be compared: it does not draw');
+  });
+
+  it('has a header: the icon, the title, the count, Back to library with Esc, and close', async () => {
+    const { wrapper, similar } = await setup();
+    const head = wrapper.get('header.head');
+    expect(head.find('[data-testid="similar-icon"]').exists()).toBe(true);
+    expect(head.get('h2').text()).toBe('Similar to Inter Regular');
+    expect(head.get('[data-testid="similar-count"]').text()).toBe(`${similar.rows.length} fonts`);
+    const back = head.get('[data-testid="similar-back"]');
+    expect(back.text()).toBe('Back to library Esc');
+    expect(back.get('kbd').text()).toBe('Esc');
+    expect(back.attributes('aria-keyshortcuts')).toBe('Escape');
+    // Back sits beside the close button, the last thing in the header.
+    const buttons = head.findAll('button');
+    expect(buttons.at(-2)!.element).toBe(back.element);
+    expect(buttons.at(-1)!.attributes('aria-label')).toBe('Close the similar fonts');
+    await back.trigger('click');
+    expect(similar.open).toBe(false);
+  });
+
+  it('sets the reference apart in its own labelled block, not as a result', async () => {
+    const { wrapper } = await setup();
+    const ref = wrapper.get('[data-testid="similar-source"]');
+    expect(ref.element.tagName).toBe('SECTION');
+    const label = ref.get('h3');
+    expect(label.text()).toBe('Reference');
+    expect(ref.attributes('aria-labelledby')).toBe(label.attributes('id'));
+    expect(ref.text()).toContain('Inter Regular');
+    expect(wrapper.get('ul.list').element.contains(ref.element)).toBe(false);
+    expect(wrapper.findAll('button.result').map((b) => b.attributes('data-face'))).not.toContain(
+      '1',
     );
+  });
+
+  it('gives each percentage bar an accessible name and value', async () => {
+    const { wrapper, similar } = await setup();
+    const bar = wrapper.findAll('button.result')[0]!.get('[data-testid="similar-bar"]');
+    const percent = similar.rows[0]!.percent!;
+    expect(bar.attributes('role')).toBe('meter');
+    expect(bar.attributes('aria-label')).toBe(`Similarity: ${percent}%`);
+    expect(bar.attributes('aria-valuenow')).toBe(String(percent));
+    expect(bar.attributes('aria-hidden')).toBeUndefined();
+  });
+
+  it('says what a fallback text means in words, not with a bare "Fallback" badge', async () => {
+    const { wrapper, similar } = await setup();
+    const samples = useSamplesStore();
+    const first = similar.rows[0]!.result.face;
+    vi.spyOn(samples, 'get').mockImplementation((id) =>
+      id === first.id
+        ? { face: id, text: 'αβγ', fallback: { kind: 'script', script: 'Grek' }, missing: [] }
+        : undefined,
+    );
+    // Re-render with the stubbed answer.
+    similar.results = [...similar.results];
+    await flushPromises();
+    const button = wrapper.findAll('button.result')[0]!;
+    expect(button.find('[data-testid="fallback-hint"]').exists()).toBe(false);
+    const words = button.get('[data-testid="similar-fallback"]');
+    expect(words.text()).toBe(
+      'This font lacks characters of the sample text, so it shows its own letters.',
+    );
+    expect(button.attributes('aria-describedby')).toContain(words.attributes('id'));
+    // A row with the sample says nothing.
+    expect(
+      wrapper.findAll('button.result')[1]!.get('[data-testid="similar-fallback"]').text(),
+    ).toBe('');
   });
 
   it("shows the core's error as a plain message", async () => {

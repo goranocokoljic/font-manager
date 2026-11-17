@@ -3,12 +3,12 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
-import type { FaceSummary } from '../api/types';
+import type { FaceSummary, SimilarFace } from '../api/types';
 import { faceKey, familyKey } from '../list/rows';
 import { useFontListStore } from './fontList';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
-import { scorePercent, SIMILAR_LIMIT, useSimilarStore } from './similar';
+import { groupRows, scorePercent, SIMILAR_LIMIT, useSimilarStore } from './similar';
 
 // Three sample families, then two extra ones with four styles each.
 const A = EXTRA_ID_BASE;
@@ -27,9 +27,9 @@ beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => setClient(undefined));
 
 describe('find similar', () => {
-  it('asks findSimilar for the face and keeps its ranked answer', async () => {
+  it('asks findSimilarAnswer for the face and keeps its ranked answer', async () => {
     const { similar } = await setup();
-    const spy = vi.spyOn(client, 'findSimilar');
+    const spy = vi.spyOn(client, 'findSimilarAnswer');
     const inter = await face(1);
     await similar.openFor(inter);
     expect(spy).toHaveBeenCalledWith({ face: 1, limit: SIMILAR_LIMIT });
@@ -50,6 +50,25 @@ describe('find similar', () => {
     expect(similar.open).toBe(true);
     expect(similar.results).toEqual([]);
     expect(similar.error).toBeNull();
+    // fm-core says why (E54.11); the store keeps its code and words for the panel.
+    expect(similar.empty).toBe('noneClose');
+    expect(similar.emptyMessage).toBe('No font in the library looks close enough to this one.');
+  });
+
+  it('keeps why a face cannot be compared, and forgets it on the next answer', async () => {
+    const { similar } = await setup({ similar: 'unmeasured' });
+    await similar.openFor(await face(1));
+    expect(similar.empty).toBe('notMeasured');
+    expect(similar.emptyMessage).toMatch(/^This font cannot be compared/);
+    vi.spyOn(client, 'findSimilarAnswer').mockResolvedValueOnce({
+      faces: [{ face: await face(6), score: 0.9, reasons: ['same weight'] }],
+      empty: null,
+      message: null,
+    });
+    await similar.openFor(await face(1));
+    expect(similar.empty).toBeNull();
+    expect(similar.emptyMessage).toBeNull();
+    expect(similar.rows).toHaveLength(1);
   });
 
   it("keeps the core's error", async () => {
@@ -63,8 +82,8 @@ describe('find similar', () => {
   it('drops an answer for a face it no longer shows', async () => {
     const { similar } = await setup();
     let release: () => void = () => undefined;
-    const real = client.findSimilar.bind(client);
-    vi.spyOn(client, 'findSimilar').mockImplementationOnce(
+    const real = client.findSimilarAnswer.bind(client);
+    vi.spyOn(client, 'findSimilarAnswer').mockImplementationOnce(
       (req) => new Promise((resolve) => (release = () => void real(req).then(resolve))),
     );
     const first = similar.openFor(await face(1));
@@ -119,5 +138,36 @@ describe('scorePercent', () => {
   it('has no percent for a missing score', () => {
     expect(scorePercent(null)).toBeNull();
     expect(scorePercent(Number.NaN)).toBeNull();
+  });
+});
+
+describe('groupRows (E54.10)', () => {
+  const at = (id: number, familyName: string, score: number | null, reasons: string[]) =>
+    ({
+      face: { id, familyName, style: `S${id}` } as FaceSummary,
+      score,
+      reasons,
+    }) satisfies SimilarFace;
+
+  it('keeps one row per family: its best face, the percent and how many more styles', () => {
+    const rows = groupRows([
+      at(1, 'Alpha', 0.61, ['same weight', 'same classification']),
+      at(2, 'Alpha', 0.874, ['same weight', 'matching x-height']),
+      at(3, 'Beta', null, ['same weight']),
+    ]);
+    expect(rows.map((r) => [r.result.face.id, r.percent, r.moreStyles])).toEqual([
+      [2, 87, 1],
+      [3, null, 0],
+    ]);
+  });
+
+  it('drops only the reasons every row shares', () => {
+    const rows = groupRows([
+      at(1, 'Alpha', 0.9, ['same weight', 'same classification']),
+      at(2, 'Beta', 0.8, ['same weight']),
+    ]);
+    expect(rows.map((r) => r.reasons)).toEqual([['same classification'], []]);
+    // One row: nothing to compare it with, so it keeps every reason.
+    expect(groupRows([at(1, 'Alpha', 0.9, ['same weight'])])[0]!.reasons).toEqual(['same weight']);
   });
 });

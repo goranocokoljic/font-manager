@@ -2070,7 +2070,6 @@
   },
   "similar": {
     "title": "Similar to {name}",
-    "hint": "Enter or a click selects a font. Esc closes.",
     "close": "Close the similar fonts",
     "results": "Similar fonts",
     "loading": "Looking for similar fonts…",
@@ -2084,7 +2083,18 @@
       "other": "+{count} more styles"
     },
     "reasons": "Why: {reasons}",
-    "notInList": "The list does not show {name} now: a search or a filter hides it."
+    "notInList": "The list does not show {name} now: a search or a filter hides it.",
+    "count": {
+      "one": "{count} font",
+      "other": "{count} fonts"
+    },
+    "back": "Back to library",
+    "backKey": "Esc",
+    "backTitle": "Close the similar fonts and go back to the library",
+    "reference": "Reference",
+    "bar": "Similarity: {percent}%",
+    "noneTitle": "Nothing is close enough",
+    "notMeasuredTitle": "This font cannot be compared"
   },
   "documentFonts": {
     "action": "Check a document's fonts…",

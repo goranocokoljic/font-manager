@@ -2070,7 +2070,6 @@
   },
   "similar": {
     "title": "Ähnlich wie {name}",
-    "hint": "Eingabe oder ein Klick wählt eine Schrift. Esc schließt.",
     "close": "Ähnliche Schriften schließen",
     "results": "Ähnliche Schriften",
     "loading": "Ähnliche Schriften werden gesucht …",
@@ -2084,7 +2083,18 @@
       "other": "+{count} weitere Schnitte"
     },
     "reasons": "Warum: {reasons}",
-    "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet die Schrift aus."
+    "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet die Schrift aus.",
+    "count": {
+      "one": "{count} Schrift",
+      "other": "{count} Schriften"
+    },
+    "back": "Zurück zur Bibliothek",
+    "backKey": "Esc",
+    "backTitle": "Ähnliche Schriften schließen und zur Bibliothek zurückkehren",
+    "reference": "Referenz",
+    "bar": "Ähnlichkeit: {percent} %",
+    "noneTitle": "Keine Schrift ist ähnlich genug",
+    "notMeasuredTitle": "Diese Schrift lässt sich nicht vergleichen"
   },
   "documentFonts": {
     "action": "Schriften eines Dokuments prüfen …",
