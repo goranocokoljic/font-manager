@@ -335,8 +335,9 @@ const surfaceClass = computed(() =>
 .count {
   flex: 0 1 auto;
 }
+/* The date gives way first (a far larger shrink weight); the count only once it is gone. */
 .refreshed {
-  flex: 0 1 auto;
+  flex: 0 1000 auto;
   margin-inline-start: auto;
   font-size: var(--fm-text-xs);
 }

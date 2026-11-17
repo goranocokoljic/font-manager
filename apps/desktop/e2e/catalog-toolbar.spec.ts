@@ -220,4 +220,49 @@ test.describe('the longest locale (de-DE)', () => {
       expect(date.x + date.width).toBeLessThanOrEqual(refresh.x + 0.5);
     });
   }
+
+  // The tight case: a column just wide enough to keep the bar on one row, so the catalog's row
+  // is narrower than the count, the date and both buttons. The date gives way, nothing spills.
+  test('in a one-row bar too narrow for the date, it shortens and no control overlaps', async ({
+    page,
+  }) => {
+    await page.route('**/fmfont/*', (route) =>
+      route.fulfill({ status: 200, contentType: 'font/ttf', body: font }),
+    );
+    await page.setViewportSize({ width: 1220, height: 800 });
+    await page.goto('/?mockCatalog=1');
+    await page.getByTestId('catalog-googleFonts').click();
+    await expect(page.getByTestId('catalog-list').getByRole('listitem')).toHaveCount(4);
+    await expect(page.getByTestId('catalog-refreshed')).toHaveText(/^Aktualisiert /);
+    const bar = toolbar(page);
+    const box = async (l: ReturnType<typeof toolbar>) => (await l.boundingBox())!;
+    const sidebarButton = await box(bar.getByRole('button').first());
+    const fill = await box(bar.locator('.fill'));
+    const switcher = await box(bar.locator('.segmented'));
+    // One row: the catalog's row sits beside the view switch, not under it.
+    expect(Math.abs(fill.y + fill.height / 2 - (switcher.y + switcher.height / 2))).toBeLessThan(4);
+    expect(Math.abs(fill.y - sidebarButton.y)).toBeLessThan(8);
+    // Squeeze the catalog's row below what its content needs (count + date + two buttons is
+    // about 280 px in German): a fixed width, so the case does not hang on one OS's text widths.
+    await page.addStyleTag({ content: 'header.toolbar .fill { flex: 0 0 200px !important; }' });
+    const squeezed = await box(bar.locator('.fill'));
+    expect(Math.round(squeezed.width)).toBe(200);
+    // The date is shortened, its full text in the tooltip.
+    const date = page.getByTestId('catalog-refreshed');
+    const clipped = await date.evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(clipped, 'the date is ellipsized').toBe(true);
+    await expect(date).toHaveAttribute('title', /^Aktualisiert /);
+    // Every control of the row stays in the row, before the view switch, in order.
+    const dateBox = await box(date);
+    const refresh = await box(page.getByTestId('catalog-refresh'));
+    const check = await box(page.getByTestId('catalog-check-updates'));
+    expect(dateBox.x + dateBox.width).toBeLessThanOrEqual(refresh.x + 0.5);
+    expect(refresh.x + refresh.width).toBeLessThanOrEqual(check.x + 0.5);
+    const after = await box(bar.locator('.segmented'));
+    expect(check.x + check.width).toBeLessThanOrEqual(squeezed.x + squeezed.width + 0.5);
+    expect(squeezed.x + squeezed.width).toBeLessThanOrEqual(after.x + 0.5);
+    // The count is still whole: the date gave way first.
+    const count = page.locator('.browser .count');
+    expect(await count.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  });
 });
