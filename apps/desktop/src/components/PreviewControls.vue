@@ -657,13 +657,15 @@ const specimenText = computed(() => {
           <h3 :id="`${uid}-g-text`" class="heading">{{ t('preview.groups.text') }}</h3>
           <div class="row">
             <label :for="`${uid}-sample`" class="label">{{ t('preview.sample') }}</label>
-            <UiSelect
-              :id="`${uid}-sample`"
-              class="wide"
-              :model-value="s.sample"
-              :options="SAMPLE_KINDS"
-              @update:model-value="set({ sample: $event })"
-            />
+            <span class="wide">
+              <UiSelect
+                :id="`${uid}-sample`"
+                :fit="false"
+                :model-value="s.sample"
+                :options="SAMPLE_KINDS"
+                @update:model-value="set({ sample: $event })"
+              />
+            </span>
           </div>
           <div class="row">
             <span class="label" aria-hidden="true">{{ t('preview.align') }}</span>
@@ -1008,7 +1010,7 @@ const specimenText = computed(() => {
   padding: 0 14px;
   overflow: hidden;
   border-radius: var(--fm-radius-md);
-  background-color: var(--fm-surface);
+  background-color: var(--fm-well);
   font-family: var(--fm-font-ui);
   font-size: 34px;
   line-height: 1;
@@ -1066,9 +1068,14 @@ const specimenText = computed(() => {
   flex: none;
   width: 103px;
 }
+/* UiSelect renders two roots (its button and its list), so a wrapper gives it the row. */
 .wide {
+  display: flex;
   flex: 1;
   min-width: 0;
+}
+.wide > :deep(.ui-select) {
+  flex: 1;
 }
 .slider-row input[type='range'] {
   flex: 1;
@@ -1077,7 +1084,7 @@ const specimenText = computed(() => {
 }
 .slider-row .number {
   flex: none;
-  width: 80px;
+  width: 104px;
 }
 .unit {
   flex: none;
