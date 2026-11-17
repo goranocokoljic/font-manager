@@ -226,6 +226,7 @@
     "size": "Größe",
     "sizeGlyph": "A",
     "sizeSlider": "Größenregler",
+    "textSizeSlider": "Textgrößen-Regler",
     "sizeInPixels": "Größe in Pixeln",
     "autoSize": "Automatische Größe",
     "autoSizeHint": "Jede Zeile so skalieren, dass x-Höhe oder Versalhöhe aller Schriften bei dieser Größe gleich ist",

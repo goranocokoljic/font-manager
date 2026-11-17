@@ -84,10 +84,12 @@ test('the slider applies at 1.2× and the glyphs sit centred in the card', async
   const wall = await openWall(page);
   await chip(page, 'Letters').click();
   await field(page).fill('ROag');
-  await page.getByRole('slider', { name: 'Size slider' }).evaluate((el: HTMLInputElement) => {
-    el.value = '40';
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  await page
+    .getByRole('slider', { name: 'Size slider', exact: true })
+    .evaluate((el: HTMLInputElement) => {
+      el.value = '40';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
   await liveCards(page);
   const text = cards(wall).first().getByTestId('card-live-text');
   await expect(text).toHaveCSS('font-size', '48px');

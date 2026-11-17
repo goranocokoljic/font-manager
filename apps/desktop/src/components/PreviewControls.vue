@@ -409,7 +409,8 @@ const sliderRows = computed<SliderRow[]>(() => [
   {
     id: 'size',
     label: t('preview.size'),
-    slider: t('preview.sizeSlider'),
+    // Not "Size slider": that names the toolbar's, which sizes the same setting.
+    slider: t('preview.textSizeSlider'),
     field: t('preview.sizeInPixels'),
     key: KEY.value.size,
     bounds: size.value,

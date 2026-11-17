@@ -195,7 +195,7 @@ test('Preview options is keyboard-complete: every control by Tab and keys, Escap
     'Start',
     'Center',
     'End',
-    'Size slider',
+    'Text size slider',
     'Size in pixels',
     'Off',
     'x-height',

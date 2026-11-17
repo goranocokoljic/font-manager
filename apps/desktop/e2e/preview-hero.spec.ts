@@ -36,10 +36,12 @@ const chip = (page: Page, name: string) =>
 const firstCard = (wall: Locator) => wall.getByRole('option').first();
 
 const setSize = (page: Page, value: number) =>
-  page.getByRole('slider', { name: 'Size slider' }).evaluate((el: HTMLInputElement, v) => {
-    el.value = String(v);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  }, value);
+  page
+    .getByRole('slider', { name: 'Size slider', exact: true })
+    .evaluate((el: HTMLInputElement, v) => {
+      el.value = String(v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
 
 test.describe('the preview row', () => {
   test('a 44 px field with a hint, then chips, a divider and the language; nothing else', async ({
@@ -232,7 +234,7 @@ test.describe('the preview row', () => {
     await expect(wall).toHaveAttribute('data-preset', 'numerals');
     await expect(field(page)).toHaveValue('Hamburgefonstiv');
     await expect(chip(page, 'Numerals')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('slider', { name: 'Size slider' })).toHaveValue('80');
+    await expect(page.getByRole('slider', { name: 'Size slider', exact: true })).toHaveValue('80');
   });
 
   test('the Language picker puts its pangram up and lists recent languages first', async ({

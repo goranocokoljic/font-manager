@@ -226,6 +226,7 @@
     "size": "Size",
     "sizeGlyph": "A",
     "sizeSlider": "Size slider",
+    "textSizeSlider": "Text size slider",
     "sizeInPixels": "Size in pixels",
     "autoSize": "Auto size",
     "autoSizeHint": "Scale each row so every font's x-height or cap height matches at this size",

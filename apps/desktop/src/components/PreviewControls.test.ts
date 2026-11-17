@@ -220,7 +220,7 @@ describe('PreviewControls', () => {
     ]);
     // Size, Line height and Tracking: a slider and a number field each, units after the field.
     for (const [slider, number] of [
-      ['Size slider', 'Size in pixels'],
+      ['Text size slider', 'Size in pixels'],
       ['Line height slider', 'Line height'],
       ['Tracking slider', 'Tracking in em'],
     ]) {
@@ -358,7 +358,7 @@ describe('PreviewControls', () => {
 
   it('the size slider and its field show the same value and set the same setting', async () => {
     const { wrapper, store } = controls();
-    const slider = wrapper.get('input[type="range"][aria-label="Size slider"]');
+    const slider = wrapper.get('input[type="range"][aria-label="Text size slider"]');
     const number = wrapper.get('input[aria-label="Size in pixels"]');
     await slider.setValue('64');
     expect(store.settingsFor('all').sizePx).toBe(64);
@@ -458,7 +458,7 @@ describe('PreviewSizeSlider', () => {
   });
 
   it('is in the row only when the view asks for it', () => {
-    // The popover has a Size slider of its own; the row's is the one in `.main`.
+    // The row's own slider, in `.main` (the popover's is the Text size slider).
     expect(controls().wrapper.get('.main').find('input[aria-label="Size slider"]').exists()).toBe(
       false,
     );
