@@ -91,7 +91,6 @@ const sampleStyle = computed(() => ({
   lineHeight: String(props.preview.lineHeight),
   letterSpacing: `${props.preview.trackingEm}em`,
   textAlign: props.preview.align,
-  color: props.preview.textColor ?? undefined,
 }));
 const sizeStyle = (sizePx: number) => ({ ...sampleStyle.value, fontSize: `${sizePx}px` });
 const styles = computed(() => styleCount(props.family.styles.length));

@@ -60,11 +60,11 @@ test('the metrics toggle draws baseline, x-height and cap height that follow siz
 }) => {
   await open(page);
   const controls = controlsOf(page);
-  const metrics = controls.getByRole('checkbox', { name: 'Metrics' });
+  const metrics = controls.getByRole('switch', { name: 'Metric lines' });
   await expect(metrics).not.toBeChecked();
   await expect(page.locator('[data-line]')).toHaveCount(0);
 
-  // Keyboard: Space on the focused, labelled checkbox turns it on.
+  // Keyboard: Space on the focused, labelled switch turns it on.
   await metrics.focus();
   await page.keyboard.press('Space');
   await expect(metrics).toBeChecked();
@@ -92,7 +92,7 @@ test('the metrics toggle draws baseline, x-height and cap height that follow siz
 
   // A taller line moves the baseline down by half the added leading; the gaps stay.
   const before = at.baseline!;
-  await controls.getByLabel('Line height').fill('2');
+  await controls.getByRole('textbox', { name: 'Line height', exact: true }).fill('2');
   // Whole-pixel line boxes: within a pixel.
   await expect
     .poll(async () => Math.abs((await metricLines(page, 1)).baseline! - before - (56 * 0.8) / 2))
@@ -103,12 +103,12 @@ test('the metrics toggle draws baseline, x-height and cap height that follow siz
   // Persists for the view across a reload; the list stays virtualized.
   await page.reload();
   await showPreviewOptions(page);
-  await expect(controls.getByRole('checkbox', { name: 'Metrics' })).toBeChecked();
+  await expect(controls.getByRole('switch', { name: 'Metric lines' })).toBeChecked();
   await expect(page.locator('[data-face="1"] [data-line="baseline"]')).toHaveCount(1);
   const total = Number(await rows.first().getAttribute('aria-setsize'));
   expect(await rows.count()).toBeLessThanOrEqual(total);
 
-  await controls.getByRole('checkbox', { name: 'Metrics' }).uncheck();
+  await controls.getByRole('switch', { name: 'Metric lines' }).uncheck();
   await expect(page.locator('[data-line]')).toHaveCount(0);
 });
 
@@ -117,7 +117,7 @@ test('the outline toggle draws outlines in every view mode and turns off again',
 }) => {
   await open(page);
   const controls = controlsOf(page);
-  const outline = controls.getByRole('checkbox', { name: 'Outline' });
+  const outline = controls.getByRole('switch', { name: 'Outlines' });
   const sample = page.locator('[role="treeitem"] [data-face="1"] .sample');
   const solid = await sample.evaluate(fill);
   expect(solid).not.toBe('rgba(0, 0, 0, 0)');
@@ -146,7 +146,7 @@ test('the outline toggle draws outlines in every view mode and turns off again',
   expect(await strip.evaluate(fill)).toBe('rgba(0, 0, 0, 0)');
 
   await showPreviewOptions(page);
-  await controls.getByRole('checkbox', { name: 'Outline' }).uncheck();
+  await controls.getByRole('switch', { name: 'Outlines' }).uncheck();
   await expect.poll(() => strip.evaluate(fill)).toBe(solid);
   await modeButton(page, 'Grid').click();
   await expect(
@@ -164,7 +164,7 @@ test('the tracking slider applies in every view mode and in the preview strip', 
   await expect(slider).toHaveAttribute('min', '-0.2');
   await expect(slider).toHaveAttribute('max', '1');
   await slider.fill('0.5');
-  await expect(controls.getByLabel('Tracking in em')).toHaveValue('0.5');
+  await expect(controls.getByLabel('Tracking in em')).toHaveValue('0.50');
   await expect(page.locator('[role="treeitem"] [data-face="1"] .sample')).toHaveCSS(
     'letter-spacing',
     '14px',

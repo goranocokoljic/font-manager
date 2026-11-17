@@ -123,19 +123,6 @@ const previewStore = usePreviewStore();
 const compare = useCompareStore();
 const search = useSearchStore();
 
-const surfaceClass = computed(() =>
-  props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
-);
-// A chosen background is the ground and the cards alike, as the board's white on white.
-const viewportStyle = computed(() =>
-  props.preview.backgroundColor
-    ? {
-        backgroundColor: props.preview.backgroundColor,
-        '--fm-card-bg': props.preview.backgroundColor,
-      }
-    : {},
-);
-
 const viewport = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
 const height = ref(FALLBACK_HEIGHT);
@@ -467,8 +454,7 @@ function cardStyle(index: number) {
 }
 
 function thumbStyle(thumb: HeldThumbnail | undefined) {
-  const color = props.preview.textColor ?? undefined;
-  if (!thumb) return { color };
+  if (!thumb) return {};
   const image = `url("${thumb.url}")`;
   const scale = specimenPx.value / thumb.renderPx;
   const w = thumb.width * scale;
@@ -476,7 +462,6 @@ function thumbStyle(thumb: HeldThumbnail | undefined) {
   const fit = specimenScale(w, h, box.value);
   const size = `${w * fit}px ${h * fit}px`;
   return {
-    color,
     maskImage: image,
     WebkitMaskImage: image,
     maskSize: size,
@@ -670,9 +655,7 @@ function onToggle(row: ListRow): void {
   <div
     ref="viewport"
     class="viewport"
-    :class="[surfaceClass, { rows }]"
-    :style="viewportStyle"
-    :data-surface="preview.surface"
+    :class="{ rows }"
     :data-columns="columns"
     :data-preset="preset"
     :data-layout="layoutKey"
@@ -730,7 +713,6 @@ function onToggle(row: ListRow): void {
               :line-height="wrapped ? wrapLineHeight : undefined"
               :tracking-em="preview.trackingEm"
               :outline="preview.outline"
-              :color="preview.textColor"
               :defer="!motion.settled.value"
               aria-hidden="true"
             />

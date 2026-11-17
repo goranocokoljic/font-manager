@@ -58,13 +58,6 @@ const lines = computed(() =>
   })),
 );
 
-const surfaceClass = computed(() =>
-  props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
-);
-const viewportStyle = computed(() => ({
-  backgroundColor: props.preview.backgroundColor ?? undefined,
-}));
-
 const viewport = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
 const height = ref(FALLBACK_HEIGHT);
@@ -181,9 +174,6 @@ function onToggle(row: ListRow): void {
   <div
     ref="viewport"
     class="viewport"
-    :class="surfaceClass"
-    :style="viewportStyle"
-    :data-surface="preview.surface"
     role="tree"
     tabindex="0"
     :aria-label="t('waterfall.label')"
@@ -261,7 +251,6 @@ function onToggle(row: ListRow): void {
             :metrics="item.metrics"
             :outline="preview.outline"
             :align="preview.align"
-            :color="preview.textColor"
             :fallback="k === 0 ? item.fallback : null"
             :show-variable="k === 0"
             :missing="item.missing"

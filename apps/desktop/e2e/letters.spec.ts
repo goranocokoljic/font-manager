@@ -46,7 +46,7 @@ const names = (wall: Locator) =>
 /** Every card as live text (outline on), so the text a card draws can be read. */
 async function liveCards(page: Page) {
   await showPreviewOptions(page);
-  await page.getByRole('checkbox', { name: 'Outline' }).check();
+  await page.getByRole('switch', { name: 'Outlines' }).check();
   await page.keyboard.press('Escape');
 }
 

@@ -180,26 +180,12 @@ describe('PreviewControls', () => {
     await toggle.trigger('click');
     expect(panel.isVisible()).toBe(true);
     expect(toggle.attributes('aria-expanded')).toBe('true');
-    // A press inside stays open; the panel holds every remaining control.
+    // A press inside stays open.
     wrapper
       .get('input[aria-label="Line height"]')
       .element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     await flushPromises();
     expect(panel.isVisible()).toBe(true);
-    for (const name of [
-      'Size in pixels',
-      'Line height',
-      'Tracking in em',
-      'Text color',
-      'Background color',
-    ]) {
-      expect(panel.find(`input[aria-label="${name}"]`).exists()).toBe(true);
-    }
-    expect(panel.text()).toContain('Auto size');
-    expect(panel.text()).toContain('Metrics');
-    expect(panel.text()).toContain('Outline');
-    expect(panel.text()).toContain('Surface');
-    expect(panel.find('[aria-label="Alignment"]').exists()).toBe(true);
 
     document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     await flushPromises();
@@ -209,6 +195,60 @@ describe('PreviewControls', () => {
     await wrapper.get('input[aria-label="Line height"]').trigger('keydown', { key: 'Escape' });
     expect(panel.isVisible()).toBe(false);
     expect(document.activeElement).toBe(toggle.element);
+  });
+
+  it('lays the popover out as board 12: title, Reset, specimen, then three groups in order', async () => {
+    const { wrapper } = controls();
+    await flushPromises();
+    const panel = wrapper.get('.more');
+    expect(panel.attributes('aria-labelledby')).toBe(panel.get('.title').attributes('id'));
+    expect(panel.get('.title').text()).toBe('Preview options');
+    expect(panel.get('.head').get('button').text()).toBe('Reset');
+    expect(panel.find('[data-testid="options-specimen"]').exists()).toBe(true);
+    const groups = panel.findAll('section.group');
+    expect(groups.map((g) => g.get('h3').text())).toEqual(['Text', 'Size and spacing', 'Guides']);
+    for (const g of groups)
+      expect(g.attributes('aria-labelledby')).toBe(g.get('h3').attributes('id'));
+    const labels = (i: number) =>
+      groups[i]!.findAll('.label, .toggle-text > span:first-child').map((l) => l.text());
+    expect(labels(0)).toEqual(['Sample', 'Align']);
+    expect(labels(1)).toEqual(['Size', 'Auto size', 'Line height', 'Tracking']);
+    expect(labels(2)).toEqual(['Metric lines', 'Outlines']);
+    expect(groups[2]!.findAll('.desc').map((d) => d.text())).toEqual([
+      'Baseline, x-height and cap height',
+      'Draw glyphs as outlines',
+    ]);
+    // Size, Line height and Tracking: a slider and a number field each, units after the field.
+    for (const [slider, number] of [
+      ['Size slider', 'Size in pixels'],
+      ['Line height slider', 'Line height'],
+      ['Tracking slider', 'Tracking in em'],
+    ]) {
+      expect(panel.find(`input[type="range"][aria-label="${slider}"]`).exists()).toBe(true);
+      expect(panel.find(`input[type="text"][aria-label="${number}"]`).exists()).toBe(true);
+    }
+    expect(groups[1]!.findAll('.unit').map((u) => u.text())).toEqual(['px', '', 'em']);
+    // The number fields show two places where the board does.
+    expect((panel.get('input[aria-label="Line height"]').element as HTMLInputElement).value).toBe(
+      '1.20',
+    );
+    expect(
+      (panel.get('input[aria-label="Tracking in em"]').element as HTMLInputElement).value,
+    ).toBe('0.00');
+  });
+
+  it('has no colour or surface control, in the popover or in the palette (E54.8)', async () => {
+    const { wrapper } = controls();
+    await flushPromises();
+    const panel = wrapper.get('.more');
+    expect(panel.find('input[type="color"]').exists()).toBe(false);
+    for (const word of ['color', 'colour', 'Background', 'Surface', 'Follow theme'])
+      expect(panel.text().toLowerCase()).not.toContain(word.toLowerCase());
+    expect(wrapper.findAll('[aria-label*="olor"]')).toHaveLength(0);
+    const titles = useCommandsStore().items.map((i) => i.action.title.toLowerCase());
+    expect(titles.length).toBeGreaterThan(0);
+    for (const word of ['color', 'colour', 'background', 'surface'])
+      expect(titles.filter((title) => title.includes(word))).toEqual([]);
   });
 
   it('T focuses and selects the field; Escape leaves it for the list', async () => {
@@ -253,27 +293,26 @@ describe('PreviewControls', () => {
     expect((size.element as HTMLInputElement).value).toBe('300');
   });
 
-  it('sets line height, tracking, alignment, colors and surface', async () => {
+  it('sets line height, tracking and alignment', async () => {
     const { wrapper, store } = controls();
     await wrapper.get('input[aria-label="Line height"]').setValue('1.6');
     await wrapper.get('input[aria-label="Tracking in em"]').setValue('0.1');
-    await wrapper
-      .get('[aria-label="Alignment"] button[aria-pressed="false"]:nth-of-type(2)')
-      .trigger('click');
-    await wrapper.get('input[aria-label="Text color"]').setValue('#123456');
-    await wrapper.get('input[aria-label="Background color"]').setValue('#fedcba');
-    await pickOption(selectLabelled(wrapper, 'Surface'), 'dark');
+    const align = wrapper.get('[role="group"][aria-label="Align"]');
+    expect(align.findAll('button').map((b) => b.attributes('aria-label'))).toEqual([
+      'Start',
+      'Center',
+      'End',
+    ]);
+    await align.get('button[aria-label="Center"]').trigger('click');
     expect(store.settingsFor('all')).toMatchObject({
       lineHeight: 1.6,
       trackingEm: 0.1,
       align: 'center',
-      textColor: '#123456',
-      backgroundColor: '#fedcba',
-      surface: 'dark',
     });
-    expect(wrapper.get('[aria-label="Alignment"] button[aria-pressed="true"]').text()).toBe(
-      'Center',
-    );
+    expect(align.get('button[aria-pressed="true"]').attributes('aria-label')).toBe('Center');
+    const specimen = wrapper.get('[data-testid="options-specimen"]').element as HTMLElement;
+    expect(specimen.style.justifyContent).toBe('center');
+    expect(specimen.style.letterSpacing).toBe('0.1em');
   });
 
   it('chooses the sample kind in the options, with the font name among them', async () => {
@@ -288,22 +327,18 @@ describe('PreviewControls', () => {
     await wrapper.get('input[aria-label="Size in pixels"]').setValue('200');
     expect(store.settingsFor('collection-3').sizePx).toBe(200);
     expect(store.settingsFor('all').sizePx).toBe(28);
-    await wrapper.findAll('button').at(-1)!.trigger('click');
+    await wrapper.get('.head button').trigger('click');
     expect(store.settingsFor('collection-3').sizePx).toBe(28);
   });
 
-  it('sets auto size from a labelled select (Off, x-height, Cap height)', async () => {
+  it('sets auto size from a segmented control (Off, x-height, Cap height)', async () => {
     const { wrapper, store } = controls('collection-3');
-    const select = selectLabelled(wrapper, 'Auto size');
-    expect((await selectOptions(select)).map(([, label]) => label)).toEqual([
-      'Off',
-      'x-height',
-      'Cap height',
-    ]);
-    expect(select.attributes('data-value')).toBe('off');
-    await pickOption(select, 'xHeight');
+    const auto = wrapper.get('[role="group"][aria-label="Auto size"]');
+    expect(auto.findAll('button').map((b) => b.text())).toEqual(['Off', 'x-height', 'Cap height']);
+    expect(auto.get('button[aria-pressed="true"]').text()).toBe('Off');
+    await auto.get('button[data-value="xHeight"]').trigger('click');
     expect(store.settingsFor('collection-3').autoSize).toBe('xHeight');
-    await pickOption(select, 'capHeight');
+    await auto.get('button[data-value="capHeight"]').trigger('click');
     expect(store.settingsFor('collection-3').autoSize).toBe('capHeight');
     expect(store.settingsFor('all').autoSize).toBe('off');
   });
@@ -318,28 +353,91 @@ describe('PreviewControls', () => {
     expect((number.element as HTMLInputElement).value).toBe('0.35');
     await slider.setValue('-0.2');
     expect(store.settingsFor('all').trackingEm).toBe(-0.2);
-    const group = wrapper.get(
-      `[role="group"][aria-labelledby="${slider.element.parentElement!.getAttribute('aria-labelledby')}"]`,
-    );
-    expect(group.text()).toContain('Tracking');
+    expect(wrapper.get('[data-testid="options-tracking"]').text()).toContain('Tracking');
   });
 
-  it('toggles metrics and outline from labelled checkboxes, per view', async () => {
+  it('the size slider and its field show the same value and set the same setting', async () => {
+    const { wrapper, store } = controls();
+    const slider = wrapper.get('input[type="range"][aria-label="Size slider"]');
+    const number = wrapper.get('input[aria-label="Size in pixels"]');
+    await slider.setValue('64');
+    expect(store.settingsFor('all').sizePx).toBe(64);
+    expect((number.element as HTMLInputElement).value).toBe('64');
+    await number.setValue('72');
+    expect((slider.element as HTMLInputElement).value).toBe('72');
+  });
+
+  it('toggles metric lines and outlines from labelled switches, per view', async () => {
     const { wrapper, store } = controls('collection-3');
-    const box = (name: string) =>
-      wrapper
-        .findAll('label')
-        .find((l) => l.text() === name)!
-        .get('input[type="checkbox"]');
-    expect((box('Metrics').element as HTMLInputElement).checked).toBe(false);
-    await box('Metrics').setValue(true);
+    const toggle = (name: string) => {
+      const label = wrapper.findAll('.toggle-text > span').find((l) => l.text() === name)!;
+      return wrapper.get(`[role="switch"][aria-labelledby="${label.attributes('id')}"]`);
+    };
+    expect(toggle('Metric lines').attributes('aria-checked')).toBe('false');
+    expect(toggle('Metric lines').attributes('aria-describedby')).toBeTruthy();
+    await toggle('Metric lines').trigger('click');
     expect(store.settingsFor('collection-3').metrics).toBe(true);
-    await box('Outline').setValue(true);
+    expect(wrapper.findAll('[data-testid="options-specimen"] .guide')).toHaveLength(3);
+    await toggle('Outlines').trigger('click');
     expect(store.settingsFor('collection-3').outline).toBe(true);
+    expect(wrapper.get('[data-testid="options-specimen"]').classes()).toContain('outline');
     expect(store.settingsFor('all')).toMatchObject({ metrics: false, outline: false });
-    await box('Metrics').setValue(false);
+    await toggle('Metric lines').trigger('click');
     expect(store.settingsFor('collection-3').metrics).toBe(false);
-    expect((box('Outline').element as HTMLInputElement).checked).toBe(true);
+    expect(wrapper.findAll('[data-testid="options-specimen"] .guide')).toHaveLength(0);
+    expect(toggle('Outlines').attributes('aria-checked')).toBe('true');
+  });
+
+  it('fades Line height on the wall for Word, says why, and keeps the stored value', async () => {
+    const { wrapper, store } = controls('all', { mode: 'grid' });
+    store.applyPreset('all', 'pangram');
+    await flushPromises();
+    const row = () => wrapper.get('[data-testid="options-lineHeight"]');
+    expect(row().classes()).not.toContain('off');
+    expect(wrapper.text()).not.toContain('No effect while the preview is a single line.');
+
+    store.applyPreset('all', 'word');
+    await flushPromises();
+    expect(row().classes()).toContain('off');
+    const slider = row().get('input[type="range"]');
+    const number = row().get('input[type="text"]');
+    expect(slider.attributes('aria-disabled')).toBe('true');
+    expect(number.attributes('aria-disabled')).toBe('true');
+    const why = wrapper.get(`#${slider.attributes('aria-describedby')}`);
+    expect(why.text()).toBe('No effect while the preview is a single line.');
+    expect(number.attributes('aria-describedby')).toBe(slider.attributes('aria-describedby'));
+    // Still in its place, between Auto size and Tracking: the popover keeps its height.
+    expect(
+      wrapper.findAll('[data-testid^="options-"]').map((r) => r.attributes('data-testid')),
+    ).toEqual(['options-specimen', 'options-size', 'options-lineHeight', 'options-tracking']);
+    // Neither the slider, the field nor its arrow keys change the stored value.
+    await slider.setValue('2');
+    await number.setValue('2.5');
+    await number.trigger('change');
+    await number.trigger('keydown', { key: 'ArrowUp' });
+    expect(store.settingsFor('all').lineHeight).toBe(1.2);
+    // The other sliders still work.
+    await wrapper.get('input[aria-label="Tracking in em"]').setValue('0.2');
+    expect(store.settingsFor('all').trackingEm).toBe(0.2);
+  });
+
+  it('keeps Line height on in the list, where it spaces the rows', async () => {
+    const { wrapper, store } = controls('all', { mode: 'list' });
+    store.applyPreset('all', 'word');
+    await flushPromises();
+    expect(wrapper.get('[data-testid="options-lineHeight"]').classes()).not.toContain('off');
+    await wrapper.get('input[aria-label="Line height"]').setValue('1.5');
+    expect(store.settingsFor('all').lineHeight).toBe(1.5);
+  });
+
+  it('turns Size off in Waterfall with the reason under it', async () => {
+    const { wrapper, store } = controls('all', { mode: 'waterfall' });
+    await flushPromises();
+    const row = wrapper.get('[data-testid="options-size"]');
+    expect(row.classes()).toContain('off');
+    expect(wrapper.text()).toContain('Size is fixed in Waterfall');
+    await row.get('input[type="range"]').setValue('100');
+    expect(store.settingsFor('all').sizePx).toBe(28);
   });
 });
 
@@ -360,11 +458,15 @@ describe('PreviewSizeSlider', () => {
   });
 
   it('is in the row only when the view asks for it', () => {
-    expect(controls().wrapper.find('input[aria-label="Size slider"]').exists()).toBe(false);
+    // The popover has a Size slider of its own; the row's is the one in `.main`.
+    expect(controls().wrapper.get('.main').find('input[aria-label="Size slider"]').exists()).toBe(
+      false,
+    );
     mounted?.unmount();
     expect(
       controls('all', { inlineSize: true })
-        .wrapper.find('input[aria-label="Size slider"]')
+        .wrapper.get('.main')
+        .find('input[aria-label="Size slider"]')
         .exists(),
     ).toBe(true);
   });

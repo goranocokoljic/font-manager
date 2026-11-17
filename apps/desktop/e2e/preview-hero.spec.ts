@@ -59,8 +59,8 @@ test.describe('the preview row', () => {
       'Letters',
     ]);
     await expect(row(page).getByLabel('Language')).toBeVisible();
-    for (const name of ['Size in pixels', 'Line height', 'Surface', 'Auto size', 'Sample']) {
-      await expect(row(page).getByLabel(name)).toBeHidden();
+    for (const name of ['Size in pixels', 'Line height', 'Auto size', 'Sample']) {
+      await expect(row(page).getByLabel(name, { exact: true }).first()).toBeHidden();
     }
     // The options button ends the row.
     const toggle = await row(page).getByRole('button', { name: 'Preview options' }).boundingBox();
@@ -274,17 +274,11 @@ test.describe('the preview row', () => {
     await expect(options).toBeHidden();
     await showPreviewOptions(page);
     await expect(options).toBeVisible();
-    for (const name of [
-      'Size in pixels',
-      'Auto size',
-      'Line height',
-      'Tracking in em',
-      'Surface',
-    ]) {
-      await expect(options.getByLabel(name)).toBeVisible();
+    for (const name of ['Size in pixels', 'Auto size', 'Line height', 'Tracking in em']) {
+      await expect(options.getByLabel(name, { exact: true }).first()).toBeVisible();
     }
     // A Select's menu in it lives in <body>: choosing keeps the popover open.
-    await selectOption(options.getByLabel('Surface'), 'dark');
+    await selectOption(options.getByLabel('Sample', { exact: true }), 'alphabet');
     await expect(options).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(options).toBeHidden();
