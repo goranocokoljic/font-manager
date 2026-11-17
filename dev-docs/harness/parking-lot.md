@@ -499,3 +499,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E51.5 #603] apps/desktop/src/components/SourcesSidebar.vue:104 — sidebar row buttons use `size="sm"` (24 px targets) though rows are now always 30 px; the 24 px rationale no longer applies.
 - [E51.2 #600] apps/desktop/src/components/FilterChips.vue:504 — a spilled chip (`visibility: hidden`) cannot be reached by keyboard and the "+N" drawer does not list the foundry, renders-text or new-fonts chips; "Clear all" is the only way to remove them.
 - [E51.2 #600] apps/desktop/src/stores/libraryViews.ts:51 — the active sidebar view is judged from `search.filters` alone and ignores the narrowings outside `Filters` (foundry, now the watcher's "only these faces").
+
+## 2026-11-17
+
+- [E54.1 #611] apps/desktop/src/components/FoundriesSidebar.vue:145 — the Foundries sidebar has no keydown route for the Menu key / Shift+F10; its keyboard menu relies only on the browser-fired `contextmenu` event, unlike the Characters grid (FamilyCharacters.vue:333).
+- [E54.1 #611] apps/desktop/playwright.config.ts:20 — `reuseExistingServer` lets a Vite server already on port 1420 from another worktree serve the specs, so a local run can fail until a clean rerun.
