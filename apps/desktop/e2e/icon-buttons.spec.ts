@@ -118,7 +118,7 @@ test('a catalog item: a 28 px download arrow, no text button', async ({ page }) 
   await expectTargets(list, 'catalog items', 4);
   const lato = list.getByRole('listitem').filter({ hasText: 'Lato' });
   const download = lato.getByRole('button', { name: 'Download Lato…' });
-  await expect(download).toHaveAttribute('title', 'Download Lato…');
+  await expect(download).toHaveAccessibleDescription('Download Lato…');
   await expect(download).toHaveText('');
   await expect(lato.getByRole('button', { name: 'Install Lato' })).toHaveCount(0);
 });

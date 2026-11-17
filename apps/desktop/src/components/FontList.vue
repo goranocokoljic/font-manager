@@ -89,6 +89,7 @@ const quick = useQuickCollectionStore();
 const similar = useSimilarStore();
 const similarChord = chordOf(ACTIONS.similar)!;
 const activateChord = chordOf(ACTIONS.activateSession)!;
+const compareChord = chordOf(ACTIONS.compare)!;
 const activation = useActivationStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
@@ -380,27 +381,31 @@ function onToggle(row: ListRow): void {
         <div v-if="item.face" class="row-actions">
           <UiIconButton
             icon="power"
+            size="lg"
             tabindex="-1"
             data-testid="row-activate"
             :label="t('list.activateLabel', { name: rowName(item.face) })"
             :aria-keyshortcuts="ariaShortcut(activateChord)"
-            :title="`${t('list.activateLabel', { name: rowName(item.face) })} (${formatChord(activateChord)})`"
+            :shortcut="formatChord(activateChord)"
             @click.stop="toggleActive(item.row)"
           />
           <CompareToggle
+            size="lg"
             tabindex="-1"
             data-testid="row-compare"
+            :shortcut="formatChord(compareChord)"
             :face="item.face"
             :scope="item.row.kind === 'family' ? 'family' : 'face'"
             @toggle="onCompareToggled(item.row)"
           />
           <UiIconButton
             icon="similar"
+            size="lg"
             tabindex="-1"
             data-testid="row-similar"
             :label="similarLabel(item.face)"
             :aria-keyshortcuts="ariaShortcut(similarChord)"
-            :title="`${similarLabel(item.face)} (${formatChord(similarChord)})`"
+            :shortcut="formatChord(similarChord)"
             @click.stop="findSimilar(item.row, item.face)"
           />
         </div>

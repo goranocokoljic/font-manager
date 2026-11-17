@@ -107,7 +107,7 @@ test('turn Google Fonts on, browse, search and change the sample text, by keyboa
   const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   const entry = catalogs.getByRole('button', { name: 'Google Fonts', exact: true });
   const turnOn = catalogs.getByRole('button', { name: 'Turn on Google Fonts' });
-  await expect(turnOn).toHaveAccessibleDescription('Connects to the internet');
+  await expect(turnOn).toHaveAccessibleDescription('Turn on — Connects to the internet');
 
   // Open it while off: no list, nothing fetched.
   await entry.focus();
@@ -267,7 +267,7 @@ test('download a family into a chosen folder, by keyboard, with progress and the
     .filter({ hasText: 'Lato' })
     .getByRole('button', { name: 'Download Lato…' });
   await expect(open, 'an icon button (E50.6)').toHaveText('');
-  await expect(open).toHaveAttribute('title', 'Download Lato…');
+  await expect(open).toHaveAccessibleDescription('Download Lato…');
   await open.focus();
   await page.keyboard.press('Enter');
 

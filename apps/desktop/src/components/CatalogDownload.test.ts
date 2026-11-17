@@ -7,7 +7,7 @@ import type { DownloadFamilyResponse } from '../api/types';
 import { FaceLoader, setFaceLoader } from '../preview/faceLoader';
 import { useCatalogsStore } from '../stores/catalogs';
 import CatalogBrowser from './CatalogBrowser.vue';
-import { selectOptions } from './ui/testing';
+import { selectOptions, tooltipOf } from './ui/testing';
 
 let wrappers: VueWrapper[] = [];
 
@@ -58,7 +58,7 @@ describe('CatalogBrowser "Download..."', () => {
     expect(button.element.tagName).toBe('BUTTON');
     expect(button.text(), 'an icon button (E50.6)').toBe('');
     expect(button.attributes('aria-label')).toBe('Download Lato…');
-    expect(button.attributes('title')).toBe('Download Lato…');
+    expect(tooltipOf(button)).toBe('Download Lato…');
     expect(panel(w).exists()).toBe(false);
 
     await openFor(w, 'Lato');

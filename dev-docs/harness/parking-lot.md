@@ -521,3 +521,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E54.8 #618] apps/desktop/src/components/FamilyText.vue:65 — the family page Text section always forces surface-light/surface-dark (Paper by default), so in the dark theme it never draws on the theme surface; confirm whether criterion 2's "family page" covers it.
 - [E54.8 #618] apps/desktop/src/stores/familyPage.ts:64 — `textGround` defaults to 'paper' whatever the theme; same root cause as the line above.
 - [E54.8 #618] crates/fm-core/src/api/tests/watching.rs:227 — `sources_added_paused_resumed_and_removed_change_what_is_watched` flaked on the Linux runner (no watcher event in 10 s for a font copied into a newly added source); may race inotify registration under load.
+- [E54.9 #619] apps/desktop/src/views/FamilyView.vue:381 — the family page's Compare shows no shortcut in its tooltip while Tag and Similar beside it show T and S.
+- [E54.9 #619] apps/desktop/src/components/FontGrid.vue:811 — the wall card's "like this" letter buttons are card actions that still use a native `title` (text buttons, not UiIconButton).
+- [E54.9 #619] apps/desktop/src/components/ui/UiTooltip.vue:27 — the tooltip has its own copy of UiPopover's place-and-clamp math and no resize handler; two copies to keep in step.

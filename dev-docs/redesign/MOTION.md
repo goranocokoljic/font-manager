@@ -40,6 +40,7 @@ In `apps/desktop/src/styles/theme.css`. All durations but the reduced fade are `
 | Quick Look (Space) | The specimen sheet fades up over a blurred wall; ← → crossfade the family inside the sheet | Opacity + translateY(8 px); backdrop blur fixed, not animated | 200 ms / 120 ms | Fade only, no blur |
 | Open the Studio | The page lifts off the paper ground and the roles rail slides in | Paper scale .98 → 1 + opacity; rail translateX | 280 ms | Fade only |
 | Hover anything | Tint eases in on pointer enter and out on leave | background-color on the tint layer only | 120 ms | Same (hover tint is not motion) |
+| Tooltip of an icon button (E54.9) | Fades in above the button after a 300 ms rest of the pointer (at once on a keyboard focus) and fades out on leave, press or Esc | `<FmFade speed="fast" reduced="fade">` on the opacity | 120 ms | The reduced fade |
 
 ## Helpers
 

@@ -37,6 +37,7 @@
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
+import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
 import type { FaceId, FaceSummary } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
 import { SETTLE_MS, useScrollSettle } from '../list/settle';
@@ -114,6 +115,8 @@ const FALLBACK_HEIGHT = 600;
 const FALLBACK_WIDTH = 800;
 
 const list = useFontListStore();
+// The compare row action's tooltip names its key (E54.9).
+const compareKey = formatChord(chordOf(ACTIONS.compare)!);
 const fontSwitch = useFontSwitchStore();
 const fontDrag = useFontDragStore();
 const library = useLibraryStore();
@@ -804,7 +807,9 @@ function onToggle(row: ListRow): void {
           <CompareToggle
             class="card-compare"
             data-testid="card-compare"
+            size="lg"
             tabindex="-1"
+            :shortcut="compareKey"
             :face="item.face"
             :scope="item.row.kind === 'family' ? 'family' : 'face'"
             @toggle="viewport?.focus({ preventScroll: true })"

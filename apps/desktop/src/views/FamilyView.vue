@@ -346,6 +346,7 @@ onBeforeUnmount(() => {
           icon="arrowLeft"
           :label="t('family.previous')"
           aria-keyshortcuts="ArrowLeft"
+          shortcut="←"
           :disabled="page.previous === null"
           @click="step(-1)"
         />
@@ -354,6 +355,7 @@ onBeforeUnmount(() => {
           icon="arrowRight"
           :label="t('family.next')"
           aria-keyshortcuts="ArrowRight"
+          shortcut="→"
           :disabled="page.next === null"
           @click="step(1)"
         />
@@ -372,6 +374,7 @@ onBeforeUnmount(() => {
           icon="tag"
           :label="t('family.tag')"
           aria-keyshortcuts="T"
+          shortcut="T"
           :disabled="!page.detail"
           @click="tag"
         />
@@ -386,6 +389,7 @@ onBeforeUnmount(() => {
           icon="similar"
           :label="t('family.findSimilar')"
           aria-keyshortcuts="S"
+          shortcut="S"
           :disabled="!page.face"
           @click="findSimilar"
         />

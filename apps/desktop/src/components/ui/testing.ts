@@ -38,3 +38,26 @@ export async function pickOption(trigger: Trigger, value: string): Promise<void>
   option.click();
   await nextTick();
 }
+
+/**
+ * The text an icon button's tooltip shows (E54.9): its `UiTooltip`, found through the button's
+ * `aria-describedby`. The shortcut is left out; `tooltipShortcut` reads it.
+ */
+export function tooltipOf(button: Pick<DOMWrapper<Element>, 'attributes'>): string | undefined {
+  return tooltipLayer(button)?.querySelector('.text')?.textContent ?? undefined;
+}
+
+/** The shortcut an icon button's tooltip shows, if any. */
+export function tooltipShortcut(
+  button: Pick<DOMWrapper<Element>, 'attributes'>,
+): string | undefined {
+  return tooltipLayer(button)?.querySelector('kbd')?.textContent ?? undefined;
+}
+
+function tooltipLayer(button: Pick<DOMWrapper<Element>, 'attributes'>): HTMLElement | null {
+  for (const id of (button.attributes('aria-describedby') ?? '').split(/\s+/)) {
+    const el = id ? document.getElementById(id) : null;
+    if (el?.getAttribute('role') === 'tooltip') return el;
+  }
+  return null;
+}

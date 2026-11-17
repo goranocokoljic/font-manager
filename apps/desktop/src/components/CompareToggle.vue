@@ -5,13 +5,14 @@
 // a click removes it. The accessible name says which ("Add … to Compare" / "Remove … from
 // Compare"); there is no aria-pressed, as the name already changes with the state.
 //
-// The 28 px UiIconButton (E50.6) with the accent focus ring. `scope="family"` stands for the face's whole
+// The 28 px UiIconButton (E50.6) with the accent focus ring; `size="lg"` (a row action, E54.9)
+// passes through to it. `scope="family"` stands for the face's whole
 // family: a family's card or row is in the set while any of its faces is. By default a click
 // goes to the compare store's `toggle`; with `manual` it only emits `toggle`, for a parent
 // that must act around it (the sheet keeps the focus on the next face). With `fresh` a click
 // outside the set starts a new comparison with the face as its base (the family page's
 // Compare, E48.5) instead of adding to the set. `disabledReason` disables the icon and puts the
-// reason in its title (a full set, E48.3).
+// reason in its tooltip (a full set, E48.3).
 import { computed } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
@@ -39,10 +40,9 @@ const label = computed(() => {
   return t(inSet.value ? 'compare.removeLabel' : 'compare.addLabel', { name });
 });
 
-const title = computed(
-  () =>
-    props.disabledReason ?? (props.shortcut ? `${label.value} (${props.shortcut})` : label.value),
-);
+// The tooltip (E54.9): the reason when the icon is off, else the name and the shortcut.
+const title = computed(() => props.disabledReason ?? label.value);
+const tipShortcut = computed(() => (props.disabledReason ? undefined : props.shortcut));
 
 function onClick(): void {
   if (props.disabledReason) return;
@@ -63,15 +63,16 @@ function onClick(): void {
     :icon="inSet ? 'compareFilled' : 'compare'"
     :label="label"
     :title="title"
+    :shortcut="tipShortcut"
     :disabled="disabledReason ? true : undefined"
     @click.stop="onClick"
   />
 </template>
 
 <style scoped>
-/* The box, the glyph and the hover come from UiIconButton; a square 28 px, as before. */
+/* The box, the glyph and the hover come from UiIconButton; with no padding its min-width
+   makes it square at every size (28 px, or 32 px for a row action, E54.9). */
 .compare-toggle {
-  inline-size: 28px;
   padding: 0;
 }
 /* In the set: the shapes fill in the accent. A fill and a stroke, never a text color: the

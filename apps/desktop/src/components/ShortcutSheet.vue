@@ -4,8 +4,10 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
-import { useActions } from '../stores/commands';
+import { ACTION_ICONS, useActions } from '../stores/commands';
+import UiIcon from './ui/UiIcon.vue';
 import { VIEW_MODES } from '../stores/views';
+import type { IconName } from './ui/icons';
 
 const open = ref(false);
 const dialog = ref<HTMLElement | null>(null);
@@ -29,7 +31,9 @@ const chord = (action: string) => {
   return c ? formatChord(c) : '';
 };
 
-const groups = computed(() => [
+const groups = computed<
+  Array<{ title: string; rows: Array<{ label: string; keys: string[]; icon?: IconName }> }>
+>(() => [
   {
     title: t('shortcuts.groups.go'),
     rows: [
@@ -45,12 +49,28 @@ const groups = computed(() => [
     rows: [
       { label: t('shortcuts.rows.openFamily'), keys: [chord(ACTIONS.openFamily)] },
       { label: t('shortcuts.rows.quickLook'), keys: [chord(ACTIONS.quickLook)] },
-      { label: t('shortcuts.rows.activate'), keys: [chord(ACTIONS.activateSession)] },
+      {
+        label: t('shortcuts.rows.activate'),
+        keys: [chord(ACTIONS.activateSession)],
+        icon: ACTION_ICONS[ACTIONS.activateSession],
+      },
       { label: t('shortcuts.rows.activatePermanent'), keys: [chord(ACTIONS.activatePermanent)] },
-      { label: t('shortcuts.rows.compare'), keys: [chord(ACTIONS.compare)] },
+      {
+        label: t('shortcuts.rows.compare'),
+        keys: [chord(ACTIONS.compare)],
+        icon: ACTION_ICONS[ACTIONS.compare],
+      },
       { label: t('shortcuts.rows.quick'), keys: [chord(ACTIONS.quickCollection)] },
-      { label: t('shortcuts.rows.tag'), keys: [chord(ACTIONS.tag)] },
-      { label: t('shortcuts.rows.similar'), keys: [chord(ACTIONS.similar)] },
+      {
+        label: t('shortcuts.rows.tag'),
+        keys: [chord(ACTIONS.tag)],
+        icon: ACTION_ICONS[ACTIONS.tag],
+      },
+      {
+        label: t('shortcuts.rows.similar'),
+        keys: [chord(ACTIONS.similar)],
+        icon: ACTION_ICONS[ACTIONS.similar],
+      },
     ],
   },
   {
@@ -106,7 +126,7 @@ function onKeyDown(e: KeyboardEvent): void {
           <h2>{{ g.title }}</h2>
           <dl>
             <div v-for="r in g.rows" :key="r.label" class="row">
-              <dt>{{ r.label }}</dt>
+              <dt><UiIcon v-if="r.icon" class="icon" :name="r.icon" />{{ r.label }}</dt>
               <dd>
                 <kbd v-for="k in r.keys" :key="k">{{ k }}</kbd>
               </dd>
@@ -166,9 +186,16 @@ dl {
   border-bottom: 1px solid var(--fm-border);
 }
 dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   white-space: nowrap;
   font-size: var(--fm-text-sm);
+}
+/* The action's icon (E54.9), the same as its button's. */
+dt .icon {
+  color: var(--fm-muted);
 }
 dd {
   display: flex;
