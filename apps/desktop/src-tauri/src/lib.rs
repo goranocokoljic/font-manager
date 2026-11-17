@@ -46,7 +46,7 @@ use fm_api::preview::{
 use fm_api::search::{
     CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, FoundryInfo,
     GlyphTraitInfo, LanguageHint, LanguagePreset, MergeFoundriesRequest, PairingRequest,
-    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarAnswer, SimilarFace, SimilarRequest,
     UnmergeFoundryRequest,
 };
 use fm_api::settings::{
@@ -928,6 +928,15 @@ async fn find_similar(
     call(&state, move |api| api.find_similar(req)).await
 }
 
+/// The faces that look like one face, or why there are none (E54.11).
+#[tauri::command]
+async fn find_similar_answer(
+    state: State<'_, AppState>,
+    req: SimilarRequest,
+) -> ApiResult<SimilarAnswer> {
+    call(&state, move |api| api.find_similar_answer(req)).await
+}
+
 /// Faces of other families that pair with one face by rule, with reasons
 /// (the Compare sheet's Pairings panel, E23.4).
 #[tauri::command]
@@ -1538,6 +1547,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_family,
             search,
             find_similar,
+            find_similar_answer,
             suggest_pairings,
             list_glyph_traits,
             list_foundries,

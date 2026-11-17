@@ -249,3 +249,43 @@ fn a_shapes_only_profile_compares_drawing_and_width_only() {
     // pair alike in everything.
     assert!(found.score < compare(&a, &a).score);
 }
+
+/// E54.11: only pairs that both have a fingerprint are candidates.
+#[test]
+fn a_face_without_a_fingerprint_is_no_candidate() {
+    let measured = profile(Classification::Serif, Some(print(0.3)));
+    let bare = profile(Classification::Serif, None);
+    assert!(candidate(&measured, &measured.clone()));
+    assert!(!candidate(&measured, &bare));
+    assert!(!candidate(&bare, &measured));
+    assert!(!candidate(&bare, &bare.clone()));
+}
+
+/// E54.11: symbol faces are candidates for symbol faces only.
+#[test]
+fn symbol_and_text_faces_are_no_candidates_for_each_other() {
+    let text = profile(Classification::Serif, Some(print(0.3)));
+    let icons = profile(Classification::Symbol, Some(print(0.3)));
+    let unknown = Profile {
+        classification: None,
+        ..text.clone()
+    };
+    assert!(is_symbol(&icons) && !is_symbol(&text) && !is_symbol(&unknown));
+    assert!(!candidate(&text, &icons));
+    assert!(!candidate(&icons, &text));
+    assert!(!candidate(&icons, &unknown));
+    assert!(candidate(&icons, &icons.clone()));
+    assert!(candidate(&text, &unknown));
+}
+
+/// E54.11: the floor is "neither alike nor unlike"; a pair that differs in
+/// every component scores below it.
+#[test]
+fn the_floor_is_half_alike_and_unlike_pairs_fall_below_it() {
+    assert!((MIN_SCORE - UNKNOWN).abs() < f32::EPSILON);
+    let a = profile(Classification::Sans, Some(print(0.2)));
+    let (_, mut b) = only(SIMILAR_SHAPES);
+    b.fingerprint.as_mut().expect("fingerprint").vector = print(0.9).vector;
+    assert!(compare(&a, &b).score < MIN_SCORE);
+    assert!(compare(&a, &a.clone()).score >= MIN_SCORE);
+}

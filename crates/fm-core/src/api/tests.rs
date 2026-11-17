@@ -1768,12 +1768,34 @@ fn coverage_and_languages_come_from_the_stored_cmap() {
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
     // E23.2: similar faces come from the index, never the face itself.
+    // E54.11: nothing in this small library is close to Bebas Neue (a caps
+    // display face): its answer is empty and says why; a Barlow face finds
+    // faces.
+    let caps_only = lib
+        .api
+        .find_similar_answer(SimilarRequest { face, limit: 5 })
+        .expect("answer");
+    assert!(caps_only.faces.is_empty(), "{caps_only:?}");
+    assert_eq!(
+        caps_only.empty,
+        Some(fm_api::search::SimilarEmpty::NoneClose)
+    );
+    assert!(caps_only.message.is_some());
+    let barlow = lib
+        .api
+        .get_family(lib.family("Barlow").id)
+        .expect("family")
+        .faces[0]
+        .id;
     let similar = lib
         .api
-        .find_similar(SimilarRequest { face, limit: 5 })
+        .find_similar(SimilarRequest {
+            face: barlow,
+            limit: 5,
+        })
         .expect("similar");
     assert!(!similar.is_empty() && similar.len() <= 5, "{similar:?}");
-    assert!(similar.iter().all(|s| s.face.id != face));
+    assert!(similar.iter().all(|s| s.face.id != barlow));
     assert!(similar.iter().all(|s| (0.0..=1.0).contains(&s.score)));
     let err = lib
         .api

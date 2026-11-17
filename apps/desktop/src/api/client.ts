@@ -118,6 +118,7 @@ import type {
   Settings,
   SettingsUpdate,
   SidecarConflict,
+  SimilarAnswer,
   SimilarFace,
   SimilarRequest,
   PairingRequest,
@@ -192,6 +193,8 @@ export interface FmClient {
   detectLanguages(req: DetectLanguagesRequest): Promise<LanguageHint[]>;
   /** Faces that look like one face, closest first, each with its score and reasons (E23.3). */
   findSimilar(req: SimilarRequest): Promise<SimilarFace[]>;
+  /** `findSimilar`'s list and, when it is empty, why: a code and a message to show (E54.11). */
+  findSimilarAnswer(req: SimilarRequest): Promise<SimilarAnswer>;
   /** Faces of other families that pair with one face by rule, best first, with reasons (E23.4). */
   suggestPairings(req: PairingRequest): Promise<PairingSuggestion[]>;
   /** The glyph trait catalog, each value with its face and family counts in the library (E49.5). */
@@ -452,6 +455,7 @@ export const tauriClient: FmClient = {
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
   detectLanguages: (req) => invoke<LanguageHint[]>('detect_languages', { req }),
   findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
+  findSimilarAnswer: (req) => invoke<SimilarAnswer>('find_similar_answer', { req }),
   suggestPairings: (req) => invoke<PairingSuggestion[]>('suggest_pairings', { req }),
   listGlyphTraits: () => invoke<GlyphTraitInfo[]>('list_glyph_traits'),
   listFoundries: () => invoke<FoundryInfo[]>('list_foundries'),

@@ -411,7 +411,7 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
         }
         Command::Similar { font, limit } => output
             .print(commands::similar(api, font, *limit), |s, o| {
-                output::similar(s, o)
+                output::similar(&s.0, o)
             }),
         Command::Activate { .. } | Command::Deactivate { .. } if link == Link::Direct => {
             let refused: Result<(), _> = Err(commands::needs_the_app());

@@ -12,7 +12,7 @@ use fm_api::common::Health;
 use fm_api::export::{ExportWebResponse, SpecimenResponse};
 use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
 use fm_api::organization::{ImportSetResponse, SetExport};
-use fm_api::search::{CoverageReport, FamilyHit, FoundryInfo, GlyphTraitInfo, SimilarFace};
+use fm_api::search::{CoverageReport, FamilyHit, FoundryInfo, GlyphTraitInfo, SimilarAnswer};
 use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
@@ -456,10 +456,19 @@ pub fn coverage(report: &CoverageReport, out: &mut dyn Write) -> io::Result<()> 
     Ok(())
 }
 
-/// `fm similar`: the faces, closest first, with the reasons.
-pub fn similar(faces: &[SimilarFace], out: &mut dyn Write) -> io::Result<()> {
+/// `fm similar`: the faces, closest first, with the reasons; for none, the
+/// reason the core gives (E54.11).
+pub fn similar(answer: &SimilarAnswer, out: &mut dyn Write) -> io::Result<()> {
+    let faces = &answer.faces;
     if faces.is_empty() {
-        return writeln!(out, "No similar fonts found.");
+        return writeln!(
+            out,
+            "{}",
+            answer
+                .message
+                .as_deref()
+                .unwrap_or("No similar fonts found.")
+        );
     }
     let mut table = Table::new();
     table.load_preset(presets::NOTHING).set_header([
@@ -666,5 +675,26 @@ fn json_name<T: Serialize>(value: &T) -> String {
         Ok(serde_json::Value::String(s)) => s,
         Ok(other) => other.to_string(),
         Err(_) => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fm_api::search::{SimilarAnswer, SimilarEmpty};
+
+    /// E54.11: an empty answer prints the core's reason, in its words.
+    #[test]
+    fn an_empty_similar_answer_prints_the_reason() {
+        let answer = SimilarAnswer {
+            faces: Vec::new(),
+            empty: Some(SimilarEmpty::NotMeasured),
+            message: Some("This font cannot be compared.".into()),
+        };
+        let mut out = Vec::new();
+        super::similar(&answer, &mut out).expect("write");
+        assert_eq!(
+            String::from_utf8(out).expect("utf-8"),
+            "This font cannot be compared.\n"
+        );
     }
 }

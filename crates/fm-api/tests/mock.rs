@@ -4119,3 +4119,24 @@ fn a_search_for_faces_keeps_only_those_faces() {
         .unwrap();
     assert_eq!(none.total, 0);
 }
+
+/// E54.11: the mock leaves out faces with nothing in common, and the answer
+/// is `find_similar`'s list with no reason while it has faces.
+#[test]
+fn find_similar_keeps_the_floor_and_the_answer_matches_the_list() {
+    use fm_api::search::SimilarRequest;
+    let api = api();
+    let req = SimilarRequest {
+        face: FaceId(3),
+        limit: 100,
+    };
+    let list = api.find_similar(req).unwrap();
+    assert!(!list.is_empty());
+    assert!(
+        list.iter().all(|s| s.score >= 0.3 && !s.reasons.is_empty()),
+        "{list:?}"
+    );
+    let answer = api.find_similar_answer(req).unwrap();
+    assert_eq!(answer.faces, list);
+    assert_eq!((answer.empty, answer.message), (None, None));
+}
