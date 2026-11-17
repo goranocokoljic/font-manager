@@ -585,3 +585,31 @@ describe('MockApi supports filter: two rules (E54.4)', () => {
     expect(has.some((h) => h.family.id === latinOnly.family.id)).toBe(true);
   });
 });
+
+describe('MockApi find similar (E54.11)', () => {
+  it('ranks above the floor only, and the answer matches findSimilar', async () => {
+    const client = createMockClient();
+    const req = { face: 1, limit: 50 };
+    const list = await client.findSimilar(req);
+    const answer = await client.findSimilarAnswer(req);
+    expect(answer.faces).toEqual(list);
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.every((s) => (s.score ?? 0) >= 0.3 && s.reasons.length > 0)).toBe(true);
+    expect(answer.empty ?? null).toBeNull();
+  });
+
+  it('says why when there is nothing to show', async () => {
+    const none = await createMockClient({ similar: 'none' }).findSimilarAnswer({
+      face: 1,
+      limit: 8,
+    });
+    expect(none).toMatchObject({ faces: [], empty: 'noneClose' });
+    expect(none.message).toContain('close enough');
+    const unmeasured = await createMockClient({ similar: 'unmeasured' }).findSimilarAnswer({
+      face: 1,
+      limit: 8,
+    });
+    expect(unmeasured).toMatchObject({ faces: [], empty: 'notMeasured' });
+    expect(unmeasured.message).toContain('cannot be compared');
+  });
+});

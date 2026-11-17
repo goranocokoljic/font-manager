@@ -103,6 +103,7 @@ routes! {
     list_languages(),
     detect_languages(req),
     find_similar(req),
+    find_similar_answer(req),
     find_by_image(req),
     find_similar_glyph(req),
     suggest_pairings(req),
