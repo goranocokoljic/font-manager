@@ -83,7 +83,7 @@ watch(
   z-index: var(--fm-z-tooltip);
   box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--fm-space-2);
   max-width: min(320px, calc(100vw - 8px));
   padding: 3px var(--fm-space-2);
@@ -96,14 +96,17 @@ watch(
   font-size: var(--fm-text-sm);
   line-height: var(--fm-leading);
   pointer-events: none;
-  white-space: nowrap;
 }
+/* The whole text, never cut (review E54.9): a long name or a reason wraps onto more lines
+   inside the max width, as a native tooltip did. The key stays on the first line's end. */
 .text {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .shortcut {
   flex: none;
+  align-self: flex-start;
+  white-space: nowrap;
   color: var(--fm-muted);
   font-family: inherit;
   font-variant-numeric: tabular-nums;

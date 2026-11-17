@@ -59,11 +59,22 @@ async function hoverAndRead(
   await expect(tip.locator('kbd')).toHaveText(key);
   const tipBox = (await tip.boundingBox())!;
   expect(overlaps(tipBox, box), 'the tooltip never covers its button').toBe(false);
+  await expectWhole(tip);
   // A press hides it. The pointer is let go away from the button, so nothing is clicked.
   await page.mouse.down();
   await expect(tip).toBeHidden();
   await page.mouse.move(0, 0);
   await page.mouse.up();
+}
+
+/** The tooltip draws its whole text: nothing is cut off or hidden past its edges. */
+async function expectWhole(tip: Locator): Promise<void> {
+  const clipped = await tip.evaluate((el) =>
+    [el, ...el.querySelectorAll<HTMLElement>('.text, kbd')].some(
+      (e) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1,
+    ),
+  );
+  expect(clipped, 'the tooltip shows its whole text').toBe(false);
 }
 
 /** A row's box and the box of its first line of text. */
@@ -102,6 +113,33 @@ test('list rows: Activate, Compare and Similar are 32 px, with their own tooltip
     /^Find the fonts similar to Sample 2 /,
     'S',
   );
+});
+
+test('a long name wraps in the tooltip, it is never cut off', async ({ page }) => {
+  await serve(page);
+  await page.goto('/?mockFaces=3&mockStyles=4#/');
+  await page.evaluate(() => localStorage.clear());
+  const row = tree(page).getByRole('treeitem', { name: /^JetBrains Mono,/ });
+  await expect(row).toBeVisible();
+  await row.hover();
+  const similar = row.getByTestId('row-similar');
+  await similar.hover();
+  const tip = await tooltipOf(page, similar);
+  await expect(tip).toBeVisible();
+  await expect(tip.locator('.text')).toHaveText('Find the fonts similar to JetBrains Mono Regular');
+  await expectWhole(tip);
+  // Longer than one line at the 320 px cap: it takes a second line, it is not cut.
+  await page.evaluate(() => {
+    const text = document.querySelector<HTMLElement>('[role="tooltip"]:not([style*="none"]) .text');
+    if (text) text.textContent = `${text.textContent} ${'and a much longer reason '.repeat(3)}`;
+  });
+  await expectWhole(tip);
+  const lines = await tip
+    .locator('.text')
+    .evaluate((e) =>
+      Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)),
+    );
+  expect(lines, 'the long text wraps').toBeGreaterThan(1);
 });
 
 test('a table row and a wall card: the compare action is 32 px with its tooltip', async ({
