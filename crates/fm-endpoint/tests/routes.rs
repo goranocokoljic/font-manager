@@ -297,6 +297,10 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             r#"{"id":"googleFonts","family":"Inter"}"#.into(),
         ),
         (
+            "catalog_sample_texts",
+            r#"{"id":"googleFonts","families":["Inter"],"text":"Čač"}"#.into(),
+        ),
+        (
             "download_family",
             r#"{"id":"googleFonts","family":"Inter","kind":"static","source":1}"#.into(),
         ),

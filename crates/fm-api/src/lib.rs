@@ -350,6 +350,8 @@ pub fn types() -> specta::Types {
         catalog::ListCatalogFamiliesRequest,
         catalog::CatalogFontRequest,
         catalog::CatalogFontSource,
+        catalog::CatalogSampleTextRequest,
+        catalog::CatalogSampleText,
         catalog::CatalogFileKind,
         catalog::DownloadFamilyRequest,
         catalog::CatalogDownloadFile,

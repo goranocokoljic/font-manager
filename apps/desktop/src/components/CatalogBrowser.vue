@@ -7,14 +7,18 @@
 // "Download..." opens the download panel above the list (E22.3). "Check for updates" asks the
 // core which downloaded families have a newer version (E22.4); a Refresh asks too. A row's
 // "Install" downloads and activates the family in one call; its progress line is above the
-// list too (E22.7).
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+// list too (E22.7). The pangram follows the catalog view's own Language choice (E54.6), and
+// each row on screen asks the API which characters of the sample its preview file lacks:
+// they are drawn as tofu, as on library rows (E43.4), never in a fallback font.
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { CatalogFamily } from '../api/types';
 import { errorMessage, formatDate, t, type MessageKey } from '../i18n';
 import { CARD, gridColumns, gridRange } from '../list/grid';
 import { poolSize } from '../list/virtual';
 import { waterfallRowPx } from '../list/waterfall';
 import { sampleTextFor } from '../preview/sampleText';
+import { specimenOf } from '../preview/tofu';
+import { useCatalogSamplesStore } from '../stores/catalogSamples';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
 import { listPreview, previewRowHeight, usePreviewStore } from '../stores/preview';
 import { useViewsStore, VIEW_MODES, type ViewMode } from '../stores/views';
@@ -58,8 +62,17 @@ const preview = computed(() => {
   const settings = previews.settingsFor(CATALOG_VIEW);
   return mode.value === 'waterfall' ? settings : listPreview(settings);
 });
-const textOf = (f: CatalogFamily) =>
+const samples = useCatalogSamplesStore();
+const sampleOf = (f: CatalogFamily) =>
   sampleTextFor(preview.value, f.name, (code) => previews.pangramText(code));
+/** What a row shows: the sample with its missing characters as tofu, or the file's own text. */
+function specimenFor(f: CatalogFamily) {
+  const sample = sampleOf(f);
+  const id = catalog.value?.id;
+  const answer = id ? samples.get(id, f.name, sample) : undefined;
+  // Letters (E49.7) shows the glyphs you typed and nothing else: tofu, never a fallback.
+  return specimenOf(sample, answer, preview.value.sample === 'letters');
+}
 
 const dateOf = (at: string | null | undefined, options?: Intl.DateTimeFormatOptions) => {
   const ms = at ? Date.parse(at) : NaN;
@@ -144,6 +157,7 @@ const visible = computed(() => {
     index: number;
     slot: number;
     family: CatalogFamily;
+    specimen: ReturnType<typeof specimenFor>;
     style: Record<string, string | undefined>;
   }[] = [];
   const cardPx = width.value / perLine.value;
@@ -156,6 +170,7 @@ const visible = computed(() => {
       index,
       slot: index % pool.value,
       family,
+      specimen: specimenFor(family),
       style: {
         height: `${linePx.value}px`,
         width: perLine.value > 1 ? `${cardPx}px` : undefined,
@@ -166,6 +181,13 @@ const visible = computed(() => {
     });
   }
   return out;
+});
+
+// The rows on screen ask for their preview text (one call per tick, `catalogSamples`).
+watchEffect(() => {
+  const id = catalog.value?.id;
+  if (!id || !catalog.value?.enabled) return;
+  for (const item of visible.value) samples.want(id, item.family.name, sampleOf(item.family));
 });
 
 // A new search or a new mode starts at the top.
@@ -292,7 +314,10 @@ const surfaceClass = computed(() =>
           <CatalogFamilyItem
             :catalog="catalog.id"
             :family="item.family"
-            :text="textOf(item.family)"
+            :text="item.specimen.text"
+            :tofu="item.specimen.tofu"
+            :fallback="item.specimen.fallback"
+            :missing="item.specimen.missing"
             :preview="preview"
             :mode="mode"
           />

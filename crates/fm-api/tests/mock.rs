@@ -4140,3 +4140,29 @@ fn find_similar_keeps_the_floor_and_the_answer_matches_the_list() {
     assert_eq!(answer.faces, list);
     assert_eq!((answer.empty, answer.message), (None, None));
 }
+
+#[test]
+fn catalog_sample_texts_mark_what_a_preview_file_lacks() {
+    use fm_api::catalog::{
+        CatalogId, CatalogRef, CatalogSampleTextRequest, SetCatalogEnabledRequest,
+    };
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let ask = |families: &[&str]| {
+        api.catalog_sample_texts(CatalogSampleTextRequest {
+            id,
+            families: families.iter().map(|&f| f.to_owned()).collect(),
+            text: "Ljubazni čađavog".into(),
+        })
+    };
+    assert_eq!(ask(&["Lora"]).expect_err("off").code, ErrorCode::Conflict);
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    let got = ask(&["Lora", "Inter", "Not Listed"]).expect("answers");
+    assert_eq!(got[0].family, "Lora");
+    assert_eq!(got[0].text, "Ljubazni čađavog");
+    assert_eq!(got[0].missing, ["č", "đ"]);
+    assert!(got[1].missing.is_empty(), "Inter maps Latin Extended");
+    assert!(got[2].missing.is_empty(), "not judged");
+}

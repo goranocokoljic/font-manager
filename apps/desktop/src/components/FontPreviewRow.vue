@@ -33,6 +33,7 @@ import UiBadge from './ui/UiBadge.vue';
 import MissingGlyphs from './MissingGlyphs.vue';
 import SpecimenText from './SpecimenText';
 import { ALL_FONTS_VIEW } from '../stores/preview';
+import { fallbackTitle as tofuFallbackTitle } from '../preview/tofu';
 import { faceAxes, variationSettings } from '../preview/variations';
 import { t } from '../i18n';
 
@@ -183,16 +184,9 @@ const metricLines = computed(() => {
   return lines;
 });
 
-const fallbackTitle = computed(() => {
-  if (!props.fallback) return undefined;
-  const letters = props.fallback.kind === 'script';
-  if (!props.missing.length)
-    return t(letters ? 'list.fallbackTitle.letters' : 'list.fallbackTitle.characters');
-  const missing = `${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`;
-  return t(letters ? 'list.fallbackTitle.missingLetters' : 'list.fallbackTitle.missingCharacters', {
-    missing,
-  });
-});
+const fallbackTitle = computed(() =>
+  props.fallback ? tofuFallbackTitle(props.fallback, props.missing) : undefined,
+);
 
 /** The weight axis, when this row may be scrubbed: a variable face whose coordinates are not pinned. */
 const wghtAxis = computed(() =>

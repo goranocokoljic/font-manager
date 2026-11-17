@@ -216,6 +216,12 @@ impl CatalogService for Previews {
                 .into_owned(),
         })
     }
+    fn catalog_sample_texts(
+        &self,
+        _: fm_api::catalog::CatalogSampleTextRequest,
+    ) -> ApiResult<Vec<fm_api::catalog::CatalogSampleText>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
     fn download_family(
         &self,
         _: fm_api::catalog::DownloadFamilyRequest,

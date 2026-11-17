@@ -60,7 +60,7 @@ export interface Specimen {
  */
 export function specimenOf(
   sample: string,
-  answer: SampleText | undefined,
+  answer: Pick<SampleText, 'text' | 'fallback' | 'missing'> | undefined,
   keepSample = false,
 ): Specimen {
   const missing = answer?.missing ?? [];
@@ -74,6 +74,20 @@ export function specimenOf(
 export function missingLine(missing: readonly string[]): string {
   const chars = `${missing.slice(0, LISTED).join(' ')}${missing.length > LISTED ? ' …' : ''}`;
   return t('tofu.missing', { count: missing.length, chars });
+}
+
+/**
+ * The tooltip of the "fallback" badge: the face's own letters (or characters) are shown,
+ * and which characters of the sample it lacks.
+ */
+export function fallbackTitle(fallback: SampleFallback, missing: readonly string[]): string {
+  const letters = fallback.kind === 'script';
+  if (!missing.length)
+    return t(letters ? 'list.fallbackTitle.letters' : 'list.fallbackTitle.characters');
+  const chars = `${missing.slice(0, LISTED).join(' ')}${missing.length > LISTED ? ' …' : ''}`;
+  return t(letters ? 'list.fallbackTitle.missingLetters' : 'list.fallbackTitle.missingCharacters', {
+    missing: chars,
+  });
 }
 
 /** The accessible name of one tofu box: "missing glyph ž". */

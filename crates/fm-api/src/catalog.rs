@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::activation::ActivationOutcome;
 use crate::common::{Axis, Page, Paged, Slant};
 use crate::library::OpenLicense;
+use crate::preview::SampleFallback;
 use crate::{ApiError, ApiResult, FaceId, JobId, SourceId};
 
 /// A catalog the app knows how to read.
@@ -172,6 +173,38 @@ pub struct CatalogFontSource {
     /// Absolute path of the file in the app's cache folder, served to the
     /// webview by the app's font scheme.
     pub path: String,
+}
+
+/// The text some families of one catalog preview, for one sample text
+/// (E54.6): the catalog's twin of `SampleTextRequest`, judged against each
+/// family's preview file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogSampleTextRequest {
+    /// The catalog.
+    pub id: CatalogId,
+    /// The families, as the catalog lists them; usually the ones on screen.
+    pub families: Vec<String>,
+    /// The sample text the user chose.
+    pub text: String,
+}
+
+/// The text one catalog family previews: the sample with the characters
+/// its preview file lacks (drawn as tofu, E43.4), or text from the file's
+/// own coverage when it maps none of the sample's letters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogSampleText {
+    /// The family.
+    pub family: String,
+    /// The sample text, or text from the file's own coverage.
+    pub text: String,
+    /// Set when the file lacks characters of the sample and `text` is other text.
+    #[serde(default)]
+    pub fallback: Option<SampleFallback>,
+    /// The characters of the sample the file lacks.
+    #[serde(default)]
+    pub missing: Vec<String>,
 }
 
 /// Which files of a family to download: its static styles or its variable
@@ -365,6 +398,15 @@ pub trait CatalogService {
     /// `Conflict` and nothing is fetched; a family not in the cached list is
     /// `NotFound`.
     fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource>;
+    /// The text each family previews for the sample (E54.6), in request
+    /// order, read from its preview file as [`Self::catalog_font_source`]
+    /// gets it (a request the first time). A family whose file cannot be
+    /// had or read is not judged: it previews the sample with nothing
+    /// missing. An off catalog is `Conflict` before any request.
+    fn catalog_sample_texts(
+        &self,
+        req: CatalogSampleTextRequest,
+    ) -> ApiResult<Vec<CatalogSampleText>>;
     /// Downloads a family's files into a subfolder named after it inside a
     /// watched source (requests; only on this call), records their
     /// provenance and starts a rescan of the source. A file already there is
