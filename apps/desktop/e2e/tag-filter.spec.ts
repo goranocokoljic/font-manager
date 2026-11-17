@@ -155,3 +155,49 @@ test('the tag filter holds in a library view, a collection and a foundry', async
   await expect(tag(page, 'display')).toHaveAttribute('aria-pressed', 'true');
   await expect(chip(page, 'display')).toBeVisible();
 });
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`a pressed tag is 3:1 or more against an unpressed one (${colorScheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await open(page);
+    await tag(page, 'display').click();
+    await expect(tag(page, 'display')).toHaveAttribute('aria-pressed', 'true');
+    // The pointer away from the tags: a hover tint is no state.
+    await page.mouse.move(900, 600);
+    // The fill fades in: poll until it has settled.
+    const ratio = () =>
+      group(page).evaluate((root) => {
+        const rgba = (c: string) => {
+          const n = (c.match(/[\d.]+/g) ?? []).map(Number);
+          return [n[0] ?? 0, n[1] ?? 0, n[2] ?? 0, n.length > 3 ? n[3]! : 1] as const;
+        };
+        /** The colour an element's background shows: its fills and its ancestors', blended. */
+        const shown = (el: Element): number[] => {
+          const layers: (readonly [number, number, number, number])[] = [];
+          for (let node: Element | null = el; node; node = node.parentElement) {
+            const c = rgba(getComputedStyle(node).backgroundColor);
+            if (c[3] > 0) layers.push(c);
+            if (c[3] >= 1) break;
+          }
+          let out = [255, 255, 255];
+          for (const [r, g, b, a] of layers.reverse())
+            out = [r * a + out[0]! * (1 - a), g * a + out[1]! * (1 - a), b * a + out[2]! * (1 - a)];
+          return out;
+        };
+        const lum = (c: number[]) => {
+          const [r, g, b] = c.map((v) => {
+            const s = v / 255;
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+        };
+        const pressed = root.querySelector('li[data-tag="display"] button')!;
+        const unpressed = root.querySelector('li[data-tag="body"] button')!;
+        const [a, b] = [lum(shown(pressed)), lum(shown(unpressed))].sort((x, y) => y - x);
+        return (a! + 0.05) / (b! + 0.05);
+      });
+    await expect.poll(ratio).toBeGreaterThanOrEqual(3);
+  });
+}

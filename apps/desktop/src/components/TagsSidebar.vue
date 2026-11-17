@@ -188,10 +188,11 @@ function countLabel(n: number): string {
 .chip {
   display: block;
   max-width: 100%;
-  padding: 2px var(--fm-space-2);
-  border: none;
+  padding-block: 1px;
+  padding-inline: calc(var(--fm-space-2) - 1px);
+  border: 1px solid var(--fm-border-strong);
   border-radius: 999px;
-  background-color: var(--fm-hover);
+  background-color: transparent;
   color: var(--fm-fg);
   font: inherit;
   font-size: var(--fm-text-sm);
@@ -201,9 +202,11 @@ function countLabel(n: number): string {
   background-color: var(--fm-active);
   background-image: none;
 }
-/* The tag filters the list (E54.3): filled with the accent, as a pressed filter chip is, so
-   the mark reaches 3:1 against an unpressed tag. */
+/* The tag filters the list (E54.3): filled with the accent, as a pressed filter chip is. An
+   unpressed tag has no fill, only a border, so the pressed fill is measured against the
+   sidebar itself and reaches 3:1 (e2e/tag-filter.spec.ts checks both themes). */
 .chip[aria-pressed='true'] {
+  border-color: var(--fm-accent);
   background-color: var(--fm-accent);
   color: var(--fm-on-accent);
 }
