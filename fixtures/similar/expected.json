@@ -21,10 +21,9 @@
       "family": "Mona Sans",
       "file": "google-static/monasans/MonaSans-BlackItalic.ttf",
       "class": "sans",
-      "note": "Mona Sans and Hubot Sans are one design system; Comfortaa is an unrelated, light, round sans.",
+      "note": "The expanded width of the same heavy italic is near; Comfortaa is an unrelated, light, round sans.",
       "near": [
-        { "family": "Mona Sans", "file": "google-static/monasans/MonaSans_Expanded-BlackItalic.ttf" },
-        { "family": "Hubot Sans", "file": "google-static/hubotsans/HubotSans-Bold.ttf" }
+        { "family": "Mona Sans", "file": "google-static/monasans/MonaSans_Expanded-BlackItalic.ttf" }
       ],
       "far": [
         { "family": "Comfortaa", "file": "google-repo/comfortaa/Comfortaa[wght].ttf" },
@@ -33,28 +32,12 @@
       ]
     },
     {
-      "family": "Barlow",
-      "file": "google-repo/barlow/Barlow-BoldItalic.ttf",
-      "class": "sans",
-      "note": "The three Barlow widths are siblings: a width or weight step is nearer than another design.",
-      "near": [
-        { "family": "Barlow Condensed", "file": "google-repo/barlowcondensed/BarlowCondensed-Italic.ttf" },
-        { "family": "Barlow Semi Condensed", "file": "google-repo/barlowsemicondensed/BarlowSemiCondensed-ExtraLightItalic.ttf" }
-      ],
-      "far": [
-        { "family": "Comfortaa", "file": "google-repo/comfortaa/Comfortaa[wght].ttf" },
-        { "family": "Lexend Tera", "file": "google-repo/lexendtera/LexendTera[wght].ttf" },
-        { "family": "Clicker Script", "file": "google-repo/clickerscript/ClickerScript-Regular.ttf" }
-      ]
-    },
-    {
       "family": "Asap",
       "file": "fontshare/asap/Asap-SemiBold.otf",
       "class": "sans",
       "note": "Asap Sharp is Asap with sharp corners.",
       "near": [
-        { "family": "Asap Sharp", "file": "google-repo/asapsharp/AsapSharp[wdth,wght].ttf" },
-        { "family": "Asap Sharp", "file": "google-static/asapsharp/AsapSharp_Expanded-ExtraBoldItalic.ttf" }
+        { "family": "Asap Sharp", "file": "google-repo/asapsharp/AsapSharp[wdth,wght].ttf" }
       ],
       "far": [
         { "family": "Tourney", "file": "google-repo/tourney/Tourney-Italic[wdth,wght].ttf" },
@@ -69,7 +52,6 @@
       "note": "Geometric text sans of about the same width and weight.",
       "near": [
         { "family": "Plus Jakarta Sans", "file": "fontshare/plus-jakarta-sans/PlusJakartaSans-Light.otf" },
-        { "family": "DM Sans", "file": "google-static/dmsans/DMSans_18pt-Medium.ttf" },
         { "family": "Outfit", "file": "fontshare/outfit/Outfit-Light.woff2" }
       ],
       "far": [
@@ -100,7 +82,6 @@
       "class": "sans",
       "note": "Condensed, upright, plain sans against wide faces.",
       "near": [
-        { "family": "Homenaje", "file": "google-repo/homenaje/Homenaje-Regular.ttf" },
         { "family": "Open Sans Hebrew Condensed", "file": "google-repo/opensanshebrewcondensed/OpenSansHebrewCondensed-Light.ttf" }
       ],
       "far": [
@@ -172,44 +153,12 @@
       ]
     },
     {
-      "family": "Instrument Serif",
-      "file": "google-repo/instrumentserif/InstrumentSerif-Italic.ttf",
-      "class": "serif",
-      "note": "Serif italics.",
-      "near": [
-        { "family": "Wittgenstein", "file": "google-static/wittgenstein/Wittgenstein-Italic.ttf" },
-        { "family": "Volkhov", "file": "google-repo/volkhov/Volkhov-Italic.ttf" },
-        { "family": "Manuale", "file": "google-repo/manuale/Manuale-Italic[wght].ttf" }
-      ],
-      "far": [
-        { "family": "Oxanium", "file": "google-static/oxanium/Oxanium-SemiBold.ttf" },
-        { "family": "Slackey", "file": "google-repo/slackey/Slackey-Regular.ttf" },
-        { "family": "Public Sans", "file": "fontshare/public-sans/PublicSans-Bold.ttf" }
-      ]
-    },
-    {
-      "family": "Italiana",
-      "file": "google-repo/italiana/Italiana-Regular.ttf",
-      "class": "serif",
-      "note": "A handwriting face must not rank near a display serif.",
-      "near": [
-        { "family": "Marcellus SC", "file": "google-repo/marcellussc/MarcellusSC-Regular.ttf" },
-        { "family": "Hedvig Letters Serif", "file": "google-repo/hedviglettersserif/HedvigLettersSerif[opsz].ttf" }
-      ],
-      "far": [
-        { "family": "Zeyada", "file": "google-repo/zeyada/Zeyada.ttf" },
-        { "family": "Just Me Again Down Here", "file": "google-repo/justmeagaindownhere/JustMeAgainDownHere.ttf" },
-        { "family": "Schoolbell", "file": "google-repo/schoolbell/Schoolbell-Regular.ttf" }
-      ]
-    },
-    {
       "family": "Roboto Slab",
       "file": "google-static/robotoslab/RobotoSlab-ExtraBold.ttf",
       "class": "slab",
       "note": "Heavy faces with sturdy serifs.",
       "near": [
-        { "family": "Kay Pho Du", "file": "google-repo/kayphodu/KayPhoDu-SemiBold.ttf" },
-        { "family": "Lisu Bosa", "file": "google-repo/lisubosa/LisuBosa-Black.ttf" }
+        { "family": "Kay Pho Du", "file": "google-repo/kayphodu/KayPhoDu-SemiBold.ttf" }
       ],
       "far": [
         { "family": "Clicker Script", "file": "google-repo/clickerscript/ClickerScript-Regular.ttf" },
@@ -223,7 +172,6 @@
       "class": "slab",
       "note": "Light, low-contrast faces with slab-like serifs.",
       "near": [
-        { "family": "Hanuman", "file": "google-repo/hanuman/Hanuman[wght].ttf" },
         { "family": "Neuton", "file": "google-repo/neuton/Neuton-Light.ttf" }
       ],
       "far": [
@@ -236,11 +184,9 @@
       "family": "Zeyada",
       "file": "google-repo/zeyada/Zeyada.ttf",
       "class": "script",
-      "note": "Quick pen handwriting; no display serif near it.",
+      "note": "Quick pen handwriting. A handwriting face must not rank near a display serif.",
       "near": [
-        { "family": "Just Me Again Down Here", "file": "google-repo/justmeagaindownhere/JustMeAgainDownHere.ttf" },
-        { "family": "Schoolbell", "file": "google-repo/schoolbell/Schoolbell-Regular.ttf" },
-        { "family": "Solitreo", "file": "google-repo/solitreo/Solitreo-Regular.ttf" }
+        { "family": "Just Me Again Down Here", "file": "google-repo/justmeagaindownhere/JustMeAgainDownHere.ttf" }
       ],
       "far": [
         { "family": "Almendra Display", "file": "google-repo/almendradisplay/AlmendraDisplay-Regular.ttf" },
@@ -270,8 +216,7 @@
       "class": "script",
       "note": "Casual upright brush scripts.",
       "near": [
-        { "family": "Oregano", "file": "google-repo/oregano/Oregano-Regular.ttf" },
-        { "family": "Gveret Levin", "file": "google-repo/gveretlevin/GveretLevin-Regular.ttf" }
+        { "family": "Oregano", "file": "google-repo/oregano/Oregano-Regular.ttf" }
       ],
       "far": [
         { "family": "Crimson Pro", "file": "google-repo/crimsonpro/CrimsonPro[wght].ttf" },
@@ -286,7 +231,6 @@
       "note": "Unconnected handwriting.",
       "near": [
         { "family": "Just Me Again Down Here", "file": "google-repo/justmeagaindownhere/JustMeAgainDownHere.ttf" },
-        { "family": "Zeyada", "file": "google-repo/zeyada/Zeyada.ttf" },
         { "family": "Delius Swash Caps", "file": "google-repo/deliusswashcaps/DeliusSwashCaps-Regular.ttf" }
       ],
       "far": [
@@ -328,21 +272,6 @@
       ]
     },
     {
-      "family": "Diplomata",
-      "file": "google-repo/diplomata/Diplomata-Regular.ttf",
-      "class": "display",
-      "note": "Very heavy display faces with serifs against hairline faces.",
-      "near": [
-        { "family": "Kumar One", "file": "google-repo/kumarone/KumarOne-Regular.ttf" },
-        { "family": "Rammetto One", "file": "google-repo/rammettoone/RammettoOne-Regular.ttf" }
-      ],
-      "far": [
-        { "family": "Lexend Peta", "file": "google-static/lexendpeta/LexendPeta-Thin.ttf" },
-        { "family": "Zen Loop", "file": "google-repo/zenloop/ZenLoop-Regular.ttf" },
-        { "family": "Thasadith", "file": "google-repo/thasadith/Thasadith-Italic.ttf" }
-      ]
-    },
-    {
       "family": "Slackey",
       "file": "google-repo/slackey/Slackey-Regular.ttf",
       "class": "display",
@@ -363,8 +292,7 @@
       "note": "Monospaced sans; the first near face is the same family.",
       "near": [
         { "family": "JetBrains Mono", "file": "fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2" },
-        { "family": "Ubuntu Mono", "file": "google-repo/ubuntumono/UbuntuMono-Bold.ttf" },
-        { "family": "Inconsolata", "file": "google-repo/inconsolata/Inconsolata-SemiExpandedBold.ttf" }
+        { "family": "Ubuntu Mono", "file": "google-repo/ubuntumono/UbuntuMono-Bold.ttf" }
       ],
       "far": [
         { "family": "Clicker Script", "file": "google-repo/clickerscript/ClickerScript-Regular.ttf" },

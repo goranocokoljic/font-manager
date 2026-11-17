@@ -16,15 +16,20 @@ every reference, every near face must rank above every far face.
 - A pair is in the file only when the answer is plain. "Near" means: a designer who looks for a
   replacement would accept it in the list. "Far" means: its place high in the list would look
   like a fault. A face about which two people could disagree is in neither list.
-- A sibling family is near, also at another weight or width (Barlow and Barlow Condensed,
-  Mona Sans and Hubot Sans, Lexend Tera and Lexend Peta).
+- "Near" is strict: highly similar, not only related. An italic is not near an upright face, a
+  condensed width is not near the normal width, and one letter of another build (a different
+  g) is enough to leave a face out. Two faces of one kind (two handwriting faces, two heavy
+  heading faces) are not near for that reason alone.
+- A sibling family is near when it also looks alike (Lexend Tera and Lexend Peta, Asap and
+  Asap Sharp at the same width and slant).
 - The file covers serif, sans, slab, script, display and mono, and the two faults seen in use:
   a sibling family ranked below an unrelated sans, and a handwriting face ranked near a display
   serif.
 - Fonts whose Latin letters are a fallback (most of the Noto script fonts of the corpus) and
   the broken, TTC and Type 1 fixtures are not used.
 
-The first version (November 2026) was drafted from that sheet and then checked by the owner.
+The first version (November 2026) was drafted from that sheet and then checked by the owner,
+who took out the references and the near faces that were related but not alike.
 
 ## How to add a pair
 
