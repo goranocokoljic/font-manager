@@ -2,10 +2,26 @@ use fm_api::common::{Classification, Metrics};
 
 use super::*;
 
-/// A fingerprint whose drawing is `ink` in every cell.
+/// A drawing of 64 cells: `ink` times a fixed pattern of letters and white.
+/// The other pattern ([`unlike`]) correlates negatively with it.
+fn drawing(ink: f32, unlike: bool) -> Vec<f32> {
+    (0..64)
+        .map(|i| {
+            let cell = ((i * 7) % 5) as f32 / 4.0;
+            ink * if unlike { 1.0 - cell } else { cell }
+        })
+        .collect()
+}
+
+/// The drawing that does not look like [`print`]'s.
+fn unlike(ink: f32) -> Vec<f32> {
+    drawing(ink, true)
+}
+
+/// A fingerprint whose drawing is the fixed pattern at `ink`.
 fn print(ink: f32) -> Fingerprint {
     Fingerprint {
-        vector: vec![ink; 64],
+        vector: drawing(ink, false),
         x_height_ratio: 0.70,
         contrast: 0.20,
         stroke_width: 0.15,
@@ -31,9 +47,10 @@ fn only(keep: &str) -> (Profile, Profile) {
     let a = profile(Classification::Sans, Some(print(0.2)));
     let mut b = profile(Classification::Serif, Some(print(0.6)));
     let fp = b.fingerprint.as_mut().expect("fingerprint");
-    fp.x_height_ratio = 0.45;
+    fp.vector = unlike(0.6);
+    fp.x_height_ratio = 0.30;
     fp.contrast = 0.90;
-    fp.stroke_width = 0.04;
+    fp.stroke_width = 0.01;
     fp.advance_ratio = 1.20;
     let theirs = a.fingerprint.as_ref().expect("fingerprint");
     match keep {
@@ -122,13 +139,62 @@ fn identical_faces_score_one_with_every_reason() {
 fn closer_components_score_higher_and_stay_in_range() {
     let a = profile(Classification::Sans, Some(print(0.3)));
     let mut previous = 1.0f32;
-    for ink in [0.31, 0.34, 0.38, 0.45, 0.6, 1.0] {
-        let b = profile(Classification::Sans, Some(print(ink)));
+    // `t` moves the drawing toward the other pattern and the stroke away.
+    for t in [0.01f32, 0.03, 0.06, 0.1, 0.3, 1.0] {
+        let mut b = profile(Classification::Sans, Some(print(0.3)));
+        let fp = b.fingerprint.as_mut().expect("fingerprint");
+        fp.vector = print(0.3)
+            .vector
+            .iter()
+            .zip(unlike(0.3))
+            .map(|(x, y)| x * (1.0 - t) + y * t)
+            .collect();
+        fp.stroke_width *= 1.0 + t;
         let score = compare(&a, &b).score;
-        assert!((0.0..=1.0).contains(&score), "{ink}: {score}");
-        assert!(score <= previous, "{ink}: {score} > {previous}");
+        assert!((0.0..=1.0).contains(&score), "{t}: {score}");
+        assert!(score < previous, "{t}: {score} >= {previous}");
         previous = score;
     }
+}
+
+/// E54.13: the drawing is compared by where the ink is, not how much: a
+/// heavier drawing of the same pattern is alike, the other pattern is not.
+#[test]
+fn letter_shapes_compare_where_the_ink_is_not_how_much() {
+    assert!((shapes(&drawing(0.2, false), &drawing(0.8, false)) - 1.0).abs() < 1e-5);
+    assert!(shapes(&drawing(0.5, false), &unlike(0.5)) < f32::EPSILON);
+    // An even drawing has no shape: it is alike only an equal one.
+    assert!((shapes(&[0.3; 64], &[0.3; 64]) - 1.0).abs() < f32::EPSILON);
+    assert!(shapes(&[0.3; 64], &[0.6; 64]) < f32::EPSILON);
+    assert!(shapes(&[0.3; 64], &drawing(0.5, false)) < f32::EPSILON);
+    // Other lengths and empty drawings do not compare.
+    assert!(shapes(&[0.3; 64], &[0.3; 32]) < f32::EPSILON);
+    assert!(shapes(&[], &[]) < f32::EPSILON);
+}
+
+/// E54.13: serif and slab, sans and mono are close classes: a pair of them
+/// scores between a pair of one class and a pair of unrelated classes.
+#[test]
+fn close_classes_count_half() {
+    use Classification::*;
+    assert!((classes(Serif, Slab) - CLOSE_CLASSES).abs() < f32::EPSILON);
+    assert!((classes(Mono, Sans) - CLOSE_CLASSES).abs() < f32::EPSILON);
+    assert!((classes(Slab, Slab) - 1.0).abs() < f32::EPSILON);
+    for (x, y) in [
+        (Serif, Sans),
+        (Slab, Mono),
+        (Script, Serif),
+        (Display, Sans),
+    ] {
+        assert!(classes(x, y) < f32::EPSILON, "{x:?} {y:?}");
+    }
+    let serif = profile(Serif, Some(print(0.3)));
+    let score = |c| compare(&serif, &profile(c, Some(print(0.3)))).score;
+    assert!(score(Serif) > score(Slab) && score(Slab) > score(Sans));
+    assert_eq!(
+        score(Slab),
+        compare(&profile(Slab, Some(print(0.3))), &serif).score
+    );
 }
 
 #[test]
@@ -169,7 +235,7 @@ fn without_a_fingerprint_metrics_and_classification_decide() {
     let mut bold_wide = profile(Classification::Serif, None);
     bold_wide.weight = 900;
     bold_wide.width = 9;
-    bold_wide.x_height_ratio = Some(0.45);
+    bold_wide.x_height_ratio = Some(0.30);
     let found = compare(&without, &bold_wide);
     assert_eq!(found.reasons, [METRICS_ONLY]);
     assert!(found.score < 0.2, "{found:?}");
@@ -285,7 +351,7 @@ fn the_floor_is_half_alike_and_unlike_pairs_fall_below_it() {
     assert!((MIN_SCORE - UNKNOWN).abs() < f32::EPSILON);
     let a = profile(Classification::Sans, Some(print(0.2)));
     let (_, mut b) = only(SIMILAR_SHAPES);
-    b.fingerprint.as_mut().expect("fingerprint").vector = print(0.9).vector;
+    b.fingerprint.as_mut().expect("fingerprint").vector = unlike(0.9);
     assert!(compare(&a, &b).score < MIN_SCORE);
     assert!(compare(&a, &a.clone()).score >= MIN_SCORE);
 }
@@ -431,4 +497,85 @@ fn the_agreed_pairs_are_well_formed() {
         }
     }
     assert_eq!(classes.into_iter().collect::<Vec<_>>(), AGREED_CLASSES);
+}
+
+// ---- Ranking the agreed pairs (E54.13) ----
+
+/// The profile the index would hold for face 0 of a fixture file: the scan's
+/// classification, weight, width, metrics and fingerprint.
+fn agreed_profile(file: &str) -> Profile {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/fonts")
+        .join(file);
+    let data = std::fs::read(&path).unwrap_or_else(|e| panic!("{file}: {e}"));
+    let (mut parsed, sfnt) = crate::parser::parse_keeping_sfnt(&data);
+    let sfnt = sfnt.into_owned();
+    crate::fingerprint::fill_sfnt(&sfnt, &mut parsed);
+    let face = parsed
+        .faces
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("{file}: no face"));
+    let fingerprint = match face.fingerprint {
+        crate::fingerprint::FaceFingerprint::Taken(f) => Some(f),
+        _ => None,
+    };
+    Profile::new(
+        face.classification.map(|c| c.class),
+        face.weight.unwrap_or(400),
+        face.width.unwrap_or(5),
+        Some(&face.metrics),
+        fingerprint,
+    )
+}
+
+fn agreed_pairs() -> AgreedPairs {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/similar/expected.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("expected.json"))
+        .expect("expected.json")
+}
+
+/// E54.13: for every reference of the agreed pairs, every "near" face
+/// scores above every "far" face. The faces of the reference's own family
+/// are compared too: the app leaves them out of its list, the score does
+/// not.
+#[test]
+fn every_near_face_ranks_above_every_far_face() {
+    let mut wrong = Vec::new();
+    for r in agreed_pairs().references {
+        let reference = agreed_profile(&r.file);
+        let scored = |faces: &[AgreedFace]| -> Vec<(f32, String)> {
+            faces
+                .iter()
+                .map(|f| {
+                    let face = agreed_profile(&f.file);
+                    assert!(
+                        candidate(&reference, &face),
+                        "{} / {}: not ranked at all",
+                        r.file,
+                        f.file
+                    );
+                    (compare(&reference, &face).score, f.file.clone())
+                })
+                .collect()
+        };
+        let near = scored(&r.near);
+        let far = scored(&r.far);
+        for (n, nf) in &near {
+            for (f, ff) in &far {
+                if n <= f {
+                    wrong.push(format!("{}: near {nf} {n:.3} <= far {ff} {f:.3}", r.file));
+                }
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "{}",
+        wrong.join(
+            "
+"
+        )
+    );
 }

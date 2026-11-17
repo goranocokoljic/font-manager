@@ -7,12 +7,12 @@
 //!
 //! | Component | With fingerprints | Without |
 //! |-----------|-------------------|---------|
-//! | classification | same class or not | same |
+//! | classification | same class, close classes (serif and slab, sans and mono) or not | same |
 //! | x-height | `v` over `H`, measured | declared x-height over cap height |
 //! | width | mean advance over the x-height | `OS/2` width class |
 //! | stroke weight | stem of the `i` over the x-height | `OS/2` weight class |
 //! | contrast | thin over thick stroke of the `o` | — |
-//! | letter shapes | the reduced drawing | — |
+//! | letter shapes | the reduced drawing, by correlation (by ink for an image) | — |
 //!
 //! The score is the weighted mean of the components, so it stays in
 //! `0.0..=1.0`; a component one face lacks (no class, no fingerprint) counts
@@ -70,27 +70,67 @@ const UNKNOWN: f32 = 0.5;
 /// tunes it against agreed pairs.
 pub const MIN_SCORE: f32 = 0.5;
 
-/// How much each component counts in the score.
-const W_CLASS: f32 = 3.0;
-const W_X_HEIGHT: f32 = 1.0;
-const W_WIDTH: f32 = 1.5;
-const W_STROKE: f32 = 1.5;
-const W_CONTRAST: f32 = 1.0;
-const W_SHAPES: f32 = 3.0;
+/// How much each component counts in the score. Tuned against the agreed
+/// pairs (`fixtures/similar/expected.json`, E54.13): with these, every
+/// reference ranks each of its "near" faces above each of its "far" faces.
+///
+/// Classification: was 3.0. The class is a guess (a script read as a sans,
+/// a display face as a sans), and at 3.0 a wrong guess outweighed the
+/// measures that saw the pair alike (Zeyada and Just Me Again Down Here).
+const W_CLASS: f32 = 2.0;
+/// x-height: was 1.0. The proportion of small to capital letters is what
+/// sets connected scripts (Clicker Script, Engagement) apart from text
+/// faces, and it is measured, not guessed.
+const W_X_HEIGHT: f32 = 3.5;
+/// Width: was 1.5. A condensed face for a wide one is the fault people
+/// noticed first (Saira Extra Condensed above Lexend Peta for Lexend Tera).
+const W_WIDTH: f32 = 2.5;
+/// Stroke weight: was 1.5. The pairs put the light and the black of one
+/// design near each other (Lexend Tera, Public Sans): weight counts, but
+/// less than the build of the letters.
+const W_STROKE: f32 = 1.0;
+/// Contrast: was 1.0. Thin and thick strokes tell a Bodoni from a
+/// grotesque and a pen script from a marker.
+const W_CONTRAST: f32 = 1.5;
+/// Letter shapes: was 3.0. The drawing is now compared by correlation
+/// ([`shapes`]), which no longer counts weight twice; it stays a strong
+/// component, below the x-height and the width it partly repeats.
+const W_SHAPES: f32 = 2.0;
+
+/// The classification closeness of two classes that are close (serif and
+/// slab, sans and mono): neither the same nor unrelated. Until E54.13 a
+/// slab was as far from a serif as a script was.
+const CLOSE_CLASSES: f32 = 0.5;
 
 /// The difference at which a component's closeness reaches zero.
-/// x-height over cap height: a typical face lies between 0.6 and 0.8.
-const TOL_X_HEIGHT: f32 = 0.12;
-/// Relative difference of the advance ratio and the stem ratio.
-const TOL_WIDTH: f32 = 0.25;
-const TOL_STROKE: f32 = 0.5;
-/// Width classes (1–9) and weight classes (100–900).
+/// x-height over cap height, a typical face lies between 0.6 and 0.8: was
+/// 0.12, which made a 0.07 difference (Zeyada and Just Me Again Down Here)
+/// count as half unlike; 0.35 grades the whole range.
+const TOL_X_HEIGHT: f32 = 0.35;
+/// Relative difference of the advance ratio: was 0.25. Sibling widths of
+/// the pairs differ by 0.1 or less (Lexend Tera and Lexend Peta: 0.09), a
+/// condensed face against a normal one by 0.3 or more.
+const TOL_WIDTH: f32 = 0.17;
+/// Relative difference of the stem ratio: was 0.5. A light and a heavy of
+/// one design differ by about 0.5 (Lexend Tera and its ExtraLight) and are near (see [`W_STROKE`]).
+const TOL_STROKE: f32 = 0.85;
+/// Width classes (1–9) and weight classes (100–900), for a pair without
+/// fingerprints (not ranked, E54.11). Unchanged.
 const TOL_WIDTH_CLASS: f32 = 3.0;
 const TOL_WEIGHT_CLASS: f32 = 400.0;
-/// Contrast, in `0.0..=1.0`.
-const TOL_CONTRAST: f32 = 0.3;
-/// The mean absolute difference of two drawings' cells.
-const TOL_SHAPES: f32 = 0.12;
+/// Contrast, in `0.0..=1.0`: was 0.3. A text serif against a didone
+/// differs by about 0.2 and is near (Libre Baskerville and Libre Bodoni).
+const TOL_CONTRAST: f32 = 0.55;
+/// One minus the correlation of two drawings' cells (was a mean absolute
+/// difference of 0.12): drawings that correlate less than 0.9 do not look
+/// alike.
+const TOL_SHAPES: f32 = 0.1;
+/// The mean absolute difference of two drawings' cells at which an image
+/// of text (a shapes-only profile, E33.1) is unlike a face. Unchanged: an
+/// image has no stroke measure, so its ink is the only sign of weight, and
+/// the thin strokes of a script image correlate less (0.85 for Clicker
+/// Script) than their ink differs (0.04).
+const TOL_INK: f32 = 0.12;
 
 /// What [`compare`] looks at in one face.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -163,7 +203,7 @@ pub fn compare(a: &Profile, b: &Profile) -> Similarity {
     let class = a
         .classification
         .zip(b.classification)
-        .map(|(x, y)| if x == y { 1.0 } else { 0.0 });
+        .map(|(x, y)| classes(x, y));
     let both = a.fingerprint.as_ref().zip(b.fingerprint.as_ref());
     let measured = !(a.shapes_only || b.shapes_only);
     let (x_height, width, contrast, stroke, shape) = match both {
@@ -172,7 +212,11 @@ pub fn compare(a: &Profile, b: &Profile) -> Similarity {
             relative(x.advance_ratio, y.advance_ratio, TOL_WIDTH),
             measured.then(|| closeness(x.contrast, y.contrast, TOL_CONTRAST)),
             measured.then(|| relative(x.stroke_width, y.stroke_width, TOL_STROKE)),
-            Some(shapes(&x.vector, &y.vector)),
+            Some(if measured {
+                shapes(&x.vector, &y.vector)
+            } else {
+                ink(&x.vector, &y.vector)
+            }),
         ),
         None => (
             a.x_height_ratio
@@ -232,14 +276,59 @@ fn relative(a: f32, b: f32, tol: f32) -> f32 {
     closeness(a / larger, b / larger, tol)
 }
 
+/// The classification closeness of two classes: 1.0 for the same class,
+/// [`CLOSE_CLASSES`] for two that are close, 0.0 for the rest.
+fn classes(a: Classification, b: Classification) -> f32 {
+    use Classification::{Mono, Sans, Serif, Slab};
+    match (a, b) {
+        _ if a == b => 1.0,
+        (Serif, Slab) | (Slab, Serif) | (Sans, Mono) | (Mono, Sans) => CLOSE_CLASSES,
+        _ => 0.0,
+    }
+}
+
 /// [`closeness`] of two drawings by the mean absolute difference of their
 /// cells; drawings of different lengths (other parameters) do not compare.
-fn shapes(a: &[f32], b: &[f32]) -> f32 {
+fn ink(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
     let total: f32 = a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum();
-    closeness(total / a.len() as f32, 0.0, TOL_SHAPES)
+    closeness(total / a.len() as f32, 0.0, TOL_INK)
+}
+
+/// The summed squared deviation below which a drawing counts as without
+/// variation: rounding leaves a little on an even drawing, and a real one
+/// (64 cells of letters and white) has about 1.0.
+const MIN_VARIATION: f32 = 1e-6;
+
+/// [`closeness`] of two drawings by the correlation of their cells (E54.13):
+/// where the ink is, not how much of it. A bold and a light face of one
+/// design correlate highly; a mean difference of the cells called them
+/// unlike. Drawings of different lengths (other parameters) do not compare;
+/// a drawing with no variation correlates only with an equal one.
+fn shapes(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let n = a.len() as f32;
+    let mean_a = a.iter().sum::<f32>() / n;
+    let mean_b = b.iter().sum::<f32>() / n;
+    let (mut ab, mut aa, mut bb) = (0.0f32, 0.0f32, 0.0f32);
+    for (x, y) in a.iter().zip(b) {
+        let (x, y) = (x - mean_a, y - mean_b);
+        ab += x * y;
+        aa += x * x;
+        bb += y * y;
+    }
+    let r = if aa > MIN_VARIATION && bb > MIN_VARIATION {
+        ab / (aa * bb).sqrt()
+    } else if a == b {
+        1.0
+    } else {
+        0.0
+    };
+    closeness(1.0 - r, 0.0, TOL_SHAPES)
 }
 
 #[cfg(test)]
