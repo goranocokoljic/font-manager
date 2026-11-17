@@ -41,6 +41,11 @@ your team, read [Shared libraries](shared-libraries.md).
   font's letter is to that one, closest first. The line above the list says **Sorted by
   R like Inter**. Your filters stay. Click the **R like Inter** button to remove the sort:
   the list goes back to the sort it had before.
+- To find fonts for a language, open **Filters** and choose the language. A font is
+  shown only when it has every letter of the language: a font that lacks one letter
+  (for example `đ` for Serbian) is left out. When you look for fonts that cover a text
+  you paste, a font that lacks up to 5 of its characters is still shown, with the
+  characters it lacks.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
 - Some fonts look small or large at the same size. Set **Auto size** to **x-height**

@@ -107,6 +107,43 @@ fn id(value: &Value) -> u32 {
         .unwrap_or_else(|| panic!("an id: {value}"))
 }
 
+/// E54.4: the MCP search tool follows the two rules. Neuton Light lacks
+/// Ć Đ ć đ and Nosifer lacks đ: neither is a result for sr-Latn; as pasted
+/// text, Neuton is still a near miss that lists what it lacks.
+#[tokio::test(flavor = "multi_thread")]
+async fn search_fonts_is_exact_for_a_language_and_keeps_near_misses_for_text() {
+    let home = Home::new("exact-language");
+    let api = scanned_core(
+        &home,
+        &[
+            "google-repo/barlow",
+            "google-repo/neuton",
+            "google-repo/nosifer",
+        ],
+    );
+    let client = client_over(&api).await;
+    let names = |found: &Value| -> Vec<String> {
+        found["families"]
+            .as_array()
+            .expect("families")
+            .iter()
+            .map(|h| h["family"]["name"].as_str().expect("name").to_owned())
+            .collect()
+    };
+    let found = client
+        .ok("search_fonts", json!({ "languages": ["sr-Latn"] }))
+        .await;
+    assert_eq!(names(&found), ["Barlow"], "{found}");
+    let found = client.ok("search_fonts", json!({ "text": "Ćć Đđ" })).await;
+    let neuton = found["families"]
+        .as_array()
+        .expect("families")
+        .iter()
+        .find(|h| h["family"]["name"] == "Neuton")
+        .unwrap_or_else(|| panic!("a near miss: {found}"));
+    assert_eq!(neuton["missing"]["chars"], json!(["Ć", "ć", "Đ", "đ"]));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn search_get_font_and_coverage_run_on_the_core() {
     let home = Home::new("read");

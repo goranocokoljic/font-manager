@@ -560,6 +560,47 @@ fn search_counts_every_filter_value_with_the_other_filters_kept() {
     );
 }
 
+/// E54.4: a language allows no missing letter; pasted text keeps its near
+/// misses. JetBrains Mono and Legacy Grotesk lack č ć đ š ž (five), so they
+/// are no result for sr-Latn, but the same five as text still list them.
+#[test]
+fn a_language_allows_no_missing_letter_and_text_keeps_near_misses() {
+    let api = api();
+    let search = |supports: Supports| -> Vec<(String, Vec<String>)> {
+        api.search(SearchRequest {
+            filters: Filters {
+                supports: Some(supports),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .unwrap()
+        .families
+        .into_iter()
+        .map(|h| {
+            (
+                h.family.name,
+                h.missing.map(|m| m.chars).unwrap_or_default(),
+            )
+        })
+        .collect()
+    };
+    let sr = search(Supports::Languages {
+        codes: vec!["sr-Latn".into()],
+    });
+    let names: Vec<&str> = sr.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, ["Inter", "Source Serif 4"], "{sr:?}");
+    assert!(sr.iter().all(|(_, lacks)| lacks.is_empty()));
+    let text = search(Supports::Text {
+        text: "čćđšž".into(),
+    });
+    let mono = text
+        .iter()
+        .find(|(n, _)| n == "JetBrains Mono")
+        .expect("a near miss of text");
+    assert_eq!(mono.1, ["č", "ć", "đ", "š", "ž"]);
+}
+
 #[test]
 fn search_groups_by_family_and_reports_near_misses() {
     let api = api();
