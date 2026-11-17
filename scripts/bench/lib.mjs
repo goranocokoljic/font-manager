@@ -238,10 +238,20 @@ export function gate(current, history, { tolerance = REGRESSION_TOLERANCE, runs 
  * Paths whose change can move a bench number: the Rust crates and their
  * manifests, the Tauri shell, the bench itself. A PR that touches none of them
  * (a Vue view, a test, docs) cannot have changed the numbers, so its bench
- * report is information, not a gate.
+ * report is information, not a gate. Rust test code (a `tests/` folder, a
+ * `tests.rs` file) is not in the measured binary, so it does not count either.
  */
 export function touchesNative(path) {
+  if (/^(crates|apps\/desktop\/src-tauri)\/(.*\/)?tests(\/|\.rs$)/.test(path)) return false;
   return /^(crates\/|Cargo\.(toml|lock)$|apps\/desktop\/src-tauri\/|scripts\/bench(\.sh|\/)|\.github\/workflows\/bench\.yml$)/.test(path);
+}
+
+/**
+ * Can this PR have moved a bench number? `paths` are its changed files; an
+ * empty list (GitHub gave none) counts as yes, the careful answer.
+ */
+export function changesNative(paths) {
+  return paths.length === 0 || paths.some(touchesNative);
 }
 
 /**

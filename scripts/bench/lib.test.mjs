@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, target, TRAIT_PASS_FACES, traitPass,
-  nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe, touchesNative,
+  nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe, touchesNative, changesNative,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
 
@@ -360,6 +360,16 @@ describe('regression gate (E9.2)', () => {
     for (const p of ['apps/desktop/src/components/FontGrid.vue', 'apps/desktop/e2e/wall.spec.ts', 'apps/desktop/src/api/types.ts', 'dev-docs/harness/parking-lot.md', '.github/workflows/ci.yml', 'scripts/harness/pick.mjs']) {
       assert.equal(touchesNative(p), false, p);
     }
+  });
+
+  test('Rust test code is not native: it cannot move a bench number', () => {
+    for (const p of ['crates/fm-core/src/api/tests/watching.rs', 'crates/fm-core/src/similar/tests.rs', 'crates/fm-cli/tests/cli.rs', 'apps/desktop/src-tauri/src/tests.rs']) {
+      assert.equal(touchesNative(p), false, p);
+    }
+    assert.equal(touchesNative('crates/fm-core/src/contests.rs'), true, 'a name that only ends in tests.rs is code');
+    assert.equal(changesNative(['dev-docs/a.md', 'crates/fm-core/src/api/tests/watching.rs']), false);
+    assert.equal(changesNative(['dev-docs/a.md', 'crates/fm-core/src/lib.rs']), true);
+    assert.equal(changesNative([]), true, 'no file list: assume the numbers can move');
   });
 
   test('without a nightly value on main the budget is the gate', () => {

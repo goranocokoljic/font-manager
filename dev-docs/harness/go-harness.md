@@ -116,6 +116,11 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   `harness:blocked`. The PR conflicts with `main` (GitHub runs no CI on it) →
   `sync`. GitHub did not run the jobs at all (billing, spending limit) → the lane
   stops at once and keeps the story's state; the next run resumes it at CI.
+  A PR that changes only harness scripts and developer docs
+  (`scripts/harness/`, `dev-docs/`, `docs/adr/`, `.claude/`, `go-harness.*`,
+  `CLAUDE.md`; `scripts/harness/ci-scope.mjs`) takes the light path: ci.yml
+  runs the `light` job alone (ESLint, the script tests, Linux) and the harness
+  reads it in place of the three OS jobs (`ci.light_check`).
   Stories with numeric criteria (a number with ms, s, fps,
   MB) get the `bench` label on the CI wait before finalize; `bench-report.json`
   `pass: false` counts as red. The bench job (`.github/workflows/bench.yml`,

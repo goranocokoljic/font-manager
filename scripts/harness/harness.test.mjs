@@ -3,14 +3,15 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   parseMeta, parseCriteria, isNumericCriterion, compareStories, areaOf, areasOverlap,
-  predictAreas, storyBudget, laneOf, DEFAULT_CONFIG,
+  predictAreas, storyBudget, laneOf, DEFAULT_CONFIG, withLight,
 } from './lib.mjs';
+import { isLightPath, ciScope } from './ci-scope.mjs';
 import { staticReadiness, planLane, humanWaits, HUMAN_MERGE } from './pick.mjs';
 import { editCriterion } from './issue.mjs';
 import { countFindings, markerLine } from './review-counts.mjs';
@@ -466,5 +467,54 @@ describe('keeper: main-check', () => {
     assert.equal(prVerdict(c('SUCCESS', 'PENDING', 'SUCCESS'), req), 'pending');
     assert.equal(prVerdict([{ name: 'windows', state: 'SUCCESS' }], req), 'pending', 'missing jobs are not green');
     assert.equal(prVerdict(c('SUCCESS', 'CANCELLED', 'SUCCESS'), req), 'red');
+  });
+
+  test('the light job counts for the OS jobs ci.yml skipped', () => {
+    const req = ['ci / windows', 'ci / macos', 'ci / linux'];
+    const light = (state) => [{ name: 'scope', state: 'SUCCESS' }, { name: 'light', state }, { name: '${{ matrix.name }}', state: 'SKIPPED' }];
+    assert.equal(prVerdict(light('SUCCESS'), req, 'ci / light'), 'green');
+    assert.equal(prVerdict(light('FAILURE'), req, 'ci / light'), 'red');
+    assert.equal(prVerdict(light('PENDING'), req, 'ci / light'), 'pending');
+    assert.equal(prVerdict(light('SUCCESS'), req), 'pending', 'no light check configured: the OS jobs are required');
+    // The full path: the light job is skipped and counts for nothing.
+    const full = [{ name: 'windows', state: 'SUCCESS' }, { name: 'macos', state: 'PENDING' }, { name: 'linux', state: 'SUCCESS' }, { name: 'light', state: 'SKIPPED' }];
+    assert.equal(prVerdict(full, req, 'ci / light'), 'pending');
+    // A real OS run wins over the stand-in.
+    const mixed = [{ name: 'macos', state: 'FAILURE' }, { name: 'light', state: 'SUCCESS' }];
+    assert.equal(prVerdict(mixed, req, 'ci / light'), 'red');
+  });
+
+  test('withLight copies the light check run under each missing required name', () => {
+    const req = ['ci / windows', 'ci / macos', 'ci / linux'];
+    const run = { name: 'light', id: 7, status: 'completed', conclusion: 'success' };
+    const out = withLight([run, { name: 'scope', conclusion: 'success' }], req, 'ci / light');
+    assert.deepEqual(out.filter((r) => r.id === 7).map((r) => r.name).sort(), ['light', 'linux', 'macos', 'windows']);
+    assert.equal(matchCheck('ci / macos', out).conclusion, 'success');
+    const skipped = [{ name: 'light', conclusion: 'skipped' }, { name: 'windows', conclusion: 'success' }];
+    assert.equal(withLight(skipped, req, 'ci / light'), skipped, 'a skipped light job stands in for nothing');
+    assert.equal(withLight([run], req, null).length, 1);
+  });
+
+  test('ci-scope: only harness scripts and developer docs take the light path', () => {
+    for (const p of ['scripts/harness/ci-wait.mjs', 'scripts/harness/dashboard/server.mjs', 'dev-docs/harness/parking-lot.md', 'dev-docs/design/redesign/12-preview-options-open.png', 'docs/adr/0008-activation.md', '.claude/skills/go-cycle/SKILL.md', 'go-harness.ps1', 'go-harness.config.json', 'CLAUDE.md']) {
+      assert.equal(isLightPath(p), true, p);
+    }
+    // docs/user is the in-app help; the bench and release scripts run on all three OS.
+    for (const p of ['docs/user/index.md', 'README.md', 'scripts/bench/lib.mjs', 'scripts/release/sidecar.mjs', '.github/workflows/ci.yml', 'package.json', 'crates/fm-core/src/lib.rs', 'apps/desktop/src/App.vue', 'data/charsets/sr.json', 'fixtures/similar/expected.json']) {
+      assert.equal(isLightPath(p), false, p);
+    }
+    assert.equal(ciScope(['dev-docs/a.md', 'scripts/harness/lib.mjs']), 'light');
+    assert.equal(ciScope(['dev-docs/a.md', 'crates/fm-core/src/lib.rs']), 'full');
+    assert.equal(ciScope([]), 'full', 'no file list: run everything');
+    assert.equal(ciScope(null), 'full');
+  });
+
+  test('ci.yml has the light job the config names, beside the three OS jobs', () => {
+    const yml = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+    const job = cfg.ci.light_check.split('/').pop().trim();
+    assert.match(yml, new RegExp(`^  ${job}:\n    name: ${job}$`, 'm'));
+    assert.match(yml, /node scripts\/harness\/ci-scope\.mjs/);
+    assert.match(yml, /needs\.scope\.outputs\.scope != 'light'/);
+    assert.match(yml, /needs\.scope\.outputs\.scope == 'light'/);
   });
 });
