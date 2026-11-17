@@ -757,13 +757,6 @@ export function mockCoverage(f: FaceDetail, text: string, cjk: boolean): Coverag
 }
 
 /**
- * A face that lacks at most this many characters of a pasted text is a near miss: the
- * `supports` filter keeps it and lists what it lacks. A language allows none (E54.4), as
- * fm-core's `Need` and the Rust mock.
- */
-export const MOCK_NEAR_MISS = 5;
-
-/**
  * The characters of `text` a mock face lacks, remembered per face and text: the filter
  * counts ask it once per filter value for every face (E43.3's switch on 1,000 families).
  */
@@ -1662,7 +1655,9 @@ function passes(
   const f = d.face;
   // A wall face covers a language by its own characters, so the wall's gaps show in this
   // filter too (its Vietnamese preset included); the other faces by script. A language is
-  // exact (E54.4): one missing letter disqualifies the face. Pasted text keeps near misses.
+  // exact (E54.4): one missing letter disqualifies the face. Pasted text is exact here too,
+  // unlike fm-core's near miss: the "render your text completely" line (E43.3) needs every
+  // glyph, and its e2e checks run on this mock (see ADR 0024).
   const covers = (code: string) => {
     const own = mockWall().chars.get(f.family);
     const preset = [...mockLanguages, ...(own ? [WALL_VIETNAMESE] : [])].find(
@@ -1703,7 +1698,7 @@ function passes(
     (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
     (q.webOk == null || q.webOk === mockWebUse(d.license).ok) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers)) &&
-    (supports?.kind !== 'text' || textLacks(d, supports.text).length <= MOCK_NEAR_MISS)
+    (supports?.kind !== 'text' || textLacks(d, supports.text).length === 0)
   );
 }
 
@@ -3064,9 +3059,6 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       (!rule || passesGroup(d, rule, []))
     );
   };
-  /** What the matching face that lacks the fewest characters of `text` lacks. */
-  const bestLacks = (faces: FaceDetail[], text: string): string[] =>
-    faces.map((d) => textLacks(d, text)).reduce((best, l) => (l.length < best.length ? l : best));
   const wordsOf = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean);
   const hits = (query: string, q: Filters, rule?: RuleGroup | null): FamilyHit[] => {
     const words = wordsOf(query);
@@ -3079,13 +3071,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         family: summaryOf(family),
         faces: matching.map((d) => d.face.id),
         score: nameHit ? 1 : 0.5,
-        // A language hit lacks nothing; a text hit lists what its best face lacks.
-        missing: q.supports
-          ? {
-              chars: q.supports.kind === 'text' ? bestLacks(matching, q.supports.text) : [],
-              hasLocl: false,
-            }
-          : null,
+        // Both rules are exact in this mock: a hit lacks nothing.
+        missing: q.supports ? { chars: [], hasLocl: false } : null,
       });
     }
     return out.sort((a, b) => b.score! - a.score! || a.family.name.localeCompare(b.family.name));

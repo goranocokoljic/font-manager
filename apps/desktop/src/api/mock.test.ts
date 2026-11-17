@@ -575,14 +575,13 @@ describe('MockApi supports filter: two rules (E54.4)', () => {
     expect(serbian.every((h) => h.missing?.chars.length === 0)).toBe(true);
   });
 
-  it('keeps a face lacking up to five characters of a pasted text and lists them', async () => {
+  it('keeps pasted text exact, for the "render your text completely" line (E43.3)', async () => {
     const english = await search({ supports: { kind: 'languages', codes: ['en'] } });
     const serbian = await search({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
     const latinOnly = english.find((h) => !serbian.some((s) => s.family.id === h.family.id))!;
-    const five = await search({ supports: { kind: 'text', text: 'čćđšž' } });
-    const near = five.find((h) => h.family.id === latinOnly.family.id);
-    expect(near?.missing?.chars).toEqual(['č', 'ć', 'đ', 'š', 'ž']);
-    const six = await search({ supports: { kind: 'text', text: 'čćđšžħ' } });
-    expect(six.some((h) => h.family.id === latinOnly.family.id)).toBe(false);
+    const lacking = await search({ supports: { kind: 'text', text: 'abcž' } });
+    expect(lacking.some((h) => h.family.id === latinOnly.family.id)).toBe(false);
+    const has = await search({ supports: { kind: 'text', text: 'abc' } });
+    expect(has.some((h) => h.family.id === latinOnly.family.id)).toBe(true);
   });
 });

@@ -32,7 +32,9 @@ the one `fm_core::coverage::Need`: the search and its filter counts, smart colle
 with a language rule (their counts are computed live, so an existing one shows its
 new, smaller count after the update without a rescan), drop counts, the brief and
 pairing workflows, `fm search --supports` and the MCP search tool. The Rust `MockApi`
-and the TypeScript mock follow the same two rules.
+follows the same two rules. The TypeScript mock is exact for a language too, but keeps
+pasted text exact: its e2e checks of the "N of M families render your text completely"
+line and the "Hide the N with missing glyphs" switch (E43.3) need every glyph.
 
 Unchanged: the coverage report (`check_coverage`, which lists every missing character
 of a face) and the tofu line on a row (E43.4). No `fm-api` type changes.
@@ -43,3 +45,6 @@ of a face) and the tofu line on a row (E43.4). No `fm-api` type changes.
   is still sent for a language search, with no characters.
 - `fm search --supports` keeps its MISSING column; for a language it is empty.
 - A face whose coverage is not stored still fails the filter, as before.
+- Open question for the reconsideration of rule 2: the E43.3 line and switch send a
+  pasted-text rule, so in the app a family lacking up to five glyphs of the text counts
+  as rendering it "completely" and is not hidden.
