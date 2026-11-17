@@ -1,0 +1,19 @@
+{
+  "id": "a-layout-test-must-put-the-element-under-the-pressure-it-gua",
+  "title": "A layout test must put the element under the pressure it guards",
+  "category": "testing",
+  "rule": "When a test guards a layout rule that only acts under pressure (text that must shorten, a row that must not push a control out, a wrap at a breakpoint), run it in a state where the rule is needed: measure that the element's content is wider than its room, then assert the rule's effect (the text is ellipsized with scrollWidth > clientWidth, no two controls overlap, the order holds). Do not rely on viewport widths alone: one width may fit without pressure and another may cross a container breakpoint that rearranges the layout. If no stable viewport gives pressure on every OS, constrain the container in the test (a fixed width through an injected style). Check that removing the rule makes the test fail. Asserting only that controls stay inside the bar's box passes even when they overlap each other.",
+  "rationale": "E54.5 (#615): the de-DE test for the catalog bar's 'refreshed' date ran at 1280 px (the date fit) and 1024 px (a container query wrapped the row), so removing the date's shrink rules kept it green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    615
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**",
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-11-17T08:41:22.410Z",
+  "last_seen": "2026-11-17T08:41:22.410Z"
+}
