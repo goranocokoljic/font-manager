@@ -1,15 +1,34 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+// The toolbar's search field. It searches the library; a view with its own search (an
+// online catalog, E54.5) passes `modelValue` and its own label, and gets the same field.
+import { computed, ref } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
 import { useSearchStore } from '../stores/search';
 
+const props = withDefaults(
+  defineProps<{
+    /** The text, for a view that keeps its own search; omitted, the library's search. */
+    modelValue?: string;
+    label?: string;
+    placeholder?: string;
+    disabled?: boolean;
+  }>(),
+  { modelValue: undefined, label: undefined, placeholder: undefined, disabled: false },
+);
 const emit = defineEmits<{
   /** Escape in an empty box: the focus goes back to the font list. */
   leave: [];
+  'update:modelValue': [text: string];
 }>();
 const search = useSearchStore();
+const own = computed(() => props.modelValue !== undefined);
+const text = computed(() => (own.value ? (props.modelValue ?? '') : search.text));
+function setText(value: string): void {
+  if (own.value) emit('update:modelValue', value);
+  else search.setText(value);
+}
 const input = ref<HTMLInputElement | null>(null);
 const chord = chordOf(ACTIONS.search)!;
 
@@ -32,7 +51,7 @@ useActions([
 
 /** Escape empties the box, then leaves it. */
 function onEscape(): void {
-  if (search.text) search.setText('');
+  if (text.value) setText('');
   else {
     input.value?.blur();
     emit('leave');
@@ -45,13 +64,14 @@ function onEscape(): void {
     ref="input"
     type="search"
     class="search"
-    :aria-label="t('search.label')"
+    :aria-label="label ?? t('search.label')"
     :aria-keyshortcuts="ariaShortcut(chord)"
-    :placeholder="t('search.placeholder')"
+    :placeholder="placeholder ?? t('search.placeholder')"
     autocomplete="off"
     spellcheck="false"
-    :value="search.text"
-    @input="search.setText(($event.target as HTMLInputElement).value)"
+    :disabled="disabled"
+    :value="text"
+    @input="setText(($event.target as HTMLInputElement).value)"
     @keydown.esc.prevent="onEscape"
   />
 </template>

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import ActivationNotice from '../components/ActivationNotice.vue';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
+import AppToolbar from '../components/AppToolbar.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionHeader from '../components/CollectionHeader.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
@@ -25,11 +26,9 @@ import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
 import { hasChosenFilters } from '../search/chips';
 import { useSourcesStore } from '../stores/sources';
-import UiSegmentedControl from '../components/ui/UiSegmentedControl.vue';
 import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
-import PreviewSizeSlider from '../components/PreviewSizeSlider.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
@@ -53,11 +52,10 @@ import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap'
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
 import { useCollectionsStore } from '../stores/collections';
-import { MAX_PINS, useCompareStore } from '../stores/compare';
+import { useCompareStore } from '../stores/compare';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useFamilyPageStore } from '../stores/familyPage';
 import { useFontListStore } from '../stores/fontList';
-import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { useLibraryViewsStore } from '../stores/libraryViews';
 import { ALL_FONTS_VIEW, listPreview, usePreviewStore } from '../stores/preview';
@@ -76,7 +74,6 @@ import { useFamilyNavigation } from './useFamilyNavigation';
 import { useLiveLibrary } from './useLiveLibrary';
 
 const app = useAppStore();
-const layout = useLayoutStore();
 const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
@@ -510,7 +507,6 @@ watch(
 onBeforeUnmount(() => unregisterSaved.splice(0).forEach((u) => u()));
 
 const settingsChord = chordOf(ACTIONS.settings)!;
-const compareChord = chordOf(ACTIONS.compare)!;
 
 // The selected face is in the URL (`#/?face=3`) so a reload keeps it; the
 // font list selects by changing the query.
@@ -616,50 +612,24 @@ async function openFace(face: FaceId): Promise<void> {
     </template>
 
     <template #list>
-      <AdobeFontsNote v-if="catalogs.open === 'adobeFonts'" :level="1" />
+      <AdobeFontsNote v-if="catalogs.open === 'adobeFonts'" bar />
       <CatalogBrowser v-else-if="catalogs.current" />
       <QuickCollectionReview
         v-else-if="quick.open"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
       />
       <template v-else>
-        <header class="toolbar" data-top-bar>
-          <UiIconButton
-            icon="sidebar"
-            :label="t('home.sidebar')"
-            aria-controls="fm-sidebar"
-            aria-keyshortcuts="["
-            :aria-pressed="layout.sidebarOpen"
-            :title="t('home.sidebarTitle')"
-            @click="layout.toggleSidebar"
-          />
-          <h1 class="title">{{ collections.open?.name ?? libraryViews.currentLabel }}</h1>
-          <SearchBox @leave="focusList" />
+        <AppToolbar
+          :title="collections.open?.name ?? libraryViews.currentLabel"
+          :view="ALL_FONTS_VIEW"
+          :mode="mode"
+          :modes="modeOptions"
+          :size-range="mode === 'grid' ? WALL_SIZE : undefined"
+          @update:mode="views.setMode(ALL_FONTS_VIEW, $event)"
+        >
+          <template #search><SearchBox @leave="focusList" /></template>
           <FilterChips v-show="!similar.open" class="filters" />
-          <UiSegmentedControl
-            :model-value="mode"
-            :options="modeOptions"
-            :label="t('home.viewMode')"
-            slide
-            @update:model-value="views.setMode(ALL_FONTS_VIEW, $event)"
-          />
-          <!-- The toolbar never changes shape (E50.2): the same controls in every view mode.
-               A control of one view lives inside that view (Columns, the layout preset). -->
-          <UiIconButton
-            icon="compare"
-            :label="t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS })"
-            :disabled="!compare.canOpen"
-            :title="t('home.compareTitle', { chord: formatChord(compareChord) })"
-            @click="compare.openSheet"
-          >
-            <span class="pins">{{ compare.pins.length }}</span>
-          </UiIconButton>
-          <PreviewSizeSlider
-            :view="ALL_FONTS_VIEW"
-            :mode="mode"
-            :size-range="mode === 'grid' ? WALL_SIZE : undefined"
-          />
-        </header>
+        </AppToolbar>
         <div
           v-show="!similar.open"
           ref="browse"
@@ -854,40 +824,6 @@ async function openFace(face: FaceId): Promise<void> {
 .browse :deep([data-family-name]:hover) {
   text-decoration: underline;
 }
-.toolbar {
-  /* A stacking level of its own, above the view below: the filter popover opens over it. */
-  position: relative;
-  z-index: 1;
-  container-type: inline-size;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--fm-space-1);
-  min-height: 48px;
-  padding: var(--fm-space-2) var(--fm-space-3);
-  border-bottom: 1px solid var(--fm-border);
-}
-/* The rest of the bar: Filters and its chips, one row. */
-.filters {
-  flex: 1 1 0;
-  min-width: 120px;
-}
-/* A column too narrow for both: the filters take a row of their own under the controls. */
-@container (max-width: 960px) {
-  .filters {
-    order: 1;
-    flex-basis: 100%;
-  }
-  .title {
-    flex: 1;
-  }
-}
-.title {
-  margin: 0;
-  font-size: var(--fm-text-md);
-  font-weight: 600;
-  white-space: nowrap;
-}
 /* The Layout pane's head (E50.3): the face, the preset, the width, prev/next, then the Studio
    at its own end. */
 .studio {
@@ -915,10 +851,6 @@ async function openFace(face: FaceId): Promise<void> {
 .steps {
   display: inline-flex;
   gap: var(--fm-space-1);
-}
-.pins {
-  font-size: var(--fm-text-xs);
-  font-variant-numeric: tabular-nums;
 }
 .preset {
   display: flex;

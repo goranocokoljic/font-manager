@@ -27,6 +27,8 @@ export const ICONS = {
   sparkles:
     '<path d="M7 2.5l1.3 3.2L11.5 7 8.3 8.3 7 11.5 5.7 8.3 2.5 7l3.2-1.3z"/><path d="M12.5 10.5v3M11 12h3"/>',
   rescan: '<path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v2.5h-2.5"/>',
+  // Check for updates (E54.5): an arrow up in a circle, next to Refresh's turning arrow.
+  updateCheck: '<circle cx="8" cy="8" r="5.5"/><path d="M8 10.5v-5M5.8 7.7 8 5.5l2.2 2.2"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
   play: '<path d="M5 3.5l7 4.5-7 4.5z"/>',
   trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5"/>',

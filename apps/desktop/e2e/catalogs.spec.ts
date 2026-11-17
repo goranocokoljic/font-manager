@@ -374,7 +374,7 @@ test('Check for updates badges the families with a newer version, in the catalog
   const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).click();
   const check = page.getByTestId('catalog-check-updates');
-  await expect(check).toHaveText('Check for updates');
+  await expect(check).toHaveAccessibleName('Check for updates');
   await expect(check, 'off: nothing to check').toBeDisabled();
   await catalogs.getByRole('button', { name: 'Turn on Google Fonts' }).click();
   await expect(catalogRows(page)).toHaveCount(4);

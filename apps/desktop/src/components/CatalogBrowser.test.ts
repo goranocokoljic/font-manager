@@ -158,7 +158,8 @@ describe('CatalogBrowser', () => {
 
   it('switches between List, Grid and Waterfall', async () => {
     const { w } = await opened({ catalog: 'offline' });
-    const mode = (label: string) => w.findAll('.modes button').find((b) => b.text() === label)!;
+    const mode = (label: string) =>
+      w.findAll('.segmented button').find((b) => b.attributes('aria-label') === label)!;
     await mode('Waterfall').trigger('click');
     expect(mode('Waterfall').attributes('aria-pressed')).toBe('true');
     expect(rows(w)[0]!.findAll('.line')).toHaveLength(6);
@@ -166,6 +167,73 @@ describe('CatalogBrowser', () => {
     expect(rows(w)[0]!.classes()).toContain('grid');
     await mode('List').trigger('click');
     expect(rows(w)[0]!.classes()).toContain('list');
+  });
+
+  it("shows the library's view switch; Table and Layout are off with the reason (E54.5)", async () => {
+    const { w } = await opened({ catalog: 'offline' });
+    const segs = w.findAll('.segmented button');
+    // The library's order and icons (E51.3), no text buttons.
+    expect(segs.map((b) => b.attributes('aria-label'))).toEqual([
+      'List',
+      'Grid',
+      'Table',
+      'Waterfall',
+      'Layout',
+    ]);
+    expect(segs.map((b) => b.find('svg').exists())).toEqual([true, true, true, true, true]);
+    expect(segs.map((b) => b.text())).toEqual(['', '', '', '', '']);
+    const table = segs[2]!;
+    const layout = segs[4]!;
+    for (const off of [table, layout]) {
+      expect(off.attributes('aria-disabled')).toBe('true');
+      expect(off.attributes('title')).toMatch(/a catalog has List, Grid and Waterfall/);
+      const why = off.attributes('aria-describedby')!;
+      expect(w.get(`[id="${why}"]`).text()).toBe(off.attributes('title'));
+    }
+    for (const on of [segs[0]!, segs[1]!, segs[3]!]) {
+      expect(on.attributes('aria-disabled')).toBeUndefined();
+      expect(on.attributes('aria-describedby')).toBeUndefined();
+    }
+    // A press on an off mode changes nothing.
+    await table.trigger('click');
+    await layout.trigger('click');
+    expect(useViewsStore().modeFor(CATALOG_VIEW)).toBe('list');
+    expect(segs[0]!.attributes('aria-pressed')).toBe('true');
+    // The size slider is in the bar, not in the preview row.
+    expect(w.find('header [data-testid="size-slider"]').exists()).toBe(true);
+    expect(w.findAll('[data-testid="size-slider"]')).toHaveLength(1);
+  });
+
+  it('Refresh and Check for updates are icon buttons with a name and a tooltip (E54.5)', async () => {
+    const { w } = await opened({ catalog: 'offline' });
+    const refresh = w.get('[data-testid="catalog-refresh"]');
+    const check = w.get('[data-testid="catalog-check-updates"]');
+    for (const b of [refresh, check]) {
+      expect(b.classes()).toContain('ui-icon-button');
+      expect(b.find('svg').exists()).toBe(true);
+      expect(b.text()).toBe('');
+    }
+    expect(refresh.attributes('aria-label')).toBe('Refresh');
+    expect(refresh.attributes('title')).toBe(
+      'Fetch the list of Google Fonts again from the internet',
+    );
+    expect(check.attributes('aria-label')).toBe('Check for updates');
+    expect(check.attributes('title')).toMatch(/^Compare the families you downloaded/);
+    // The date shortens in a narrow bar: its full text is its tooltip.
+    const date = w.get('[data-testid="catalog-refreshed"]');
+    expect(date.attributes('title')).toBe(date.text());
+  });
+
+  it('searches through the same search box as the library (E54.5)', async () => {
+    const { w } = await opened({ catalog: 'offline' });
+    const box = w.get('header input[type="search"]');
+    expect(box.attributes('aria-label')).toBe('Search Google Fonts');
+    expect(box.classes()).toContain('search');
+    await box.setValue('lo');
+    await flushPromises();
+    expect(useCatalogsStore().query).toBe('lo');
+    await box.trigger('keydown', { key: 'Escape' });
+    expect(useCatalogsStore().query).toBe('');
   });
 
   it('a failed refresh keeps the cached list with the offline note', async () => {

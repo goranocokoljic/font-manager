@@ -98,3 +98,28 @@ describe('OnlineCatalogsSidebar', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('AdobeFontsNote in the center (E54.5)', () => {
+  it("puts its title in the app's top bar, with no control that has nothing to do", async () => {
+    recordingClient();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    wrapper = mount(AdobeFontsNote, {
+      props: { bar: true },
+      global: { plugins: [pinia] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    const bar = wrapper.get('header.toolbar');
+    expect(bar.attributes('data-top-bar')).toBeDefined();
+    // The library's title: the same h1.title, labelling the note.
+    const title = bar.get('h1.title');
+    expect(title.text()).toBe('Adobe Fonts');
+    expect(wrapper.get('section').attributes('aria-labelledby')).toBe(title.attributes('id'));
+    // Only the sidebar toggle: no search, view switch, Compare or size slider.
+    expect(bar.findAll('button').map((b) => b.attributes('aria-label'))).toEqual(['Sidebar']);
+    expect(bar.find('input').exists()).toBe(false);
+    expect(bar.find('[role="group"]').exists()).toBe(false);
+    expect(wrapper.find('h2').exists()).toBe(false);
+  });
+});

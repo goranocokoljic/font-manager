@@ -10,19 +10,23 @@
 // list too (E22.7).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CatalogFamily } from '../api/types';
-import { errorMessage, formatDate, t } from '../i18n';
+import { errorMessage, formatDate, t, type MessageKey } from '../i18n';
 import { CARD, gridColumns, gridRange } from '../list/grid';
 import { poolSize } from '../list/virtual';
 import { waterfallRowPx } from '../list/waterfall';
 import { sampleTextFor } from '../preview/sampleText';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
 import { listPreview, previewRowHeight, usePreviewStore } from '../stores/preview';
-import { useViewsStore, type ViewMode } from '../stores/views';
+import { useViewsStore, VIEW_MODES, type ViewMode } from '../stores/views';
+import AppToolbar from './AppToolbar.vue';
 import CatalogDownload from './CatalogDownload.vue';
 import CatalogFamilyItem from './CatalogFamilyItem.vue';
 import CatalogInstall from './CatalogInstall.vue';
 import PreviewControls from './PreviewControls.vue';
+import SearchBox from './SearchBox.vue';
 import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
+import type { SegmentOption } from './ui/UiSegmentedControl.vue';
 
 const props = withDefaults(defineProps<{ overscan?: number }>(), { overscan: 2 });
 
@@ -31,8 +35,18 @@ const previews = usePreviewStore();
 const views = useViewsStore();
 
 type CatalogMode = 'list' | 'grid' | 'waterfall';
-// The label of each is `home.modes.<mode>`.
-const MODES: readonly CatalogMode[] = ['list', 'grid', 'waterfall'];
+/** The library's modes a catalog cannot show, and why (E51.4: off, never hidden). */
+const MODE_OFF: Partial<Record<ViewMode, MessageKey>> = {
+  table: 'catalogs.modeOff.table',
+  layout: 'catalogs.modeOff.layout',
+};
+// The library's switch, in its order (E51.3); the label of each is `home.modes.<mode>`.
+const modeOptions = computed<SegmentOption<ViewMode>[]>(() =>
+  VIEW_MODES.map((m) => {
+    const off = MODE_OFF[m];
+    return { value: m, label: t(`home.modes.${m}`), icon: m, reason: off ? t(off) : undefined };
+  }),
+);
 const mode = computed<CatalogMode>(() => {
   const m: ViewMode = views.modeFor(CATALOG_VIEW);
   return m === 'grid' || m === 'waterfall' ? m : 'list';
@@ -52,6 +66,11 @@ const dateOf = (at: string | null | undefined, options?: Intl.DateTimeFormatOpti
   return Number.isFinite(ms) ? formatDate(ms, options) : null;
 };
 const refreshedAt = computed(() => dateOf(catalog.value?.refreshedAt));
+const refreshedLabel = computed(() =>
+  refreshedAt.value
+    ? t('catalogs.refreshedAt', { date: refreshedAt.value })
+    : t('catalogs.neverRefreshed'),
+);
 const offlineNote = computed(() => {
   const date = dateOf(catalog.value?.refreshedAt, { dateStyle: 'medium' });
   return store.offline && date ? t('catalogs.offline', { date }) : null;
@@ -167,60 +186,56 @@ const surfaceClass = computed(() =>
 
 <template>
   <section v-if="catalog" class="browser" :aria-labelledby="`catalog-title-${catalog.id}`">
-    <header class="toolbar" data-top-bar>
-      <h1 :id="`catalog-title-${catalog.id}`" class="title">
-        <bdi>{{ catalog.name }}</bdi>
-      </h1>
-      <input
-        type="search"
-        class="search"
-        data-testid="catalog-search"
-        :aria-label="t('catalogs.searchLabel', { name: catalog.name })"
-        :placeholder="t('catalogs.searchPlaceholder')"
-        autocomplete="off"
-        spellcheck="false"
-        :disabled="!catalog.enabled"
-        :value="store.query"
-        @input="store.setQuery(($event.target as HTMLInputElement).value)"
-        @keydown.esc.prevent="store.setQuery('')"
-      />
-      <p class="count" role="status">
-        <template v-if="catalog.enabled && store.listed">{{
-          t('home.families', { count: store.total })
-        }}</template>
-      </p>
-      <div class="modes" role="group" :aria-label="t('home.viewMode')">
-        <UiButton
-          v-for="m in MODES"
-          :key="m"
-          :aria-pressed="mode === m"
-          @click="views.setMode(CATALOG_VIEW, m)"
-        >
-          {{ t(`home.modes.${m}`) }}
-        </UiButton>
+    <!-- The library's bar (E54.5): the same view switch, search and size slider at the same
+         places. Table and Layout stay in the switch, off, with the reason. -->
+    <AppToolbar
+      :title="catalog.name"
+      :title-id="`catalog-title-${catalog.id}`"
+      :view="CATALOG_VIEW"
+      :mode="mode"
+      :modes="modeOptions"
+      @update:mode="views.setMode(CATALOG_VIEW, $event)"
+    >
+      <template #search>
+        <SearchBox
+          data-testid="catalog-search"
+          :model-value="store.query"
+          :label="t('catalogs.searchLabel', { name: catalog.name })"
+          :placeholder="t('catalogs.searchPlaceholder')"
+          :disabled="!catalog.enabled"
+          @update:model-value="store.setQuery($event)"
+          @leave="viewport?.focus()"
+        />
+      </template>
+      <div class="fill status">
+        <p class="count" role="status">
+          <template v-if="catalog.enabled && store.listed">{{
+            t('home.families', { count: store.total })
+          }}</template>
+        </p>
+        <!-- The date gives way first: it shortens, the full text in its tooltip, so it never
+             pushes a button out of the bar in a long language. -->
+        <span class="refreshed" data-testid="catalog-refreshed" :title="refreshedLabel">{{
+          refreshedLabel
+        }}</span>
+        <UiIconButton
+          icon="rescan"
+          data-testid="catalog-refresh"
+          :label="store.refreshing ? t('catalogs.refreshing') : t('catalogs.refresh')"
+          :title="t('catalogs.refreshTitle', { name: catalog.name })"
+          :disabled="!catalog.enabled || store.refreshing"
+          @click="store.refresh()"
+        />
+        <UiIconButton
+          icon="updateCheck"
+          data-testid="catalog-check-updates"
+          :label="store.checking ? t('catalogs.updates.checking') : t('catalogs.updates.check')"
+          :title="t('catalogs.updates.checkTitle')"
+          :disabled="!catalog.enabled || store.checking || store.refreshing"
+          @click="store.checkUpdates()"
+        />
       </div>
-      <span class="refreshed" data-testid="catalog-refreshed">{{
-        refreshedAt
-          ? t('catalogs.refreshedAt', { date: refreshedAt })
-          : t('catalogs.neverRefreshed')
-      }}</span>
-      <UiButton
-        data-testid="catalog-refresh"
-        :title="t('catalogs.refreshTitle', { name: catalog.name })"
-        :disabled="!catalog.enabled || store.refreshing"
-        @click="store.refresh()"
-      >
-        {{ store.refreshing ? t('catalogs.refreshing') : t('catalogs.refresh') }}
-      </UiButton>
-      <UiButton
-        data-testid="catalog-check-updates"
-        :title="t('catalogs.updates.checkTitle')"
-        :disabled="!catalog.enabled || store.checking || store.refreshing"
-        @click="store.checkUpdates()"
-      >
-        {{ store.checking ? t('catalogs.updates.checking') : t('catalogs.updates.check') }}
-      </UiButton>
-    </header>
+    </AppToolbar>
     <p v-if="store.checkError" class="banner error" role="alert" data-testid="catalog-updates">
       {{ errorMessage(store.checkError) }}
     </p>
@@ -236,7 +251,7 @@ const surfaceClass = computed(() =>
       @close="downloadClosed"
     />
     <CatalogInstall v-if="store.install && store.install.catalog === catalog.id" />
-    <PreviewControls :view="CATALOG_VIEW" :mode="mode" inline-size />
+    <PreviewControls :view="CATALOG_VIEW" :mode="mode" />
 
     <div v-if="!catalog.enabled" class="empty" data-testid="catalog-off">
       <p>{{ t('catalogs.off', { name: catalog.name }) }}</p>
@@ -299,50 +314,30 @@ const surfaceClass = computed(() =>
   flex-direction: column;
   min-height: 0;
 }
-/* Wraps onto a second line in a narrow center (the inspector open below ~1,280 px,
-   a longer language), so Refresh and the date never fall outside the column. */
-.toolbar {
+/* The catalog's row of the bar: the count, the date, Refresh and Check for updates. As tall
+   as the library's filter row, so a bar wrapped to two rows is the same height in both (the
+   28 px buttons stand 2 px into the bar's padding and gap). */
+.status {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  box-sizing: border-box;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--fm-border);
+  gap: var(--fm-space-1);
+  height: 24px;
 }
-.title {
-  margin: 0;
-  font-size: var(--fm-text-md);
-  font-weight: 600;
-}
-.title,
 .count,
 .refreshed {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fm-muted);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.search {
-  flex: 0 1 220px;
-  width: 220px;
-  min-width: 120px;
-  padding: 4px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
 .count {
-  flex: 1;
-  margin: 0;
-  color: var(--fm-muted);
-}
-.modes {
-  display: flex;
-  gap: 4px;
+  flex: 0 1 auto;
 }
 .refreshed {
-  color: var(--fm-muted);
+  flex: 0 1 auto;
+  margin-inline-start: auto;
   font-size: var(--fm-text-xs);
 }
 .banner {
