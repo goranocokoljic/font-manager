@@ -21,7 +21,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { loadConfig, gh, ghJson, parseArgs, isMain } from './lib.mjs';
+import { loadConfig, gh, ghJson, parseArgs, isMain, withLight } from './lib.mjs';
 import { blocking, changesNative } from '../bench/lib.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -97,7 +97,9 @@ function jobLog(id) {
 
 async function waitFor(sha, names, cfg, deadline, pr = null, opts = {}) {
   for (;;) {
-    const runs = checkRuns(sha, opts);
+    // The light job (a PR with harness scripts and developer docs only) stands
+    // in for the OS jobs ci.yml skipped.
+    const runs = withLight(checkRuns(sha, opts), names, opts.light);
     const found = names.map((n) => ({ want: n, run: matchCheck(n, runs) }));
     // No run yet and the PR conflicts with main: GitHub will never start one.
     if (pr && found.every((f) => !f.run) && mergeable(pr) === 'CONFLICTING') return 'conflict';
@@ -159,7 +161,7 @@ async function main() {
   if (!existsSync('.github/workflows/ci.yml')) {
     verdict = { status: 'no-ci', sha, checks: [], failed: [], bench: null, note: '.github/workflows/ci.yml does not exist (E1.2 not merged?)' };
   } else {
-    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number);
+    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number, { light: cfg.ci.light_check });
     if (found === 'conflict') {
       verdict = { status: 'conflict', sha, checks: [], failed: [], bench: null, note: 'the PR conflicts with main, so no CI runs' };
     } else if (!found) {
@@ -170,6 +172,8 @@ async function main() {
       }));
       const failed = checks
         .filter((c) => c.conclusion !== 'success' && c.conclusion !== 'missing' && c.id)
+        // One red light job stands for three required checks: report it once.
+        .filter((c, i, all) => all.findIndex((k) => k.id === c.id) === i)
         .map((c) => ({ name: c.name, os: c.os, url: c.url, excerpt: excerpt(jobLog(c.id)) }));
       const infra = failed.map((c) => infraReason(annotations(checks.find((k) => k.name === c.name).id))).find(Boolean);
       verdict = infra

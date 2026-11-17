@@ -1,6 +1,12 @@
 # CI matrix: the judge for every story. A story is done only when all three
 # jobs are green — a Windows-only pass is not a pass.
 #
+# One exception, the light path: a change that touches only harness scripts and
+# developer docs (scripts/harness/ci-scope.mjs decides) cannot break the app, so
+# it runs the `light` job alone (ESLint and the script tests on Linux) and the
+# three OS jobs are skipped. go-harness reads `ci / light` in their place
+# (go-harness.config.json `ci.light_check`).
+#
 # Check names are "windows", "macos" and "linux" (go-harness matches them as
 # `ci / windows` ... in go-harness.config.json `ci.required_checks`).
 name: ci
@@ -17,6 +23,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,8 +31,51 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
+  # light or full, from the changed files. Anything it cannot tell is full.
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: node scripts/harness/ci-scope.mjs >> "$GITHUB_OUTPUT"
+
+  light:
+    name: light
+    needs: scope
+    if: needs.scope.outputs.scope == 'light'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm exec eslint .
+
+      - name: Script tests (harness, bench, release, docs, community)
+        run: pnpm test:scripts
+
   check:
     name: ${{ matrix.name }}
+    needs: scope
+    # A failed scope job must not skip the judge: only an explicit "light" does.
+    if: ${{ !cancelled() && needs.scope.outputs.scope != 'light' }}
     runs-on: ${{ matrix.os }}
     # 90, not 60: the Windows job needs ~53 min on an ordinary runner now and
     # passed 60 on a slow one (PR #569: every step ~30 % slower, cancelled
