@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <UiPopover :open="open" :anchor="null" :at="at" @close="close">
+  <UiPopover :open="open" :anchor="null" :at="at" over @close="close">
     <div
       v-if="open"
       class="menu"

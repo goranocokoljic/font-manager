@@ -168,3 +168,24 @@ test('the shortcuts themselves are untouched', async ({ page }) => {
   await expect.poll(() => clipboard(page)).toBe('Grumpy wizards');
   await expect(menu(page)).toHaveCount(0);
 });
+
+test('a text field inside a popover keeps its popover while a menu item runs', async ({ page }) => {
+  // The foundry picker is a popover; a press on the text menu is not a press outside it.
+  await page.goto('/?mockLibrary=wall#/');
+  const nav = page.getByRole('navigation', { name: 'Library' });
+  await nav.getByRole('button', { name: 'Foundries', exact: true }).click();
+  await page.locator('#fm-foundries-list').getByTestId('all-foundries').click();
+  const f = page.getByRole('searchbox', { name: 'Find a foundry' });
+  await f.fill('Grumpy wizards');
+  await f.selectText();
+  await openMenu(page, f);
+  await item(page, 'Copy').click();
+  await expect.poll(() => clipboard(page)).toBe('Grumpy wizards');
+  await expect(page.getByTestId('foundry-picker')).toBeVisible();
+  await expect(f).toBeFocused();
+
+  await openMenu(page, f);
+  await item(page, 'Cut').click();
+  await expect(f).toHaveValue('');
+  await expect(page.getByTestId('foundry-picker')).toBeVisible();
+});

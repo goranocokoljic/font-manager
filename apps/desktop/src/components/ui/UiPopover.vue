@@ -21,8 +21,14 @@ const props = withDefaults(
      * still gives the reading direction, and a press on it still does not close the layer.
      */
     at?: { x: number; y: number } | null;
+    /**
+     * A layer over the others (the text fields' menu, E54.2): a press inside it does not close
+     * the other open layers, so a text field inside a popover keeps its popover while its menu
+     * runs.
+     */
+    over?: boolean;
   }>(),
-  { matchWidth: false, at: null },
+  { matchWidth: false, at: null, over: false },
 );
 // `placed`: the layer is visible, so an owner that moves the focus into it can do so now.
 const emit = defineEmits<{ close: []; placed: [] }>();
@@ -71,6 +77,8 @@ function onPointerDown(e: PointerEvent): void {
   // The anchor's own label is part of it: a click there toggles, it does not close first.
   const own = props.anchor?.closest('label') ?? props.anchor;
   if (layer.value?.contains(target) || own?.contains(target)) return;
+  const el = target instanceof Element ? target : target.parentElement;
+  if (el?.closest('[data-ui-popover-over]')) return;
   emit('close');
 }
 function onScroll(e: Event): void {
@@ -120,7 +128,14 @@ onBeforeUnmount(() => listen(false));
 <template>
   <Teleport to="body">
     <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
-      <div v-if="open" ref="layer" class="ui-popover" data-ui-popover :style="style">
+      <div
+        v-if="open"
+        ref="layer"
+        class="ui-popover"
+        data-ui-popover
+        :data-ui-popover-over="over ? '' : undefined"
+        :style="style"
+      >
         <slot />
       </div>
     </FmSlide>
@@ -145,5 +160,10 @@ onBeforeUnmount(() => listen(false));
   font-family: var(--fm-font-ui);
   font-size: var(--fm-text-md);
   line-height: var(--fm-leading);
+}
+/* A layer over the others (the text fields' menu) is drawn above them: the popover its field
+   is in was opened earlier and sits at the same level. */
+.ui-popover[data-ui-popover-over] {
+  z-index: calc(var(--fm-z-popover) + 1);
 }
 </style>

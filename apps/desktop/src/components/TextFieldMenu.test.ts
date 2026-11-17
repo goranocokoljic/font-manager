@@ -1,7 +1,9 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent, h, ref } from 'vue';
 import { setClient } from '../api/client';
 import { createMockClient } from '../api/mock';
+import UiPopover from './ui/UiPopover.vue';
 import TextFieldMenu from './TextFieldMenu.vue';
 
 let wrapper: VueWrapper | undefined;
@@ -187,5 +189,42 @@ describe('TextFieldMenu', () => {
     const layer = document.querySelector<HTMLElement>('[data-ui-popover]');
     expect(layer?.style.left).toBe('120px');
     expect(layer?.style.top).toBe('94px');
+  });
+  it('a press on an item does not close a popover the field is in', async () => {
+    document.body.innerHTML = '<button id="anchor">open</button>';
+    setClient(createMockClient());
+    const hostOpen = ref(true);
+    const Host = defineComponent(
+      () => () =>
+        h(
+          UiPopover,
+          {
+            open: hostOpen.value,
+            anchor: document.getElementById('anchor'),
+            onClose: () => (hostOpen.value = false),
+          },
+          () => h('input', { id: 'inner', type: 'search', value: 'Grumpy wizards' }),
+        ),
+    );
+    const host = mount(Host, { attachTo: document.body });
+    wrapper = mount(TextFieldMenu, { attachTo: document.body });
+    await flushPromises();
+    const field = document.getElementById('inner') as HTMLInputElement;
+    field.focus();
+    field.setSelectionRange(0, 6);
+    await rightClick(field);
+    const copy = item('Copy')!;
+    copy.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(hostOpen.value).toBe(true);
+    copy.click();
+    await flushPromises();
+    expect(exec).toHaveBeenCalledWith('copy', false, undefined);
+    expect(document.activeElement).toBe(field);
+    // A press elsewhere still closes the host.
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(hostOpen.value).toBe(false);
+    host.unmount();
   });
 });
