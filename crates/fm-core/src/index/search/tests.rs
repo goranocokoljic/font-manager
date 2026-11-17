@@ -1556,13 +1556,19 @@ fn languages_filter_keeps_faces_that_cover_every_language() {
     assert_eq!(misses(&res), [full("Full")], "AND: both scripts");
     assert_eq!(
         styles(&index, &res, "Full"),
-        ["Regular", "Bold"],
-        "the Bold lacks one letter: a near miss, after the Regular"
+        ["Regular"],
+        "the Bold lacks one letter (ж): not a result (E54.4)"
     );
     let res = filtered(&index, "", languages(&["sr-Cyrl"]));
-    assert_eq!(misses(&res), [full("Full"), ("Almost", "ђћ".to_owned())]);
+    assert_eq!(
+        misses(&res),
+        [full("Full")],
+        "Almost lacks ђћ: no near miss for a language"
+    );
+    let res = filtered(&index, "latin", languages(&["sr-Latn"]));
+    assert_eq!(names(&res), ["Latin"], "text and coverage combine");
     let res = filtered(&index, "almost", languages(&["sr-Cyrl"]));
-    assert_eq!(names(&res), ["Almost"], "text and coverage combine");
+    assert!(res.families.is_empty(), "{:?}", names(&res));
 }
 
 #[test]
@@ -1603,13 +1609,8 @@ fn near_misses_list_the_exact_missing_characters() {
     let res = filtered(&index, "", languages(&["en"]));
     assert_eq!(
         misses(&res),
-        [
-            full("Almost"),
-            full("Full"),
-            full("Latin"),
-            ("Five", "vwxyz".to_owned()),
-        ],
-        "complete families first; six missing is not a result"
+        [full("Almost"), full("Full"), full("Latin")],
+        "a language has no near misses: Five (lacks five) is not a result (E54.4)"
     );
     let res = filtered(&index, "", text("ж"));
     assert_eq!(
@@ -1649,7 +1650,8 @@ fn locl_is_reported_for_the_chosen_language() {
     };
     assert_eq!(
         locl(languages(&["sr-Cyrl"])),
-        [("Full".to_owned(), true), ("Almost".to_owned(), true)]
+        [("Full".to_owned(), true)],
+        "Almost lacks ђћ: not a result"
     );
     assert_eq!(
         locl(languages(&["sr-Latn"])),
@@ -1706,7 +1708,7 @@ fn an_unknown_language_is_refused() {
 #[test]
 fn counts_keep_the_supports_filter() {
     let index = coverage_library();
-    let res = filtered(&index, "", languages(&["sr-Cyrl"]));
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
     let counts = res.counts.expect("counts");
     assert_eq!(
         counts.weight,
@@ -1720,17 +1722,30 @@ fn counts_keep_the_supports_filter() {
                 count: 1
             }
         ],
-        "Full and Almost pass; Latin, Five and Six are not counted"
+        "Full (both styles) and Latin pass; Almost, Five and Six are not counted"
     );
     let res = filtered(
         &index,
         "",
         Filters {
             weight: Some(WeightRange { min: 650, max: 750 }),
-            ..languages(&["sr-Cyrl"])
+            ..languages(&["sr-Latn"])
         },
     );
     assert_eq!(names(&res), ["Full"]);
+    // E54.4: the counts follow the exact rule. Almost lacks ђћ and the Full
+    // Bold lacks ж: neither is counted for sr-Cyrl.
+    let counts = filtered(&index, "", languages(&["sr-Cyrl"]))
+        .counts
+        .expect("counts");
+    assert_eq!(
+        counts.weight,
+        [FilterCount {
+            value: 400,
+            count: 1
+        }],
+        "only the Full Regular has every sr-Cyrl letter"
+    );
 }
 
 const OFL_TEXT: &str =

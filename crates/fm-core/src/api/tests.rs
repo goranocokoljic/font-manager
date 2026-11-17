@@ -6653,6 +6653,124 @@ fn a_serbian_brief_returns_only_families_covering_sr_cyrl_and_sr_latn() {
     assert_eq!(lib.fetcher.calls(), 0, "no network");
 }
 
+/// E54.4: one missing letter disqualifies a face for a language, on the
+/// fixtures. Neuton Light lacks Ć Đ ć đ, Nosifer lacks only đ; Barlow has
+/// all 62 base characters of sr-Latn, hr and bs. Pasted text keeps its
+/// near-miss allowance, and the coverage report still lists every gap.
+#[test]
+fn a_language_filter_drops_a_face_missing_one_letter_on_the_fixtures() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-exact-language",
+        &[
+            "google-repo/neuton/Neuton-Light.ttf",
+            "google-repo/nosifer/Nosifer-Regular.ttf",
+        ],
+    );
+    let search = |supports: Supports| -> Vec<(String, Vec<String>)> {
+        lib.api
+            .search(SearchRequest {
+                filters: Filters {
+                    supports: Some(supports),
+                    ..Filters::default()
+                },
+                ..SearchRequest::default()
+            })
+            .expect("search")
+            .families
+            .into_iter()
+            .map(|h| {
+                let lacks = h.missing.map(|m| m.chars).unwrap_or_default();
+                (h.family.name, lacks)
+            })
+            .collect()
+    };
+    let languages = |code: &str| Supports::Languages {
+        codes: vec![code.to_owned()],
+    };
+    for code in ["sr-Latn", "hr", "bs"] {
+        let hits = search(languages(code));
+        let names: Vec<&str> = hits.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(!names.contains(&"Neuton"), "{code}: {names:?}");
+        assert!(
+            !names.contains(&"Nosifer"),
+            "{code}: lacks one letter: {names:?}"
+        );
+        assert!(names.contains(&"Barlow"), "{code}: has all 62: {names:?}");
+        assert!(
+            hits.iter().all(|(_, lacks)| lacks.is_empty()),
+            "{code}: no near miss: {hits:?}"
+        );
+    }
+    // Pasted text keeps today's rule: lacking four of it is still a result.
+    let hits = search(Supports::Text {
+        text: "Ćć Đđ Šš".into(),
+    });
+    let neuton = hits.iter().find(|(n, _)| n == "Neuton").expect("near miss");
+    assert_eq!(neuton.1, ["Ć", "ć", "Đ", "đ"], "ascending code points");
+    // A smart collection with a language rule counts the same way.
+    let smart = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Serbian".into(),
+            parent: None,
+            rules: Some(Filters {
+                supports: Some(languages("sr-Latn")),
+                ..Filters::default()
+            }),
+            rule_group: None,
+            color: None,
+        })
+        .expect("smart");
+    let count = lib
+        .api
+        .list_collections()
+        .expect("collections")
+        .into_iter()
+        .find(|c| c.id == smart.id)
+        .expect("listed")
+        .face_count;
+    let exact = lib
+        .api
+        .search(SearchRequest {
+            filters: Filters {
+                supports: Some(languages("sr-Latn")),
+                ..Filters::default()
+            },
+            ..SearchRequest::default()
+        })
+        .expect("search")
+        .families
+        .iter()
+        .map(|h| h.faces.len())
+        .sum::<usize>();
+    assert_eq!(count as usize, exact, "the smart count is the exact count");
+    // The brief workflow leaves them out too.
+    let res = lib
+        .api
+        .pick_fonts_for_brief(brief("anything", &["sr-Latn"], Some(50)))
+        .expect("brief");
+    let names: Vec<&str> = res
+        .candidates
+        .iter()
+        .map(|c| c.family.name.as_str())
+        .collect();
+    assert!(
+        !names.contains(&"Neuton") && !names.contains(&"Nosifer"),
+        "{names:?}"
+    );
+    assert!(names.contains(&"Barlow"), "{names:?}");
+    // The coverage report is unchanged: it lists every missing character.
+    let report = lib
+        .api
+        .check_coverage(CoverageRequest {
+            face: FaceId(lib.family("Neuton").id.0),
+            target: languages("sr-Latn"),
+        })
+        .expect("report");
+    assert_eq!(report.missing, ["Ć", "ć", "Đ", "đ"]);
+    assert!(!report.complete);
+}
+
 #[test]
 fn brief_words_rank_by_class_tags_and_names_with_license_reasons() {
     let (lib, _, _) = Lib::scanned("api-brief-rank");

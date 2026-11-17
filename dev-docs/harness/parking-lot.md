@@ -499,3 +499,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E51.5 #603] apps/desktop/src/components/SourcesSidebar.vue:104 — sidebar row buttons use `size="sm"` (24 px targets) though rows are now always 30 px; the 24 px rationale no longer applies.
 - [E51.2 #600] apps/desktop/src/components/FilterChips.vue:504 — a spilled chip (`visibility: hidden`) cannot be reached by keyboard and the "+N" drawer does not list the foundry, renders-text or new-fonts chips; "Clear all" is the only way to remove them.
 - [E51.2 #600] apps/desktop/src/stores/libraryViews.ts:51 — the active sidebar view is judged from `search.filters` alone and ignores the narrowings outside `Filters` (foundry, now the watcher's "only these faces").
+
+## 2026-11-17
+
+- [E54.4 #614] apps/desktop/e2e/wall-text.spec.ts:86 — the E43.3 "N of M families render your text completely" line and its hide switch send a pasted-text rule, which fm-core lets through with up to 5 missing characters, so "completely" overstates in the real app (open question in ADR 0024).
+- [E54.4 #614] crates/fm-core/src/coverage.rs:478 — same root cause seen from the core: the pasted-text near miss counts a face lacking up to 5 characters as rendering the text.
+- [E54.4 #614] crates/fm-core/src/api.rs:1693 — the brief's `!m.chars.is_empty()` skip can no longer trigger for a language search; harmless dead branch.
+- [E54.4 #614] apps/desktop/src/api/mock.ts:1674 — language presets in `mockLanguages` but not in `MOCK_PRESETS` (de, fr, el, mt) still pass by script, not by their letters.

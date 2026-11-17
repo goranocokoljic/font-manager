@@ -27,7 +27,7 @@ answer.
 | `fm scan [folder]` | Add the folder to the library and scan it. Without a folder, scan every folder of the library. Progress goes to stderr. A folder that fails to scan does not stop the others; `fm` then exits with the code of the first failure. |
 | `fm list` | List the families |
 | `fm list --family <font>` | List the faces of a family |
-| `fm search [words] [--supports sr-Cyrl,sr-Latn] [--feature smcp] [--variable] [--trait R.leg=straight]` | Find families. With `--supports`, show the characters each family misses. `--trait` asks for a letter shape: `R.leg=straight` (a value) or `O.roundness>=0.95` (a measure). Repeat it for more. A font that does not have the letter is left out. |
+| `fm search [words] [--supports sr-Cyrl,sr-Latn] [--feature smcp] [--variable] [--trait R.leg=straight]` | Find families. With `--supports`, show only the families that have every letter of each language; a family that lacks one letter is left out. `--trait` asks for a letter shape: `R.leg=straight` (a value) or `O.roundness>=0.95` (a measure). Repeat it for more. A font that does not have the letter is left out. |
 | `fm traits` | List the letter shapes that `--trait` can ask for, with how many fonts have each value. The app measures the shapes after a scan. |
 | `fm info <font>` | Show a font: names, styles, axes, features, scripts and license |
 | `fm coverage <font> --text "..."` | Check that a font has every character of the text. Exits with code 5 when a character is missing. `--supports <languages>` checks languages instead. |

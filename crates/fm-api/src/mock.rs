@@ -259,8 +259,18 @@ fn self_reference(c: &Collection) -> ApiError {
     ))
 }
 
-/// Near-misses within this many characters still show in a coverage search.
+/// Near-misses within this many characters of a pasted text still show in a
+/// coverage search; a language allows none (E54.4), as fm-core's `Need`.
 const NEAR_MISS: usize = 5;
+
+/// How many characters of `target` a face may lack and still pass the
+/// `supports` filter: none for languages, [`NEAR_MISS`] for pasted text.
+fn allowance(target: &Supports) -> usize {
+    match target {
+        Supports::Languages { .. } => 0,
+        Supports::Text { .. } => NEAR_MISS,
+    }
+}
 
 /// The largest page a list returns.
 const MAX_PAGE: u32 = 500;
@@ -1348,7 +1358,7 @@ impl State {
                 Rule::Filters { filters } => {
                     self.matches(f, filters, path)?
                         && match &filters.supports {
-                            Some(target) => self.coverage(f, target)?.0.len() <= NEAR_MISS,
+                            Some(target) => self.coverage(f, target)?.0.len() <= allowance(target),
                             None => true,
                         }
                 }
@@ -2329,7 +2339,7 @@ impl State {
                 }
                 if let Some(target) = &filters.supports {
                     let (missing, per) = self.coverage(f, target)?;
-                    if missing.len() > NEAR_MISS {
+                    if missing.len() > allowance(target) {
                         continue;
                     }
                     if best_missing

@@ -12,9 +12,12 @@
 //! filter. The same pass counts the results of every filter value.
 //!
 //! The `supports` filter (E3.8) checks each face's `cmap` against the
-//! characters asked for ([`Need`]). A face that lacks at most
-//! [`NEAR_MISS`](crate::coverage::NEAR_MISS) of them is still a result: it lists what it lacks, and its
-//! family ranks after the families with a complete face.
+//! characters asked for ([`Need`]), by two rules (E54.4, ADR 0024). For
+//! language presets it is exact: a face that lacks one base character is no
+//! result and counts under no filter value. For a pasted text, a face that
+//! lacks at most [`NEAR_MISS`](crate::coverage::NEAR_MISS) of its characters
+//! is still a result: it lists what it lacks, and its family ranks after the
+//! families with a complete face.
 //!
 //! Faces of files that are gone or of paused sources are not searched.
 //!
