@@ -10,6 +10,20 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `/` | Go to the search box |
 | `Ctrl+,` | Open the settings (also in the File menu, in the Font Fu menu on a Mac, in the tray menu and in the status bar) |
 
+## In a text field
+
+The search box, the preview text, a name you rename, the notes, the settings: every text
+field has the usual keys. Right-click a text field (or press the `Menu` key or
+`Shift+F10`) for the same commands in a menu: **Cut**, **Copy**, **Paste** and
+**Select all**. In the menu, use `Up` and `Down` to choose, `Enter` to run, `Esc` to close.
+
+| Key | What it does |
+|-----|--------------|
+| `Ctrl+X` | Cut the selected text |
+| `Ctrl+C` | Copy the selected text |
+| `Ctrl+V` | Paste |
+| `Ctrl+A` | Select all the text in the field |
+
 ## In the font list
 
 | Key | What it does |

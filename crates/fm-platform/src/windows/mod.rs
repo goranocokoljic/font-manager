@@ -9,6 +9,9 @@ mod activator;
 #[cfg(windows)]
 mod autostart;
 #[cfg(windows)]
+#[allow(unsafe_code)] // Clipboard and global memory calls; every block has a SAFETY note.
+pub(crate) mod clipboard;
+#[cfg(windows)]
 #[allow(unsafe_code)] // Shell, OLE and clipboard calls; every block has a SAFETY note.
 pub(crate) mod drag;
 #[cfg(windows)]

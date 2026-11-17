@@ -38,6 +38,9 @@ const session: Record<string, string> = JSON.parse(process.env.FM_SCREENS_SESSIO
 const click = process.env.FM_SCREENS_CLICK;
 // FM_SCREENS_OPEN=Language opens the Select (a combobox) of that name, so its menu is in the shot.
 const openSelect = process.env.FM_SCREENS_OPEN;
+// FM_SCREENS_TEXT_MENU='Search fonts' types in that text field, selects a word and right-clicks it,
+// so the text fields' own menu (E54.2) is in the shot.
+const textMenu = process.env.FM_SCREENS_TEXT_MENU;
 // FM_SCREENS_PIN=3 pins the first 3 list rows with C and opens Compare; FM_SCREENS_PIN_MODE=Overlay picks a mode.
 const pinRows = Number(process.env.FM_SCREENS_PIN ?? 0);
 const pinMode = process.env.FM_SCREENS_PIN_MODE;
@@ -356,6 +359,18 @@ test.describe('@screens', () => {
               await page.getByRole('combobox', { name: openSelect, exact: true }).first().click();
               await expect(page.getByRole('listbox').first()).toBeVisible();
               // The menu fades in (120 ms); the shot waits for it to settle.
+              await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
+            }
+            if (textMenu) {
+              const field = page
+                .getByRole('textbox', { name: textMenu })
+                .or(page.getByRole('searchbox', { name: textMenu }));
+              await field.first().fill('Grumpy wizards');
+              await field.first().evaluate((el: HTMLInputElement) => el.setSelectionRange(0, 6));
+              const box = (await field.first().boundingBox())!;
+              await field
+                .first()
+                .click({ button: 'right', position: { x: 40, y: box.height / 2 } });
               await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
             }
             if (hoverRow) {

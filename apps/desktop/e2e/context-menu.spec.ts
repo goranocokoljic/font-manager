@@ -48,15 +48,22 @@ async function rightClickDoesNothing(page: Page, target: Locator) {
 const setMode = (page: Page, name: string) =>
   page.getByRole('group', { name: 'View mode' }).getByRole('button', { name, exact: true }).click();
 
-test('a right-click on the list, the sidebar, the toolbar and a text field does nothing', async ({
-  page,
-}) => {
+test('a right-click on the list, the sidebar and the toolbar does nothing', async ({ page }) => {
   await open(page);
   const tree = page.getByRole('tree', { name: 'Font list' });
   await rightClickDoesNothing(page, tree.getByRole('treeitem').first());
   await rightClickDoesNothing(page, page.getByRole('navigation', { name: 'Library' }));
   await rightClickDoesNothing(page, page.locator('header.toolbar'));
-  await rightClickDoesNothing(page, page.getByRole('searchbox', { name: 'Search fonts' }));
+});
+
+test("a right-click in a text field shows the app's text menu, never the webview's", async ({
+  page,
+}) => {
+  await open(page);
+  // E54.2: Cut, Copy, Paste and Select all, the app's own.
+  await page.getByRole('searchbox', { name: 'Search fonts' }).click({ button: 'right' });
+  expect(await takeMenus(page)).toEqual([true]);
+  await expect(page.getByRole('menu', { name: 'Edit text' })).toBeVisible();
 });
 
 test('the Menu key and Shift+F10 (a keyboard context menu) are cancelled too', async ({ page }) => {

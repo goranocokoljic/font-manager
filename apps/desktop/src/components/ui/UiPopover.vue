@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// A floating layer under its anchor (over it when there is no room below). It lives in
+// A floating layer under its anchor (over it when there is no room below), or at a point
+// (`at`: a context menu opens at the pointer, E54.2). It lives in
 // <body>, so no scrolling pane clips it; a pointer press outside it or a scroll elsewhere
 // asks the owner to close it; a resize moves it with its anchor. The owner keeps the focus and handles the keys —
 // the layer never takes focus, so the dialogs' focus guards never see it leave.
@@ -14,8 +15,14 @@ const props = withDefaults(
     anchor: HTMLElement | null;
     /** The layer is at least as wide as its anchor. */
     matchWidth?: boolean;
+    /**
+     * A point in the window (client pixels) to open at instead of under the anchor: the
+     * layer's corner is at the point, below it or above it as there is room. The anchor
+     * still gives the reading direction, and a press on it still does not close the layer.
+     */
+    at?: { x: number; y: number } | null;
   }>(),
-  { matchWidth: false },
+  { matchWidth: false, at: null },
 );
 // `placed`: the layer is visible, so an owner that moves the focus into it can do so now.
 const emit = defineEmits<{ close: []; placed: [] }>();
@@ -32,8 +39,8 @@ const MAX_HEIGHT = 320;
 function place(): void {
   const anchor = props.anchor;
   const el = layer.value;
-  if (!anchor || !el) return;
-  const r = anchor.getBoundingClientRect();
+  const r = props.at ? pointRect(props.at) : anchor?.getBoundingClientRect();
+  if (!el || !r) return;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const below = vh - r.bottom - GAP - MARGIN;
@@ -43,7 +50,7 @@ function place(): void {
   const flip = wanted > below && above > below;
   const maxHeight = Math.max(MIN_HEIGHT, Math.min(wanted, MAX_HEIGHT, flip ? above : below));
   const width = Math.max(el.offsetWidth, props.matchWidth ? r.width : 0);
-  const rtl = getComputedStyle(anchor).direction === 'rtl';
+  const rtl = getComputedStyle(anchor ?? document.documentElement).direction === 'rtl';
   const wantedLeft = rtl ? r.right - width : r.left;
   const left = Math.min(Math.max(MARGIN, wantedLeft), Math.max(MARGIN, vw - width - MARGIN));
   const s: Record<string, string> = { left: `${left}px`, maxHeight: `${maxHeight}px` };
@@ -51,6 +58,11 @@ function place(): void {
   if (flip) s.bottom = `${vh - r.top + GAP}px`;
   else s.top = `${r.bottom + GAP}px`;
   style.value = s;
+}
+
+/** A point as an empty rectangle, so the layer opens at it as it opens at an anchor. */
+function pointRect(p: { x: number; y: number }) {
+  return { left: p.x, right: p.x, top: p.y, bottom: p.y, width: 0 };
 }
 
 function onPointerDown(e: PointerEvent): void {
@@ -94,6 +106,13 @@ watch(
     if (props.open) emit('placed');
   },
   { immediate: true },
+);
+// A new point while open (a second right-click): the layer moves there.
+watch(
+  () => props.at,
+  () => {
+    if (props.open) place();
+  },
 );
 onBeforeUnmount(() => listen(false));
 </script>

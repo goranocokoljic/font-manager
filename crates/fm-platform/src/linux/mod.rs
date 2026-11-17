@@ -11,6 +11,8 @@
 mod activator;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod autostart;
+#[cfg(target_os = "linux")]
+pub(crate) mod clipboard;
 #[cfg(unix)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod fontconfig;

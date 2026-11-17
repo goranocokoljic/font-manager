@@ -421,6 +421,12 @@ export interface FmClient {
    */
   printPage(): Promise<void>;
   /**
+   * The text on the system clipboard, for the text fields' Paste item (E54.2): the app
+   * reads it natively, since the webview may not read the clipboard without asking.
+   * Empty when the clipboard holds no text.
+   */
+  readClipboardText(): Promise<string>;
+  /**
    * Tells the native shell (Help menu, tray) which catalog locale the UI shows, so
    * its labels follow the Language setting.
    */
@@ -573,6 +579,7 @@ export const tauriClient: FmClient = {
   openHelp: (page) => invoke<void>('open_help', { page }),
   openUrl: (url) => invoke<void>('open_url', { url }),
   printPage: () => invoke<void>('print_page'),
+  readClipboardText: () => invoke<string>('read_clipboard_text'),
   setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
   onShellNavigate: (handler) => listen<string>(SHELL_NAVIGATE, (e) => handler(e.payload)),
   updateSupport: () => invoke<UpdateSupport>('update_support'),

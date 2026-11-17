@@ -4,12 +4,13 @@
 //! implementation per OS under `src/{windows,macos,linux}/`, the app-paths
 //! helpers, the file-system calls that differ per OS (symbolic links, the
 //! trash), the tray, the login entry, the default browser, how the app was installed (updates),
-//! the PDF printer, the file drag out of the window and the IPC transport. Platform differences are
+//! the PDF printer, the file drag out of the window, the clipboard read and the IPC transport. Platform differences are
 //! documented in an ADR, never hidden in `cfg` branches elsewhere.
 
 pub mod activator;
 pub mod autostart;
 pub mod browser;
+pub mod clipboard;
 pub mod drag;
 pub mod fs;
 pub mod ipc;
@@ -32,6 +33,7 @@ pub use activator::{
 };
 pub use autostart::{AUTOSTART_ARG, Autostart, MockAutostart};
 pub use browser::{OpenCommand, OpenUrlError, open_url};
+pub use clipboard::ClipboardError;
 pub use drag::{DragError, DragSupport, FileDrag, MockFileDrag};
 pub use ipc::{IpcCloser, IpcListener, IpcName, IpcStream};
 #[cfg(target_os = "linux")]

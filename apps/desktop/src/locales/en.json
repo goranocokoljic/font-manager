@@ -903,6 +903,13 @@
     "title": "Color palette",
     "numbered": "Palette {number}"
   },
+  "textMenu": {
+    "label": "Edit text",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "selectAll": "Select all"
+  },
   "glyphs": {
     "noFace": "Select a face to see its glyphs.",
     "search": "Search glyphs",
