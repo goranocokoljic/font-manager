@@ -289,3 +289,146 @@ fn the_floor_is_half_alike_and_unlike_pairs_fall_below_it() {
     assert!(compare(&a, &b).score < MIN_SCORE);
     assert!(compare(&a, &a.clone()).score >= MIN_SCORE);
 }
+
+// ---- The agreed pairs: fixtures/similar/expected.json (E54.12) ----
+
+/// One face of the agreed pairs: a file of `fixtures/fonts`.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgreedFace {
+    family: String,
+    file: String,
+}
+
+/// One reference of the agreed pairs with the faces a person put near and far.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgreedReference {
+    family: String,
+    file: String,
+    class: String,
+    note: String,
+    near: Vec<AgreedFace>,
+    far: Vec<AgreedFace>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgreedPairs {
+    #[serde(rename = "$schema")]
+    schema: String,
+    about: String,
+    references: Vec<AgreedReference>,
+}
+
+const AGREED_CLASSES: [&str; 6] = ["display", "mono", "sans", "script", "serif", "slab"];
+
+/// E54.12: the file a person wrote is one the ranking test (E54.13) can read:
+/// the shape the schema gives, real fixture fonts, and no face on both sides.
+#[test]
+fn the_agreed_pairs_are_well_formed() {
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read =
+        |p: &str| std::fs::read_to_string(repo.join(p)).unwrap_or_else(|e| panic!("{p}: {e}"));
+    let pairs: AgreedPairs =
+        serde_json::from_str(&read("fixtures/similar/expected.json")).expect("expected.json");
+
+    // The schema and this reader agree on the shape.
+    let schema: serde_json::Value =
+        serde_json::from_str(&read("fixtures/similar/expected.schema.json")).expect("schema");
+    let sorted = |v: &serde_json::Value| -> Vec<String> {
+        let mut k: Vec<String> = v
+            .as_array()
+            .expect("array")
+            .iter()
+            .map(|s| s.as_str().expect("string").to_owned())
+            .collect();
+        k.sort();
+        k
+    };
+    assert_eq!(schema["properties"]["$schema"]["const"], pairs.schema);
+    assert_eq!(schema["additionalProperties"], false);
+    assert_eq!(
+        sorted(&schema["required"]),
+        ["$schema", "about", "references"]
+    );
+    let min = schema["properties"]["references"]["minItems"]
+        .as_u64()
+        .expect("minItems");
+    assert_eq!(min, 20);
+    let face = &schema["$defs"]["face"];
+    assert_eq!(face["additionalProperties"], false);
+    assert_eq!(sorted(&face["required"]), ["family", "file"]);
+    let reference = &schema["$defs"]["reference"];
+    assert_eq!(reference["additionalProperties"], false);
+    assert_eq!(
+        sorted(&reference["required"]),
+        ["class", "family", "far", "file", "near", "note"]
+    );
+    assert_eq!(
+        sorted(&reference["properties"]["class"]["enum"]),
+        AGREED_CLASSES
+    );
+
+    // The file itself.
+    assert!(!pairs.about.trim().is_empty());
+    assert!(
+        pairs.references.len() as u64 >= min,
+        "at least {min} references"
+    );
+    let manifest = read("fixtures/fonts/manifest.tsv");
+    let known: BTreeSet<&str> = manifest
+        .lines()
+        .skip(1)
+        .filter_map(|l| l.split('\t').nth(4))
+        .collect();
+    let check = |f: &str, family: &str| {
+        assert!(!family.trim().is_empty(), "{f}: no family name");
+        assert!(
+            known.contains(f),
+            "{f} is not in fixtures/fonts/manifest.tsv"
+        );
+        let ext = f.rsplit('.').next().unwrap_or_default();
+        assert!(
+            ["ttf", "otf", "woff", "woff2"].contains(&ext),
+            "{f}: not a format every reader of the file can load"
+        );
+    };
+    let mut references = BTreeSet::new();
+    let mut classes = BTreeSet::new();
+    for r in &pairs.references {
+        check(&r.file, &r.family);
+        assert!(
+            references.insert(r.file.as_str()),
+            "{} is a reference twice",
+            r.file
+        );
+        assert!(
+            AGREED_CLASSES.contains(&r.class.as_str()),
+            "{}: class {}",
+            r.file,
+            r.class
+        );
+        classes.insert(r.class.as_str());
+        assert!(!r.note.trim().is_empty(), "{}: no note", r.file);
+        assert!(
+            !r.near.is_empty() && !r.far.is_empty(),
+            "{}: near and far",
+            r.file
+        );
+        let mut seen = BTreeSet::from([r.file.as_str()]);
+        for f in r.near.iter().chain(&r.far) {
+            check(&f.file, &f.family);
+            assert!(
+                seen.insert(f.file.as_str()),
+                "{}: {} is listed twice or is the reference",
+                r.file,
+                f.file
+            );
+        }
+    }
+    assert_eq!(classes.into_iter().collect::<Vec<_>>(), AGREED_CLASSES);
+}
