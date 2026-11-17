@@ -515,3 +515,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E54.5 #615] apps/desktop/src/components/PreviewControls.vue:45 — the `inlineSize` prop has no caller left; only PreviewControls.test.ts:366 uses it.
 - [E54.5 #615] apps/desktop/src/views/HomeView.vue:631 — in a narrow column the library's filter chips row is moved down with `order: 1`, so its Tab order differs from its reading order.
 - [E54.2 #612] apps/desktop/src/styles/theme.css:128 — in dark mode the accent ring (#ab4b96) is ~2.5:1 against the hover tint and ~3.0:1 against --fm-surface-2, so the inset-ring-on-hover menu pattern (FamilyCharacters .menu) is under 3:1 on its inner edge.
+- [E54.6 #616] crates/fm-core/src/catalog.rs:140 — `cached_preview` never invalidates a preview file when a catalog refresh brings a newer family version; the new per-file `cmaps` cache inherits that staleness.
+- [E54.6 #616] apps/desktop/src/components/FontPreviewRow.vue:271 — the "fallback" badge names itself with `aria-label` on a role-less span, which some screen readers skip (CatalogFamilyItem now copies the pattern).
+- [E54.6 #616] apps/desktop/src/styles/theme.css:573 — `.fm-missing-glyphs` (65 % accent / 35 % foreground, xs text) is borderline for AA contrast in the dark theme.
