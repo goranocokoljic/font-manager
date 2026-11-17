@@ -518,3 +518,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E54.6 #616] crates/fm-core/src/catalog.rs:140 — `cached_preview` never invalidates a preview file when a catalog refresh brings a newer family version; the new per-file `cmaps` cache inherits that staleness.
 - [E54.6 #616] apps/desktop/src/components/FontPreviewRow.vue:271 — the "fallback" badge names itself with `aria-label` on a role-less span, which some screen readers skip (CatalogFamilyItem now copies the pattern).
 - [E54.6 #616] apps/desktop/src/styles/theme.css:573 — `.fm-missing-glyphs` (65 % accent / 35 % foreground, xs text) is borderline for AA contrast in the dark theme.
+- [E54.8 #618] apps/desktop/src/components/FamilyText.vue:65 — the family page Text section always forces surface-light/surface-dark (Paper by default), so in the dark theme it never draws on the theme surface; confirm whether criterion 2's "family page" covers it.
+- [E54.8 #618] apps/desktop/src/stores/familyPage.ts:64 — `textGround` defaults to 'paper' whatever the theme; same root cause as the line above.
+- [E54.8 #618] crates/fm-core/src/api/tests/watching.rs:227 — `sources_added_paused_resumed_and_removed_change_what_is_watched` flaked on the Linux runner (no watcher event in 10 s for a font copied into a newly added source); may race inotify registration under load.
