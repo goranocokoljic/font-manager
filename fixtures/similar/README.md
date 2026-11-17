@@ -40,5 +40,6 @@ who took out the references and the near faces that were related but not alike.
 3. Add the reference to `references` with its `class`, a `note` that says what the eye goes by,
    and at least one `near` and one `far` face. To add a face to a reference that exists, put it
    in that reference's `near` or `far` list.
-4. Run `cargo nextest run -p fm-core similar`. The ranking test (E54.13) fails when the score
+4. Run `cargo nextest run -p fm-core similar`. The ranking test
+   (`every_near_face_ranks_above_every_far_face`, E54.13) fails when the score
    disagrees with the new pair: then the pair or the score is wrong, and a person decides.

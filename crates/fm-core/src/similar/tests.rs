@@ -180,13 +180,21 @@ fn close_classes_count_half() {
     assert!((classes(Serif, Slab) - CLOSE_CLASSES).abs() < f32::EPSILON);
     assert!((classes(Mono, Sans) - CLOSE_CLASSES).abs() < f32::EPSILON);
     assert!((classes(Slab, Slab) - 1.0).abs() < f32::EPSILON);
-    for (x, y) in [(Serif, Sans), (Slab, Mono), (Script, Serif), (Display, Sans)] {
+    for (x, y) in [
+        (Serif, Sans),
+        (Slab, Mono),
+        (Script, Serif),
+        (Display, Sans),
+    ] {
         assert!(classes(x, y) < f32::EPSILON, "{x:?} {y:?}");
     }
     let serif = profile(Serif, Some(print(0.3)));
     let score = |c| compare(&serif, &profile(c, Some(print(0.3)))).score;
     assert!(score(Serif) > score(Slab) && score(Slab) > score(Sans));
-    assert_eq!(score(Slab), compare(&profile(Slab, Some(print(0.3))), &serif).score);
+    assert_eq!(
+        score(Slab),
+        compare(&profile(Slab, Some(print(0.3))), &serif).score
+    );
 }
 
 #[test]
@@ -503,7 +511,11 @@ fn agreed_profile(file: &str) -> Profile {
     let (mut parsed, sfnt) = crate::parser::parse_keeping_sfnt(&data);
     let sfnt = sfnt.into_owned();
     crate::fingerprint::fill_sfnt(&sfnt, &mut parsed);
-    let face = parsed.faces.into_iter().next().unwrap_or_else(|| panic!("{file}: no face"));
+    let face = parsed
+        .faces
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("{file}: no face"));
     let fingerprint = match face.fingerprint {
         crate::fingerprint::FaceFingerprint::Taken(f) => Some(f),
         _ => None,
@@ -558,6 +570,12 @@ fn every_near_face_ranks_above_every_far_face() {
             }
         }
     }
-    assert!(wrong.is_empty(), "{}", wrong.join("
-"));
+    assert!(
+        wrong.is_empty(),
+        "{}",
+        wrong.join(
+            "
+"
+        )
+    );
 }
