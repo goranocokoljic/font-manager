@@ -182,13 +182,69 @@ describe('an empty section', () => {
 });
 
 describe('tags', () => {
-  it('are chips that keep their count for screen readers and in the tooltip', async () => {
+  it('are chip buttons that keep their count in the accessible name and the tooltip', async () => {
     const { w } = await mountIt(TagsSidebar, { faceTags: { 1: ['display'], 6: ['display'] } });
-    const chip = w.get('li[data-tag="display"]');
-    expect(chip.classes()).toContain('chip');
+    const chip = w.get('li[data-tag="display"] button.chip');
+    expect(chip.attributes('type')).toBe('button');
     expect(chip.attributes('title')).toBe('2 fonts');
+    expect(chip.attributes('aria-pressed')).toBe('false');
+    expect(chip.get('.count').text()).toBe('2 fonts');
     expect(chip.get('.count').attributes('aria-label')).toBe('2 fonts');
     expect(chip.get('.count').classes()).toContain('sr-only');
+  });
+
+  it('filter the list on a click, combine, and a second click takes one off (E54.3)', async () => {
+    const { w, client } = await mountIt(TagsSidebar, {
+      faceTags: { 1: ['display'], 6: ['display', 'body'] },
+    });
+    const ids = Object.fromEntries((await client.listTags()).map((t) => [t.name, t.id]));
+    const chip = (name: string) => w.get(`li[data-tag="${name}"] button.chip`);
+    const search = useSearchStore();
+
+    await chip('display').trigger('click');
+    expect(search.filters.tags).toEqual([ids.display]);
+    expect(chip('display').attributes('aria-pressed')).toBe('true');
+    expect(chip('body').attributes('aria-pressed')).toBe('false');
+
+    await chip('body').trigger('click');
+    expect(search.filters.tags).toEqual([ids.display, ids.body]);
+    expect(chip('body').attributes('aria-pressed')).toBe('true');
+
+    await chip('display').trigger('click');
+    expect(search.filters.tags).toEqual([ids.body]);
+    expect(chip('display').attributes('aria-pressed')).toBe('false');
+
+    // The Filters popover's chips clear it: the sidebar lets go of the tag too.
+    search.setFilters({});
+    await flushPromises();
+    expect(chip('body').attributes('aria-pressed')).toBe('false');
+  });
+
+  it('move the focus with the arrow keys, Home and End, and stop at the ends', async () => {
+    const { w } = await mountIt(TagsSidebar, {
+      faceTags: { 1: ['alpha', 'beta', 'gamma'] },
+    });
+    const buttons = () => w.findAll('button.chip').map((b) => b.element as HTMLElement);
+    const focused = () => buttons().indexOf(document.activeElement as HTMLElement);
+    buttons()[0]!.focus();
+    await w.get('button.chip').trigger('keydown', { key: 'ArrowRight' });
+    expect(focused()).toBe(1);
+    await w.findAll('button.chip')[1]!.trigger('keydown', { key: 'ArrowDown' });
+    expect(focused()).toBe(2);
+    await w.findAll('button.chip')[2]!.trigger('keydown', { key: 'ArrowRight' });
+    expect(focused()).toBe(2);
+    await w.findAll('button.chip')[2]!.trigger('keydown', { key: 'Home' });
+    expect(focused()).toBe(0);
+    await w.findAll('button.chip')[0]!.trigger('keydown', { key: 'ArrowLeft' });
+    expect(focused()).toBe(0);
+    await w.findAll('button.chip')[0]!.trigger('keydown', { key: 'End' });
+    expect(focused()).toBe(2);
+    await w.findAll('button.chip')[2]!.trigger('keydown', { key: 'ArrowUp' });
+    expect(focused()).toBe(1);
+    // A key the list does not use leaves the focus, and the filter, alone.
+    await w.findAll('button.chip')[1]!.trigger('keydown', { key: 'a' });
+    expect(focused()).toBe(1);
+    expect(useSearchStore().filters.tags).toBeUndefined();
   });
 });
 

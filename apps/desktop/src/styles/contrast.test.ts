@@ -434,6 +434,7 @@ describe('the accent in the style sheets', () => {
     ['activate button', 'components/InspectorInfo.vue', '.activate'],
     ['count badge', 'components/ui/UiBadge.vue', '.tone-accent'],
     ['pressed chip', 'components/FilterChips.vue', ".chip[aria-pressed='true']"],
+    ['pressed tag', 'components/TagsSidebar.vue', ".chip[aria-pressed='true']"],
     ['toast action', 'components/ToastMessage.vue', '.action'],
     ['active segment', 'components/ui/UiSegmentedControl.vue', ".seg[aria-pressed='true']"],
     ['active Compare mode', 'components/CompareSheet.vue', '.mode:has(input:checked)'],
