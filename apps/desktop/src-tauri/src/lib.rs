@@ -560,6 +560,27 @@ async fn start_file_drag<R: Runtime>(
     Ok(files)
 }
 
+/// The text on the system clipboard, for the Paste item of the text fields'
+/// own menu (E54.2, ADR 0025): read natively on the UI thread, since the
+/// webview may not read the clipboard without asking. Empty when the
+/// clipboard holds no text.
+#[tauri::command]
+async fn read_clipboard_text<R: Runtime>(app: AppHandle<R>) -> ApiResult<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let failed = |detail: String| {
+        ApiError::new(ErrorCode::Internal, "The clipboard could not be read.").with_detail(detail)
+    };
+    app.run_on_main_thread(move || {
+        let _ = tx.send(fm_platform::clipboard::read_text());
+    })
+    .map_err(|e| failed(e.to_string()))?;
+    tauri::async_runtime::spawn_blocking(move || rx.recv())
+        .await
+        .map_err(|e| failed(e.to_string()))?
+        .map_err(|e| failed(e.to_string()))?
+        .map_err(|e| failed(e.0))
+}
+
 /// One page of families.
 #[tauri::command]
 async fn list_families(
@@ -1543,6 +1564,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             glyph_styles,
             font_switch_payload,
             start_file_drag,
+            read_clipboard_text,
             list_families,
             get_family,
             search,

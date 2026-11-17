@@ -13,6 +13,10 @@ ignore = [
   # Tauri 2 uses on Linux (gtk3-macros) and no safe upgrade exists. Revisit when
   # Tauri moves its Linux backend off gtk-rs 0.18.
   { id = "RUSTSEC-2024-0370", reason = "transitive via the Tauri 2 Linux GTK3 stack; no fix available" },
+  # chrono was declared unmaintained (2026-11). It comes in only through rmcp
+  # (fm-mcp) and its schemars dependency; no maintained release exists. Revisit
+  # when rmcp drops it.
+  { id = "RUSTSEC-2026-0543", reason = "transitive via rmcp/schemars (fm-mcp); no fix available" },
 ]
 
 [licenses]

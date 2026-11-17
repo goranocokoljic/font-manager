@@ -4737,6 +4737,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     printPage: async () => {
       if (typeof window !== 'undefined') window.print();
     },
+    // Browser mode: the browser's own clipboard (a test grants the permission).
+    readClipboardText: async () => {
+      if (typeof navigator === 'undefined' || !navigator.clipboard) return '';
+      return navigator.clipboard.readText();
+    },
     // Browser mode has no native menu or tray to relabel; the last locale is kept
     // so tests can see what the shell was told.
     setShellLocale: async (locale) => {

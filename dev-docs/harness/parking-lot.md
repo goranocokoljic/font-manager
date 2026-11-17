@@ -514,3 +514,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E54.5 #615] apps/desktop/src/views/HomeView.vue:452 — the 1–5 view-mode actions always set ALL_FONTS_VIEW, so in a catalog they change the hidden library mode, not the catalog's switch (3 and 5 even though they are off there).
 - [E54.5 #615] apps/desktop/src/components/PreviewControls.vue:45 — the `inlineSize` prop has no caller left; only PreviewControls.test.ts:366 uses it.
 - [E54.5 #615] apps/desktop/src/views/HomeView.vue:631 — in a narrow column the library's filter chips row is moved down with `order: 1`, so its Tab order differs from its reading order.
+- [E54.2 #612] apps/desktop/src/styles/theme.css:128 — in dark mode the accent ring (#ab4b96) is ~2.5:1 against the hover tint and ~3.0:1 against --fm-surface-2, so the inset-ring-on-hover menu pattern (FamilyCharacters .menu) is under 3:1 on its inner edge.

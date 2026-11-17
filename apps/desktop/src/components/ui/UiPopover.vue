@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// A floating layer under its anchor (over it when there is no room below). It lives in
+// A floating layer under its anchor (over it when there is no room below), or at a point
+// (`at`: a context menu opens at the pointer, E54.2). It lives in
 // <body>, so no scrolling pane clips it; a pointer press outside it or a scroll elsewhere
 // asks the owner to close it; a resize moves it with its anchor. The owner keeps the focus and handles the keys —
 // the layer never takes focus, so the dialogs' focus guards never see it leave.
@@ -14,8 +15,20 @@ const props = withDefaults(
     anchor: HTMLElement | null;
     /** The layer is at least as wide as its anchor. */
     matchWidth?: boolean;
+    /**
+     * A point in the window (client pixels) to open at instead of under the anchor: the
+     * layer's corner is at the point, below it or above it as there is room. The anchor
+     * still gives the reading direction, and a press on it still does not close the layer.
+     */
+    at?: { x: number; y: number } | null;
+    /**
+     * A layer over the others (the text fields' menu, E54.2): a press inside it does not close
+     * the other open layers, so a text field inside a popover keeps its popover while its menu
+     * runs.
+     */
+    over?: boolean;
   }>(),
-  { matchWidth: false },
+  { matchWidth: false, at: null, over: false },
 );
 // `placed`: the layer is visible, so an owner that moves the focus into it can do so now.
 const emit = defineEmits<{ close: []; placed: [] }>();
@@ -32,8 +45,8 @@ const MAX_HEIGHT = 320;
 function place(): void {
   const anchor = props.anchor;
   const el = layer.value;
-  if (!anchor || !el) return;
-  const r = anchor.getBoundingClientRect();
+  const r = props.at ? pointRect(props.at) : anchor?.getBoundingClientRect();
+  if (!el || !r) return;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const below = vh - r.bottom - GAP - MARGIN;
@@ -43,7 +56,7 @@ function place(): void {
   const flip = wanted > below && above > below;
   const maxHeight = Math.max(MIN_HEIGHT, Math.min(wanted, MAX_HEIGHT, flip ? above : below));
   const width = Math.max(el.offsetWidth, props.matchWidth ? r.width : 0);
-  const rtl = getComputedStyle(anchor).direction === 'rtl';
+  const rtl = getComputedStyle(anchor ?? document.documentElement).direction === 'rtl';
   const wantedLeft = rtl ? r.right - width : r.left;
   const left = Math.min(Math.max(MARGIN, wantedLeft), Math.max(MARGIN, vw - width - MARGIN));
   const s: Record<string, string> = { left: `${left}px`, maxHeight: `${maxHeight}px` };
@@ -53,12 +66,19 @@ function place(): void {
   style.value = s;
 }
 
+/** A point as an empty rectangle, so the layer opens at it as it opens at an anchor. */
+function pointRect(p: { x: number; y: number }) {
+  return { left: p.x, right: p.x, top: p.y, bottom: p.y, width: 0 };
+}
+
 function onPointerDown(e: PointerEvent): void {
   const target = e.target;
   if (!(target instanceof Node)) return;
   // The anchor's own label is part of it: a click there toggles, it does not close first.
   const own = props.anchor?.closest('label') ?? props.anchor;
   if (layer.value?.contains(target) || own?.contains(target)) return;
+  const el = target instanceof Element ? target : target.parentElement;
+  if (el?.closest('[data-ui-popover-over]')) return;
   emit('close');
 }
 function onScroll(e: Event): void {
@@ -95,13 +115,27 @@ watch(
   },
   { immediate: true },
 );
+// A new point while open (a second right-click): the layer moves there.
+watch(
+  () => props.at,
+  () => {
+    if (props.open) place();
+  },
+);
 onBeforeUnmount(() => listen(false));
 </script>
 
 <template>
   <Teleport to="body">
     <FmSlide from="bottom" distance="4px" speed="fast" reduced="fade">
-      <div v-if="open" ref="layer" class="ui-popover" data-ui-popover :style="style">
+      <div
+        v-if="open"
+        ref="layer"
+        class="ui-popover"
+        data-ui-popover
+        :data-ui-popover-over="over ? '' : undefined"
+        :style="style"
+      >
         <slot />
       </div>
     </FmSlide>
@@ -126,5 +160,10 @@ onBeforeUnmount(() => listen(false));
   font-family: var(--fm-font-ui);
   font-size: var(--fm-text-md);
   line-height: var(--fm-leading);
+}
+/* A layer over the others (the text fields' menu) is drawn above them: the popover its field
+   is in was opened earlier and sits at the same level. */
+.ui-popover[data-ui-popover-over] {
+  z-index: calc(var(--fm-z-popover) + 1);
 }
 </style>
