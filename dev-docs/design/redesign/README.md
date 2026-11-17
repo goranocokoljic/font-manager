@@ -12,7 +12,7 @@ Boards 1, 2 and 3 have several states. Each state is a Tweak, so an export is re
 3. **Share › Export** the board as PNG at 2× and save it under the file name in the table.
 4. Put the files in this folder; fill in the export date at the bottom.
 
-Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak; boards 9–11 have one, three and one.
+Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak; boards 9–11 have one, three and one. Board 12 (Preview options) is 1120 px wide, so its exports are 2240 px; its two popover files are the popover alone, cropped (848 px).
 
 ## The files
 
@@ -50,9 +50,14 @@ Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare
 | `10-characters-popover.png` | 10 | state = Popover | the glyph details popover, no metrics | E50.9 |
 | `10-characters-compare.png` | 10 | state = Compare metrics | Compare with Inter on: the metrics row and the ghosted glyph | E50.9 |
 | `11-sources.png` | 11 · Settings: Sources | scanning = on | source cards, one scanning, one missing, the drop zone | E50.13 |
+| `12-preview-options-open.png` | 12 · Preview options | theme = Paper, preset = Pangram | the popover open under its toolbar button on the wall: Text, Size and spacing, Guides; no colour controls | E54.7, E54.8 |
+| `12-preview-options-inactive.png` | 12 | theme = Paper, preset = Word | Line height faded, with the line "No effect while the preview is a single line." under it | E54.7, E54.8 |
+| `12-preview-options-dark.png` | 12 | theme = Dark, preset = Pangram | the same popover in the dark theme | E54.7, E54.8 |
+| `12-preview-options-popover.png` | 12 | theme = Paper, popover only | the popover alone, for the pixel comparison | E54.7, E54.8 |
+| `12-preview-options-popover-dark.png` | 12 | theme = Dark, popover only | the popover alone in the dark theme | E54.7, E54.8 |
 
 A UI story is reviewed against its image, not against the previous screenshot. The boards show
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15).
+Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17).

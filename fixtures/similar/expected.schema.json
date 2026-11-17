@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/fixtures/similar/expected.schema.json",
+  "title": "Font Fu: the agreed pairs for Similar",
+  "description": "For each reference face of the fixture corpus (fixtures/fonts): the faces a person says should rank near it and the faces that should rank far from it. expected.json follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "about", "references"],
+  "properties": {
+    "$schema": { "const": "./expected.schema.json" },
+    "about": { "type": "string", "minLength": 1 },
+    "references": {
+      "description": "At least 20 references; no file is a reference twice.",
+      "type": "array",
+      "minItems": 20,
+      "items": { "$ref": "#/$defs/reference" }
+    }
+  },
+  "$defs": {
+    "face": {
+      "description": "One face: the default instance of a file of fixtures/fonts.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "file"],
+      "properties": {
+        "family": { "description": "The family name, for the reader.", "type": "string", "minLength": 1 },
+        "file": {
+          "description": "The path under fixtures/fonts, as fixtures/fonts/manifest.tsv lists it.",
+          "type": "string",
+          "pattern": "^[^/\\\\]+(/[^/\\\\]+)+\\.(ttf|otf|woff|woff2)$"
+        }
+      }
+    },
+    "reference": {
+      "description": "A reference face. Every near face must rank above every far face. A file is in near or in far, never in both, and never the reference itself.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "file", "class", "note", "near", "far"],
+      "properties": {
+        "family": { "type": "string", "minLength": 1 },
+        "file": {
+          "type": "string",
+          "pattern": "^[^/\\\\]+(/[^/\\\\]+)+\\.(ttf|otf|woff|woff2)$"
+        },
+        "class": {
+          "description": "What a designer would call the reference. It groups the file for the reader; it is not the app's classification.",
+          "enum": ["serif", "sans", "slab", "script", "display", "mono"]
+        },
+        "note": { "description": "Why these faces: what the eye goes by.", "type": "string", "minLength": 1 },
+        "near": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/face" } },
+        "far": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/face" } }
+      }
+    }
+  }
+}

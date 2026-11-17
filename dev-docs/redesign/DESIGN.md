@@ -95,8 +95,25 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   it. The one exception is Compare's overlay, which needs two data colours
   (`--fm-compare-0/1`) to tell faces apart. (Amended in review 5.)
 - **Dialog scrim:** `--fm-scrim`, never a literal. (Added in review 5.)
-- **Specimen area:** neutral background, no border; preview colour follows the theme unless
-  the user overrides it; previews honour the `font-feature-settings` chosen in Features.
+- **Specimen area:** neutral background, no border; preview colour always follows the theme
+  (no override, see Preview options); previews honour the `font-feature-settings` chosen in
+  Features.
+- **Preview options (board 12, E54.7, E54.8):** one `UiPopover` under the toolbar's options
+  button, with a title, a Reset text button and a small live specimen at the top. Three groups,
+  each under a small-caps heading and divided by a hairline, in this order:
+  **Text** — Sample (`UiSelect`) and Align (`UiSegmentedControl`, three icon segments);
+  **Size and spacing** — Size (px), Auto size (`UiSegmentedControl`: Off / x-height / Cap
+  height), Line height, Tracking (em); **Guides** — Metric lines and Outlines, each a toggle
+  with a one-line description under its label. Size, Line height and Tracking are sliders with
+  a `UiNumberField` at the row's end (the unit, if any, after the field); the slider and the
+  field show the same value, and the field saves on `commit`. A control that has no effect in
+  the current view mode stays in its place, disabled and faded (slider, field and label), with
+  one quiet line under it that says why ("No effect while the preview is a single line."); it
+  is never hidden, so the popover does not change height between view modes. There are no
+  colour controls at all: no Text colour, no Background, no Surface. Preview colours come from
+  the theme: every preview draws in the theme's text colour on the theme's surface. The slider
+  knob follows the one-accent rule above; the blue knob in the exports is the canvas browser's
+  default, not a second colour.
 - **Letters (match by letters, board 8, E49):** the letters in the preview field are the
   controls: a letter that has traits carries a hairline underline, a letter with a value
   chosen carries an accent underline, and the field's right edge says what to do ("click an
