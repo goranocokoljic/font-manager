@@ -677,6 +677,32 @@ pub struct SimilarFace {
     pub reasons: Vec<String>,
 }
 
+/// Why [`SearchService::find_similar_answer`] found no similar face (E54.11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SimilarEmpty {
+    /// The reference face has no glyph fingerprint (it does not draw the
+    /// Latin sample the comparison measures: a symbol, icon or non-Latin
+    /// face, or one that could not be drawn), so it cannot be compared.
+    NotMeasured,
+    /// No face is close enough to call similar.
+    NoneClose,
+}
+
+/// The faces that look like one face, or why there are none (E54.11).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarAnswer {
+    /// The similar faces, closest first: what `find_similar` returns.
+    pub faces: Vec<SimilarFace>,
+    /// Set when `faces` is empty: why.
+    #[serde(default)]
+    pub empty: Option<SimilarEmpty>,
+    /// `empty` in plain words, for the UI to show as it is.
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
 /// Faces that look like the text in an image (E33.1): a screenshot of a line
 /// of text, matched against the glyph fingerprints of the library.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -793,8 +819,14 @@ pub trait SearchService {
     /// The language presets a text may be in, best first, from its letters
     /// outside ASCII. Empty for a text without such letters.
     fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>>;
-    /// Faces ranked by visual similarity.
+    /// Faces ranked by visual similarity, closest first, at most `limit`.
+    /// Only faces with a glyph fingerprint are ranked, symbol faces only for
+    /// a symbol face, and a face too far to call similar is left out, so the
+    /// list can be empty (E54.11).
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>>;
+    /// [`Self::find_similar`]'s list, and when it is empty the reason, in a
+    /// code and in plain words (E54.11).
+    fn find_similar_answer(&self, req: SimilarRequest) -> ApiResult<SimilarAnswer>;
     /// Faces ranked by how close they look to the text in an image, closest
     /// first, at most `limit`; only faces with a glyph fingerprint are
     /// candidates. An image that is not a readable PNG, or shows no text, is

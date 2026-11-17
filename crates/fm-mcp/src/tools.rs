@@ -671,7 +671,7 @@ pub fn list() -> Vec<Tool> {
         ),
         tool::<FaceLimitInput>(
             FIND_SIMILAR,
-            "Faces that look like one face, closest first, with plain-word reasons.",
+            "Faces that look like one face, closest first, with plain-word reasons. Only faces with a glyph fingerprint are ranked, never an icon or symbol face for a text face, and weak matches are left out: an empty list comes with `empty` and a `message` that says why.",
         ),
         tool::<FaceLimitInput>(
             GET_PAIRINGS,
@@ -1027,11 +1027,16 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
         }
         FIND_SIMILAR => {
             let a: FaceLimitInput = args(name, value)?;
-            let similar = api.find_similar(SimilarRequest {
+            let answer = api.find_similar_answer(SimilarRequest {
                 face: FaceId(a.face_id),
                 limit: a.limit.unwrap_or(DEFAULT_LIMIT),
             })?;
-            Ok(json!({ "similar": to_json(&similar)? }))
+            let mut out = json!({ "similar": to_json(&answer.faces)? });
+            if let (Some(empty), Some(message)) = (answer.empty, answer.message) {
+                out["empty"] = to_json(&empty)?;
+                out["message"] = json!(message);
+            }
+            Ok(out)
         }
         GET_PAIRINGS => {
             let a: FaceLimitInput = args(name, value)?;

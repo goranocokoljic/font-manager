@@ -2,9 +2,14 @@
 //!
 //! The candidates are the searchable faces (files that are not gone, sources
 //! that are not paused), less the face asked about and every face of its
-//! family as search groups it. Each is scored with
-//! [`crate::similar::compare`] and the best `limit` come back, closest
-//! first; equal scores keep face-id order, so a ranking never flickers.
+//! family as search groups it, and less every face
+//! [`crate::similar::candidate`] turns down: one without a glyph
+//! fingerprint, or a symbol face for a text face and the other way round
+//! (E54.11). Each is scored with [`crate::similar::compare`]; those below
+//! [`crate::similar::MIN_SCORE`] are dropped and the best `limit` come back,
+//! closest first; equal scores keep face-id order, so a ranking never
+//! flickers. A reference without a fingerprint finds nothing, and
+//! [`Index::find_similar_answer`] says why.
 //!
 //! The profiles are read once per database change, with the search rows
 //! ([`super::SearchCache`]): a search after that is a pass over memory.
@@ -13,7 +18,7 @@ use std::collections::HashMap;
 
 use fm_api::FaceId;
 use fm_api::common::{Classification, Metrics};
-use fm_api::search::{SimilarFace, SimilarRequest};
+use fm_api::search::{SimilarAnswer, SimilarEmpty, SimilarFace, SimilarRequest};
 
 use super::{Index, Row, db_error, name_of};
 use crate::error::{FmError, FmResult};
@@ -35,21 +40,56 @@ SELECT face.id, face.weight, face.width, face.metrics,
 FROM face
 LEFT JOIN face_fingerprint AS fp ON fp.face_id = face.id";
 
+/// [`SimilarEmpty::NotMeasured`] in plain words.
+pub const NOT_MEASURED_MESSAGE: &str = "This font cannot be compared: it does not draw the      Latin letters the comparison measures (an icon, symbol or non-Latin font).";
+/// [`SimilarEmpty::NoneClose`] in plain words.
+pub const NONE_CLOSE_MESSAGE: &str = "No font in the library looks close enough to this one.";
+
 impl Index {
     /// The visible faces that look most like `req.face`, closest first, at
     /// most `req.limit`; never the face itself or a face of its family. An
     /// unknown face is `NotFound`.
     pub fn find_similar(&self, req: &SimilarRequest) -> FmResult<Vec<SimilarFace>> {
+        Ok(self.find_similar_answer(req)?.faces)
+    }
+
+    /// [`Index::find_similar`]'s list, and the reason when it is empty: the
+    /// reference has no fingerprint, or nothing scores
+    /// [`similar::MIN_SCORE`] or more.
+    pub fn find_similar_answer(&self, req: &SimilarRequest) -> FmResult<SimilarAnswer> {
         let me = self.face_summary(req.face)?;
         let mine = family_key(&me.family_name);
-        self.rank(req.limit, |profiles| {
+        let mut measured = false;
+        let faces = self.rank(req.limit, similar::MIN_SCORE, |profiles| {
             let target = profiles
                 .get(&req.face.0)
-                .ok_or_else(|| FmError::not_found(format!("Face {}", req.face)))?;
+                .ok_or_else(|| FmError::not_found(format!("Face {}", req.face)))?
+                .clone();
+            measured = target.fingerprint.is_some();
+            let reference = target.clone();
             Ok((
-                target.clone(),
-                Box::new(move |r: &Row, _: &Profile| r.id != req.face.0 && r.family_key != mine),
+                target,
+                Box::new(move |r: &Row, p: &Profile| {
+                    r.id != req.face.0 && r.family_key != mine && similar::candidate(&reference, p)
+                }),
             ))
+        })?;
+        let empty = match (faces.is_empty(), measured) {
+            (false, _) => None,
+            (true, false) => Some(SimilarEmpty::NotMeasured),
+            (true, true) => Some(SimilarEmpty::NoneClose),
+        };
+        let message = empty.map(|e| {
+            match e {
+                SimilarEmpty::NotMeasured => NOT_MEASURED_MESSAGE,
+                SimilarEmpty::NoneClose => NONE_CLOSE_MESSAGE,
+            }
+            .to_owned()
+        });
+        Ok(SimilarAnswer {
+            faces,
+            empty,
+            message,
         })
     }
 
@@ -67,7 +107,7 @@ impl Index {
             shapes_only: print.shapes_only,
             ..Profile::default()
         };
-        self.rank(limit, move |_| {
+        self.rank(limit, 0.0, move |_| {
             Ok((
                 target,
                 Box::new(|_: &Row, p: &Profile| p.fingerprint.is_some()),
@@ -76,11 +116,12 @@ impl Index {
     }
 
     /// The searchable faces `keep` accepts, scored against the target
-    /// `pick` chooses from the profiles, best `limit` first; equal scores
-    /// in face-id order.
+    /// `pick` chooses from the profiles, those scoring `floor` or more, best
+    /// `limit` first; equal scores in face-id order.
     fn rank<'a>(
         &self,
         limit: u32,
+        floor: f32,
         pick: impl FnOnce(&HashMap<u32, Profile>) -> FmResult<(Profile, Keep<'a>)>,
     ) -> FmResult<Vec<SimilarFace>> {
         self.refresh_search_cache()?;
@@ -99,6 +140,7 @@ impl Index {
                     let profile = profiles.get(&r.id)?;
                     keep(r, profile).then(|| (r.id, similar::compare(&target, profile)))
                 })
+                .filter(|(_, found)| found.score >= floor)
                 .collect();
             ranked.sort_by(|a, b| b.1.score.total_cmp(&a.1.score).then(a.0.cmp(&b.0)));
             ranked.truncate(limit as usize);

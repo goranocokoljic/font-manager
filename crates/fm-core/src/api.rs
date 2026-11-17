@@ -80,8 +80,9 @@ use fm_api::preview::{
 use fm_api::search::{
     CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters, FoundryInfo,
     GlyphTraitInfo, ImageMatchRequest, LanguageHint, LanguagePreset, MergeFoundriesRequest,
-    PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace,
-    SimilarGlyphFace, SimilarGlyphRequest, SimilarRequest, Supports, UnmergeFoundryRequest,
+    PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarAnswer,
+    SimilarFace, SimilarGlyphFace, SimilarGlyphRequest, SimilarRequest, Supports,
+    UnmergeFoundryRequest,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
@@ -1094,6 +1095,10 @@ impl SearchService for CoreApi {
 
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
         Ok(self.lock().find_similar(&req)?)
+    }
+
+    fn find_similar_answer(&self, req: SimilarRequest) -> ApiResult<SimilarAnswer> {
+        Ok(self.lock().find_similar_answer(&req)?)
     }
 
     /// Reads and reduces the image before taking the lock; the file is

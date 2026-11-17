@@ -22,7 +22,7 @@ use fm_api::library::{
 use fm_api::organization::{ImportSetResponse, ProjectSet, SetExport};
 use fm_api::preview::PreviewRequest;
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FamilyHit, Filters, SearchRequest, SimilarFace,
+    CoverageReport, CoverageRequest, FamilyHit, Filters, SearchRequest, SimilarAnswer,
     SimilarRequest, Supports, TraitFilter,
 };
 use fm_api::{Api, ApiError, CollectionId, ErrorCode, Event, FaceId, FamilyId};
@@ -262,10 +262,25 @@ pub fn coverage(api: &dyn Api, font: &str, target: Supports) -> Result<CoverageR
     Ok(api.check_coverage(CoverageRequest { face, target })?)
 }
 
-/// `fm similar <font>`: the faces that look most like it.
-pub fn similar(api: &dyn Api, font: &str, limit: u32) -> Result<Vec<SimilarFace>, Failure> {
+/// `fm similar <font>`: the faces that look most like it, or why there are
+/// none (E54.11).
+pub fn similar(api: &dyn Api, font: &str, limit: u32) -> Result<Similar, Failure> {
     let face = resolve(api, font)?.face;
-    Ok(api.find_similar(SimilarRequest { face, limit })?)
+    Ok(Similar(
+        api.find_similar_answer(SimilarRequest { face, limit })?,
+    ))
+}
+
+/// `fm similar`'s answer. `--json` prints the list of faces, as it did
+/// before E54.11 (the same list as `find_similar`); the reason for an empty
+/// list is printed in words.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Similar(pub SimilarAnswer);
+
+impl Serialize for Similar {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.0.faces.serialize(s)
+    }
 }
 
 /// What the argument of `fm activate` and `fm deactivate` names.
