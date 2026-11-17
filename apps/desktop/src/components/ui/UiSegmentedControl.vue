@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends string">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import UiIcon from './UiIcon.vue';
 import type { IconName } from './icons';
 
@@ -9,6 +9,11 @@ export interface SegmentOption<V extends string> {
   label: string;
   /** Icon segment. Omit it for a text segment that shows `label`. */
   icon?: IconName;
+  /**
+   * Set when the choice has no effect here (E51.4): the segment stays in its place, dimmed and
+   * `aria-disabled`, still on the Tab path, and this text is its tooltip and description.
+   */
+  reason?: string;
 }
 
 const props = defineProps<{
@@ -26,6 +31,13 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
 
 const root = ref<HTMLElement | null>(null);
+const uid = useId();
+
+/** A segment that is off does nothing on a click or a key. */
+function choose(o: SegmentOption<T>): void {
+  if (o.reason) return;
+  emit('update:modelValue', o.value);
+}
 /** Where the chosen segment is; null before a layout (the segment then fills itself). */
 const place = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 
@@ -79,16 +91,21 @@ watch(
       :key="o.value"
       type="button"
       class="seg"
-      :class="{ text: !o.icon }"
+      :class="{ text: !o.icon, off: !!o.reason }"
       :data-value="o.value"
       :aria-label="o.label"
-      :title="o.label"
+      :title="o.reason ?? o.label"
       :aria-pressed="modelValue === o.value"
-      @click="emit('update:modelValue', o.value)"
+      :aria-disabled="o.reason ? 'true' : undefined"
+      :aria-describedby="o.reason ? `${uid}-${o.value}-why` : undefined"
+      @click="choose(o)"
     >
       <UiIcon v-if="o.icon" :name="o.icon" />
       <template v-else>{{ o.label }}</template>
     </button>
+    <template v-for="o in options" :key="`why-${o.value}`">
+      <span v-if="o.reason" :id="`${uid}-${o.value}-why`" class="sr-only">{{ o.reason }}</span>
+    </template>
   </div>
 </template>
 
@@ -129,8 +146,13 @@ watch(
   font-size: var(--fm-text-sm);
   white-space: nowrap;
 }
-.seg:hover {
+.seg:not(.off):hover {
   color: var(--fm-fg);
+}
+/* Off (E51.4): the same place and size, at 40 %. */
+.seg.off {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .seg[aria-pressed='true'] {
   background-color: var(--fm-accent);

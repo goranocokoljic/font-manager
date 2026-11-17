@@ -1983,6 +1983,10 @@
     "refreshTitle": "Fetch the list of {name} again from the internet",
     "refreshedAt": "Refreshed {date}",
     "neverRefreshed": "Not refreshed yet",
+    "modeOff": {
+      "table": "Table shows the fonts in your library — a catalog has List, Grid and Waterfall",
+      "layout": "Layout sets the fonts in your library — a catalog has List, Grid and Waterfall"
+    },
     "offline": "Offline - showing the list from {date}",
     "noMatches": "No family matches the search.",
     "empty": "The list is empty. Refresh to fetch it.",

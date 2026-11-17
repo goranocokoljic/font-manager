@@ -65,3 +65,36 @@ describe('UiSegmentedControl thumb (E46.2)', () => {
     expect(w.classes()).not.toContain('sliding');
   });
 });
+
+describe('UiSegmentedControl segment that is off (E51.4, E54.5)', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('keeps an off segment in place, focusable, with its reason, and ignores a press', async () => {
+    const w = mountIt({
+      options: [
+        { value: 'a', label: 'A' },
+        { value: 'b', label: 'B', reason: 'B does nothing here' },
+        { value: 'c', label: 'C' },
+      ],
+    });
+    const segs = w.findAll('.seg');
+    expect(segs).toHaveLength(3);
+    const off = segs[1]!;
+    expect(off.attributes('aria-disabled')).toBe('true');
+    expect(off.attributes('disabled')).toBeUndefined();
+    expect(off.classes()).toContain('off');
+    expect(off.attributes('aria-label')).toBe('B');
+    expect(off.attributes('title')).toBe('B does nothing here');
+    expect(w.get(`[id="${off.attributes('aria-describedby')}"]`).text()).toBe(
+      'B does nothing here',
+    );
+    await off.trigger('click');
+    expect(w.emitted('update:modelValue')).toBeUndefined();
+    await segs[2]!.trigger('click');
+    expect(w.emitted('update:modelValue')).toEqual([['c']]);
+    expect(segs[2]!.attributes('aria-disabled')).toBeUndefined();
+    expect(segs[2]!.attributes('title')).toBe('C');
+  });
+});

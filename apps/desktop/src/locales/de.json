@@ -1983,6 +1983,10 @@
     "refreshTitle": "Die Liste von {name} erneut aus dem Internet laden",
     "refreshedAt": "Aktualisiert {date}",
     "neverRefreshed": "Noch nicht aktualisiert",
+    "modeOff": {
+      "table": "Die Tabelle zeigt die Schriften deiner Bibliothek — ein Katalog hat Liste, Raster und Wasserfall",
+      "layout": "Das Satzbild setzt die Schriften deiner Bibliothek — ein Katalog hat Liste, Raster und Wasserfall"
+    },
     "offline": "Offline - Liste vom {date}",
     "noMatches": "Keine Familie passt zur Suche.",
     "empty": "Die Liste ist leer. Aktualisieren Sie, um sie zu laden.",

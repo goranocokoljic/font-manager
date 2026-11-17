@@ -2,12 +2,17 @@
 // The Adobe Fonts entry of the online catalogs (E22.6): a note and a link, nothing
 // else. Adobe Fonts are encrypted and served by Creative Cloud, so the app does not
 // look for Creative Cloud, list its fonts or call the network; the link opens the
-// site in the default browser.
+// site in the default browser. In the center (`bar`, E54.5) its title sits in the app's top
+// bar, at the library's height and title style, with no control that would have nothing to do.
 import { ref } from 'vue';
 import { useClient } from '../api/client';
 import { errorMessage, t } from '../i18n';
+import AppToolbar from './AppToolbar.vue';
 
-const props = withDefaults(defineProps<{ level?: 1 | 2 | 3 }>(), { level: 2 });
+const props = withDefaults(defineProps<{ level?: 1 | 2 | 3; bar?: boolean }>(), {
+  level: 2,
+  bar: false,
+});
 
 const ADOBE_FONTS_URL = 'https://fonts.adobe.com';
 const heading = `h${props.level}`;
@@ -24,8 +29,19 @@ async function openSite(): Promise<void> {
 </script>
 
 <template>
-  <section class="catalog-note" aria-labelledby="adobe-fonts-title" data-testid="adobe-fonts-note">
-    <component :is="heading" id="adobe-fonts-title" class="name">
+  <section
+    class="catalog-note"
+    :class="{ bar }"
+    aria-labelledby="adobe-fonts-title"
+    data-testid="adobe-fonts-note"
+  >
+    <AppToolbar
+      v-if="bar"
+      bare
+      title-id="adobe-fonts-title"
+      :title="t('catalogs.adobeFonts.name')"
+    />
+    <component :is="heading" v-else id="adobe-fonts-title" class="name">
       {{ t('catalogs.adobeFonts.name') }}
     </component>
     <p class="text">{{ t('catalogs.adobeFonts.note') }}</p>
@@ -46,6 +62,24 @@ async function openSite(): Promise<void> {
 .catalog-note {
   max-width: 60ch;
   padding: 16px;
+}
+/* In the center: the bar spans the column, the note keeps its reading width under it. */
+.catalog-note.bar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  max-width: none;
+  padding: 0;
+}
+.catalog-note.bar > :not(header) {
+  max-width: 60ch;
+  margin-inline: 16px;
+}
+.catalog-note.bar > .text {
+  margin-block-start: 16px;
+}
+.catalog-note.bar > .link {
+  align-self: flex-start;
 }
 .name {
   margin: 0 0 8px;
