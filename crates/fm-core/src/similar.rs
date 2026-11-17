@@ -16,10 +16,16 @@
 //!
 //! The score is the weighted mean of the components, so it stays in
 //! `0.0..=1.0`; a component one face lacks (no class, no fingerprint) counts
-//! as half alike, so a pair compared on little never outranks a pair compared
-//! on everything. Each component close enough names itself in the reasons
-//! ("similar width"). When either face has no fingerprint the pair is
-//! compared by metrics and classification only, and the reasons say so.
+//! as half alike ([`UNKNOWN`]). Each component close enough names itself in
+//! the reasons ("similar width"). When either face has no fingerprint the
+//! pair is compared by metrics and classification only, and the reasons say
+//! so.
+//!
+//! Who is ranked is [`candidate`]'s choice (E54.11): only pairs that both
+//! have a fingerprint, and never a symbol face for a text face or the other
+//! way round. So a pair compared on less (metrics only) never outranks one
+//! compared on everything: it is not ranked at all. A pair scoring below
+//! [`MIN_SCORE`] is not returned either.
 //! A profile with [`Profile::shapes_only`] (an image of text, E33.1) has
 //! its x-height, contrast and stroke weight unknown.
 //!
@@ -48,9 +54,21 @@ pub const METRICS_ONLY: &str = "compared by metrics and classification only (no 
 /// A component this close or closer is named in the reasons.
 const REASON_AT: f32 = 0.6;
 
-/// The closeness of a component one face lacks: neither alike nor unlike,
-/// so a pair that is compared on less never outranks one compared on all.
+/// The closeness of a component one face lacks: neither alike nor unlike.
 const UNKNOWN: f32 = 0.5;
+
+/// The lowest score a similar face is returned with (E54.11).
+///
+/// How it was chosen: a score is a weighted mean of closenesses, and
+/// [`UNKNOWN`] (0.5) is "neither alike nor unlike". A pair below it is, on
+/// balance, more unlike than alike, so calling it similar is wrong whatever
+/// the rest of the library holds. Checked on `fixtures/fonts/google-repo`
+/// (2026-11-17): for Libre Baskerville every serif scores 0.58 or more, and
+/// the faces below 0.5 are sans, scripts (Clicker Script, Miniver) and
+/// display faces; for Barlow Bold Italic, Libre Baskerville (0.23) and
+/// Clicker Script fall below it (`index::search::similar` tests). E54.13
+/// tunes it against agreed pairs.
+pub const MIN_SCORE: f32 = 0.5;
 
 /// How much each component counts in the score.
 const W_CLASS: f32 = 3.0;
@@ -125,6 +143,19 @@ pub struct Similarity {
     /// The components that match, in plain words, in the order of the table
     /// in the module docs; [`METRICS_ONLY`] last when it applies.
     pub reasons: Vec<&'static str>,
+}
+
+/// Whether `b` is ranked as similar to the reference `a` (E54.11): both
+/// have a glyph fingerprint, and both or neither are symbol faces (icons,
+/// dingbats). A pair compared on metrics alone, or a symbol face for a text
+/// face, is no candidate.
+pub fn candidate(a: &Profile, b: &Profile) -> bool {
+    a.fingerprint.is_some() && b.fingerprint.is_some() && is_symbol(a) == is_symbol(b)
+}
+
+/// A symbol, icon or dingbat face.
+pub fn is_symbol(p: &Profile) -> bool {
+    p.classification == Some(Classification::Symbol)
 }
 
 /// Scores `b` against `a` (symmetric).

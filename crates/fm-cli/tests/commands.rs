@@ -355,8 +355,8 @@ fn search_prints_the_hits_of_a_direct_search_with_the_same_filters() {
     assert_eq!(exit, Exit::Success);
     assert_eq!(hits(&out), direct);
 
-    // The characters a family misses are printed: Legacy Grotesk (Latin
-    // only) is a near miss of Serbian Latin.
+    // E54.4: a language is exact. Legacy Grotesk (Latin only) lacks five
+    // letters of Serbian Latin, so it is no result and nothing is missing.
     let direct = direct_search(
         &api,
         Filters {
@@ -369,19 +369,19 @@ fn search_prints_the_hits_of_a_direct_search_with_the_same_filters() {
     let (exit, out, _) = fm_on(&api, &["--json", "search", "--supports", "sr-Latn"]);
     assert_eq!(exit, Exit::Success);
     assert_eq!(hits(&out), direct);
-    let legacy = direct
-        .iter()
-        .find(|h| h.family.name == "Legacy Grotesk")
-        .and_then(|h| h.missing.clone())
-        .expect("a near miss");
-    assert_eq!(legacy.chars.len(), 5, "{legacy:?}");
+    assert!(!direct.is_empty(), "a family covers Serbian Latin");
+    assert!(
+        direct.iter().all(|h| h.family.name != "Legacy Grotesk"),
+        "{direct:?}"
+    );
+    assert!(
+        direct
+            .iter()
+            .all(|h| h.missing.as_ref().is_some_and(|m| m.chars.is_empty())),
+        "{direct:?}"
+    );
     let (_, text, _) = fm_on(&api, &["search", "--supports", "sr-Latn"]);
-    let row = text
-        .lines()
-        .find(|l| l.contains("Legacy Grotesk"))
-        .unwrap_or_else(|| panic!("a Legacy Grotesk row: {text}"));
-    assert!(row.trim_end().ends_with(&legacy.chars.join(" ")), "{row}");
-    assert!(text.contains("MISSING"), "{text}");
+    assert!(!text.contains("Legacy Grotesk"), "{text}");
 
     let (_, text, _) = fm(&["search", "mono"]);
     assert!(

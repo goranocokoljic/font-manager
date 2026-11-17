@@ -504,3 +504,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E54.1 #611] apps/desktop/src/components/FoundriesSidebar.vue:145 — the Foundries sidebar has no keydown route for the Menu key / Shift+F10; its keyboard menu relies only on the browser-fired `contextmenu` event, unlike the Characters grid (FamilyCharacters.vue:333).
 - [E54.1 #611] apps/desktop/playwright.config.ts:20 — `reuseExistingServer` lets a Vite server already on port 1420 from another worktree serve the specs, so a local run can fail until a clean rerun.
+- [E54.4 #614] apps/desktop/e2e/wall-text.spec.ts:86 — the E43.3 "N of M families render your text completely" line and its hide switch send a pasted-text rule, which fm-core lets through with up to 5 missing characters, so "completely" overstates in the real app (open question in ADR 0024).
+- [E54.4 #614] crates/fm-core/src/coverage.rs:478 — same root cause seen from the core: the pasted-text near miss counts a face lacking up to 5 characters as rendering the text.
+- [E54.4 #614] crates/fm-core/src/api.rs:1693 — the brief's `!m.chars.is_empty()` skip can no longer trigger for a language search; harmless dead branch.
+- [E54.4 #614] apps/desktop/src/api/mock.ts:1674 — language presets in `mockLanguages` but not in `MOCK_PRESETS` (de, fr, el, mt) still pass by script, not by their letters.
+- [E54.3 #613] apps/desktop/src/stores/catalogs.ts:555 — any search-filter change (now also a sidebar tag click) closes an open catalog and shows the filtered library; intended or not, no story names it.
+- [E54.3 #613] apps/desktop/src/stores/search.ts:490 — a pressed tag whose last font is untagged may leave `listTags` while its id stays in `filters.tags`; only the chip above the list can release it.
+- [E54.11 #621] apps/desktop/src/stores/similar.ts:39 — the Similar panel and the Compare sheet (compareSimilar.ts:62) still call `findSimilar` and show a generic empty state, not `findSimilarAnswer`'s reason (for E54.10 #620).

@@ -41,6 +41,11 @@ your team, read [Shared libraries](shared-libraries.md).
   font's letter is to that one, closest first. The line above the list says **Sorted by
   R like Inter**. Your filters stay. Click the **R like Inter** button to remove the sort:
   the list goes back to the sort it had before.
+- To find fonts for a language, open **Filters** and choose the language. A font is
+  shown only when it has every letter of the language: a font that lacks one letter
+  (for example `đ` for Serbian) is left out. When you look for fonts that cover a text
+  you paste, a font that lacks up to 5 of its characters is still shown, with the
+  characters it lacks.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
 - Some fonts look small or large at the same size. Set **Auto size** to **x-height**
@@ -175,6 +180,19 @@ faded. Drop them on:
 You cannot drop fonts on a smart collection, because it fills itself from its
 rules. Press `Esc` to stop a drag; nothing changes. To do the same with the
 keyboard, use **Collection** and **Tag** in the selection bar.
+
+## Filter by tag from the sidebar
+
+Click a tag under **Tags** in the sidebar. The list shows only the fonts with
+that tag, and the tag looks pressed. Click it again to remove the filter. Click
+more tags to show only the fonts that have all of them. This is the same filter
+as **Tag** in **Filters**: a chip above the list shows each tag, and when you
+remove the chip, the tag in the sidebar is no longer pressed. The filter stays
+when you open a collection, a library view such as **Favorites**, or a foundry.
+A drop of fonts on a tag only tags them; it does not change the filter.
+
+With the keyboard, press `Tab` or the arrow keys to go from tag to tag, and
+press `Space` or `Enter` to turn the filter on or off.
 
 ## Give a collection a colour
 

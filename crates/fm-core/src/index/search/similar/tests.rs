@@ -8,7 +8,7 @@ use fm_api::library::SourceKind;
 
 use super::*;
 use crate::scanner::{FileIndex, discover};
-use crate::similar::METRICS_ONLY;
+use crate::similar::{METRICS_ONLY, MIN_SCORE};
 
 /// The search budget of the spec (criterion 5).
 const BUDGET: Duration = Duration::from_millis(50);
@@ -29,6 +29,24 @@ fn indexed(root: &Path) -> Index {
     index
         .apply_rescan(source, &scanned, &report)
         .expect("persist");
+    index
+}
+
+/// The `google-repo` folders `dirs`, each a source of one fresh index.
+fn indexed_all(dirs: &[&str]) -> Index {
+    let mut index = Index::open_in_memory().expect("open");
+    for dir in dirs {
+        let root = fixtures().join("google-repo").join(dir);
+        let mut scanned = FileIndex::new();
+        let report = scanned.rescan(&root, &discover(&root).expect("discover"));
+        let source = index
+            .add_source(&root.to_string_lossy(), SourceKind::Watched)
+            .expect("source")
+            .id;
+        index
+            .apply_rescan(source, &scanned, &report)
+            .expect("persist");
+    }
     index
 }
 
@@ -105,19 +123,19 @@ fn classes(index: &Index) -> HashMap<u32, Option<Classification>> {
 }
 
 /// Criterion 3: for Barlow, a sans ranks above Libre Baskerville and
-/// Clicker Script. The fixtures hold Barlow Bold Italic, not Regular.
+/// Clicker Script. The fixtures hold Barlow Bold Italic, not Regular. Since
+/// E54.11 the serif and the script score below the floor and are not
+/// returned at all.
 #[test]
 fn a_sans_ranks_above_a_serif_and_a_script_for_barlow() {
     let index = library();
     let ranked = ranking(&index, face(&index, "Barlow-BoldItalic.ttf"));
-    let sans = rank_of(&ranked, "Barlow Semi Condensed");
-    let condensed = rank_of(&ranked, "Barlow Condensed");
-    let serif = rank_of(&ranked, "Libre Baskerville");
-    let script = rank_of(&ranked, "Clicker Script");
     let all = show(&ranked);
     eprintln!("{all}");
-    assert!(sans < serif && sans < script, "{all}");
-    assert!(condensed < serif && condensed < script, "{all}");
+    rank_of(&ranked, "Barlow Condensed");
+    for gone in ["Libre Baskerville", "Clicker Script"] {
+        assert!(ranked.iter().all(|s| s.face.family_name != gone), "{all}");
+    }
 }
 
 /// Criterion 3: for Libre Baskerville, a serif (Crimson Pro) ranks above
@@ -144,7 +162,8 @@ fn the_face_and_its_family_are_left_out_and_the_limit_holds() {
     let barlow = face(&index, "Barlow-BoldItalic.ttf");
     let family = index.face_summary(barlow).expect("summary").family;
     let ranked = ranking(&index, barlow);
-    assert!(ranked.len() > 50, "{}", ranked.len());
+    assert!(ranked.len() > 20, "{}", ranked.len());
+    assert!(ranked.iter().all(|s| s.score >= MIN_SCORE));
     assert!(ranked.iter().all(|s| s.face.id != barlow));
     assert!(ranked.iter().all(|s| s.face.family != family));
     assert!(ranked.iter().all(|s| (0.0..=1.0).contains(&s.score)));
@@ -194,7 +213,7 @@ fn a_family_with_two_faces_leaves_out_both() {
 fn hidden_faces_are_not_candidates() {
     let index = library();
     let barlow = face(&index, "Barlow-BoldItalic.ttf");
-    let semi = face(&index, "BarlowSemiCondensed-ExtraLightItalic.ttf");
+    let semi = face(&index, "BarlowCondensed-Italic.ttf");
     assert!(ranking(&index, barlow).iter().any(|s| s.face.id == semi));
     index
         .conn
@@ -207,30 +226,36 @@ fn hidden_faces_are_not_candidates() {
     assert!(ranking(&index, barlow).iter().all(|s| s.face.id != semi));
 }
 
-/// Criterion 4: a face without a fingerprint is compared by metrics and
-/// classification only, and says so; the others keep their drawings.
+/// E54.11 criterion 1: a face without a fingerprint is no candidate for a
+/// face with one, so it never outranks a measured face. Before E54.11 it
+/// was compared by metrics alone and ranked; this test failed then.
 #[test]
-fn a_face_without_a_fingerprint_says_so() {
+fn a_face_without_a_fingerprint_is_never_ranked() {
     let index = library();
     let barlow = face(&index, "Barlow-BoldItalic.ttf");
-    let semi = face(&index, "BarlowSemiCondensed-ExtraLightItalic.ttf");
+    let condensed = face(&index, "BarlowCondensed-Italic.ttf");
     assert!(
         ranking(&index, barlow)
             .iter()
-            .filter(|s| s.face.id == semi)
-            .all(|s| !s.reasons.iter().any(|r| r == METRICS_ONLY))
+            .any(|s| s.face.id == condensed)
     );
     index
         .conn
         .execute(
             "UPDATE face_fingerprint SET vector = NULL WHERE face_id = ?1",
-            [semi.0],
+            [condensed.0],
         )
         .expect("no fingerprint");
 
     let ranked = ranking(&index, barlow);
+    assert!(!ranked.is_empty());
+    assert!(
+        ranked.iter().all(|s| s.face.id != condensed),
+        "{}",
+        show(&ranked)
+    );
     for s in &ranked {
-        let metrics_only = s.reasons.iter().any(|r| r == METRICS_ONLY);
+        assert!(!s.reasons.iter().any(|r| r == METRICS_ONLY), "{s:?}");
         let has_print: bool = index
             .conn
             .query_row(
@@ -239,24 +264,148 @@ fn a_face_without_a_fingerprint_says_so() {
                 |r| r.get(0),
             )
             .unwrap_or(false);
-        assert_eq!(metrics_only, !has_print, "{}", s.face.family_name);
+        assert!(has_print, "{} has no fingerprint", s.face.family_name);
     }
-    let found = ranked.iter().find(|s| s.face.id == semi).expect("ranked");
+}
+
+/// E54.11 criterion 4: asked about a face without a fingerprint, the answer
+/// is empty and says why, instead of a metrics-only ranking.
+#[test]
+fn a_reference_without_a_fingerprint_answers_empty_with_a_reason() {
+    let index = library();
+    let condensed = face(&index, "BarlowCondensed-Italic.ttf");
+    index
+        .conn
+        .execute(
+            "UPDATE face_fingerprint SET vector = NULL WHERE face_id = ?1",
+            [condensed.0],
+        )
+        .expect("no fingerprint");
+    let req = SimilarRequest {
+        face: condensed,
+        limit: 20,
+    };
+    let answer = index.find_similar_answer(&req).expect("answer");
+    assert!(answer.faces.is_empty(), "{:?}", answer.faces);
+    assert_eq!(answer.empty, Some(SimilarEmpty::NotMeasured));
+    assert_eq!(answer.message.as_deref(), Some(NOT_MEASURED_MESSAGE));
+    assert!(index.find_similar(&req).expect("similar").is_empty());
+
+    // A measured face with results has no reason.
+    let barlow = face(&index, "Barlow-BoldItalic.ttf");
+    let found = index
+        .find_similar_answer(&SimilarRequest {
+            face: barlow,
+            limit: 5,
+        })
+        .expect("answer");
+    assert_eq!(found.faces.len(), 5);
+    assert_eq!((found.empty, found.message), (None, None));
+}
+
+/// E54.11 criterion 3: only faces at the floor or above come back, so the
+/// answer can be empty: Clicker Script is the one other face, and it is not
+/// close to Libre Baskerville.
+#[test]
+fn nothing_above_the_floor_answers_empty_with_a_reason() {
+    let index = indexed_all(&["librebaskerville", "clickerscript"]);
+    let req = SimilarRequest {
+        face: face(&index, "LibreBaskerville[wght].ttf"),
+        limit: 20,
+    };
+    let script = face(&index, "ClickerScript-Regular.ttf");
+    {
+        index.refresh_search_cache().expect("rows");
+        index.read_profiles().expect("profiles");
+        let cache = index.search_cache.borrow();
+        let profiles = cache.profiles.as_ref().expect("profiles");
+        let (a, b) = (&profiles[&req.face.0], &profiles[&script.0]);
+        assert!(similar::candidate(a, b));
+        let score = similar::compare(a, b).score;
+        assert!(score < MIN_SCORE, "{score}");
+    }
+    let answer = index.find_similar_answer(&req).expect("answer");
+    assert!(answer.faces.is_empty(), "{:?}", answer.faces);
+    assert_eq!(answer.empty, Some(SimilarEmpty::NoneClose));
+    assert_eq!(answer.message.as_deref(), Some(NONE_CLOSE_MESSAGE));
+}
+
+/// E54.11 criterion 5: for a serif reference no icon or symbol face
+/// appears, every result is a measured face, and the closest are serifs.
+#[test]
+fn a_serif_finds_only_measured_text_faces() {
+    let index = library();
+    let classes = classes(&index);
+    let symbols: Vec<u32> = classes
+        .iter()
+        .filter(|(_, c)| **c == Some(Classification::Symbol))
+        .map(|(id, _)| *id)
+        .collect();
+    assert!(!symbols.is_empty(), "the fixtures hold a symbol face");
+    let ranked = ranking(&index, face(&index, "LibreBaskerville[wght].ttf"));
+    assert!(ranked.len() >= 5, "{}", show(&ranked));
+    for s in &ranked {
+        assert!(
+            !symbols.contains(&s.face.id.0),
+            "{} is a symbol face",
+            s.face.family_name
+        );
+        assert!(!s.reasons.iter().any(|r| r == METRICS_ONLY), "{s:?}");
+        assert!(s.score >= MIN_SCORE, "{s:?}");
+    }
+    for s in &ranked[..5] {
+        assert_eq!(
+            classes.get(&s.face.id.0),
+            Some(&Some(Classification::Serif)),
+            "{}",
+            show(&ranked)
+        );
+    }
+}
+
+/// E54.11 criterion 2: a symbol face with a fingerprint is no candidate for
+/// a text face, and a symbol face finds symbol faces only. The two closest
+/// serifs are made symbol faces in the index, so the pair is measured and
+/// close.
+#[test]
+fn symbol_faces_and_text_faces_do_not_find_each_other() {
+    let index = library();
+    let libre = face(&index, "LibreBaskerville[wght].ttf");
+    let before = ranking(&index, libre);
+    let pair: Vec<FaceId> = before[..2].iter().map(|s| s.face.id).collect();
+    for id in &pair {
+        index
+            .conn
+            .execute(
+                "UPDATE face SET parsed = json_set(parsed, '$.classification.class', 'symbol')
+                 WHERE id = ?1",
+                [id.0],
+            )
+            .expect("symbol");
+    }
+    let after = ranking(&index, libre);
+    assert!(!after.is_empty());
     assert!(
-        !found
-            .reasons
-            .iter()
-            .any(|r| r == "similar contrast" || r == "similar letter shapes"),
-        "{found:?}"
+        after.iter().all(|s| !pair.contains(&s.face.id)),
+        "{}",
+        show(&after)
     );
 
-    // Asked about the face without one, every result says so.
-    let from_semi = ranking(&index, semi);
-    assert!(!from_semi.is_empty());
+    // The symbol face finds the other one and the fixtures' own symbol
+    // face (Noto Znamenny Musical Notation draws the sample), no text face.
+    let classes = classes(&index);
+    let from_symbol = ranking(&index, pair[0]);
     assert!(
-        from_semi
+        from_symbol.iter().any(|s| s.face.id == pair[1]),
+        "{}",
+        show(&from_symbol)
+    );
+    assert!(
+        from_symbol
             .iter()
-            .all(|s| s.reasons.iter().any(|r| r == METRICS_ONLY))
+            .all(|s| classes.get(&s.face.id.0) == Some(&Some(Classification::Symbol))),
+        "{}",
+        show(&from_symbol)
     );
 }
 
@@ -284,8 +433,7 @@ fn a_write_reads_the_profiles_again() {
         .execute("DELETE FROM face_fingerprint WHERE face_id = ?1", [top.0])
         .expect("delete");
     let after = ranking(&index, barlow);
-    let found = after.iter().find(|s| s.face.id == top).expect("ranked");
-    assert!(found.reasons.iter().any(|r| r == METRICS_ONLY), "{found:?}");
+    assert!(after.iter().all(|s| s.face.id != top), "{}", show(&after));
 }
 
 /// Criterion 5 without the reference library: 10,000 faces with

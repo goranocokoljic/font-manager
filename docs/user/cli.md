@@ -27,11 +27,11 @@ answer.
 | `fm scan [folder]` | Add the folder to the library and scan it. Without a folder, scan every folder of the library. Progress goes to stderr. A folder that fails to scan does not stop the others; `fm` then exits with the code of the first failure. |
 | `fm list` | List the families |
 | `fm list --family <font>` | List the faces of a family |
-| `fm search [words] [--supports sr-Cyrl,sr-Latn] [--feature smcp] [--variable] [--trait R.leg=straight]` | Find families. With `--supports`, show the characters each family misses. `--trait` asks for a letter shape: `R.leg=straight` (a value) or `O.roundness>=0.95` (a measure). Repeat it for more. A font that does not have the letter is left out. |
+| `fm search [words] [--supports sr-Cyrl,sr-Latn] [--feature smcp] [--variable] [--trait R.leg=straight]` | Find families. With `--supports`, show only the families that have every letter of each language; a family that lacks one letter is left out. `--trait` asks for a letter shape: `R.leg=straight` (a value) or `O.roundness>=0.95` (a measure). Repeat it for more. A font that does not have the letter is left out. |
 | `fm traits` | List the letter shapes that `--trait` can ask for, with how many fonts have each value. The app measures the shapes after a scan. |
 | `fm info <font>` | Show a font: names, styles, axes, features, scripts and license |
 | `fm coverage <font> --text "..."` | Check that a font has every character of the text. Exits with code 5 when a character is missing. `--supports <languages>` checks languages instead. |
-| `fm similar <font> [--limit 10]` | List the fonts that look most like this one |
+| `fm similar <font> [--limit 10]` | List the fonts that look most like this one. Only fonts with a measured drawing are listed, icon fonts only for icon fonts, and weak matches are left out; when nothing is listed it says why |
 | `fm activate <font> [--permanent]` | Activate a font. A family name activates every style. Shows one line per font with what happened. Exits with code 4 when a font was not activated (a conflict with an installed font, a format that cannot be activated, an error). The app must run. |
 | `fm activate --collection <name>` / `--set <name>` | Activate every font of a collection or a project set. Give its name or its id. |
 | `fm deactivate <font>` (or `--collection`, `--set`) | Deactivate fonts. `fm` deactivates only fonts that the app activated. It shows other fonts as skipped and exits with code 4. The app must run. |

@@ -71,8 +71,8 @@ use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage,
     FaceLanguageCoverage, FamilyHit, FilterCount, FilterCounts, Filters, ImageMatchRequest,
     LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingRole,
-    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarGlyphFace,
-    SimilarGlyphRequest, SimilarRequest, Supports, WeightRange, WidthRange,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarAnswer, SimilarEmpty, SimilarFace,
+    SimilarGlyphFace, SimilarGlyphRequest, SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::search::{FoundryInfo, MergeFoundriesRequest, UNKNOWN_FOUNDRY, UnmergeFoundryRequest};
 use crate::search::{
@@ -259,8 +259,25 @@ fn self_reference(c: &Collection) -> ApiError {
     ))
 }
 
-/// Near-misses within this many characters still show in a coverage search.
+/// Near-misses within this many characters of a pasted text still show in a
+/// coverage search; a language allows none (E54.4), as fm-core's `Need`.
 const NEAR_MISS: usize = 5;
+
+/// The mock's similar floor: a face with nothing in common (the bare 0.2)
+/// is not similar, like a face below the core's floor (E54.11).
+const MOCK_SIMILAR_FLOOR: f32 = 0.3;
+
+/// The mock's "none close" message.
+const MOCK_NONE_CLOSE: &str = "No font in the library looks close enough to this one.";
+
+/// How many characters of `target` a face may lack and still pass the
+/// `supports` filter: none for languages, [`NEAR_MISS`] for pasted text.
+fn allowance(target: &Supports) -> usize {
+    match target {
+        Supports::Languages { .. } => 0,
+        Supports::Text { .. } => NEAR_MISS,
+    }
+}
 
 /// The largest page a list returns.
 const MAX_PAGE: u32 = 500;
@@ -1348,7 +1365,7 @@ impl State {
                 Rule::Filters { filters } => {
                     self.matches(f, filters, path)?
                         && match &filters.supports {
-                            Some(target) => self.coverage(f, target)?.0.len() <= NEAR_MISS,
+                            Some(target) => self.coverage(f, target)?.0.len() <= allowance(target),
                             None => true,
                         }
                 }
@@ -2329,7 +2346,7 @@ impl State {
                 }
                 if let Some(target) = &filters.supports {
                     let (missing, per) = self.coverage(f, target)?;
-                    if missing.len() > NEAR_MISS {
+                    if missing.len() > allowance(target) {
                         continue;
                     }
                     if best_missing
@@ -2825,10 +2842,15 @@ impl SearchService for MockApi {
         Ok(hints)
     }
 
+    /// The stand-in ranking: 0.2, +0.5 same classification, +0.2 same
+    /// weight, +0.1 same x-height. Like the core (E54.11), a symbol face is
+    /// only ranked for a symbol face and the other way round, and a face
+    /// with nothing in common (below [`MOCK_SIMILAR_FLOOR`]) is left out.
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
         let st = self.state();
         let me = st.face(req.face)?;
         let my_class = st.family(me.detail.face.family)?.classification;
+        let symbol = |c: Classification| c == Classification::Symbol;
         let mut out = Vec::new();
         for f in st
             .faces
@@ -2836,6 +2858,9 @@ impl SearchService for MockApi {
             .filter(|f| f.detail.face.id != req.face && st.visible(f))
         {
             let class = st.family(f.detail.face.family)?.classification;
+            if symbol(class) != symbol(my_class) {
+                continue;
+            }
             let mut score: f32 = 0.2;
             let mut reasons = Vec::new();
             if class == my_class {
@@ -2850,6 +2875,9 @@ impl SearchService for MockApi {
                 score += 0.1;
                 reasons.push("matching x-height".to_string());
             }
+            if score < MOCK_SIMILAR_FLOOR {
+                continue;
+            }
             out.push(SimilarFace {
                 face: st.summary(f),
                 score: score.min(1.0),
@@ -2859,6 +2887,17 @@ impl SearchService for MockApi {
         out.sort_by(|a, b| b.score.total_cmp(&a.score));
         out.truncate(req.limit as usize);
         Ok(out)
+    }
+
+    /// The mock has no fingerprints: an empty list is always "none close".
+    fn find_similar_answer(&self, req: SimilarRequest) -> ApiResult<SimilarAnswer> {
+        let faces = self.find_similar(req)?;
+        let empty = faces.is_empty().then_some(SimilarEmpty::NoneClose);
+        Ok(SimilarAnswer {
+            faces,
+            empty,
+            message: empty.map(|_| MOCK_NONE_CLOSE.to_string()),
+        })
     }
 
     /// The visible faces in id order, scores falling from 0.9; the file must

@@ -559,3 +559,57 @@ describe('foundries (E50.11)', () => {
     });
   });
 });
+
+describe('MockApi supports filter: two rules (E54.4)', () => {
+  const search = async (filters: Filters) =>
+    (await createMockClient().search({ query: '', filters, page: { offset: 0, limit: 1000 } }))
+      .families;
+
+  it('drops a face that lacks one letter of a language, with no near miss', async () => {
+    const english = await search({ supports: { kind: 'languages', codes: ['en'] } });
+    const serbian = await search({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
+    const latinOnly = english.filter((h) => !serbian.some((s) => s.family.id === h.family.id));
+    // A Latin-1 face lacks č ć đ š ž: an English result, not a Serbian one.
+    expect(latinOnly.length).toBeGreaterThan(0);
+    expect(serbian.length).toBeGreaterThan(0);
+    expect(serbian.every((h) => h.missing?.chars.length === 0)).toBe(true);
+  });
+
+  it('keeps pasted text exact, for the "render your text completely" line (E43.3)', async () => {
+    const english = await search({ supports: { kind: 'languages', codes: ['en'] } });
+    const serbian = await search({ supports: { kind: 'languages', codes: ['sr-Latn'] } });
+    const latinOnly = english.find((h) => !serbian.some((s) => s.family.id === h.family.id))!;
+    const lacking = await search({ supports: { kind: 'text', text: 'abcž' } });
+    expect(lacking.some((h) => h.family.id === latinOnly.family.id)).toBe(false);
+    const has = await search({ supports: { kind: 'text', text: 'abc' } });
+    expect(has.some((h) => h.family.id === latinOnly.family.id)).toBe(true);
+  });
+});
+
+describe('MockApi find similar (E54.11)', () => {
+  it('ranks above the floor only, and the answer matches findSimilar', async () => {
+    const client = createMockClient();
+    const req = { face: 1, limit: 50 };
+    const list = await client.findSimilar(req);
+    const answer = await client.findSimilarAnswer(req);
+    expect(answer.faces).toEqual(list);
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.every((s) => (s.score ?? 0) >= 0.3 && s.reasons.length > 0)).toBe(true);
+    expect(answer.empty ?? null).toBeNull();
+  });
+
+  it('says why when there is nothing to show', async () => {
+    const none = await createMockClient({ similar: 'none' }).findSimilarAnswer({
+      face: 1,
+      limit: 8,
+    });
+    expect(none).toMatchObject({ faces: [], empty: 'noneClose' });
+    expect(none.message).toContain('close enough');
+    const unmeasured = await createMockClient({ similar: 'unmeasured' }).findSimilarAnswer({
+      face: 1,
+      limit: 8,
+    });
+    expect(unmeasured).toMatchObject({ faces: [], empty: 'notMeasured' });
+    expect(unmeasured.message).toContain('cannot be compared');
+  });
+});

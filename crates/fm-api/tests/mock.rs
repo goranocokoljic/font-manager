@@ -560,6 +560,47 @@ fn search_counts_every_filter_value_with_the_other_filters_kept() {
     );
 }
 
+/// E54.4: a language allows no missing letter; pasted text keeps its near
+/// misses. JetBrains Mono and Legacy Grotesk lack č ć đ š ž (five), so they
+/// are no result for sr-Latn, but the same five as text still list them.
+#[test]
+fn a_language_allows_no_missing_letter_and_text_keeps_near_misses() {
+    let api = api();
+    let search = |supports: Supports| -> Vec<(String, Vec<String>)> {
+        api.search(SearchRequest {
+            filters: Filters {
+                supports: Some(supports),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .unwrap()
+        .families
+        .into_iter()
+        .map(|h| {
+            (
+                h.family.name,
+                h.missing.map(|m| m.chars).unwrap_or_default(),
+            )
+        })
+        .collect()
+    };
+    let sr = search(Supports::Languages {
+        codes: vec!["sr-Latn".into()],
+    });
+    let names: Vec<&str> = sr.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, ["Inter", "Source Serif 4"], "{sr:?}");
+    assert!(sr.iter().all(|(_, lacks)| lacks.is_empty()));
+    let text = search(Supports::Text {
+        text: "čćđšž".into(),
+    });
+    let mono = text
+        .iter()
+        .find(|(n, _)| n == "JetBrains Mono")
+        .expect("a near miss of text");
+    assert_eq!(mono.1, ["č", "ć", "đ", "š", "ž"]);
+}
+
 #[test]
 fn search_groups_by_family_and_reports_near_misses() {
     let api = api();
@@ -4077,4 +4118,25 @@ fn a_search_for_faces_keeps_only_those_faces() {
         })
         .unwrap();
     assert_eq!(none.total, 0);
+}
+
+/// E54.11: the mock leaves out faces with nothing in common, and the answer
+/// is `find_similar`'s list with no reason while it has faces.
+#[test]
+fn find_similar_keeps_the_floor_and_the_answer_matches_the_list() {
+    use fm_api::search::SimilarRequest;
+    let api = api();
+    let req = SimilarRequest {
+        face: FaceId(3),
+        limit: 100,
+    };
+    let list = api.find_similar(req).unwrap();
+    assert!(!list.is_empty());
+    assert!(
+        list.iter().all(|s| s.score >= 0.3 && !s.reasons.is_empty()),
+        "{list:?}"
+    );
+    let answer = api.find_similar_answer(req).unwrap();
+    assert_eq!(answer.faces, list);
+    assert_eq!((answer.empty, answer.message), (None, None));
 }

@@ -106,6 +106,8 @@ import {
   type SetExport,
   type QuickCollection,
   type SearchResponse,
+  type SimilarAnswer,
+  type SimilarRequest,
   type SampleText,
   type SizeBasis,
   type SizeFactor,
@@ -671,6 +673,9 @@ export const mockFolders: AppFolders = {
 // faces that list `cyrl` also Latin Extended-A (Central European) and Serbian Cyrillic.
 const range = (from: number, to: number) =>
   Array.from({ length: to - from }, (_, i) => String.fromCodePoint(from + i)).join('');
+/** The mock's similar floor: a face with nothing in common (the bare 0.2) is not similar (E54.11). */
+const MOCK_SIMILAR_FLOOR = 0.3;
+
 const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
 const LATIN_EXT_A = range(0x100, 0x180);
 const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
@@ -757,21 +762,21 @@ export function mockCoverage(f: FaceDetail, text: string, cjk: boolean): Coverag
 }
 
 /**
- * True when a mock face has every character of `text`, remembered per face and text: the
- * filter counts ask it once per filter value for every face (E43.3's switch on 1,000 families).
+ * The characters of `text` a mock face lacks, remembered per face and text: the filter
+ * counts ask it once per filter value for every face (E43.3's switch on 1,000 families).
  */
-const RENDERS = new WeakMap<FaceDetail, Map<string, boolean>>();
-function rendersAll(f: FaceDetail, text: string): boolean {
-  let known = RENDERS.get(f);
-  if (!known) RENDERS.set(f, (known = new Map()));
-  let complete = known.get(text);
-  if (complete === undefined) {
-    complete = mockCoverage(f, text, false).complete;
+const LACKS = new WeakMap<FaceDetail, Map<string, string[]>>();
+function textLacks(f: FaceDetail, text: string): string[] {
+  let known = LACKS.get(f);
+  if (!known) LACKS.set(f, (known = new Map()));
+  let missing = known.get(text);
+  if (missing === undefined) {
+    missing = mockCoverage(f, text, false).missing;
     // A face's text changes as the user types: keep the last few texts only.
     if (known.size >= 8) known.delete(known.keys().next().value!);
-    known.set(text, complete);
+    known.set(text, missing);
   }
-  return complete;
+  return missing;
 }
 
 /** What a mock face lacks of the presets `codes`, like the Rust mock's `check_coverage`. */
@@ -1155,11 +1160,12 @@ export interface MockOptions {
    */
   settingsStorage?: Pick<Storage, 'getItem' | 'setItem'>;
   /**
-   * What "Find similar" answers: `ranked` (the default: every other face, ranked like
-   * the Rust mock), `none` (no similar face) or `fail` (fm-core's answer while E23.2 is
-   * not built: `unsupported`).
+   * What "Find similar" answers: `ranked` (the default: the other faces, ranked like
+   * the Rust mock), `none` (no similar face: "none close"), `fail` (fm-core's answer
+   * while E23.2 is not built: `unsupported`) or `unmeasured` (the face has no glyph
+   * fingerprint: an empty answer that says so, E54.11).
    */
-  similar?: 'ranked' | 'none' | 'fail';
+  similar?: 'ranked' | 'none' | 'fail' | 'unmeasured';
   /**
    * The online catalogs (E22.2): `online` (the default) starts with every catalog off and
    * never refreshed; `offline` starts with Google Fonts on, a list cached on
@@ -1654,13 +1660,22 @@ function passes(
 ): boolean {
   const f = d.face;
   // A wall face covers a language by its own characters, so the wall's gaps show in this
-  // filter too (its Vietnamese preset included); the other faces by script.
+  // filter too (its Vietnamese preset included); the other faces by script. A language is
+  // exact (E54.4): one missing letter disqualifies the face. Pasted text is exact here too,
+  // unlike fm-core's near miss: the "render your text completely" line (E43.3) needs every
+  // glyph, and its e2e checks run on this mock (see ADR 0024).
   const covers = (code: string) => {
     const own = mockWall().chars.get(f.family);
     const preset = [...mockLanguages, ...(own ? [WALL_VIETNAMESE] : [])].find(
       (l) => l.code === code,
     );
     if (own && preset?.pangram) return [...preset.pangram].every((c) => /\s/.test(c) || own.has(c));
+    // A preset the coverage list knows the letters of: every one of them (E54.4).
+    const letters = MOCK_PRESETS.find(([c]) => c === code)?.[2];
+    if (letters) {
+      const has = mockChars(d);
+      return [...letters].every((c) => has.has(c));
+    }
     const script = preset?.script.toLowerCase();
     return !!script && d.scripts.includes(script);
   };
@@ -1689,7 +1704,7 @@ function passes(
     (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
     (q.webOk == null || q.webOk === mockWebUse(d.license).ok) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers)) &&
-    (supports?.kind !== 'text' || rendersAll(d, supports.text))
+    (supports?.kind !== 'text' || textLacks(d, supports.text).length === 0)
   );
 }
 
@@ -2948,6 +2963,60 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     if (!f) throw notFound(id);
     return f;
   };
+  // "Find similar" (E23.3, E54.11), as the Rust mock; the messages are the core's.
+  const similarAnswer = async (req: SimilarRequest): Promise<SimilarAnswer> => {
+    const me = faceOrThrow(req.face);
+    if (options.similar === 'fail')
+      throw {
+        code: 'unsupported' as const,
+        message: 'Finding similar fonts is not available yet.',
+        detail: 'find_similar',
+      };
+    if (options.similar === 'unmeasured')
+      return {
+        faces: [],
+        empty: 'notMeasured',
+        message:
+          'This font cannot be compared: it does not draw the Latin letters the comparison ' +
+          'measures (an icon, symbol or non-Latin font).',
+      };
+    const symbol = (d: FaceDetail) => mockClassification(d) === 'symbol';
+    const ranked =
+      options.similar === 'none'
+        ? []
+        : faces
+            .filter(
+              (f) => f.face.id !== req.face && !trashed.has(f.path) && symbol(f) === symbol(me),
+            )
+            .map((f) => {
+              let score = 0.2;
+              const reasons: string[] = [];
+              if (mockClassification(f) === mockClassification(me)) {
+                score += 0.5;
+                reasons.push('same classification');
+              }
+              if (f.face.weight === me.face.weight) {
+                score += 0.2;
+                reasons.push('same weight');
+              }
+              if (f.metrics.xHeight === me.metrics.xHeight) {
+                score += 0.1;
+                reasons.push('matching x-height');
+              }
+              return { face: summary(f), score: Math.min(1, score), reasons };
+            })
+            .filter((s) => s.score >= MOCK_SIMILAR_FLOOR);
+    // Stable: equal scores keep the library order.
+    ranked.sort((a, b) => b.score - a.score);
+    const found = ranked.slice(0, req.limit);
+    return found.length > 0
+      ? { faces: found, empty: null, message: null }
+      : {
+          faces: [],
+          empty: 'noneClose',
+          message: 'No font in the library looks close enough to this one.',
+        };
+  };
   // Foundries (E50.11), as the Rust mock: each family's foundry as written, names equal
   // without case folded, the user's merges applied; no alias table. The merged name,
   // lowercased → [the name, the name it became].
@@ -3062,6 +3131,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         family: summaryOf(family),
         faces: matching.map((d) => d.face.id),
         score: nameHit ? 1 : 0.5,
+        // Both rules are exact in this mock: a hit lacks nothing.
         missing: q.supports ? { chars: [], hasLocl: false } : null,
       });
     }
@@ -3733,39 +3803,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return hints.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     },
     // The Rust mock's ranking: 0.2, +0.5 same classification, +0.2 same weight,
-    // +0.1 same x-height; closest first, `limit` of them.
-    findSimilar: async (req) => {
-      const me = faceOrThrow(req.face);
-      if (options.similar === 'fail')
-        throw {
-          code: 'unsupported' as const,
-          message: 'Finding similar fonts is not available yet.',
-          detail: 'find_similar',
-        };
-      if (options.similar === 'none') return [];
-      const ranked = faces
-        .filter((f) => f.face.id !== req.face && !trashed.has(f.path))
-        .map((f) => {
-          let score = 0.2;
-          const reasons: string[] = [];
-          if (mockClassification(f) === mockClassification(me)) {
-            score += 0.5;
-            reasons.push('same classification');
-          }
-          if (f.face.weight === me.face.weight) {
-            score += 0.2;
-            reasons.push('same weight');
-          }
-          if (f.metrics.xHeight === me.metrics.xHeight) {
-            score += 0.1;
-            reasons.push('matching x-height');
-          }
-          return { face: summary(f), score: Math.min(1, score), reasons };
-        });
-      // Stable: equal scores keep the library order.
-      ranked.sort((a, b) => b.score - a.score);
-      return ranked.slice(0, req.limit);
-    },
+    // +0.1 same x-height; like the core (E54.11) a symbol face only for a symbol face and
+    // the other way round, and nothing below the floor (0.3: something in common);
+    // closest first, `limit` of them.
+    findSimilar: async (req) => (await similarAnswer(req)).faces,
+    findSimilarAnswer: (req) => similarAnswer(req),
     // The Rust mock's pairing rules: contrasting classes +0.4 (a display or script face
     // only with a sans or serif), the same designer +0.2, x-heights within 5% +0.1; one
     // face per other family, the closest in weight; best first, then by family id.
@@ -4845,8 +4887,9 @@ export const mockClient: FmClient = createMockClient({
   colorFace: countFromUrl('mockColor', 1) > 0,
   // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.
   hebrewFace: countFromUrl('mockHebrew', 1) > 0,
-  // `?mockSimilar=1` finds no similar face, `=2` answers with an error.
-  similar: (['ranked', 'none', 'fail'] as const)[countFromUrl('mockSimilar', 2)],
+  // `?mockSimilar=1` finds no similar face, `=2` answers with an error, `=3` says the
+  // face cannot be compared (no fingerprint).
+  similar: (['ranked', 'none', 'fail', 'unmeasured'] as const)[countFromUrl('mockSimilar', 3)],
   // `?mockCatalog=1` starts with Google Fonts on, a cached list, and no connection.
   catalog: countFromUrl('mockCatalog', 1) ? 'offline' : 'online',
   // `?mockCatalogDownload=1` makes "Download..." fail as without a connection, `=2`

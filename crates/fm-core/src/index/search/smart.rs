@@ -195,8 +195,8 @@ impl Leaf {
                 self.activated_cutoff.as_deref(),
                 row.last_activated.as_deref(),
             ) == 0
-            // As search's `supports` filter: complete or a near miss passes,
-            // unknown coverage fails.
+            // As search's `supports` filter: complete passes, a near miss
+            // only for pasted text (E54.4), unknown coverage fails.
             && self
                 .need
                 .as_ref()

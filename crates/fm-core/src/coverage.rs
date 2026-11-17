@@ -19,7 +19,18 @@
 //!
 //! A [`Need`] is what the `supports` search filter (E3.8) asks: the base
 //! characters of some presets, or the characters of a pasted text. Checking
-//! a face against it is one merge over the pages of its set.
+//! a face against it is one merge over the pages of its set. The two kinds
+//! follow two rules (E54.4, docs/adr/0024-exact-language-filter.md):
+//!
+//! - **Languages are exact.** A face meets a language need only when it maps
+//!   every base character of every chosen preset; one missing letter
+//!   disqualifies it, and it is not offered as a near miss.
+//! - **Pasted text allows a near miss.** A face that lacks at most
+//!   [`NEAR_MISS`] characters of the text still meets it and lists what it
+//!   lacks. This allowance is to be reconsidered.
+//!
+//! The coverage report ([`report`], `check_coverage`) is unaffected: it
+//! lists every missing character of a face.
 
 use std::sync::LazyLock;
 
@@ -368,8 +379,10 @@ fn block_coverage(table: &BlockTable, set: &CodePointSet) -> Vec<BlockCoverage> 
     out
 }
 
-/// A face that lacks at most this many characters of a [`Need`] is a near
-/// miss: the `supports` filter keeps it and lists what it lacks.
+/// A face that lacks at most this many characters of a pasted text is a
+/// near miss: the `supports` filter keeps it and lists what it lacks. Used by
+/// the pasted-text path ([`Need::text`]) only: a language need allows no
+/// missing character (E54.4). The allowance is to be reconsidered.
 pub const NEAR_MISS: usize = 5;
 
 /// What a `supports` filter (E3.8) asks of a face: the characters it must
@@ -381,6 +394,9 @@ pub struct Need<'a> {
     len: usize,
     /// The chosen presets; empty for pasted text.
     presets: Vec<&'a Preset>,
+    /// How many characters a face may lack and still meet the need: 0 for
+    /// languages, [`NEAR_MISS`] for pasted text.
+    allowance: usize,
 }
 
 /// How one face meets a [`Need`].
@@ -388,17 +404,19 @@ pub struct Need<'a> {
 pub struct Fit {
     /// Characters of the need the face does not map.
     pub missing: usize,
-    /// Those characters, ascending, when there are at most [`NEAR_MISS`];
-    /// empty otherwise.
+    /// Those characters, ascending, when the face meets the need (a near
+    /// miss of a pasted text); empty otherwise.
     pub chars: Vec<char>,
     /// The face has `locl` forms for one of the chosen languages.
     pub has_locl: bool,
+    /// The need's allowance: 0 for languages, [`NEAR_MISS`] for text.
+    allowance: usize,
 }
 
 impl Fit {
-    /// Complete, or a near miss.
+    /// Complete, or (pasted text only) a near miss.
     pub fn passes(&self) -> bool {
-        self.missing <= NEAR_MISS
+        self.missing <= self.allowance
     }
 }
 
@@ -447,7 +465,8 @@ impl<'a> Need<'a> {
             })
             .collect::<FmResult<Vec<_>>>()?;
         let chars = CodePointSet::from_code_points(presets.iter().flat_map(|p| p.base.iter()));
-        Ok(Self::new(chars, presets))
+        // One missing letter disqualifies a face for a language (E54.4).
+        Ok(Self::new(chars, presets, 0))
     }
 
     /// Every character of `text` a font draws a glyph for: whitespace,
@@ -456,14 +475,15 @@ impl<'a> Need<'a> {
         let chars = CodePointSet::from_code_points(
             text.chars().filter(|&c| !is_ignorable(c)).map(u32::from),
         );
-        Self::new(chars, Vec::new())
+        Self::new(chars, Vec::new(), NEAR_MISS)
     }
 
-    fn new(chars: CodePointSet, presets: Vec<&'a Preset>) -> Self {
+    fn new(chars: CodePointSet, presets: Vec<&'a Preset>, allowance: usize) -> Self {
         Self {
             len: chars.len(),
             chars,
             presets,
+            allowance,
         }
     }
 
@@ -475,14 +495,14 @@ impl<'a> Need<'a> {
     /// Whether a face that maps `set` meets the need, as [`Fit::passes`]
     /// says of [`Need::check`], without listing what it lacks.
     pub fn passes(&self, set: &CodePointSet) -> bool {
-        self.len - self.chars.intersection_len(set) <= NEAR_MISS
+        self.len - self.chars.intersection_len(set) <= self.allowance
     }
 
     /// How a face that maps `set` and has `locl` forms for `locl`
     /// (`script/LANG` entries) meets the need.
     pub fn check(&self, set: &CodePointSet, locl: &[String]) -> Fit {
         let missing = self.len - self.chars.intersection_len(set);
-        let chars = if missing <= NEAR_MISS {
+        let chars = if missing <= self.allowance {
             self.chars
                 .iter()
                 .filter(|&cp| !set.contains(cp))
@@ -495,6 +515,7 @@ impl<'a> Need<'a> {
             missing,
             chars,
             has_locl: !locl.is_empty() && self.presets.iter().any(|p| p.has_locl(locl)),
+            allowance: self.allowance,
         }
     }
 }
@@ -932,8 +953,10 @@ mod tests {
         let face = set("abcd");
         assert_eq!(one.check(&face, &[]).missing, 0, "xa alone is covered");
         let fit = both.check(&face, &[]);
-        assert!(fit.passes());
-        assert_eq!((fit.missing, fit.chars), (1, vec!['ž']), "AND: xb's ž too");
+        assert_eq!(fit.missing, 1, "AND: xb's ž too");
+        assert!(!fit.passes(), "one missing letter disqualifies (E54.4)");
+        assert!(fit.chars.is_empty(), "no near miss for a language");
+        assert!(both.check(&set("abcdž"), &[]).passes());
         let err = Need::languages_of(&presets, &codes(&["xa", "zz"])).expect_err("unknown");
         assert_eq!(err.code(), fm_api::ErrorCode::InvalidRequest);
         assert!(err.message().contains("zz"));
@@ -989,6 +1012,35 @@ mod tests {
         let need = Need::languages(&codes(&["sr-Cyrl", "sr-Latn"])).expect("known");
         assert!(!need.is_empty());
         assert!(Need::languages(&codes(&["xx-Nope"])).is_err());
+    }
+
+    /// E54.4: a language need allows no missing character, where the same
+    /// characters as pasted text allow up to NEAR_MISS.
+    #[test]
+    fn a_language_allows_no_missing_letter_where_text_allows_a_near_miss() {
+        let presets = [preset("xa", "Latn", None, "abcdefghij")];
+        let language = Need::languages_of(&presets, &codes(&["xa"])).expect("known");
+        let text = Need::text("abcdefghij");
+        for (face, lacks) in [("abcdefghij", 0), ("abcdefghi", 1), ("abcde", 5)] {
+            let set = set(face);
+            let exact = lacks == 0;
+            assert_eq!(language.passes(&set), exact, "language, {face}");
+            assert_eq!(
+                language.check(&set, &[]).passes(),
+                exact,
+                "language, {face}"
+            );
+            assert!(
+                language.check(&set, &[]).chars.is_empty(),
+                "no near-miss list"
+            );
+            assert!(text.passes(&set), "text, {face}");
+            assert_eq!(
+                text.check(&set, &[]).chars.len(),
+                lacks,
+                "text lists {face}"
+            );
+        }
     }
 
     #[test]

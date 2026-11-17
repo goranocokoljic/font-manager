@@ -217,8 +217,9 @@ pub(crate) fn passes(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> b
 }
 
 /// The [`Dim::Supports`] bit for a face that meets the search's [`Need`](crate::coverage::Need)
-/// as `fit`: complete or a near miss passes; `None` (the face's coverage
-/// is not known) fails.
+/// as `fit`: complete passes, and for a pasted text a near miss too (a
+/// language allows none, E54.4); `None` (the face's coverage is not known)
+/// fails.
 pub(crate) fn failed_supports(fit: Option<&Fit>) -> u32 {
     if fit.is_some_and(Fit::passes) {
         0

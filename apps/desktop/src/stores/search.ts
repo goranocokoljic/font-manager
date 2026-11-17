@@ -15,9 +15,10 @@ import type {
   LanguageHint,
   LanguagePreset,
   RuleGroup,
+  TagId,
   TraitFilter,
 } from '../api/types';
-import { hasFilters } from '../search/chips';
+import { hasFilters, toggleChip } from '../search/chips';
 import { chooseTrait, parseTraitWords, withoutTrait } from '../search/traits';
 import { useLibraryStore } from './library';
 
@@ -404,6 +405,19 @@ export const useSearchStore = defineStore('search', () => {
     setFoundry(isFoundry(name) ? null : name);
   }
 
+  /** The tag filter holds `id` now (E54.3): the sidebar's tag shows as pressed. */
+  function isTag(id: TagId): boolean {
+    return filters.value.tags?.includes(id) ?? false;
+  }
+
+  /**
+   * A click on a sidebar tag (E54.3): adds it to the tag filter, or takes it off when it is
+   * on. The same `filters.tags` the Filters popover and its chips set, so all three agree.
+   */
+  function toggleTag(id: TagId): void {
+    setFilters(toggleChip(filters.value, 'tags', id));
+  }
+
   /**
    * "Show" on the watcher's notice (E51.2): the wall lists only `faces`, under a chip named
    * `label`; the text and every other filter are cleared so none hides them.
@@ -492,6 +506,8 @@ export const useSearchStore = defineStore('search', () => {
     setFoundry,
     isFoundry,
     toggleFoundry,
+    isTag,
+    toggleTag,
     showOnly,
     clearOnly,
     chooseTraitValue,

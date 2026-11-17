@@ -6,18 +6,25 @@
 // fonts already carry; after the drop it folds back if it was folded. The tag under the
 // pointer shows the accent ring and its count now and after the drop ("31 → 34", E44.2);
 // the drop flies the ghost into it.
+// Each tag is a button (E54.3): a click filters the list by it and marks it pressed, a second
+// click takes it off; several combine. It is the search store's `filters.tags`, the one the
+// Filters popover and its chips set. Tab and the arrow keys move between the tags. A drop
+// only tags: it is no click, so it never toggles the filter.
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import type { TagId } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
 import { isFontDrag, readFontDrop } from '../list/drag';
 import { FmFade } from '../motion';
 import { useFontDragStore, type DropTarget } from '../stores/fontDrag';
+import { useSearchStore } from '../stores/search';
 import { useTaggingStore } from '../stores/tagging';
 import { useTagsStore } from '../stores/tags';
 import SidebarHead from './SidebarHead.vue';
 
 const tags = useTagsStore();
 const tagging = useTaggingStore();
+const search = useSearchStore();
+const list = ref<HTMLElement | null>(null);
 const target = ref<TagId | null>(null);
 const fontDrag = useFontDragStore();
 const dropTarget = (id: TagId): DropTarget => ({ kind: 'tag', id });
@@ -75,6 +82,28 @@ function onDrop(name: string, e: DragEvent): void {
     void tagging.dropOn(name, fonts);
 }
 
+/** The arrow keys, Home and End move the focus between the tags, in the reading direction. */
+function onKey(e: KeyboardEvent): void {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const buttons = [...(list.value?.querySelectorAll<HTMLElement>('button.chip') ?? [])];
+  const at = buttons.indexOf(e.target as HTMLElement);
+  if (at < 0) return;
+  const rtl = getComputedStyle(e.target as HTMLElement).direction === 'rtl';
+  const step: Record<string, number> = {
+    ArrowDown: 1,
+    ArrowUp: -1,
+    ArrowRight: rtl ? -1 : 1,
+    ArrowLeft: rtl ? 1 : -1,
+  };
+  let next: number;
+  if (e.key in step) next = Math.min(buttons.length - 1, Math.max(0, at + step[e.key]!));
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = buttons.length - 1;
+  else return;
+  e.preventDefault();
+  buttons[next]?.focus();
+}
+
 function countLabel(n: number): string {
   return t('tags.fontCount', { count: n });
 }
@@ -91,12 +120,18 @@ function countLabel(n: number): string {
       {{ t('tags.heading') }}
     </SidebarHead>
     <p v-if="tags.error" role="alert" class="error">{{ errorMessage(tags.error) }}</p>
-    <ul v-show="!tagging.folded" id="fm-tags-list" class="list" aria-labelledby="fm-tags-heading">
+    <ul
+      v-show="!tagging.folded"
+      id="fm-tags-list"
+      ref="list"
+      class="list"
+      aria-labelledby="fm-tags-heading"
+      @keydown="onKey"
+    >
       <li
         v-for="tag in tags.tags"
         :key="tag.id"
-        class="chip"
-        :title="countLabel(tag.faceCount)"
+        class="tag"
         :class="{
           carried: tagging.dragging && tagging.dragCarried.has(tag.id),
           drop: target === tag.id,
@@ -107,7 +142,18 @@ function countLabel(n: number): string {
         @dragleave="onDragLeave(tag.id)"
         @drop="onDrop(tag.name, $event)"
       >
-        <span class="name">{{ tag.name }}</span>
+        <button
+          type="button"
+          class="chip"
+          :title="countLabel(tag.faceCount)"
+          :aria-pressed="search.isTag(tag.id)"
+          @click="search.toggleTag(tag.id)"
+        >
+          <span class="name">{{ tag.name }}</span>
+          <span class="sr-only count" :aria-label="countLabel(tag.faceCount)">{{
+            countLabel(tag.faceCount)
+          }}</span>
+        </button>
         <FmFade speed="fast">
           <span
             v-if="dropCount(tag.id)"
@@ -117,9 +163,6 @@ function countLabel(n: number): string {
             >{{ dropCount(tag.id)!.text }}</span
           >
         </FmFade>
-        <span class="sr-only count" :aria-label="countLabel(tag.faceCount)">{{
-          formatNumber(tag.faceCount)
-        }}</span>
       </li>
       <li v-if="!tags.tags.length" class="side-quiet">{{ t('tags.empty') }}</li>
     </ul>
@@ -135,29 +178,48 @@ function countLabel(n: number): string {
   padding: 0 var(--fm-space-2);
   list-style: none;
 }
-.chip {
+.tag {
+  /* The count floats above the chip, so the chip under the pointer keeps its size and place:
+     a wider chip could wrap to the next line, leave the pointer and miss the drop. */
+  position: relative;
   max-width: 100%;
-  padding: 2px var(--fm-space-2);
   border-radius: 999px;
-  background-color: var(--fm-hover);
+}
+.chip {
+  display: block;
+  max-width: 100%;
+  padding-block: 1px;
+  padding-inline: calc(var(--fm-space-2) - 1px);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: 999px;
+  background-color: transparent;
+  color: var(--fm-fg);
+  font: inherit;
   font-size: var(--fm-text-sm);
+  cursor: pointer;
 }
 .chip:hover {
   background-color: var(--fm-active);
+  background-image: none;
+}
+/* The tag filters the list (E54.3): filled with the accent, as a pressed filter chip is. An
+   unpressed tag has no fill, only a border, so the pressed fill is measured against the
+   sidebar itself and reaches 3:1 (e2e/tag-filter.spec.ts checks both themes). */
+.chip[aria-pressed='true'] {
+  border-color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 /* A tag the dragged fonts already carry: a ring, not bold type, so no chip changes width and
    moves another under the pointer during the drag. */
-.carried {
+.carried .chip {
   box-shadow: inset 0 0 0 1px var(--fm-accent);
-  color: var(--fm-fg);
+}
+.carried .chip[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px var(--fm-on-accent);
 }
 .drop {
   outline: 2px solid var(--fm-accent);
-}
-/* The count floats above the chip, so the chip under the pointer keeps its size and place: a
-   wider chip could wrap to the next line, leave the pointer and miss the drop. */
-.chip {
-  position: relative;
 }
 .drop-count {
   position: absolute;

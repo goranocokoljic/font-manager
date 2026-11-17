@@ -3609,6 +3609,27 @@ export type SidecarField =
 /**  The family's declared license. */
 "familyLicense";
 
+/**  The faces that look like one face, or why there are none (E54.11). */
+export type SimilarAnswer = {
+	/**  The similar faces, closest first: what `find_similar` returns. */
+	faces: SimilarFace[],
+	/**  Set when `faces` is empty: why. */
+	empty?: SimilarEmpty | null,
+	/**  `empty` in plain words, for the UI to show as it is. */
+	message?: string | null,
+};
+
+/**  Why [`SearchService::find_similar_answer`] found no similar face (E54.11). */
+export type SimilarEmpty = 
+/**
+ *  The reference face has no glyph fingerprint (it does not draw the
+ *  Latin sample the comparison measures: a symbol, icon or non-Latin
+ *  face, or one that could not be drawn), so it cannot be compared.
+ */
+"notMeasured" | 
+/**  No face is close enough to call similar. */
+"noneClose";
+
 /**  A similar face and why. */
 export type SimilarFace = {
 	/**  The face. */
