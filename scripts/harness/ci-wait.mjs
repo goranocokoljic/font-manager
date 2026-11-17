@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadConfig, gh, ghJson, parseArgs, isMain } from './lib.mjs';
-import { blocking, touchesNative } from '../bench/lib.mjs';
+import { blocking, changesNative } from '../bench/lib.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -114,6 +114,15 @@ async function bench(prNumber, sha, cfg, deadline) {
   if (!existsSync('.github/workflows/' + cfg.ci.bench_workflow)) {
     return { status: 'unavailable', note: 'no bench workflow yet: verify numeric criteria locally (pending E9.1)' };
   }
+  // A PR that changes no native code (crates, Tauri shell, the bench) cannot
+  // have moved the numbers: do not start the bench at all. A criterion with a
+  // number and a unit that is not a budget ("the tooltip shows within 400 ms")
+  // would else cost a three-OS bench run, and a slow runner could turn it red.
+  const files = ghJson(['pr', 'view', String(prNumber), '--json', 'files'])?.files ?? [];
+  const nativeChanged = changesNative(files.map((f) => f.path));
+  if (!nativeChanged) {
+    return { status: 'skipped', nativeChanged, note: 'bench not run: the PR changes no native code (crates, src-tauri, bench)' };
+  }
   gh(['label', 'create', 'bench', '--color', 'C5DEF5', '--description', 'Runs the bench workflow on this PR'], { allowFail: true }); // exists -> no-op error
   gh(['pr', 'edit', String(prNumber), '--add-label', 'bench'], { allowFail: true });
   const found = await waitFor(sha, [cfg.ci.bench_check], cfg, deadline, null, { ignoreSkipped: true });
@@ -129,16 +138,8 @@ async function bench(prNumber, sha, cfg, deadline) {
     const metrics = JSON.parse(readFileSync(join(dir, String(file)), 'utf8'));
     // The PR report is gated against main (E9.2): a regression is red, a metric
     // already over budget on main is not. An ungated report: over budget is red.
-    // A PR that changes no native code (crates, Tauri shell, the bench) cannot
-    // have moved the numbers: its report is kept for the record and never blocks.
-    const files = ghJson(['pr', 'view', String(prNumber), '--json', 'files'])?.files ?? [];
-    const nativeChanged = files.length === 0 || files.some((f) => touchesNative(f.path));
     const failed = blocking(metrics, { nativeChanged }).map((k) => ({ metric: k, ...metrics[k] }));
-    const informational = !nativeChanged && blocking(metrics).length > 0;
-    return {
-      status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion, nativeChanged,
-      ...(informational ? { note: 'bench regressions not counted: the PR changes no native code (crates, src-tauri, bench)' } : {}),
-    };
+    return { status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion, nativeChanged };
   } catch (e) {
     return { status: 'error', note: e.message };
   } finally {
