@@ -7924,3 +7924,84 @@ fn a_search_for_faces_lists_only_those_faces() {
 }
 
 mod watching;
+
+/// E54.6: catalog families are judged against their preview files, in
+/// request order; a family that cannot be judged previews the sample, and
+/// an off catalog fails the request.
+#[test]
+fn catalog_sample_texts_judge_each_family_by_its_preview_file() {
+    let (lib, _, _) = Lib::scanned("catalog-sample-texts");
+    let server =
+        crate::catalog::tests::lato_server((200, crate::catalog::tests::lato_font("bold")));
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        Arc::new(crate::catalog::HttpFetcher::new()),
+        vec![Arc::new(GoogleFonts::with_base_url(server.base()))],
+    )
+    .with_previews_in(lib.paths.cache.join(CATALOGS_DIR));
+    let lib = Lib {
+        api: lib.api.with_catalogs(catalogs),
+        ..lib
+    };
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    let ask = |families: &[&str]| {
+        lib.api
+            .catalog_sample_texts(fm_api::catalog::CatalogSampleTextRequest {
+                id,
+                families: families.iter().map(|&f| f.to_owned()).collect(),
+                text: "Ljubazni fenjerdžija".into(),
+            })
+    };
+    let e = ask(&["Lato"]).expect_err("off");
+    assert_eq!(e.code, ErrorCode::Conflict);
+
+    lib.api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    lib.api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    let got = ask(&["Not Listed", "Lato"]).expect("answers");
+    assert_eq!(
+        got.iter().map(|g| g.family.as_str()).collect::<Vec<_>>(),
+        ["Not Listed", "Lato"],
+        "request order"
+    );
+    assert_eq!(got[0].text, "Ljubazni fenjerdžija");
+    assert!(got[0].missing.is_empty(), "not judged: {:?}", got[0]);
+    assert_eq!(got[0].fallback, None);
+    // Lato's file maps Latin: the sample, with only what the file lacks missing.
+    assert_eq!(got[1].text, "Ljubazni fenjerdžija");
+    assert_eq!(got[1].fallback, None);
+    assert!(
+        !got[1].missing.iter().any(|c| c == "a" || c == " "),
+        "{:?}",
+        got[1].missing
+    );
+    let file = lib
+        .api
+        .catalog_font_source(CatalogFontRequest {
+            id,
+            family: "Lato".into(),
+        })
+        .expect("preview file");
+    let set = crate::coverage::CodePointSet::from_code_points(
+        crate::parser::parse_file(Path::new(&file.path))
+            .expect("parse")
+            .faces[0]
+            .code_points
+            .clone(),
+    );
+    let lacks: Vec<String> = "Ljubazni fenjerdžija"
+        .chars()
+        .filter(|&c| c != ' ' && !set.contains(u32::from(c)))
+        .map(String::from)
+        .fold(Vec::new(), |mut v, c| {
+            if !v.contains(&c) {
+                v.push(c);
+            }
+            v
+        });
+    assert_eq!(
+        got[1].missing, lacks,
+        "what the file lacks, as the file says"
+    );
+}

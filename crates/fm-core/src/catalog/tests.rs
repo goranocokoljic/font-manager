@@ -1166,3 +1166,55 @@ fn a_download_with_a_deadline_gone_makes_no_request_and_writes_nothing() {
         .expect("download");
     assert_eq!(got.written.len(), 2);
 }
+
+/// E54.6: the letters a catalog family can show are read from its preview
+/// file. Neuton Light lacks Ć Đ ć đ of Serbian (Latin), and maps the rest.
+#[test]
+fn a_previews_code_points_come_from_its_file_and_are_read_once() {
+    let dir = TempDir::new("catalog-preview-cmap");
+    let fetcher = Routed::new();
+    *lock(&fetcher.font) = fixture("fonts/google-repo/neuton/Neuton-Light.ttf");
+    let c = previewing(&dir, &fetcher);
+    let e = c.preview_code_points(GOOGLE, "Lato").expect_err("off");
+    assert_eq!(e.code(), ErrorCode::Conflict);
+    c.set_enabled(GOOGLE, true).expect("on");
+    c.refresh(GOOGLE).expect("refresh");
+
+    let set = c.preview_code_points(GOOGLE, "Lato").expect("code points");
+    for ch in ['a', 'č', 'š', 'ž', 'Č'] {
+        assert!(set.contains(u32::from(ch)), "maps {ch}");
+    }
+    for ch in ['ć', 'đ', 'Ć', 'Đ'] {
+        assert!(!set.contains(u32::from(ch)), "lacks {ch}");
+    }
+    let got = crate::sample::preview_sample(&set, "čađavog lica hoće");
+    assert_eq!(got.text, "čađavog lica hoće", "the sample, not a fallback");
+    assert_eq!(got.fallback, None);
+    assert_eq!(got.missing, vec!['đ', 'ć']);
+
+    // Asked again, the file is not parsed or fetched again: the same set.
+    let again = c.preview_code_points(GOOGLE, "Lato").expect("again");
+    assert!(Arc::ptr_eq(&set, &again));
+    assert_eq!(fetcher.urls().len(), 3, "index, file list, file");
+}
+
+/// A preview file the parser cannot read maps nothing: its rows are not judged.
+#[test]
+fn a_preview_with_no_readable_face_maps_nothing() {
+    let dir = TempDir::new("catalog-preview-cmap-broken");
+    let fetcher = Routed::new();
+    // A TrueType magic with nothing after it: kept as a font, no face to read.
+    *lock(&fetcher.font) = {
+        let mut bytes = vec![0, 1, 0, 0];
+        bytes.extend([0; 60]);
+        bytes
+    };
+    let c = previewing(&dir, &fetcher);
+    c.set_enabled(GOOGLE, true).expect("on");
+    c.refresh(GOOGLE).expect("refresh");
+    match c.preview_code_points(GOOGLE, "Lato") {
+        Ok(set) => assert!(set.is_empty()),
+        // Refused as not a font before it is kept: also never judged.
+        Err(e) => assert_eq!(e.code(), ErrorCode::Io),
+    }
+}

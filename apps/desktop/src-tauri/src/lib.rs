@@ -11,9 +11,9 @@ use fm_api::activation::{
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef,
-    CatalogService, CatalogUpdate, CheckUpdatesRequest, DownloadFamilyRequest,
-    DownloadFamilyResponse, InstallFamilyRequest, InstallFamilyResponse,
-    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    CatalogSampleText, CatalogSampleTextRequest, CatalogService, CatalogUpdate,
+    CheckUpdatesRequest, DownloadFamilyRequest, DownloadFamilyResponse, InstallFamilyRequest,
+    InstallFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -759,6 +759,17 @@ async fn list_catalog_families(
     req: ListCatalogFamiliesRequest,
 ) -> ApiResult<Paged<CatalogFamily>> {
     call(&state, move |api| api.list_catalog_families(req)).await
+}
+
+/// The text each catalog family on screen previews for the sample (E54.6):
+/// its missing characters, read from its preview file (a request the
+/// first time, as the webview's own load of the file).
+#[tauri::command]
+async fn catalog_sample_texts(
+    state: State<'_, AppState>,
+    req: CatalogSampleTextRequest,
+) -> ApiResult<Vec<CatalogSampleText>> {
+    call(&state, move |api| api.catalog_sample_texts(req)).await
 }
 
 /// Downloads a family into a watched source and starts its rescan (E22.3);
@@ -1630,6 +1641,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             set_catalog_enabled,
             refresh_catalog,
             list_catalog_families,
+            catalog_sample_texts,
             download_family,
             install_family,
             list_catalog_downloads,

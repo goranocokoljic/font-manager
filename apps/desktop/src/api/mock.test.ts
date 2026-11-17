@@ -80,7 +80,8 @@ describe('MockApi collection colours (E44.3)', () => {
 describe('MockApi detectLanguages (E43.2)', () => {
   it('ranks the presets by the letters of the text', async () => {
     const hints = await createMockClient().detectLanguages({ text: 'Zażółć Ђ' });
-    expect(hints.map((h) => h.code)).toEqual(['pl', 'sr-Cyrl']);
+    // ć is Polish and Serbian (Latin); Ђ Serbian (Cyrillic) only.
+    expect(hints.map((h) => h.code)).toEqual(['pl', 'sr-Cyrl', 'sr-Latn']);
     expect(hints[0]?.confidence ?? 0).toBeGreaterThan(hints[1]?.confidence ?? 1);
   });
 

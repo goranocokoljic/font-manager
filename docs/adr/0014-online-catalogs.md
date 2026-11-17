@@ -68,7 +68,10 @@ part that differs per catalog needs one narrow seam.
   `NotFound` for a family the list does not have, both before any request. The webview
   loads it as live text through the face loader on the app's font scheme
   (`fmfont`, path `/catalog-<catalog id>-<the name's UTF-8 as hex>`), so a request is
-  made only when a row of an open catalog is on screen. Turning a never-refreshed
+  made only when a row of an open catalog is on screen. `catalog_sample_texts` (E54.6)
+  reads the same file for the rows on screen and answers, per family, the characters of
+  the sample it lacks (`fm_core::sample::preview_sample`, as `sample_texts` for a library
+  face), so a catalog row draws them as tofu (E43.4); it makes no other request. Turning a never-refreshed
   catalog on fetches its list at once; the switch says it connects to the internet.
 - **Downloads (E22.3).** `CatalogService::download_family` (catalog, family, static or
   variable, a source) and `install_family` (below) are the only calls that write into the

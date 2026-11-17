@@ -379,6 +379,36 @@ export type CatalogRef = {
 	id: CatalogId,
 };
 
+/**
+ *  The text one catalog family previews: the sample with the characters
+ *  its preview file lacks (drawn as tofu, E43.4), or text from the file's
+ *  own coverage when it maps none of the sample's letters.
+ */
+export type CatalogSampleText = {
+	/**  The family. */
+	family: string,
+	/**  The sample text, or text from the file's own coverage. */
+	text: string,
+	/**  Set when the file lacks characters of the sample and `text` is other text. */
+	fallback?: SampleFallback | null,
+	/**  The characters of the sample the file lacks. */
+	missing?: string[],
+};
+
+/**
+ *  The text some families of one catalog preview, for one sample text
+ *  (E54.6): the catalog's twin of `SampleTextRequest`, judged against each
+ *  family's preview file.
+ */
+export type CatalogSampleTextRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The families, as the catalog lists them; usually the ones on screen. */
+	families: string[],
+	/**  The sample text the user chose. */
+	text: string,
+};
+
 /**  One style a catalog family offers. */
 export type CatalogStyle = {
 	/**  Weight class (100–1000). */

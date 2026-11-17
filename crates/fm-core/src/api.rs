@@ -37,9 +37,10 @@ use fm_api::activation::{
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
-    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogUpdate,
-    CheckUpdatesRequest, DownloadFamilyRequest, DownloadFamilyResponse, InstallFamilyRequest,
-    InstallFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogSampleText,
+    CatalogSampleTextRequest, CatalogService, CatalogUpdate, CheckUpdatesRequest,
+    DownloadFamilyRequest, DownloadFamilyResponse, InstallFamilyRequest, InstallFamilyResponse,
+    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::{Health, Page, Paged};
 use fm_api::comparison::{
@@ -1974,6 +1975,37 @@ impl CatalogService for CoreApi {
         req: ListCatalogFamiliesRequest,
     ) -> ApiResult<Paged<CatalogFamily>> {
         Ok(self.catalogs()?.families(req.id, &req.query, req.page)?)
+    }
+
+    /// Each family judged against its preview file as `sample_texts` judges
+    /// a library face. An off catalog fails the request; any other failure
+    /// (a family not listed, no connection, a damaged file) leaves that
+    /// family's sample unjudged and the rest answered.
+    fn catalog_sample_texts(
+        &self,
+        req: CatalogSampleTextRequest,
+    ) -> ApiResult<Vec<CatalogSampleText>> {
+        let catalogs = self.catalogs()?;
+        req.families
+            .into_iter()
+            .map(|family| {
+                let set = match catalogs.preview_code_points(req.id, &family) {
+                    Ok(set) => set,
+                    Err(e) if e.code() == ErrorCode::Conflict => return Err(e.into()),
+                    Err(e) => {
+                        tracing::debug!(%family, error = %e, "catalog preview not judged");
+                        Arc::default()
+                    }
+                };
+                let got = crate::sample::preview_sample(&set, &req.text);
+                Ok(CatalogSampleText {
+                    family,
+                    text: got.text,
+                    fallback: got.fallback,
+                    missing: got.missing.into_iter().map(String::from).collect(),
+                })
+            })
+            .collect()
     }
 
     fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {

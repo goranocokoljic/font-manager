@@ -235,6 +235,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; refresh_catalog, json!({ "id": "googleFonts" }));
     same!(seen, d, c; list_catalog_families, json!({ "id": "googleFonts" }));
     same!(seen, d, c; catalog_font_source, json!({ "id": "googleFonts", "family": "Inter" }));
+    same!(seen, d, c; catalog_sample_texts, json!({ "id": "googleFonts", "families": ["Inter"], "text": "Čač" }));
     same!(seen, d, c; download_family, json!({ "id": "googleFonts", "family": "Inter", "kind": "static", "source": 1 }));
     same!(seen, d, c; install_family, json!({ "id": "googleFonts", "family": "Inter", "kind": "static" }));
     same!(seen, d, c; list_catalog_downloads);
