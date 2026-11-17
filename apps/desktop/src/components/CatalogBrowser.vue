@@ -200,10 +200,6 @@ watch([() => store.query, mode], () => {
 function downloadClosed(): void {
   viewport.value?.focus();
 }
-
-const surfaceClass = computed(() =>
-  preview.value.surface === 'auto' ? undefined : `surface-${preview.value.surface}`,
-);
 </script>
 
 <template>
@@ -291,8 +287,6 @@ const surfaceClass = computed(() =>
       v-else-if="store.total > 0"
       ref="viewport"
       class="viewport"
-      :class="surfaceClass"
-      :style="{ backgroundColor: preview.backgroundColor ?? undefined }"
       role="list"
       tabindex="0"
       data-testid="catalog-list"

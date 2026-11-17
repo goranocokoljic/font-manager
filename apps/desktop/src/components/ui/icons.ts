@@ -80,5 +80,9 @@ export const ICONS = {
   bookmark: '<path d="M4.5 2.5h7v11L8 11l-3.5 2.5z"/>',
   maximize: '<path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"/>',
   minimize: '<path d="M13.5 2.5L9.5 6.5M9.5 3v3.5H13M2.5 13.5l4-4M6.5 13V9.5H3"/>',
+  // Preview options' Align (E54.8, board 12): three lines set to the start, centre or end.
+  alignStart: '<path d="M3 4.5h10M3 8h6M3 11.5h8"/>',
+  alignCenter: '<path d="M3 4.5h10M5 8h6M4 11.5h8"/>',
+  alignEnd: '<path d="M3 4.5h10M7 8h6M5 11.5h8"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { selectOption, showPreviewOptions } from './select';
+import { showPreviewOptions } from './select';
 
 // Browser mode runs on the mock client; the Quick Collection starts empty.
 const fixture = readFileSync(
@@ -77,20 +77,18 @@ test('the review lists the fonts with the preview settings; each drops by key or
   await expect(reviewRows(page)).toHaveCount(2);
   await expect(reviewRows(page).first().locator('.sample')).toHaveCSS('font-size', '40px');
 
-  // The Surface setting applies too: white text picked for a dark surface stays readable.
-  await review(page).getByRole('button', { name: 'Back to fonts' }).click();
-  await showPreviewOptions(page);
-  const controls = page.getByRole('group', { name: 'Preview settings' });
-  await selectOption(controls.getByLabel('Surface'), 'dark');
-  await controls.getByLabel('Text color').fill('#ffffff');
-  await page.getByTestId('quick-collection').click();
+  // The rows draw in the theme's text colour on the theme's surface (E54.8): no override.
   const surface = page.locator('.review .viewport');
-  await expect(surface).toHaveClass(/surface-dark/);
-  await expect(surface).toHaveCSS('background-color', 'rgb(28, 28, 30)');
-  await expect(reviewRows(page).first().locator('.sample')).toHaveCSS(
-    'color',
-    'rgb(255, 255, 255)',
-  );
+  await expect(surface).not.toHaveClass(/surface-/);
+  const fg = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--fm-fg)';
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  });
+  await expect(reviewRows(page).first().locator('.sample')).toHaveCSS('color', fg);
 
   // The button drops one.
   await review(page)

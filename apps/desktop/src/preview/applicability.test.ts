@@ -157,3 +157,23 @@ describe('previewPreset', () => {
     expect(previewPreset(src({ sample: 'fontName' }))).toBe('word');
   });
 });
+
+describe('Line height (E54.8)', () => {
+  it('is off on the wall for the single-line presets only', () => {
+    const off = PREVIEW_PRESETS.filter((p) => !applicability('grid', p).lineHeight.applies);
+    expect(off).toEqual(['word', 'numerals', 'letters']);
+    expect(applicability('grid', 'word').lineHeight).toEqual({
+      applies: false,
+      reason: 'preview.inactive.lineHeightSingle',
+    });
+    expect(t('preview.inactive.lineHeightSingle')).toBe(
+      'No effect while the preview is a single line.',
+    );
+  });
+
+  it('applies in every other view mode, whatever the preset', () => {
+    for (const mode of VIEW_MODES.filter((m) => m !== 'grid'))
+      for (const preset of PREVIEW_PRESETS)
+        expect(applicability(mode, preset).lineHeight.applies, `${mode} ${preset}`).toBe(true);
+  });
+});

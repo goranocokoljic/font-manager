@@ -23,7 +23,6 @@ const props = defineProps<{
   trackingEm?: number;
   /** Draws the text as outlines (stroke, no fill). */
   outline?: boolean;
-  color?: string | null;
   /** Starts no load for a face not held yet (the grid moves fast). */
   defer?: boolean;
   /** The width the text must fit, in CSS px; wider text shrinks so it is never cut. */
@@ -119,7 +118,6 @@ const style = computed(() => ({
   fontSize: `${props.sizePx * fit.value}px`,
   fontPalette: props.palette,
   letterSpacing: props.trackingEm ? `${props.trackingEm}em` : undefined,
-  color: props.color ?? undefined,
   lineHeight: props.lineHeight,
   '--fm-wrap-lines': props.wrapLines,
 }));

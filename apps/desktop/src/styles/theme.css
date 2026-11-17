@@ -62,6 +62,9 @@
   --fm-bg: #ffffff;
   --fm-surface: #f6f5f2;
   --fm-surface-2: #ffffff;
+  /* A well set into a level-2 surface (Preview options' specimen, E54.8): the paper tint in
+     light, the deeper ground in dark, where surface and surface-2 are one colour. */
+  --fm-well: var(--fm-surface);
   --fm-fg: #1a1a1a;
   --fm-muted: #5c5c63;
   --fm-border: rgb(0 0 0 / 9%);
@@ -115,6 +118,7 @@
     --fm-bg: #1c1c1e;
     --fm-surface: #262628;
     --fm-surface-2: #262628;
+    --fm-well: var(--fm-bg);
     --fm-studio-ground: var(--fm-surface-2);
     --fm-fg: #ececec;
     --fm-muted: #a3a3a8;
@@ -148,6 +152,7 @@
   --fm-surface: #262628;
   /* The lightest surface where the dark accent, as a focus ring, still reaches 3:1. */
   --fm-surface-2: #262628;
+  --fm-well: var(--fm-bg);
   --fm-studio-ground: var(--fm-surface-2);
   --fm-fg: #ececec;
   --fm-muted: #a3a3a8;
@@ -509,8 +514,8 @@ hr {
   }
 }
 
-/* A preview surface other than `auto` overrides the theme inside a font view only
-   (list, grid, waterfall) and on the family page's Text section (Paper and Ink). */
+/* The family page's Text section (Paper and Ink) sets its ground apart from the theme. Font
+   views have no surface of their own since E54.8: they always take the theme's. */
 .surface-light {
   color-scheme: light;
   --fm-bg: #ffffff;

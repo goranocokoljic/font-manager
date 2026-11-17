@@ -8,7 +8,7 @@
 // Features switched in the inspector's Features tab apply through
 // `font-feature-settings`. A color palette chosen in the inspector for the face's
 // family in `view` applies through `font-palette` (E16.3).
-// The list passes the view's preview settings (size, spacing, alignment, color).
+// The list passes the view's preview settings (size, spacing, alignment); the text takes the theme's colour.
 // When the face lacks characters of the sample, the list passes the fallback text
 // the API chose and `fallback`; the row then shows a small "Fallback" hint. Otherwise
 // each character in `missing` is drawn as tofu (E43.4), never in a fallback font, and the
@@ -48,8 +48,6 @@ const props = withDefaults(
     /** Letter spacing in em. */
     trackingEm?: number;
     align?: 'start' | 'center' | 'end';
-    /** Sample text color; inherits the list's when absent. */
-    color?: string | null;
     variations?: AxisValue[];
     /** Set when `text` is a fallback from the face's own coverage, not the sample. */
     fallback?: SampleFallback | null;
@@ -73,7 +71,6 @@ const props = withDefaults(
     lineHeight: 1.2,
     trackingEm: 0,
     align: 'start',
-    color: null,
     variations: () => [],
     fallback: null,
     missing: () => [],
@@ -158,7 +155,6 @@ const sampleStyle = computed(() => ({
   lineHeight: String(props.lineHeight),
   letterSpacing: `${props.trackingEm}em`,
   textAlign: props.align,
-  color: props.color ?? undefined,
   fontVariationSettings: variationSettings(
     axes.value,
     props.variations.length ? props.variations : (axesSet.values(props.face.id) ?? []),

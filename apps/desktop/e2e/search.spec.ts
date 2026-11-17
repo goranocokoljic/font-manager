@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { selectOption, showPreviewOptions } from './select';
+import { showPreviewOptions } from './select';
 import { openFilters } from './filters';
 
 // Preview rows load face files from `/fmfont/<id>`; serve one fixture for all.
@@ -116,20 +116,13 @@ test('open-license and embedding chips filter the list; open fonts show a green 
   await expect.poll(() => names(page)).toEqual(['Legacy Grotesk']);
 });
 
-for (const [scheme, surface] of [
-  ['dark', 'light'],
-  ['light', 'dark'],
-] as const) {
-  test(`the open-license badge keeps AA contrast on a ${surface} surface in a ${scheme} app`, async ({
+// The list has no surface of its own since E54.8: it sits on the theme's, in either scheme.
+for (const scheme of ['dark', 'light'] as const) {
+  test(`the open-license badge keeps AA contrast on the theme's surface in a ${scheme} app`, async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme: scheme });
     const tree = await open(page);
-    await selectOption(
-      page.getByRole('group', { name: 'Preview settings' }).getByLabel('Surface'),
-      surface,
-    );
-    await expect(tree).toHaveAttribute('data-surface', surface);
     const badge = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('open-license');
     const ratio = await badge.evaluate((el) => {
       const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
@@ -140,7 +133,13 @@ for (const [scheme, surface] of [
         });
         return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
       };
-      const bg = getComputedStyle(el.closest('[data-surface]')!).backgroundColor;
+      // The first opaque ground behind the badge.
+      let at: Element | null = el;
+      let bg = 'rgba(0, 0, 0, 0)';
+      while (at && /rgba\(.*, 0\)$|transparent/.test(bg)) {
+        bg = getComputedStyle(at).backgroundColor;
+        at = at.parentElement;
+      }
       const [hi, lo] = [lum(getComputedStyle(el).color), lum(bg)].sort((x, y) => y - x);
       return (hi! + 0.05) / (lo! + 0.05);
     });
