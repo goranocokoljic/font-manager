@@ -52,6 +52,12 @@ pub const HELP_PAGES: &[HelpPage] = &[
 /// The label of the one help window; opening another page reuses it.
 pub const HELP_WINDOW: &str = "help";
 
+/// E54.1: the help window never shows the webview's own context menu either. The help
+/// pages are static and do not load the app's `blockWebviewMenu` (`src/contextMenu.ts`),
+/// so the window runs the same capture-phase listener on every page it loads.
+const BLOCK_WEBVIEW_MENU: &str =
+    "window.addEventListener('contextmenu', (e) => e.preventDefault(), true);";
+
 const MENU_ID_PREFIX: &str = "help:";
 
 /// The page with this slug.
@@ -112,6 +118,7 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, slug: &str) -> ApiResult<()> {
         ))
         .inner_size(960.0, 720.0)
         .min_inner_size(480.0, 400.0)
+        .initialization_script(BLOCK_WEBVIEW_MENU)
         .build()
         .map_err(failed)?;
     Ok(())
