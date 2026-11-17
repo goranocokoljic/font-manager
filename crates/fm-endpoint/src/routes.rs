@@ -206,6 +206,7 @@ routes! {
     refresh_catalog(req),
     list_catalog_families(req),
     catalog_font_source(req),
+    catalog_sample_texts(req),
     download_family(req),
     install_family(req),
     list_catalog_downloads(),

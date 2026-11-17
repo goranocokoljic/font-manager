@@ -94,13 +94,6 @@ const activation = useActivationStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
 
-const surfaceClass = computed(() =>
-  props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
-);
-const viewportStyle = computed(() => ({
-  backgroundColor: props.preview.backgroundColor ?? undefined,
-}));
-
 /** Viewport height before the first measurement (and where there is no layout). */
 const FALLBACK_HEIGHT = 600;
 
@@ -277,9 +270,6 @@ function onToggle(row: ListRow): void {
   <div
     ref="viewport"
     class="viewport"
-    :class="surfaceClass"
-    :style="viewportStyle"
-    :data-surface="preview.surface"
     role="tree"
     tabindex="0"
     :aria-label="t('list.label')"
@@ -338,7 +328,6 @@ function onToggle(row: ListRow): void {
           :metrics="item.metrics"
           :outline="preview.outline"
           :align="preview.align"
-          :color="preview.textColor"
           :fallback="item.fallback"
           :missing="item.missing"
           :variations="item.variations"

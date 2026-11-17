@@ -217,10 +217,16 @@
     "customText": "Zum Testen tippen",
     "heroPlaceholder": "Zum Testen tippen",
     "options": "Vorschauoptionen",
+    "groups": {
+      "text": "Text",
+      "sizeSpacing": "Größe und Abstand",
+      "guides": "Hilfslinien"
+    },
     "customPlaceholder": "Beispieltext eingeben",
     "size": "Größe",
     "sizeGlyph": "A",
     "sizeSlider": "Größenregler",
+    "textSizeSlider": "Textgrößen-Regler",
     "sizeInPixels": "Größe in Pixeln",
     "autoSize": "Automatische Größe",
     "autoSizeHint": "Jede Zeile so skalieren, dass x-Höhe oder Versalhöhe aller Schriften bei dieser Größe gleich ist",
@@ -230,27 +236,23 @@
       "capHeight": "Versalhöhe"
     },
     "lineHeight": "Zeilenabstand",
+    "lineHeightSlider": "Zeilenabstand-Regler",
     "tracking": "Laufweite",
     "trackingSlider": "Laufweite-Regler",
     "trackingInEm": "Laufweite in em",
-    "metrics": "Metriken",
-    "metricsHint": "Grundlinie, x-Höhe und Versalhöhe jeder Zeile zeichnen",
-    "outline": "Kontur",
-    "alignment": "Ausrichtung",
+    "metrics": "Metriklinien",
+    "metricsHint": "Grundlinie, x-Höhe und Versalhöhe",
+    "outline": "Konturen",
+    "outlineHint": "Glyphen als Konturen zeichnen",
+    "align": "Ausrichtung",
     "aligns": {
       "start": "Anfang",
       "center": "Mitte",
       "end": "Ende"
     },
-    "text": "Textfarbe",
-    "textColor": "Farbe des Texts",
-    "background": "Hintergrund",
-    "backgroundColor": "Hintergrundfarbe",
-    "surface": "Fläche",
-    "surfaces": {
-      "auto": "Design folgen",
-      "light": "Hell",
-      "dark": "Dunkel"
+    "units": {
+      "px": "px",
+      "em": "em"
     },
     "strip": {
       "region": "Vorschauleiste",
@@ -269,7 +271,8 @@
       "sizeLayout": "Die Größe gilt nicht für das Layout — ändere sie im Layout",
       "sizeParagraph": "Absatz steht in der Fließtextgröße — ändere sie in den Vorschauoptionen",
       "language": "Die Sprache gilt nur für Pangramm — wechsle zu Pangramm",
-      "languageLayout": "Die Sprache gilt nicht für das Layout"
+      "languageLayout": "Die Sprache gilt nicht für das Layout",
+      "lineHeightSingle": "Keine Wirkung, solange die Vorschau einzeilig ist."
     },
     "presets": {
       "word": "Wort",

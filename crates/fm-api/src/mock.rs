@@ -18,10 +18,10 @@ use crate::activation::{
 };
 use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
-    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogStyle,
-    CatalogUpdate, CatalogUpdateStatus, CheckUpdatesRequest, DownloadFamilyRequest,
-    DownloadFamilyResponse, InstallFamilyRequest, InstallFamilyResponse,
-    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogSampleText,
+    CatalogSampleTextRequest, CatalogService, CatalogStyle, CatalogUpdate, CatalogUpdateStatus,
+    CheckUpdatesRequest, DownloadFamilyRequest, DownloadFamilyResponse, InstallFamilyRequest,
+    InstallFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureGroup, FeatureInfo, FontFormat, Health,
@@ -6339,6 +6339,55 @@ impl CatalogService for MockApi {
 
     /// The rules of the core without a request: an off catalog is
     /// `Conflict`, a family not in the cache `NotFound`; the path is made up.
+    /// The core's rule without a file: Lora's preview maps basic Latin only
+    /// (so Serbian Latin's č ć đ š ž are missing, drawn as tofu), every other
+    /// family Latin Extended too. A family not in the cached list is not
+    /// judged; an off catalog is `Conflict`.
+    fn catalog_sample_texts(
+        &self,
+        req: CatalogSampleTextRequest,
+    ) -> ApiResult<Vec<CatalogSampleText>> {
+        let st = self.state();
+        if !st.catalogs_on.contains(&req.id) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("{} is turned off. Turn it on to fetch its fonts.", req.id),
+            ));
+        }
+        let listed = |name: &str| {
+            st.catalog_cache
+                .get(&req.id)
+                .is_some_and(|(_, families)| families.iter().any(|f| f.name == name))
+        };
+        Ok(req
+            .families
+            .into_iter()
+            .map(|family| {
+                let mut missing: Vec<String> = Vec::new();
+                if listed(&family) {
+                    let maps =
+                        |c: char| LATIN.contains(c) || (family != "Lora" && LATIN_EXT.contains(c));
+                    for c in req.text.chars() {
+                        let s = c.to_string();
+                        if !c.is_whitespace()
+                            && !c.is_control()
+                            && !maps(c)
+                            && !missing.contains(&s)
+                        {
+                            missing.push(s);
+                        }
+                    }
+                }
+                CatalogSampleText {
+                    family,
+                    text: req.text.clone(),
+                    fallback: None,
+                    missing,
+                }
+            })
+            .collect())
+    }
+
     fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {
         let st = self.state();
         if !st.catalogs_on.contains(&req.id) {

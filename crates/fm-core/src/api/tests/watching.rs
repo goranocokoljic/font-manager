@@ -65,6 +65,36 @@ fn until(done: impl Fn() -> bool) -> Option<Duration> {
 
 /// The `LibraryChanged` events of `source` that arrive within `quiet` of
 /// each other, until none does.
+/// The changes to `source` when at least one is expected: waits up to
+/// `first` for the first one, then collects until `quiet` passes without
+/// another. A slow runner's OS (FSEvents on a loaded macOS runner) can
+/// deliver an event later than a quiet window alone allows.
+fn expected_changes_of(
+    rx: &Receiver<Event>,
+    source: SourceId,
+    first: Duration,
+    quiet: Duration,
+) -> Vec<Event> {
+    let deadline = Instant::now() + first;
+    let mut out = Vec::new();
+    while out.is_empty() {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return out;
+        }
+        match rx.recv_timeout(left) {
+            Ok(event) => {
+                if matches!(&event, Event::LibraryChanged { source: Some(s), .. } if *s == source) {
+                    out.push(event);
+                }
+            }
+            Err(_) => return out,
+        }
+    }
+    out.extend(changes_of(rx, source, quiet));
+    out
+}
+
 fn changes_of(rx: &Receiver<Event>, source: SourceId, quiet: Duration) -> Vec<Event> {
     let mut out = Vec::new();
     while let Ok(event) = rx.recv_timeout(quiet) {
@@ -72,30 +102,6 @@ fn changes_of(rx: &Receiver<Event>, source: SourceId, quiet: Duration) -> Vec<Ev
             out.push(event);
         }
     }
-    out
-}
-
-/// The changes of `source` when at least one is expected: waits up to `first` for the first
-/// one (a just-added watch can take more than a second to deliver on a busy macOS runner,
-/// FSEvents), then collects the rest until `quiet` passes without an event.
-fn changes_after(
-    rx: &Receiver<Event>,
-    source: SourceId,
-    first: Duration,
-    quiet: Duration,
-) -> Vec<Event> {
-    let deadline = std::time::Instant::now() + first;
-    let mut out = Vec::new();
-    while out.is_empty() {
-        let left = deadline.saturating_duration_since(std::time::Instant::now());
-        let Ok(event) = rx.recv_timeout(left) else {
-            return out;
-        };
-        if matches!(&event, Event::LibraryChanged { source: Some(s), .. } if *s == source) {
-            out.push(event);
-        }
-    }
-    out.extend(changes_of(rx, source, quiet));
     out
 }
 
@@ -200,6 +206,8 @@ fn a_burst_of_200_files_lands_as_one_refresh() {
 
 #[test]
 fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
+    // How long an expected change may take to arrive.
+    const EXPECTED: Duration = Duration::from_secs(10);
     let (lib, source) = watched("api-watch-sources", WatchSettings::default());
     let rx = lib.api.subscribe();
 
@@ -215,12 +223,7 @@ fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
         .expect("source");
     let path = other.join("a.ttf");
     std::fs::copy(fixtures().join(NEW_FONT), &path).expect("copy");
-    let events = changes_after(
-        &rx,
-        second.id,
-        Duration::from_secs(10),
-        Duration::from_millis(1500),
-    );
+    let events = expected_changes_of(&rx, second.id, EXPECTED, Duration::from_millis(1500));
     assert_eq!(gained(&events), 1, "{events:?}");
 
     // Paused: not watched.
@@ -244,21 +247,11 @@ fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
             paused: false,
         })
         .expect("resume");
-    let events = changes_after(
-        &rx,
-        second.id,
-        Duration::from_secs(10),
-        Duration::from_millis(1500),
-    );
+    let events = expected_changes_of(&rx, second.id, EXPECTED, Duration::from_millis(1500));
     // The resume's own event brings back the first face; the rescan adds b.
     assert_eq!(gained(&events), 2, "{events:?}");
     std::fs::remove_file(&later).expect("delete");
-    let events = changes_after(
-        &rx,
-        second.id,
-        Duration::from_secs(10),
-        Duration::from_millis(1500),
-    );
+    let events = expected_changes_of(&rx, second.id, EXPECTED, Duration::from_millis(1500));
     assert_eq!(lost(&events), 1, "{events:?}");
 
     // Removed: no longer watched. The watcher itself forgets the folder (an
@@ -280,12 +273,7 @@ fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
     // The first source was watched all along.
     let first = lib.root.join("d.ttf");
     std::fs::copy(fixtures().join(NEW_FONT), &first).expect("copy");
-    let events = changes_after(
-        &rx,
-        source.id,
-        Duration::from_secs(10),
-        Duration::from_millis(1500),
-    );
+    let events = expected_changes_of(&rx, source.id, EXPECTED, Duration::from_millis(1500));
     assert_eq!(gained(&events), 1, "{events:?}");
     close(lib);
 }

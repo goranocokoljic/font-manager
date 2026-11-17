@@ -2,6 +2,9 @@
 // A number field drawn by us: a text input that accepts numbers (decimals too), with
 // quiet − / + buttons. Empty is allowed (`''`). It replaces the browser's `type="number"`.
 // `commit` fires when the user leaves the field or presses Enter, with the final value.
+// `decimals` shows a value with that many places (1.20, 0.00). `inactive` (E54.8) is a field
+// whose setting has no effect here: it keeps its place and its Tab stop, shows the value
+// faded and takes no typing, steps or arrow keys.
 import { nextTick, ref, watch } from 'vue';
 import { t } from '../../i18n';
 import UiIcon from './UiIcon.vue';
@@ -15,6 +18,8 @@ const props = withDefaults(
     step?: number;
     ariaLabel?: string;
     ariaDescribedby?: string;
+    decimals?: number;
+    inactive?: boolean;
   }>(),
   {
     id: undefined,
@@ -23,6 +28,8 @@ const props = withDefaults(
     step: 1,
     ariaLabel: undefined,
     ariaDescribedby: undefined,
+    decimals: undefined,
+    inactive: false,
   },
 );
 const emit = defineEmits<{
@@ -31,12 +38,17 @@ const emit = defineEmits<{
 }>();
 
 /** What the input shows: kept apart so "0." and "-" survive on the way to a number. */
-const text = ref(String(props.modelValue));
+function format(value: number | ''): string {
+  return value === '' || props.decimals === undefined
+    ? String(value)
+    : value.toFixed(props.decimals);
+}
+const text = ref(format(props.modelValue));
 watch(
   () => props.modelValue,
   (value) => {
     const shown = text.value.trim() === '' ? '' : Number(text.value);
-    if (shown !== value) text.value = String(value);
+    if (shown !== value) text.value = format(value);
   },
 );
 
@@ -51,26 +63,29 @@ function places(): number {
   return (String(props.step).split('.')[1] ?? '').length;
 }
 function bump(dir: 1 | -1) {
+  if (props.inactive) return;
   const base =
     props.modelValue === '' ? (props.min ?? 0) - (dir === 1 ? props.step : 0) : props.modelValue;
   let next = Number((base + dir * props.step).toFixed(places()));
   if (props.min !== undefined) next = Math.max(props.min, next);
   if (props.max !== undefined) next = Math.min(props.max, next);
-  text.value = String(next);
+  text.value = format(next);
   emit('update:modelValue', next);
   emit('commit', next);
 }
 function onInput(e: Event) {
+  if (props.inactive) return;
   const raw = (e.target as HTMLInputElement).value;
   text.value = raw;
   const n = parse(raw);
   if (n !== null) emit('update:modelValue', n);
 }
 async function onChange(e: Event) {
+  if (props.inactive) return;
   const n = parse((e.target as HTMLInputElement).value);
   emit('commit', n ?? props.modelValue);
   await nextTick();
-  text.value = String(props.modelValue);
+  text.value = format(props.modelValue);
 }
 function onKey(e: KeyboardEvent) {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -81,7 +96,7 @@ function onKey(e: KeyboardEvent) {
 </script>
 
 <template>
-  <span class="num">
+  <span class="num" :class="{ inactive }">
     <input
       :id="id"
       class="in"
@@ -90,6 +105,8 @@ function onKey(e: KeyboardEvent) {
       autocomplete="off"
       :aria-label="ariaLabel"
       :aria-describedby="ariaDescribedby"
+      :aria-disabled="inactive ? 'true' : undefined"
+      :readonly="inactive"
       :value="text"
       @input="onInput"
       @change="onChange"
@@ -105,6 +122,13 @@ function onKey(e: KeyboardEvent) {
 </template>
 
 <style scoped>
+/* Inactive (E54.8): the same place and size, at 40 %, as every control without effect. */
+.num.inactive {
+  opacity: 0.4;
+}
+.num.inactive .b {
+  cursor: not-allowed;
+}
 .num {
   display: flex;
   align-items: center;

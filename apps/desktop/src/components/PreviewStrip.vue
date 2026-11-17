@@ -54,11 +54,7 @@ function onInput(e: Event): void {
 </script>
 
 <template>
-  <section
-    class="strip"
-    :aria-label="t('preview.strip.region')"
-    :style="{ color: preview.textColor ?? undefined }"
-  >
+  <section class="strip" :aria-label="t('preview.strip.region')">
     <div class="controls">
       <label :for="`${uid}-size`">{{ t('preview.strip.size') }}</label>
       <input
@@ -96,7 +92,6 @@ function onInput(e: Event): void {
       :metrics="metrics"
       :outline="preview.outline"
       :align="preview.align"
-      :color="preview.textColor"
     />
     <p v-else class="hint">{{ t('preview.strip.empty') }}</p>
   </section>

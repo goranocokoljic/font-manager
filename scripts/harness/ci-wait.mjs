@@ -21,8 +21,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { loadConfig, gh, ghJson, parseArgs, isMain } from './lib.mjs';
-import { blocking, touchesNative } from '../bench/lib.mjs';
+import { loadConfig, gh, ghJson, parseArgs, isMain, withLight } from './lib.mjs';
+import { blocking, changesNative } from '../bench/lib.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -97,7 +97,9 @@ function jobLog(id) {
 
 async function waitFor(sha, names, cfg, deadline, pr = null, opts = {}) {
   for (;;) {
-    const runs = checkRuns(sha, opts);
+    // The light job (a PR with harness scripts and developer docs only) stands
+    // in for the OS jobs ci.yml skipped.
+    const runs = withLight(checkRuns(sha, opts), names, opts.light);
     const found = names.map((n) => ({ want: n, run: matchCheck(n, runs) }));
     // No run yet and the PR conflicts with main: GitHub will never start one.
     if (pr && found.every((f) => !f.run) && mergeable(pr) === 'CONFLICTING') return 'conflict';
@@ -114,6 +116,15 @@ async function bench(prNumber, sha, cfg, deadline) {
   if (!existsSync('.github/workflows/' + cfg.ci.bench_workflow)) {
     return { status: 'unavailable', note: 'no bench workflow yet: verify numeric criteria locally (pending E9.1)' };
   }
+  // A PR that changes no native code (crates, Tauri shell, the bench) cannot
+  // have moved the numbers: do not start the bench at all. A criterion with a
+  // number and a unit that is not a budget ("the tooltip shows within 400 ms")
+  // would else cost a three-OS bench run, and a slow runner could turn it red.
+  const files = ghJson(['pr', 'view', String(prNumber), '--json', 'files'])?.files ?? [];
+  const nativeChanged = changesNative(files.map((f) => f.path));
+  if (!nativeChanged) {
+    return { status: 'skipped', nativeChanged, note: 'bench not run: the PR changes no native code (crates, src-tauri, bench)' };
+  }
   gh(['label', 'create', 'bench', '--color', 'C5DEF5', '--description', 'Runs the bench workflow on this PR'], { allowFail: true }); // exists -> no-op error
   gh(['pr', 'edit', String(prNumber), '--add-label', 'bench'], { allowFail: true });
   const found = await waitFor(sha, [cfg.ci.bench_check], cfg, deadline, null, { ignoreSkipped: true });
@@ -129,16 +140,8 @@ async function bench(prNumber, sha, cfg, deadline) {
     const metrics = JSON.parse(readFileSync(join(dir, String(file)), 'utf8'));
     // The PR report is gated against main (E9.2): a regression is red, a metric
     // already over budget on main is not. An ungated report: over budget is red.
-    // A PR that changes no native code (crates, Tauri shell, the bench) cannot
-    // have moved the numbers: its report is kept for the record and never blocks.
-    const files = ghJson(['pr', 'view', String(prNumber), '--json', 'files'])?.files ?? [];
-    const nativeChanged = files.length === 0 || files.some((f) => touchesNative(f.path));
     const failed = blocking(metrics, { nativeChanged }).map((k) => ({ metric: k, ...metrics[k] }));
-    const informational = !nativeChanged && blocking(metrics).length > 0;
-    return {
-      status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion, nativeChanged,
-      ...(informational ? { note: 'bench regressions not counted: the PR changes no native code (crates, src-tauri, bench)' } : {}),
-    };
+    return { status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion, nativeChanged };
   } catch (e) {
     return { status: 'error', note: e.message };
   } finally {
@@ -158,7 +161,7 @@ async function main() {
   if (!existsSync('.github/workflows/ci.yml')) {
     verdict = { status: 'no-ci', sha, checks: [], failed: [], bench: null, note: '.github/workflows/ci.yml does not exist (E1.2 not merged?)' };
   } else {
-    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number);
+    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number, { light: cfg.ci.light_check });
     if (found === 'conflict') {
       verdict = { status: 'conflict', sha, checks: [], failed: [], bench: null, note: 'the PR conflicts with main, so no CI runs' };
     } else if (!found) {
@@ -169,6 +172,8 @@ async function main() {
       }));
       const failed = checks
         .filter((c) => c.conclusion !== 'success' && c.conclusion !== 'missing' && c.id)
+        // One red light job stands for three required checks: report it once.
+        .filter((c, i, all) => all.findIndex((k) => k.id === c.id) === i)
         .map((c) => ({ name: c.name, os: c.os, url: c.url, excerpt: excerpt(jobLog(c.id)) }));
       const infra = failed.map((c) => infraReason(annotations(checks.find((k) => k.name === c.name).id))).find(Boolean);
       verdict = infra

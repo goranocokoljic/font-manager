@@ -87,6 +87,16 @@ then select **Undo** again. If you emptied the trash, the copy cannot come back.
 You can get a free family from Google Fonts or Fontshare. Turn the catalog on
 first, under **Online catalogs** in the sidebar.
 
+### Preview a catalog in your language
+
+The catalogs have the same preview row as your library. To see the families in
+another language, choose it in the **Language** menu of the preview row. Each
+family then shows the pangram of that language. Google Fonts and Fontshare use
+the same choice. Your library keeps its own choice.
+
+A letter that a family does not have shows as a box, as in your library. The
+row also tells you how many glyphs are missing.
+
 ### Install a family
 
 **Install** downloads a family and activates it in one step. Your design apps can

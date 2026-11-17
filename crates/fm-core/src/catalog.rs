@@ -45,6 +45,7 @@ use fm_api::common::{Page, Paged};
 use fm_api::library::OpenLicense;
 use serde::{Deserialize, Serialize};
 
+use crate::coverage::CodePointSet;
 use crate::error::{FmError, FmResult};
 
 /// The catalogs folder inside the app's data folder.
@@ -398,7 +399,14 @@ pub struct Catalogs {
     /// One lock per preview file being fetched, so two rows showing the same
     /// family make one request.
     fetching: Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>,
+    /// The code points of each preview file read so far (E54.6), so a row
+    /// that asks again does not parse the file again.
+    cmaps: Mutex<HashMap<PathBuf, Arc<CodePointSet>>>,
 }
+
+/// Preview files whose code points are kept; past this many they are read
+/// again (a catalog lists about 1,900 families, a screen shows a few dozen).
+const CMAPS_KEPT: usize = 512;
 
 impl std::fmt::Debug for Catalogs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -430,6 +438,7 @@ impl Catalogs {
             writing: Mutex::new(()),
             previews: None,
             fetching: Mutex::new(HashMap::new()),
+            cmaps: Mutex::new(HashMap::new()),
         }
     }
 
@@ -613,6 +622,32 @@ impl Catalogs {
         let path = dir.join(format!("{stem}.{ext}"));
         write_atomic(&path, &bytes)?;
         Ok(path)
+    }
+
+    /// The code points the preview file of `family` maps (E54.6): the file
+    /// [`Self::font_source`] gives (a request the first time, refused the
+    /// same way), its first face's `cmap`. A file the parser cannot read
+    /// maps nothing, so its rows are not judged. Kept in memory per file.
+    pub fn preview_code_points(&self, id: CatalogId, family: &str) -> FmResult<Arc<CodePointSet>> {
+        let path = self.font_source(id, family)?;
+        if let Some(set) = lock(&self.cmaps).get(&path) {
+            return Ok(Arc::clone(set));
+        }
+        let parsed = crate::parser::parse_file(&path)?;
+        let set = Arc::new(CodePointSet::from_code_points(
+            parsed
+                .faces
+                .into_iter()
+                .next()
+                .map(|face| face.code_points)
+                .unwrap_or_default(),
+        ));
+        let mut kept = lock(&self.cmaps);
+        if kept.len() >= CMAPS_KEPT {
+            kept.clear();
+        }
+        kept.insert(path, Arc::clone(&set));
+        Ok(set)
     }
 
     /// Downloads the `kind` files of `family`, a family in the cached list,

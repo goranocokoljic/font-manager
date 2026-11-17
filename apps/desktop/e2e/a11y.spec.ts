@@ -431,6 +431,36 @@ for (const colorScheme of ['light', 'dark'] as const) {
       }
     });
 
+    test('the Preview options popover, with a control that has no effect (E54.8)', async ({
+      page,
+    }) => {
+      await open(page);
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
+      await inTheme(page);
+      await page
+        .getByRole('group', { name: 'View mode' })
+        .getByRole('button', { name: 'Grid' })
+        .click();
+      const settings = page.getByRole('group', { name: 'Preview settings' });
+      await settings
+        .getByRole('group', { name: 'Preset' })
+        .getByRole('button', { name: 'Word' })
+        .click();
+      await settings.getByRole('button', { name: 'Preview options' }).click();
+      const options = page.getByRole('group', { name: 'Preview options' });
+      await expect(
+        options.getByText('No effect while the preview is a single line.'),
+      ).toBeVisible();
+      expect(await violations(page), 'Word on the wall').toEqual([]);
+      await settings
+        .getByRole('group', { name: 'Preset' })
+        .getByRole('button', { name: 'Pangram' })
+        .click();
+      await settings.getByRole('button', { name: 'Preview options' }).click();
+      await options.getByRole('switch', { name: 'Metric lines' }).click();
+      expect(await violations(page), 'Pangram, metric lines on').toEqual([]);
+    });
+
     test('the command palette and Quick look', async ({ page }) => {
       await open(page);
       await page.getByRole('treeitem').first().click();

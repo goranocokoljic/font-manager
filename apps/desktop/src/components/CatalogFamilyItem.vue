@@ -9,27 +9,42 @@
 // The download arrow opens the browser's download panel for the family (E22.3). While the
 // family downloads or installs, a progress ring takes the arrow's 28 px slot. A family the
 // last update check found a newer version of shows an "Update available" badge (E22.4).
+// The characters of the sample its preview file lacks are drawn as tofu, as on library rows
+// (E43.4, E54.6), never in a fallback font; a file that maps none of the sample's letters
+// shows its own text with the "fallback" badge.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useClient } from '../api/client';
-import type { CatalogFamily, CatalogId } from '../api/types';
+import type { CatalogFamily, CatalogId, SampleFallback } from '../api/types';
 import { t } from '../i18n';
 import { cardText } from '../list/grid';
 import { styleCount } from '../list/rows';
 import { WATERFALL_SIZES } from '../list/waterfall';
 import { catalogFamily, useFaceLoader } from '../preview/faceLoader';
+import { fallbackTitle } from '../preview/tofu';
 import { useCatalogsStore } from '../stores/catalogs';
 import type { PreviewSettings } from '../stores/preview';
 import ActivationDot from './ActivationDot.vue';
+import MissingGlyphs from './MissingGlyphs.vue';
+import SpecimenText from './SpecimenText';
 import UiBadge from './ui/UiBadge.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 
-const props = defineProps<{
-  catalog: CatalogId;
-  family: CatalogFamily;
-  text: string;
-  preview: PreviewSettings;
-  mode: 'list' | 'grid' | 'waterfall';
-}>();
+const props = withDefaults(
+  defineProps<{
+    catalog: CatalogId;
+    family: CatalogFamily;
+    text: string;
+    /** Characters of `text` the preview file lacks: drawn as tofu. */
+    tofu?: readonly string[];
+    /** Set when `text` is the file's own text, not the sample. */
+    fallback?: SampleFallback | null;
+    /** Characters of the sample the file lacks (for the fallback badge's tooltip). */
+    missing?: readonly string[];
+    preview: PreviewSettings;
+    mode: 'list' | 'grid' | 'waterfall';
+  }>(),
+  { tofu: () => [], fallback: null, missing: () => [] },
+);
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
@@ -76,11 +91,15 @@ const sampleStyle = computed(() => ({
   lineHeight: String(props.preview.lineHeight),
   letterSpacing: `${props.preview.trackingEm}em`,
   textAlign: props.preview.align,
-  color: props.preview.textColor ?? undefined,
 }));
 const sizeStyle = (sizePx: number) => ({ ...sampleStyle.value, fontSize: `${sizePx}px` });
 const styles = computed(() => styleCount(props.family.styles.length));
 const update = computed(() => catalogs.updateOf(props.catalog, props.family.name));
+const fallbackLabel = computed(() =>
+  props.fallback ? fallbackTitle(props.fallback, props.missing) : undefined,
+);
+/** A card shows the start of the text; only the tofu of what it shows. */
+const shown = computed(() => (props.mode === 'grid' ? cardText(props.text) : props.text));
 
 /** The running download or install of this family: its ring takes the Download slot. */
 const progress = computed(() => catalogs.progressOf(props.catalog, props.family.name));
@@ -132,6 +151,14 @@ const arcStyle = computed(() => {
         "
         >{{ t('catalogs.updates.badge') }}</UiBadge
       >
+      <UiBadge
+        v-if="fallback"
+        data-testid="fallback-hint"
+        :title="fallbackLabel"
+        :aria-label="fallbackLabel"
+        >{{ t('list.fallback') }}</UiBadge
+      >
+      <MissingGlyphs v-if="tofu.length && mode !== 'grid'" :missing="tofu" />
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
       <span class="slot">
         <span
@@ -163,7 +190,9 @@ const arcStyle = computed(() => {
     <template v-if="mode === 'waterfall'">
       <span v-for="size in WATERFALL_SIZES" :key="size" class="line">
         <span class="size">{{ t('catalogs.sizePx', { size }) }}</span>
-        <span class="sample" dir="auto" :style="sizeStyle(size)">{{ text }}</span>
+        <span class="sample" dir="auto" :style="sizeStyle(size)"
+          ><SpecimenText :text="text" :missing="tofu"
+        /></span>
       </span>
     </template>
     <span
@@ -171,8 +200,8 @@ const arcStyle = computed(() => {
       class="sample"
       dir="auto"
       :style="mode === 'grid' ? sizeStyle(Math.min(preview.sizePx, 40)) : sampleStyle"
-      >{{ mode === 'grid' ? cardText(text) : text }}</span
-    >
+      ><SpecimenText :text="shown" :missing="tofu"
+    /></span>
   </div>
 </template>
 

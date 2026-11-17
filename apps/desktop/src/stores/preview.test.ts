@@ -124,21 +124,19 @@ describe('preview store', () => {
 
   it('saves settings per view and reads them back after a reload', async () => {
     const store = freshStore();
-    store.update('all', { sample: 'numerals', sizePx: 120, surface: 'dark' });
-    store.update('collection-7', { sample: 'fontName', align: 'center', textColor: '#AA0000' });
+    store.update('all', { sample: 'numerals', sizePx: 120 });
+    store.update('collection-7', { sample: 'fontName', align: 'center' });
     await nextTick();
 
     const reloaded = freshStore();
     expect(reloaded.settingsFor('all')).toMatchObject({
       sample: 'numerals',
       sizePx: 120,
-      surface: 'dark',
       align: 'start',
     });
     expect(reloaded.settingsFor('collection-7')).toMatchObject({
       sample: 'fontName',
       align: 'center',
-      textColor: '#aa0000',
       sizePx: DEFAULT_PREVIEW.sizePx,
     });
   });
@@ -165,15 +163,57 @@ describe('preview store', () => {
           language: 'xx',
           sizePx: 'big',
           align: 'justify',
-          textColor: 'red',
-          backgroundColor: '#12345',
-          surface: 'sepia',
         },
       }),
     );
     const store = freshStore();
     await store.loadPangrams();
     expect(store.settingsFor('all')).toEqual(DEFAULT_PREVIEW);
+  });
+
+  it('ignores the colours and surface an earlier version saved, and keeps everything else', async () => {
+    // Saved by a version before E54.8, with every view preference set away from its default.
+    const old = {
+      preset: 'pangram',
+      sample: 'pangram',
+      customText: 'Hamburg',
+      letters: 'Rag',
+      language: 'en',
+      sizePx: 64,
+      lineHeight: 1.5,
+      trackingEm: 0.05,
+      align: 'center',
+      textColor: '#aa0000',
+      backgroundColor: '#ffeecc',
+      surface: 'dark',
+      autoSize: 'xHeight',
+      metrics: true,
+      outline: true,
+      bodySizePx: 20,
+      bodyLineHeight: 1.6,
+      hideMissing: true,
+    };
+    localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify({ all: old, 'collection-3': old }));
+    const store = freshStore();
+    const { textColor, backgroundColor, surface, ...rest } = old;
+    void textColor;
+    void backgroundColor;
+    void surface;
+    expect(store.settingsFor('all')).toEqual(rest);
+    expect(store.settingsFor('collection-3')).toEqual(rest);
+    expect(Object.keys(store.settingsFor('all'))).not.toContain('surface');
+
+    // The next save writes the entry without them.
+    store.update('all', { sizePx: 65 });
+    await nextTick();
+    const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) ?? '{}');
+    for (const view of ['all', 'collection-3']) {
+      expect(saved[view]).not.toHaveProperty('textColor');
+      expect(saved[view]).not.toHaveProperty('backgroundColor');
+      expect(saved[view]).not.toHaveProperty('surface');
+    }
+    expect(saved.all.sizePx).toBe(65);
+    expect(saved['collection-3'].hideMissing).toBe(true);
   });
 
   it('cuts very long custom text', () => {

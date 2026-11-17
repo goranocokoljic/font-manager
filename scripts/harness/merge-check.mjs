@@ -15,7 +15,7 @@
 //   stop   — main itself is red: merge nothing until main is green again
 // Exit: 0 on any verdict, 3 on error.
 
-import { loadConfig, ghJson, parseArgs, isMain } from './lib.mjs';
+import { loadConfig, ghJson, parseArgs, isMain, withLight } from './lib.mjs';
 
 const TYPES_TS = 'apps/desktop/src/api/types.ts';
 
@@ -103,7 +103,8 @@ function gather(pr, track, epic, cfg) {
   const cmp = ghJson(['api', `repos/{owner}/{repo}/compare/${base.sha}...${v.headRefOid}`]);
   const runs = ghJson(['api', `repos/{owner}/{repo}/commits/${base.sha}/check-runs?per_page=100`])?.check_runs ?? [];
   const required = (cfg.ci.required_checks ?? []).map((n) => n.toLowerCase().split('/').pop().trim());
-  const mainRuns = latestPerName(runs).filter((r) => required.includes(r.name.toLowerCase()) || required.includes(r.name.toLowerCase().split('/').pop().trim()));
+  // A commit on main that ran only the light job: it stands in for the OS jobs.
+  const mainRuns = withLight(latestPerName(runs), cfg.ci.required_checks ?? [], cfg.ci.light_check).filter((r) => required.includes(r.name.toLowerCase()) || required.includes(r.name.toLowerCase().split('/').pop().trim()));
   return {
     state: v.state,
     isDraft: v.isDraft,

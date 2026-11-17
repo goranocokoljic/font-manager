@@ -1542,6 +1542,13 @@ export const mockLanguages: LanguagePreset[] = [
     sampleGlyphs: 'ЂЈЉЊЋЏбђјљњћџ',
   },
   {
+    code: 'sr-Latn',
+    name: 'Serbian (Latin)',
+    script: 'Latn',
+    pangram: 'Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos',
+    sampleGlyphs: 'ČĆĐŠŽčćđšž',
+  },
+  {
     code: 'el',
     name: 'Greek',
     script: 'Grek',
@@ -2225,6 +2232,7 @@ function createMockCatalogs(
   | 'refreshCatalog'
   | 'listCatalogFamilies'
   | 'catalogFontUrl'
+  | 'catalogSampleTexts'
   | 'downloadFamily'
   | 'installFamily'
   | 'suggestedDownloadFolder'
@@ -2292,6 +2300,7 @@ function createMockCatalogs(
     | 'refreshCatalog'
     | 'listCatalogFamilies'
     | 'catalogFontUrl'
+    | 'catalogSampleTexts'
     | 'downloadFamily'
     | 'listCatalogDownloads'
     | 'checkUpdates'
@@ -2326,6 +2335,28 @@ function createMockCatalogs(
       return { items: structuredClone(hits.slice(offset, offset + limit)), total: hits.length };
     },
     catalogFontUrl: (catalogId, family) => `/fmfont/${catalogFontPath(catalogId, family)}`,
+    // Like `catalog_sample_texts` of the Rust mock: Lora's preview maps Latin and Latin-1 only
+    // (Serbian Latin's č ć đ š ž are tofu), every other family Latin Extended-A too. A family
+    // not in the list is not judged; an off catalog is refused.
+    catalogSampleTexts: async (req) => {
+      const [, name] = site(req.id);
+      if (!enabled.has(req.id))
+        throw {
+          code: 'conflict',
+          message: `${name} is turned off. Turn it on to fetch its fonts.`,
+          detail: null,
+        };
+      const listed = new Set(caches.get(req.id)?.families.map((f) => f.name) ?? []);
+      return req.families.map((family) => {
+        const chars = family === 'Lora' ? LATIN : LATIN + LATIN_EXT_A;
+        const missing: string[] = [];
+        if (listed.has(family))
+          for (const c of req.text)
+            if (!/[\s\p{Cc}]/u.test(c) && !chars.includes(c) && !missing.includes(c))
+              missing.push(c);
+        return { family, text: req.text, fallback: null, missing };
+      });
+    },
     // The rules of the core without a request or a file (`download_family` of the Rust
     // mock): a family with axes asked for as variable gets one variable file, else one
     // file per style; the rescan is the mock's scan of the source.

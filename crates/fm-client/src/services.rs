@@ -180,6 +180,7 @@ service!(CatalogService {
     refresh_catalog(req: CatalogRef) -> Catalog;
     list_catalog_families(req: ListCatalogFamiliesRequest) -> Paged<CatalogFamily>;
     catalog_font_source(req: CatalogFontRequest) -> CatalogFontSource;
+    catalog_sample_texts(req: CatalogSampleTextRequest) -> Vec<CatalogSampleText>;
     download_family(req: DownloadFamilyRequest) -> DownloadFamilyResponse;
     install_family(req: InstallFamilyRequest) -> InstallFamilyResponse;
     list_catalog_downloads() -> Vec<CatalogDownload>;

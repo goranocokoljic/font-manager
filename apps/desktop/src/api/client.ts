@@ -14,6 +14,8 @@ import type {
   CatalogFamily,
   CatalogId,
   CatalogRef,
+  CatalogSampleText,
+  CatalogSampleTextRequest,
   CatalogUpdate,
   CheckUpdatesRequest,
   DownloadFamilyRequest,
@@ -300,6 +302,12 @@ export interface FmClient {
    */
   catalogFontUrl(id: CatalogId, family: string): string;
   /**
+   * The text each catalog family previews for a sample (E54.6): the characters its preview
+   * file lacks, for tofu as on library rows. The file is fetched the first time, as the
+   * webview's own load of it; an off catalog is refused.
+   */
+  catalogSampleTexts(req: CatalogSampleTextRequest): Promise<CatalogSampleText[]>;
+  /**
    * Downloads a family into a watched source (E22.3): its files go into a subfolder named
    * after it, an existing file is never replaced, and the source is rescanned (the returned
    * job's scan events follow). The only other call besides a refresh that goes to the network.
@@ -513,6 +521,7 @@ export const tauriClient: FmClient = {
   refreshCatalog: (req) => invoke<Catalog>('refresh_catalog', { req }),
   listCatalogFamilies: (req) => invoke<Paged<CatalogFamily>>('list_catalog_families', { req }),
   catalogFontUrl: (id, family) => convertFileSrc(catalogFontPath(id, family), FONT_SCHEME),
+  catalogSampleTexts: (req) => invoke<CatalogSampleText[]>('catalog_sample_texts', { req }),
   downloadFamily: (req) => invoke<DownloadFamilyResponse>('download_family', { req }),
   installFamily: (req) => invoke<InstallFamilyResponse>('install_family', { req }),
   suggestedDownloadFolder: async () => join(await documentDir(), SUGGESTED_DOWNLOAD_FOLDER),

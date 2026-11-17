@@ -138,7 +138,8 @@ async function openDrawer(page: Page) {
 }
 
 const SORT_MENU = '[role="group"][aria-label="Sort order"]';
-const OPTIONS = '[role="group"][aria-label="Preview options"]';
+// Named by its visible title (aria-labelledby, E54.8), so it is found by its test id.
+const OPTIONS = '[data-testid="preview-options"]';
 
 /** Opens a popover that lives in the page with `opener`, and reports its enter. */
 async function enterPanel(page: Page, panel: string, opener: Locator) {

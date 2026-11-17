@@ -429,7 +429,7 @@ describe('FontList preview settings', () => {
     ...patch,
   });
 
-  it('applies the sample, size, spacing, alignment and colors to every row', async () => {
+  it('applies the sample, size, spacing and alignment to every row', async () => {
     const list = await listOf(
       {},
       {
@@ -439,9 +439,6 @@ describe('FontList preview settings', () => {
           lineHeight: 1.5,
           trackingEm: 0.05,
           align: 'end',
-          textColor: '#aa0000',
-          backgroundColor: '#00ff00',
-          surface: 'dark',
         }),
       },
     );
@@ -454,27 +451,40 @@ describe('FontList preview settings', () => {
       expect(style.lineHeight).toBe('1.5');
       expect(style.letterSpacing).toBe('0.05em');
       expect(style.textAlign).toBe('end');
-      expect(style.color).toBe('rgb(170, 0, 0)');
     }
-    const tree = list.get('[role="tree"]');
-    expect((tree.element as HTMLElement).style.backgroundColor).toBe('rgb(0, 255, 0)');
-    expect(tree.classes()).toContain('surface-dark');
     // 96 px × 1.5 + label and padding.
     expect(list.get('[role="treeitem"]').attributes('style')).toContain('height: 174px');
     list.unmount();
   });
 
+  it('draws in the theme colours: no colour, background or surface of its own (E54.8)', async () => {
+    // Settings shaped as an earlier version saved them: the list reads none of the three.
+    const old = {
+      ...settings({}),
+      textColor: '#aa0000',
+      backgroundColor: '#00ff00',
+      surface: 'dark',
+    } as PreviewSettings;
+    const list = await listOf({}, { preview: old });
+    const tree = list.get('[role="tree"]');
+    expect((tree.element as HTMLElement).style.backgroundColor).toBe('');
+    expect(tree.classes().filter((c) => c.startsWith('surface-'))).toEqual([]);
+    expect(tree.attributes('data-surface')).toBeUndefined();
+    const samples = list.findAll('.sample');
+    expect(samples.length).toBeGreaterThan(0);
+    for (const sample of samples) expect((sample.element as HTMLElement).style.color).toBe('');
+    list.unmount();
+  });
+
   it('updates all rows live when the settings change', async () => {
     const list = await listOf({}, { preview: settings({}) });
-    expect(list.get('[role="tree"]').classes()).not.toContain('surface-light');
     await list.setProps({
-      preview: settings({ sample: 'pangram', language: 'fr', sizePx: 12, surface: 'light' }),
+      preview: settings({ sample: 'pangram', language: 'fr', sizePx: 12 }),
     });
     for (const sample of list.findAll('.sample')) {
       expect(sample.text()).toBe(pangramOf('fr'));
       expect((sample.element as HTMLElement).style.fontSize).toBe('12px');
     }
-    expect(list.get('[role="tree"]').classes()).toContain('surface-light');
     list.unmount();
   });
 

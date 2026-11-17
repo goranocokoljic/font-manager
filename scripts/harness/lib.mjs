@@ -28,6 +28,7 @@ export const DEFAULT_CONFIG = {
   budget_base_usd: 15,
   ci: {
     required_checks: ['ci / windows', 'ci / macos', 'ci / linux'],
+    light_check: 'ci / light',
     bench_check: 'bench / bench',
     bench_workflow: 'bench.yml',
     bench_artifact: 'bench-report',
@@ -53,6 +54,26 @@ export const DEFAULT_CONFIG = {
   close_epics: true,
   bot_login: '',
 };
+
+/**
+ * The `light` CI job stands in for the required OS jobs. ci.yml runs it alone
+ * for a PR that changes only harness scripts and developer docs (ci-scope.mjs);
+ * the three OS jobs are then skipped. Returns `runs` plus a copy of the light
+ * run under the name of each required job that has no run of its own, so the
+ * callers keep their "every required check" logic. `key` is the field that
+ * says "skipped" (`conclusion` for check runs, `state` for `gh pr checks`).
+ */
+export function withLight(runs, required, light, key = 'conclusion') {
+  const job = (n) => String(n).toLowerCase().split('/').pop().trim();
+  const real = (r) => String(r[key] ?? '').toLowerCase() !== 'skipped';
+  const stand = light ? (runs ?? []).find((r) => job(r.name) === job(light) && real(r)) : null;
+  if (!stand) return runs ?? [];
+  const out = [...runs];
+  for (const name of (required ?? []).map(job)) {
+    if (!runs.some((r) => job(r.name) === name && real(r))) out.push({ ...stand, name });
+  }
+  return out;
+}
 
 export function loadConfig(path = CONFIG_PATH) {
   if (!existsSync(path)) return structuredClone(DEFAULT_CONFIG);

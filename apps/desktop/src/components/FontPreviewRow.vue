@@ -8,7 +8,7 @@
 // Features switched in the inspector's Features tab apply through
 // `font-feature-settings`. A color palette chosen in the inspector for the face's
 // family in `view` applies through `font-palette` (E16.3).
-// The list passes the view's preview settings (size, spacing, alignment, color).
+// The list passes the view's preview settings (size, spacing, alignment); the text takes the theme's colour.
 // When the face lacks characters of the sample, the list passes the fallback text
 // the API chose and `fallback`; the row then shows a small "Fallback" hint. Otherwise
 // each character in `missing` is drawn as tofu (E43.4), never in a fallback font, and the
@@ -33,6 +33,7 @@ import UiBadge from './ui/UiBadge.vue';
 import MissingGlyphs from './MissingGlyphs.vue';
 import SpecimenText from './SpecimenText';
 import { ALL_FONTS_VIEW } from '../stores/preview';
+import { fallbackTitle as tofuFallbackTitle } from '../preview/tofu';
 import { faceAxes, variationSettings } from '../preview/variations';
 import { t } from '../i18n';
 
@@ -47,8 +48,6 @@ const props = withDefaults(
     /** Letter spacing in em. */
     trackingEm?: number;
     align?: 'start' | 'center' | 'end';
-    /** Sample text color; inherits the list's when absent. */
-    color?: string | null;
     variations?: AxisValue[];
     /** Set when `text` is a fallback from the face's own coverage, not the sample. */
     fallback?: SampleFallback | null;
@@ -72,7 +71,6 @@ const props = withDefaults(
     lineHeight: 1.2,
     trackingEm: 0,
     align: 'start',
-    color: null,
     variations: () => [],
     fallback: null,
     missing: () => [],
@@ -157,7 +155,6 @@ const sampleStyle = computed(() => ({
   lineHeight: String(props.lineHeight),
   letterSpacing: `${props.trackingEm}em`,
   textAlign: props.align,
-  color: props.color ?? undefined,
   fontVariationSettings: variationSettings(
     axes.value,
     props.variations.length ? props.variations : (axesSet.values(props.face.id) ?? []),
@@ -183,16 +180,9 @@ const metricLines = computed(() => {
   return lines;
 });
 
-const fallbackTitle = computed(() => {
-  if (!props.fallback) return undefined;
-  const letters = props.fallback.kind === 'script';
-  if (!props.missing.length)
-    return t(letters ? 'list.fallbackTitle.letters' : 'list.fallbackTitle.characters');
-  const missing = `${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`;
-  return t(letters ? 'list.fallbackTitle.missingLetters' : 'list.fallbackTitle.missingCharacters', {
-    missing,
-  });
-});
+const fallbackTitle = computed(() =>
+  props.fallback ? tofuFallbackTitle(props.fallback, props.missing) : undefined,
+);
 
 /** The weight axis, when this row may be scrubbed: a variable face whose coordinates are not pinned. */
 const wghtAxis = computed(() =>

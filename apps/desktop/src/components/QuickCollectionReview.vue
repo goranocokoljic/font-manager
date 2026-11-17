@@ -55,11 +55,6 @@ onMounted(() => {
 onBeforeUnmount(() => observer?.disconnect());
 
 const rowPx = computed(() => previewRowHeight(props.preview));
-// The Surface setting, as the font list applies it: the rows sit on the surface the
-// text color was picked for, whatever the app theme.
-const surfaceClass = computed(() =>
-  props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
-);
 const count = computed(() => store.faces.length);
 const range = computed(() =>
   windowRange(scrollTop.value, height.value, rowPx.value, props.overscan, count.value),
@@ -166,14 +161,7 @@ async function tag(): Promise<void> {
         </UiButton>
       </form>
     </div>
-    <div
-      v-show="count"
-      ref="viewport"
-      class="viewport"
-      :class="surfaceClass"
-      :style="{ backgroundColor: preview.backgroundColor ?? undefined }"
-      @scroll="measure"
-    >
+    <div v-show="count" ref="viewport" class="viewport" @scroll="measure">
       <ul
         class="spacer"
         :aria-label="t('quickCollection.listLabel')"
@@ -198,7 +186,6 @@ async function tag(): Promise<void> {
             :line-height="preview.lineHeight"
             :tracking-em="preview.trackingEm"
             :align="preview.align"
-            :color="preview.textColor"
             :fallback="item.fallback"
             :missing="item.missing"
           />

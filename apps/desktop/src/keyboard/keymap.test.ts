@@ -180,3 +180,17 @@ describe('chord labels', () => {
     expect(ariaShortcut({ key: '/' })).toBe('/');
   });
 });
+
+describe('no preview colour or surface (E54.8)', () => {
+  it('the keymap and the shortcuts sheet name no text colour, background or surface', async () => {
+    const en = (await import('../locales/en.json')).default;
+    const names = [
+      ...Object.keys(ACTIONS),
+      ...Object.values(ACTIONS),
+      ...KEYMAP.map((b) => b.action),
+      ...Object.values(en.shortcuts.rows),
+    ].map((s) => String(s).toLowerCase());
+    for (const word of ['color', 'colour', 'background', 'surface'])
+      expect(names.filter((n) => n.includes(word))).toEqual([]);
+  });
+});
