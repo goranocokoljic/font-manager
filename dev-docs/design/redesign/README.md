@@ -55,9 +55,17 @@ Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare
 | `12-preview-options-dark.png` | 12 | theme = Dark, preset = Pangram | the same popover in the dark theme | E54.7, E54.8 |
 | `12-preview-options-popover.png` | 12 | theme = Paper, popover only | the popover alone, for the pixel comparison | E54.7, E54.8 |
 | `12-preview-options-popover-dark.png` | 12 | theme = Dark, popover only | the popover alone in the dark theme | E54.7, E54.8 |
+| `13-setup-folders-empty.png` | 13 · First-run setup | step = Font folders, no folder yet | the setup in the main window: logotype, step indicator, the empty folder zone with "Add folder…", "Skip for now"; the library pane empty | E55.1, E55.4 |
+| `13-setup-folders.png` | 13 | step = Font folders, three folders | folder rows (one scanning, in a cloud folder), "Add another folder…", Continue; the count and the first families found so far | E55.4 |
+| `13-setup-catalogs-off.png` | 13 | step = Online catalogs, both off | the two catalog switches with the "connects to the internet" line; no folder question | E55.5 |
+| `13-setup-catalogs-on.png` | 13 | step = Online catalogs, Google Fonts on | "Where should installed fonts go?" with "Inside my font folder" chosen; the folder tree an install lands in | E55.3, E55.5 |
+| `13-setup-updates.png` | 13 | step = Updates | "Check for updates automatically" on, Finish; what a check does | E55.6 |
+| `13-setup-from-settings.png` | 13 | reopened from Settings, both catalogs on, "Another folder" | the step names as links, the close button, the chosen folder with "Change…", both catalogs in the tree | E55.4, E55.5 |
+| `13-setup-folders-dark.png` | 13 | theme = Dark, step = Font folders, three folders | the folders step in the dark theme | E55.4 |
+| `13-setup-catalogs-cloud-dark.png` | 13 | theme = Dark, step = Online catalogs, a cloud folder chosen | the note under the select when the font folder syncs with a cloud service | E55.5 |
 
 A UI story is reviewed against its image, not against the previous screenshot. The boards show
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17).
+Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17; board 13: 2026-11-18).

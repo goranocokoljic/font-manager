@@ -1634,6 +1634,188 @@
           ]
         }
       ]
+    },
+    {
+      "id": "E55",
+      "title": "Before launch, part two — first-run setup, one-click catalog installs, automatic update checks",
+      "phase": 3,
+      "track": "ui",
+      "milestone": "Launch",
+      "depends": [
+        "E51"
+      ],
+      "labels": [
+        "launch"
+      ],
+      "summary": "Two things for the first public release. (1) A new user starts with an empty library and three decisions that live in three places: which folders hold the fonts (one button in the empty state), whether to use the online catalogs (off, in the sidebar), and where catalog downloads go (asked in the middle of the first Install, CatalogInstall.vue, which proposes `<Documents>/Font Fu Fonts`). A first-run setup asks them once, in order, and leaves out every question that already has an answer. Decisions (Goran, 18 Nov 2026): the setup runs at first launch, not in the installer (the .dmg and the AppImage have no installer to ask in, and rule 5 wants the same on three systems); the user can add several font folders; the catalogs are asked about before their folder; Adobe Fonts is not part of it (the app cannot download from it); a catalog install goes into one folder per catalog, `<download folder>/Google Fonts/<Family>` and `<download folder>/Fontshare/<Family>`, so Install is one click with nothing to choose; families downloaded before stay where they are (rule 2). Today install_family writes to `<download folder>/<Family>` (family_folder in crates/fm-core/src/catalog.rs) and Settings.download_folder is None until the first Install. (2) Updates. ADR 0012 has the signed in-app updater; `Settings.check_updates_automatically` is off by default and found only under Settings → About; the check runs once at start, from the Pinia store (stores/updates.ts), and a found update opens the dialog at once. The app stays in the tray for days, so a check at start misses releases, and most users never find the switch. Decisions (Goran, 18 Nov 2026): the setup asks about the automatic check as its last step; with it on the app checks at start and once a day; an update found by an automatic check is announced quietly, never by a dialog over the user's work; nothing is installed while the app is in use without the user asking; a third level, off by default, downloads the update in the background and installs it when the user quits, and a major version still asks twice. That third level is an exception to ADR 0012's 'nothing installs until the user confirms', so the ADR is amended. The release address stays GitHub releases for now; it may move to the project's website later, or stay.",
+      "stories": [
+        {
+          "id": "E55.1",
+          "title": "Board 13: the first-run setup",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "dev-docs/design/redesign/ gains the target images of the setup in Paper and one dark theme, exported at 2× as the README says, with the README table updated: the font folders step empty and with three folders, the catalogs step with both catalogs off and with one on (the download folder question showing), the updates step, and the setup reopened from Settings",
+            "the board shows the setup inside the main window (not a second OS window), the logotype, a step indicator that counts only the steps shown, Back, Continue, Finish and 'Skip for now', a folder row (path, face count while scanning, remove), the catalog switches with their 'connects to the internet' line, the two download folder choices with the resulting paths written out (`…/Google Fonts/Inter`), and the update question with its one line on what is sent",
+            "DESIGN.md gets a short 'First-run setup' section: the three steps and what each asks, the rule that a step with an answer is not shown, what 'Skip for now' does, and that nothing in the setup uses a control the rest of the app does not have"
+          ]
+        },
+        {
+          "id": "E55.2",
+          "title": "Setup status: the core says which questions are still open",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "fm-api gains an additive request that answers which setup steps are open: font folders, catalogs, download folder, updates; the rule is in fm-core and the app, MockApi and the TypeScript mock give the same answer for the same state",
+            "font folders is open while the library has no watched folder and no library folder and the step was never answered or skipped; catalogs is open while no catalog is on and the step was never answered; download folder is open while a catalog is on and `download_folder` is not set; updates is open while this copy updates itself (`UpdateSupport.offered`), `check_updates_automatically` is off and the step was never answered",
+            "an answered or skipped step is recorded in config.json through fm-api (new fields with `#[serde(default)]`), never in localStorage; a skipped step is not asked again at the next start",
+            "an install from an earlier version that has a watched folder, a catalog on, a download folder and the automatic check on has no open step; one that lacks some of them has only those open (a test for each case)",
+            "no existing fm-api field is removed or renamed; `pnpm gen:types` only adds lines; the answer needs no network request and no scan, and cold start stays under 1 s",
+            "a new ADR, 'First-run setup', records: at first launch and not in the installer, and why (rule 5; the .dmg and the AppImage have no installer to ask in); the steps and when each is open; Adobe Fonts left out; several font folders; the decisions' date (Goran, 18 Nov 2026)"
+          ]
+        },
+        {
+          "id": "E55.3",
+          "title": "Catalog installs go into one folder per catalog",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`install_family` writes a family the library does not have into `<download folder>/<catalog folder>/<Family>`; the catalog folder is `Google Fonts` or `Fontshare`: fixed names, the same in every UI language, made safe for every OS by the function that makes family names safe",
+            "a family the library already has from that catalog is found as installed exactly as today, wherever its files are (the earlier `<download folder>/<Family>` included): it is not downloaded again and no file is moved or renamed (rule 2); an update of a downloaded family (E22.4) replaces the files where the family is",
+            "a family listed under the same name in both catalogs gets two folders and two provenance records, and installing one does not report the other as installed (a test)",
+            "`fonts_needed` with 'fetch missing fonts' (E29.5) uses the same folders, because it uses the same path; 'Download…' into a watched folder the user picks (`download_family`) is unchanged: `<source>/<Family>`",
+            "the download folder is still one source in the library, not one per catalog, and a download folder inside a watched folder still uses that folder's source; a system font folder is still refused with today's message",
+            "no fm-api type changes; MockApi and the TypeScript mock follow the same layout; the tests run against the local test server and none reaches the internet",
+            "ADR 0014 is amended in the same PR with the layout, the rule for families installed before, and the date (Goran, 18 Nov 2026); docs/user says where installed fonts are"
+          ]
+        },
+        {
+          "id": "E55.4",
+          "title": "The setup at first launch, and its first step: your font folders",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E55.1",
+            "E55.2"
+          ],
+          "criteria": [
+            "when the app starts with an open step (E55.2) the main window shows the setup in place of the library; with no open step it never shows; only open steps are shown, in the order folders, catalogs, updates, and the indicator counts only those",
+            "step one, 'Where are your fonts?': 'Add folder' opens the native folder picker and can be used again and again; the step takes no dropped folder (a drop gives the webview no path while in-window drags are on, ADR 0017, as in Settings › Sources); each chosen folder is a row with its name, full path, face count and a remove button; one line says the fonts installed in the system are already included",
+            "a chosen folder is added at once as a watched folder indexed in place (`AddSourceRequest` with `IndexInPlace`) and its scan starts; nothing is copied, moved or renamed; the row shows the scan through the existing scan events, the pane beside the step shows the count and the first families found so far (board 13), and the scan goes on behind the next steps; remove takes the folder out of the library again and touches no file; Continue only goes on",
+            "a folder the API refuses (already added, inside another source, not there) shows the API's message on its row and does not stop the others",
+            "'Skip for now' is offered only while no folder is added; it goes on and records the step as skipped; the library's empty state still offers 'Add folder'",
+            "Settings gets 'Run setup again', which opens every step with the current values; leaving a step unchanged changes nothing",
+            "the component computes nothing: the open steps come from the API; the setup is keyboard-complete, focus moves to each step's heading, the a11y and contrast specs pass, and every string is in en and de",
+            "it matches board 13 within the tolerance REVIEW.md sets and moves per MOTION.md; in browser mode the mock has no open step unless the page is opened with the setup's query parameter, so the existing specs are not blocked; a Playwright spec covers a first start, two folders added, one removed, Skip, and reopening from Settings"
+          ]
+        },
+        {
+          "id": "E55.5",
+          "title": "Setup step two: online catalogs and where their fonts go",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E55.3",
+            "E55.4"
+          ],
+          "criteria": [
+            "the step shows a switch for Google Fonts and one for Fontshare, both off; each says, as the existing switch does, that turning it on fetches the catalog's list from that server now; Adobe Fonts is not offered",
+            "with no catalog on, Continue asks nothing more and the download folder is asked at the first Install, as today",
+            "with a catalog on, the step asks where downloaded fonts go: 'Inside my font folder' (the folder from step one; a select when there are several; not offered when there is none) or 'Another folder' (the native picker, with `<Documents>/Font Fu Fonts` proposed as CatalogInstall does today)",
+            "before the user continues, the step writes out where an install will land, for the catalogs that are on only: `<folder>/Google Fonts/<Family>` and `<folder>/Fontshare/<Family>`",
+            "a folder the API refuses (a system font folder) shows the API's message; when the chosen font folder is one the API marks as inside a cloud sync folder, one line says its files sync to everyone who shares the folder and that each catalog's license decides whether its fonts may be shared, with a link to the license",
+            "after the setup, Install in a catalog is one click with no folder question; CatalogInstall's proposal stays for a user who skipped the step; Settings → Online catalogs shows the download folder and the per-catalog paths",
+            "strings in en and de; a Playwright spec on the mock covers both catalogs off, one on with 'Inside my font folder', one on with 'Another folder', and an Install afterwards that asks nothing"
+          ]
+        },
+        {
+          "id": "E55.6",
+          "title": "Setup step three: check for updates automatically",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E55.4",
+            "E55.7"
+          ],
+          "criteria": [
+            "the step exists only where this copy updates itself (`UpdateSupport.offered`); elsewhere it is not shown and the indicator does not count it",
+            "one question, 'Check for updates automatically', preselected on (owner's decision to confirm: finishing the step is the user action rule 7 asks for), with one line that says what happens: a request to the release server, named as the API reports it and not written into the string, at start and once a day; nothing about the user or the fonts is sent; nothing is installed without asking",
+            "no request is made before the user finishes the step: a spec asserts that no update check is called until Finish",
+            "Finish with the switch on turns `checkUpdatesAutomatically` on and runs the first check quietly (E55.8); with it off the setting stays off and 'Check for updates' under Settings → About works as before",
+            "the third level, 'install when I quit' (E55.9), is not offered in the setup; a Playwright spec on the mock covers on, off, and the step missing where updates are not offered"
+          ]
+        },
+        {
+          "id": "E55.7",
+          "title": "Automatic update check: at start and once a day while the app runs",
+          "size": "M",
+          "track": "platform",
+          "depends": [],
+          "criteria": [
+            "with `check_updates_automatically` on, the app checks at start and then once every 24 hours for as long as it runs, the tray included; whether a check is due is a pure function in fm-api over the time of the last check (tested without a clock), the timer is in the shell, and the start check moves out of the Pinia store",
+            "with the setting off, or where this copy does not update itself, there is no timer and no request (a test with an updater that fails on any call)",
+            "a check that fails (offline, the server down) is silent and is tried again at the next start or 24 hours later, never sooner",
+            "a found update is announced through the typed `Event` enum (a new variant; nothing existing changes) and the tray menu gains 'Update to <version>…', which opens the window at the update dialog; an automatic check never opens, raises or focuses a window",
+            "`UpdateSupport` gains an optional field with the host of the release server, read from the configured endpoint, so no text in the UI hard-codes it",
+            "ADR 0012 is amended in the same PR: 'once at start' becomes 'at start and once a day' (Goran, 18 Nov 2026); it records that the release address is GitHub releases for now and what moving it takes: copies already installed keep asking the address they were built with, so that address must keep answering; a new address goes in front of the endpoint list with GitHub kept after it (the updater goes to the next address only on a non-2xx answer); the signing key does not change",
+            "cold start stays under 1 s and idle memory under 350 MB; the PR records the check on the three systems"
+          ]
+        },
+        {
+          "id": "E55.8",
+          "title": "An update found automatically is shown quietly",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E55.7"
+          ],
+          "criteria": [
+            "an update found by an automatic check never opens the update dialog by itself: the app shows a notice in its own notice style with the version and 'See what's new', and a dot on Settings that stays until the update is installed",
+            "the notice can be dismissed and then stays away until the next start; the dot and the line under Settings → About remain",
+            "the notice, the dot, the tray item and 'Check for updates' all open the same UpdateDialog, where a major update still asks twice; a check the user started opens the dialog at once, as today",
+            "the UI subscribes to the event from E55.7 and does not poll; strings in en and de; a Playwright spec on the mock covers the notice, dismissing it, and opening the dialog from the dot"
+          ]
+        },
+        {
+          "id": "E55.9",
+          "title": "Install when I quit: download in the background, install after the normal quit",
+          "size": "L",
+          "track": "platform",
+          "depends": [
+            "E55.7"
+          ],
+          "criteria": [
+            "a new setting, off by default and added with `#[serde(default)]`: install updates when the user quits; it has an effect only with the automatic check on and where this copy updates itself, and fm-api refuses to turn it on elsewhere",
+            "with it on, a patch or minor update found by an automatic check is downloaded in the background into the app's cache folder and verified exactly as a confirmed install is (signature, and made for the announced version, ADR 0012); a refused package is deleted, reported once, and nothing is installed",
+            "a major update (and a minor one before 1.0, as `update_kind` says) is never installed this way: it is announced (E55.8) and asks twice",
+            "the install runs only when the user quits the app (Quit in the menu or the tray, or closing the window with 'keep in tray' off), after the quit path every quit uses and only once; the app does not start again after this install; the same writable-folder probe as today runs before the download and before the install, and admin rights are never asked for (rule 4)",
+            "nothing is installed while the app is in use; the PR says what happens on each system when the quit is part of a logout or a shutdown, and where a finished install cannot be guaranteed there the install waits for the next quit",
+            "the next start says once 'Updated to <version>' with a link to what is new; after a failed install the earlier version starts as before, says once that the update could not be installed and offers the dialog; 'reactivate on launch' keeps the real session in both cases",
+            "ADR 0012 is amended in the same PR: 'nothing installs until the user confirms' gets this one exception, which the user turns on (Goran, 18 Nov 2026), with the rules above; an integration test per system, or a recorded manual run in the PR, shows an update from one signed test build to the next on Windows, macOS and Linux"
+          ]
+        },
+        {
+          "id": "E55.10",
+          "title": "Settings: three levels for updates",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E55.8",
+            "E55.9"
+          ],
+          "criteria": [
+            "Settings → About replaces the 'Check automatically' switch with one control of three choices: Off; Tell me when there is an update; Download updates and install them when I quit. It sets the two settings and never shows a combination the API refuses",
+            "the third choice says in one line each: a major version always asks first; fonts activated for the session end when you quit, as they always do",
+            "under the control: when the last check ran and what it found, and, while an update is downloaded and waiting, '<version> will be installed when you quit' with 'Install now', which opens the existing dialog",
+            "where this copy does not update itself the control is hidden and the platform note explains why, as today",
+            "strings in en and de; keyboard-complete; a Playwright spec on the mock covers the three choices and the waiting state"
+          ]
+        }
+      ]
     }
   ]
 }

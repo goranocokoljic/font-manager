@@ -1,4 +1,104 @@
 {
+  "E54.13": {
+    "number": 623,
+    "id": 6434687017,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/623"
+  },
+  "E54.12": {
+    "number": 622,
+    "id": 6434686636,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/622"
+  },
+  "E54.11": {
+    "number": 621,
+    "id": 6434686205,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/621"
+  },
+  "E54.10": {
+    "number": 620,
+    "id": 6434685713,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/620"
+  },
+  "E54.9": {
+    "number": 619,
+    "id": 6434685290,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/619"
+  },
+  "E54.8": {
+    "number": 618,
+    "id": 6434684814,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/618"
+  },
+  "E54.7": {
+    "number": 617,
+    "id": 6434684375,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/617"
+  },
+  "E54.6": {
+    "number": 616,
+    "id": 6434683952,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/616"
+  },
+  "E54.5": {
+    "number": 615,
+    "id": 6434683566,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/615"
+  },
+  "E54.4": {
+    "number": 614,
+    "id": 6434683177,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/614"
+  },
+  "E54.3": {
+    "number": 613,
+    "id": 6434682532,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/613"
+  },
+  "E54.2": {
+    "number": 612,
+    "id": 6434682113,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/612"
+  },
+  "E54.1": {
+    "number": 611,
+    "id": 6434681713,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/611"
+  },
+  "E54": {
+    "number": 610,
+    "id": 6434681232,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/610"
+  },
+  "E51.5": {
+    "number": 603,
+    "id": 6410018682,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/603"
+  },
+  "E51.4": {
+    "number": 602,
+    "id": 6410018441,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/602"
+  },
+  "E51.3": {
+    "number": 601,
+    "id": 6410018187,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/601"
+  },
+  "E51.2": {
+    "number": 600,
+    "id": 6410017898,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/600"
+  },
+  "E51.1": {
+    "number": 599,
+    "id": 6410017650,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/599"
+  },
+  "E51": {
+    "number": 598,
+    "id": 6410017422,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/598"
+  },
   "E50.13": {
     "number": 584,
     "id": 6393116642,
@@ -1539,34 +1639,59 @@
     "id": 5857317171,
     "url": "https://github.com/goranocokoljic/font-manager/issues/1"
   },
-  "E51": {
-    "number": 598,
-    "id": 6410017422,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/598"
+  "E55": {
+    "number": 639,
+    "id": 6476084100,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/639"
   },
-  "E51.1": {
-    "number": 599,
-    "id": 6410017650,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/599"
+  "E55.1": {
+    "number": 640,
+    "id": 6476084601,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/640"
   },
-  "E51.2": {
-    "number": 600,
-    "id": 6410017898,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/600"
+  "E55.2": {
+    "number": 641,
+    "id": 6476085044,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/641"
   },
-  "E51.3": {
-    "number": 601,
-    "id": 6410018187,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/601"
+  "E55.3": {
+    "number": 642,
+    "id": 6476085511,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/642"
   },
-  "E51.4": {
-    "number": 602,
-    "id": 6410018441,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/602"
+  "E55.4": {
+    "number": 643,
+    "id": 6476086016,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/643"
   },
-  "E51.5": {
-    "number": 603,
-    "id": 6410018682,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/603"
+  "E55.5": {
+    "number": 644,
+    "id": 6476086517,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/644"
+  },
+  "E55.6": {
+    "number": 645,
+    "id": 6476087005,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/645"
+  },
+  "E55.7": {
+    "number": 646,
+    "id": 6476087594,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/646"
+  },
+  "E55.8": {
+    "number": 647,
+    "id": 6476088072,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/647"
+  },
+  "E55.9": {
+    "number": 648,
+    "id": 6476088535,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/648"
+  },
+  "E55.10": {
+    "number": 649,
+    "id": 6476089084,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/649"
   }
 }
