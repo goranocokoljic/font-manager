@@ -1218,3 +1218,24 @@ fn a_preview_with_no_readable_face_maps_nothing() {
         Err(e) => assert_eq!(e.code(), ErrorCode::Io),
     }
 }
+
+#[test]
+fn any_enabled_follows_the_switches_and_reads_no_cache() {
+    let dir = TempDir::new("catalog-any-enabled");
+    let fetcher = Scripted::failing();
+    let c = catalogs(&dir, &fetcher);
+    assert!(!c.any_enabled(), "a new install has every catalog off");
+    c.set_enabled(GOOGLE, true).expect("on");
+    // A damaged cache would fail `list`; `any_enabled` never reads it.
+    fs::write(
+        dir.path().join(CATALOGS_DIR).join("google-fonts.json"),
+        b"{",
+    )
+    .expect("damage");
+    let next = catalogs(&dir, &fetcher);
+    assert!(next.list().is_err(), "the cache is damaged");
+    assert!(next.any_enabled(), "read from the saved state alone");
+    c.set_enabled(GOOGLE, false).expect("off");
+    assert!(!c.any_enabled());
+    assert_eq!(fetcher.calls(), 0, "no network request");
+}

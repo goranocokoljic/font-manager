@@ -111,8 +111,11 @@ import {
   type SampleText,
   type SizeBasis,
   type SizeFactor,
+  type SetupAnswer,
+  type SetupStep,
   type Source,
   type SourceId,
+  type SourceKind,
   type Tag,
   type TagId,
   type Target,
@@ -581,6 +584,49 @@ export const shellLocale = { value: '' };
 
 /** Browser mode has no native menu: tests call this to stand in for Settings… in it. */
 export const shellNavigateHandlers = new Set<(route: string) => void>();
+
+/** The first-run setup's steps in the order it asks them (`SetupStep::ALL` in fm-api). */
+export const SETUP_STEPS: readonly SetupStep[] = [
+  'fontFolders',
+  'catalogs',
+  'downloadFolder',
+  'updates',
+];
+
+/** What the setup status is decided from (`SetupFacts` in fm-core). */
+export interface MockSetupFacts {
+  /** The kinds of the library's sources. */
+  sources: SourceKind[];
+  catalogOn: boolean;
+  /** `downloadFolder` is set. */
+  downloadFolder: boolean;
+  /** This copy updates itself (`UpdateSupport.offered`). */
+  updatesOffered: boolean;
+  checkAutomatically: boolean;
+  answers: Partial<Record<SetupStep, SetupAnswer>>;
+}
+
+/**
+ * The setup's open steps: the same rule as `fm_core::setup::open_steps` (and the Rust mock);
+ * `fixtures/setup/status-cases.json` is run against all three.
+ */
+export function mockOpenSetupSteps(f: MockSetupFacts): SetupStep[] {
+  const fontFolder = f.sources.some((k) => k === 'watched' || k === 'libraryFolder');
+  const open = (step: SetupStep): boolean => {
+    const unanswered = f.answers[step] == null;
+    switch (step) {
+      case 'fontFolders':
+        return !fontFolder && unanswered;
+      case 'catalogs':
+        return !f.catalogOn && unanswered;
+      case 'downloadFolder':
+        return f.catalogOn && !f.downloadFolder;
+      case 'updates':
+        return f.updatesOffered && !f.checkAutomatically && unanswered;
+    }
+  };
+  return SETUP_STEPS.filter(open);
+}
 
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
@@ -2767,6 +2813,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     options.settingsStorage,
   );
+  /** The setup steps answered or skipped; kept with the mock, never in browser storage. */
+  let setupAnswers: Partial<Record<SetupStep, SetupAnswer>> = {};
   const emit = (event: Event) => handlers.forEach((h) => h(event));
   // The local API: a fixed address, a token that changes on every regeneration.
   let endpointGeneration = 0;
@@ -4700,6 +4748,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return { ...settings };
     },
     getAppFolders: async () => ({ ...mockFolders }),
+    setupStatus: async () => ({
+      open: mockOpenSetupSteps({
+        sources: sources.map((s) => s.kind),
+        catalogOn: (await client.listCatalogs()).some((c) => c.enabled),
+        downloadFolder: settings.downloadFolder != null,
+        updatesOffered: options.update !== 'managed',
+        checkAutomatically: settings.checkUpdatesAutomatically === true,
+        answers: { ...setupAnswers },
+      }),
+    }),
+    answerSetupStep: async (req) => {
+      // The same refusal as `download_folder_is_chosen` in fm-api.
+      if (req.step === 'downloadFolder')
+        throw invalid(
+          'The folder for installed fonts is answered by choosing it, not by skipping it.',
+        );
+      setupAnswers = { ...setupAnswers, [req.step]: req.answer };
+      return client.setupStatus();
+    },
     endpointInfo: async () => endpoint(),
     regenerateEndpointToken: async () => {
       endpointGeneration += 1;

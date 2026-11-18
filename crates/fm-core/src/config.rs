@@ -5,12 +5,13 @@
 //! or newer app can read the file. A file that is not valid JSON is reported,
 //! never overwritten: the user may have edited it by hand.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::Path;
 
 use fm_api::settings::Settings;
+use fm_api::setup::{SetupAnswer, SetupStep};
 use fm_api::{ApiError, ErrorCode};
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,11 @@ pub struct Config {
     /// The mutating MCP tools the user allowed (E27.6), by MCP name. None
     /// until the user turns one on in Settings → AI assistants.
     pub mcp_grants: BTreeSet<String>,
+    /// The first-run setup steps the user answered or skipped (E55.2), so
+    /// none is asked again. A file from before the setup has none; then the
+    /// setup asks only what the other keys and the library leave open.
+    #[serde(default)]
+    pub setup_answers: BTreeMap<SetupStep, SetupAnswer>,
     /// What the Settings window edits, stored at the top level of the file.
     #[serde(flatten)]
     pub settings: Settings,
@@ -43,6 +49,7 @@ impl Default for Config {
             telemetry: false,
             mcp_enabled: false,
             mcp_grants: BTreeSet::new(),
+            setup_answers: BTreeMap::new(),
             settings: Settings::default(),
         }
     }
@@ -150,6 +157,7 @@ mod tests {
             telemetry: true,
             mcp_enabled: true,
             mcp_grants: BTreeSet::from(["tag_fonts".to_owned()]),
+            setup_answers: BTreeMap::from([(SetupStep::Catalogs, SetupAnswer::Skipped)]),
             settings: Settings {
                 cache_limit_mb: 256,
                 ..Settings::default()

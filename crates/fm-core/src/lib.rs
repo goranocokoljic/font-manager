@@ -56,6 +56,7 @@ pub mod scanner;
 mod search;
 pub mod set_file;
 pub mod settings;
+pub mod setup;
 pub mod sidecar;
 pub mod similar;
 pub mod specimen;

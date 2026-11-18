@@ -1,0 +1,77 @@
+[
+  {
+    "name": "a new install of a copy that updates itself",
+    "state": { "sources": ["system"], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": {} },
+    "open": ["fontFolders", "catalogs", "updates"]
+  },
+  {
+    "name": "a new install where a package manager installs the updates",
+    "state": { "sources": [], "catalogOn": false, "downloadFolder": false, "updatesOffered": false, "checkAutomatically": false, "answers": {} },
+    "open": ["fontFolders", "catalogs"]
+  },
+  {
+    "name": "an earlier version with a watched folder, a catalog on, a download folder and the automatic check on",
+    "state": { "sources": ["system", "watched"], "catalogOn": true, "downloadFolder": true, "updatesOffered": true, "checkAutomatically": true, "answers": {} },
+    "open": []
+  },
+  {
+    "name": "an earlier version with only a watched folder",
+    "state": { "sources": ["watched"], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": {} },
+    "open": ["catalogs", "updates"]
+  },
+  {
+    "name": "an earlier version with only a library folder and the automatic check on",
+    "state": { "sources": ["libraryFolder"], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": true, "answers": {} },
+    "open": ["catalogs"]
+  },
+  {
+    "name": "an earlier version with a catalog on but no download folder",
+    "state": { "sources": ["watched"], "catalogOn": true, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": true, "answers": {} },
+    "open": ["downloadFolder"]
+  },
+  {
+    "name": "an earlier version with a download folder but no catalog on",
+    "state": { "sources": ["watched"], "catalogOn": false, "downloadFolder": true, "updatesOffered": true, "checkAutomatically": true, "answers": {} },
+    "open": ["catalogs"]
+  },
+  {
+    "name": "font folders skipped without a folder",
+    "state": { "sources": [], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": { "fontFolders": "skipped" } },
+    "open": ["catalogs", "updates"]
+  },
+  {
+    "name": "font folders answered without a folder",
+    "state": { "sources": ["system"], "catalogOn": false, "downloadFolder": false, "updatesOffered": false, "checkAutomatically": false, "answers": { "fontFolders": "answered" } },
+    "open": ["catalogs"]
+  },
+  {
+    "name": "catalogs answered with none on",
+    "state": { "sources": ["watched"], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": { "catalogs": "answered" } },
+    "open": ["updates"]
+  },
+  {
+    "name": "catalogs skipped",
+    "state": { "sources": ["watched"], "catalogOn": false, "downloadFolder": false, "updatesOffered": false, "checkAutomatically": false, "answers": { "catalogs": "skipped" } },
+    "open": []
+  },
+  {
+    "name": "updates answered with the automatic check off",
+    "state": { "sources": ["watched"], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": { "catalogs": "answered", "updates": "answered" } },
+    "open": []
+  },
+  {
+    "name": "updates skipped",
+    "state": { "sources": [], "catalogOn": false, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": { "updates": "skipped" } },
+    "open": ["fontFolders", "catalogs"]
+  },
+  {
+    "name": "every step answered but a catalog turned on later without a folder",
+    "state": { "sources": [], "catalogOn": true, "downloadFolder": false, "updatesOffered": true, "checkAutomatically": false, "answers": { "fontFolders": "answered", "catalogs": "answered", "updates": "answered" } },
+    "open": ["downloadFolder"]
+  },
+  {
+    "name": "a copy that does not update itself, with the automatic check on from an older version",
+    "state": { "sources": ["watched"], "catalogOn": true, "downloadFolder": true, "updatesOffered": false, "checkAutomatically": true, "answers": {} },
+    "open": []
+  }
+]

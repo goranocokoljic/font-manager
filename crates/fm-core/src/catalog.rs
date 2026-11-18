@@ -459,6 +459,15 @@ impl Catalogs {
             .collect()
     }
 
+    /// Whether any catalog is on (E55.2): reads only the on/off state, never a
+    /// cache, so the setup status costs one small file read.
+    pub fn any_enabled(&self) -> bool {
+        let state = self.state();
+        self.adapters
+            .iter()
+            .any(|a| state.enabled.contains(&a.id()))
+    }
+
     /// Turns a catalog on or off; makes no request and keeps the cache.
     pub fn set_enabled(&self, id: CatalogId, enabled: bool) -> FmResult<Catalog> {
         let adapter = self.adapter(id)?;

@@ -81,8 +81,10 @@ use crate::search::{
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
     McpClient, McpConfirmationAnswer, McpGrant, McpGrantUpdate, McpSnippet, McpStatus, McpToolCall,
-    McpUpdate, Settings, SettingsUpdate, ThemeDefinition, ThemeTokens, unknown_theme,
+    McpUpdate, Settings, SettingsUpdate, ThemeDefinition, ThemeTokens, download_folder_is_chosen,
+    unknown_theme,
 };
+use crate::setup::{AnswerSetupStepRequest, SetupAnswer, SetupStatus, SetupStep};
 use crate::workflows::{
     BriefRequest, Candidate, DocumentFontCheck, DocumentFontRef, DocumentFontStatus, DocumentFonts,
     DocumentFontsCheck, DocumentFontsRequest, DocumentFormat, PrepareForWebRequest,
@@ -603,6 +605,11 @@ struct State {
     layouts: Vec<MockLayoutFile>,
     /// The catalogs turned on.
     catalogs_on: BTreeSet<CatalogId>,
+    /// The first-run setup steps answered or skipped (E55.2); none, as in a
+    /// new install.
+    setup_answers: BTreeMap<SetupStep, SetupAnswer>,
+    /// Whether this copy updates itself; true, as a release installer.
+    updates_offered: bool,
     /// Each refreshed catalog's cache: when, and its families.
     catalog_cache: BTreeMap<CatalogId, (String, Vec<CatalogFamily>)>,
     /// The families "downloaded" (E22.3), oldest first.
@@ -1064,6 +1071,8 @@ impl State {
             sidecar_conflicts: Vec::new(),
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
+            setup_answers: BTreeMap::new(),
+            updates_offered: true,
             catalog_cache: BTreeMap::new(),
             foundry_merges: BTreeMap::new(),
             catalog_downloads: Vec::new(),
@@ -5231,6 +5240,27 @@ impl SettingsService for MockApi {
         });
         Ok(())
     }
+
+    fn setup_status(&self) -> ApiResult<SetupStatus> {
+        let st = self.state();
+        let kinds: Vec<SourceKind> = st.sources.iter().map(|s| s.kind).collect();
+        Ok(mock_open_setup_steps(
+            &kinds,
+            !st.catalogs_on.is_empty(),
+            st.settings.download_folder.is_some(),
+            st.updates_offered,
+            st.settings.check_updates_automatically,
+            &st.setup_answers,
+        ))
+    }
+
+    fn answer_setup_step(&self, req: AnswerSetupStepRequest) -> ApiResult<SetupStatus> {
+        if req.step == SetupStep::DownloadFolder {
+            return Err(download_folder_is_chosen());
+        }
+        self.state().setup_answers.insert(req.step, req.answer);
+        self.setup_status()
+    }
 }
 
 /// Where the mock's app keeps the stdio shim: a fixed path (the mock touches
@@ -6687,10 +6717,91 @@ impl MockApi {
     }
 }
 
+impl MockApi {
+    /// Whether this copy updates itself, as the shell would report it; the
+    /// mock starts as a release installer (true).
+    pub fn set_updates_offered(&self, offered: bool) {
+        self.state().updates_offered = offered;
+    }
+}
+
+/// The setup's open steps: a copy of `fm_core::setup::open_steps` (fm-api
+/// cannot use fm-core). `fixtures/setup/status-cases.json` is run against
+/// both, and against the TypeScript mock, so they stay the same rule.
+fn mock_open_setup_steps(
+    sources: &[SourceKind],
+    catalog_on: bool,
+    download_folder_set: bool,
+    updates_offered: bool,
+    check_updates_automatically: bool,
+    answers: &BTreeMap<SetupStep, SetupAnswer>,
+) -> SetupStatus {
+    let has_font_folder = sources
+        .iter()
+        .any(|k| matches!(k, SourceKind::Watched | SourceKind::LibraryFolder));
+    let open = |step: SetupStep| {
+        let unanswered = !answers.contains_key(&step);
+        match step {
+            SetupStep::FontFolders => !has_font_folder && unanswered,
+            SetupStep::Catalogs => !catalog_on && unanswered,
+            SetupStep::DownloadFolder => catalog_on && !download_folder_set,
+            SetupStep::Updates => updates_offered && !check_updates_automatically && unanswered,
+        }
+    };
+    SetupStatus {
+        open: SetupStep::ALL.into_iter().filter(|&s| open(s)).collect(),
+    }
+}
+
 impl EventSource for MockApi {
     fn subscribe(&self) -> mpsc::Receiver<Event> {
         let (tx, rx) = mpsc::channel();
         self.state().subscribers.push(tx);
         rx
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Case {
+        name: String,
+        state: CaseState,
+        open: Vec<SetupStep>,
+    }
+
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CaseState {
+        sources: Vec<SourceKind>,
+        catalog_on: bool,
+        download_folder: bool,
+        updates_offered: bool,
+        check_automatically: bool,
+        answers: BTreeMap<SetupStep, SetupAnswer>,
+    }
+
+    /// The same table `fm_core::setup` and the TypeScript mock run.
+    #[test]
+    fn the_setup_rule_gives_the_core_answer_for_every_shared_case() {
+        let cases: Vec<Case> =
+            serde_json::from_str(include_str!("../../../fixtures/setup/status-cases.json"))
+                .expect("status cases");
+        assert!(cases.len() >= 10, "the table is there");
+        for c in cases {
+            let s = c.state;
+            let status = mock_open_setup_steps(
+                &s.sources,
+                s.catalog_on,
+                s.download_folder,
+                s.updates_offered,
+                s.check_automatically,
+                &s.answers,
+            );
+            assert_eq!(status.open, c.open, "{}", c.name);
+        }
     }
 }

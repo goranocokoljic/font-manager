@@ -16,6 +16,7 @@ use fm_api::organization::*;
 use fm_api::preview::*;
 use fm_api::search::*;
 use fm_api::settings::*;
+use fm_api::setup::{AnswerSetupStepRequest, SetupStatus};
 use fm_api::workflows::*;
 use fm_api::{
     ApiResult, CollectionId, Event, EventSource, FaceId, FamilyId, JobId, ResolutionId, SetId,
@@ -240,6 +241,14 @@ impl SettingsService for Client {
 
     fn answer_mcp_confirmation(&self, req: McpConfirmationAnswer) -> ApiResult<()> {
         self.call("answer_mcp_confirmation", &req)
+    }
+
+    fn setup_status(&self) -> ApiResult<SetupStatus> {
+        self.call("setup_status", &())
+    }
+
+    fn answer_setup_step(&self, req: AnswerSetupStepRequest) -> ApiResult<SetupStatus> {
+        self.call("answer_setup_step", &req)
     }
 }
 

@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::activation::{ActivationMode, ConflictPolicy, Target};
+use crate::setup::{AnswerSetupStepRequest, SetupStatus};
 use crate::{ApiError, ApiResult, ErrorCode};
 
 /// The smallest preview cache, in megabytes.
@@ -492,6 +493,34 @@ pub trait SettingsService {
         let _ = req;
         Err(mcp_unsupported())
     }
+    /// The first-run setup's open steps (E55.2, ADR 0026), from the library's
+    /// folders, the catalogs, the settings and the answers in `config.json`;
+    /// no network request and no scan. `Unsupported` where there is no setup.
+    fn setup_status(&self) -> ApiResult<SetupStatus> {
+        Err(setup_unsupported())
+    }
+    /// Records that the user answered or skipped a setup step, in
+    /// `config.json`, and returns the steps still open. `InvalidRequest` for
+    /// [`crate::setup::SetupStep::DownloadFolder`], which closes when the folder is chosen.
+    fn answer_setup_step(&self, req: AnswerSetupStepRequest) -> ApiResult<SetupStatus> {
+        let _ = req;
+        Err(setup_unsupported())
+    }
+}
+
+fn setup_unsupported() -> ApiError {
+    ApiError::new(
+        ErrorCode::Unsupported,
+        "The first-run setup is not available here.",
+    )
+}
+
+/// The refusal of an answer to [`crate::setup::SetupStep::DownloadFolder`]; every
+/// implementation of [`SettingsService::answer_setup_step`] uses it.
+pub fn download_folder_is_chosen() -> ApiError {
+    ApiError::invalid(
+        "The folder for installed fonts is answered by choosing it, not by skipping it.",
+    )
 }
 
 fn mcp_unsupported() -> ApiError {

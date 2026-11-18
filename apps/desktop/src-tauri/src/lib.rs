@@ -53,6 +53,7 @@ use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
     Settings, SettingsUpdate, ThemeDefinition,
 };
+use fm_api::setup::{AnswerSetupStepRequest, SetupStatus};
 use fm_api::workflows::{DocumentFontsCheck, DocumentFontsRequest};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
@@ -1393,6 +1394,22 @@ async fn get_app_folders(state: State<'_, AppState>) -> ApiResult<AppFolders> {
     call_settings(&state, |s| s.app_folders()).await
 }
 
+/// The first-run setup's open steps (E55.2): from the library, the
+/// catalogs, the settings and the answers in `config.json`.
+#[tauri::command]
+async fn setup_status(state: State<'_, AppState>) -> ApiResult<SetupStatus> {
+    call(&state, |api| api.setup_status()).await
+}
+
+/// Records that the user answered or skipped a setup step.
+#[tauri::command]
+async fn answer_setup_step(
+    state: State<'_, AppState>,
+    req: AnswerSetupStepRequest,
+) -> ApiResult<SetupStatus> {
+    call(&state, move |api| api.answer_setup_step(req)).await
+}
+
 /// The local API endpoint's address and token (Settings → Local API).
 #[tauri::command]
 async fn endpoint_info(state: State<'_, AppState>) -> ApiResult<EndpointInfo> {
@@ -1669,6 +1686,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             update_settings,
             list_themes,
             get_app_folders,
+            setup_status,
+            answer_setup_step,
             endpoint_info,
             regenerate_endpoint_token,
             mcp_status,
@@ -1742,6 +1761,9 @@ pub fn serve(
             // The folder watcher (E51.1) follows every source for the app's
             // lifetime; it starts after the trait pass, which measures what
             // it adds. The endpoint and the MCP server share this API.
+            // The setup's updates step is asked only where this copy updates
+            // itself (E55.2).
+            let core = core.with_update_support(updater::support());
             let core = Arc::new(core.with_trait_pass().with_watcher());
             if let Err(e) = core.start() {
                 tracing::warn!(error = %e, "activation start-up failed");

@@ -7923,6 +7923,7 @@ fn a_search_for_faces_lists_only_those_faces() {
     assert_eq!(search(Some(Vec::new()), "").total, 0);
 }
 
+mod setup;
 mod watching;
 
 /// E54.6: catalog families are judged against their preview files, in
