@@ -528,3 +528,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-18
 
 - [E54.10 #620] apps/desktop/src/components/SimilarPanel.vue:422 — the loading, error and empty `role="status"`/`alert` nodes are inserted together with their text, so some screen readers do not announce them.
+- [E55.2 #641] crates/fm-platform/src/updater.rs:136 — `writable_dir` ignores a failed probe removal; now that update support is computed at every start, a stuck `.fm-update-probe-<pid>` file can be left in the program folder each start.
