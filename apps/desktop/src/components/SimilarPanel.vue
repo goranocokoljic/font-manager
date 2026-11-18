@@ -1,21 +1,28 @@
 <script setup lang="ts">
-// "Similar to <family style>" (E23.3): the faces `findSimilar` ranks as closest to
-// one face, each previewed in its own font with the view's preview text, its score
-// as a percent and fm-core's reasons. It replaces the font list while open
-// (a mode, not a split); the source face is pinned on top and the inspector stays.
+// "Similar to <family style>" (E23.3, E54.10): the faces `findSimilar` ranks as closest to
+// one face, each previewed in its own font with the view's preview text, its score as a
+// percent and fm-core's reasons. It replaces the font list while open (a mode, not a
+// split); the inspector stays. The header says what the panel is (the Similar icon, the
+// title at the view titles' size and weight, how many fonts it found) and how to leave it
+// ("Back to library", Esc). The reference face sits apart, in its own labelled block, above
+// the results. The rows, their percents and their reasons come from the store
+// (`useSimilarStore().rows`); this component only lays them out.
 //
-// Keys: Tab reaches the close button and every result; Up/Down (Home/End) move
-// between results; Enter or a click selects the result in the list and the
-// inspector; Escape closes and gives the focus back to where it was.
+// Keys: Tab reaches the back and close buttons and every result; Up/Down (Home/End) move
+// between results; Enter or a click selects the result in the list and the inspector;
+// Escape closes and gives the focus back to where it was.
 import { computed, nextTick, ref, watch, watchEffect, onMounted } from 'vue';
-import type { FaceId, FaceSummary, SimilarFace } from '../api/types';
+import type { FaceId, FaceSummary } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { sampleText } from '../preview/sampleText';
-import { specimenOf } from '../preview/tofu';
+import { fallbackTitle, specimenOf } from '../preview/tofu';
 import { usePreviewStore, type PreviewSettings } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
-import { scorePercent, useSimilarStore } from '../stores/similar';
+import { useSimilarStore } from '../stores/similar';
 import FontPreviewRow from './FontPreviewRow.vue';
+import UiButton from './ui/UiButton.vue';
+import UiEmptyState from './ui/UiEmptyState.vue';
+import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 
 const props = defineProps<{ preview: PreviewSettings }>();
@@ -42,19 +49,17 @@ const titleParts = computed(() => {
   const [before = '', after = ''] = t('similar.title', { name: MARK }).split(MARK);
   return { before, after };
 });
-
-function scoreText(r: SimilarFace): string {
-  const percent = scorePercent(r.score);
-  return percent === null ? t('similar.noScore') : t('similar.score', { percent });
-}
-
-// A reason every result shares says nothing about which one is closer: show only what differs.
-const sharedReasons = computed(() => {
-  const all = similar.results;
-  if (all.length < 2) return new Set<string>();
-  const [first, ...rest] = all.map((r) => r.reasons);
-  return new Set((first ?? []).filter((x) => rest.every((o) => o.includes(x))));
-});
+/** How many rows the store has, once the answer is in. */
+const count = computed(() =>
+  similar.loading || similar.error ? '' : t('similar.count', { count: similar.rows.length }),
+);
+const emptyTitle = computed(() =>
+  similar.empty === 'notMeasured' ? t('similar.notMeasuredTitle') : t('similar.noneTitle'),
+);
+// fm-core's own words for an empty answer (E54.11); the old sentence when it gave none.
+const emptyBody = computed(
+  () => similar.emptyMessage ?? t('similar.none', { name: targetName.value }),
+);
 
 const source = computed(() => {
   const face = similar.target;
@@ -68,33 +73,25 @@ const source = computed(() => {
   };
 });
 
-// One row per family: its closest face (highest score), then "+N styles" for the rest.
-const grouped = computed(() => {
-  const byFamily = new Map<string, { best: SimilarFace; extra: number }>();
-  for (const r of similar.results) {
-    const g = byFamily.get(r.face.familyName);
-    if (!g) byFamily.set(r.face.familyName, { best: r, extra: 0 });
-    else {
-      g.extra += 1;
-      if ((r.score ?? -1) > (g.best.score ?? -1)) g.best = r;
-    }
-  }
-  return [...byFamily.values()];
-});
-
 const items = computed(() =>
-  grouped.value.map(({ best: r, extra }, i) => {
+  similar.rows.map((row, i) => {
+    const r = row.result;
     const sample = sampleText(props.preview, r.face, previews.pangramText);
-    const got = samples.get(r.face.id, sample);
+    const specimen = specimenOf(sample, samples.get(r.face.id, sample));
+    const score =
+      row.percent === null ? t('similar.noScore') : t('similar.score', { percent: row.percent });
     return {
       r,
       id: `fm-similar-${i}`,
       name: nameOf(r.face),
-      score: scoreText(r),
-      more: extra ? t('similar.moreStyles', { count: extra }) : '',
-      percent: scorePercent(r.score) ?? 0,
-      why: r.reasons.filter((x) => !sharedReasons.value.has(x)).join(', '),
-      ...specimenOf(sample, got),
+      score,
+      more: row.moreStyles ? t('similar.moreStyles', { count: row.moreStyles }) : '',
+      percent: row.percent,
+      bar: row.percent === null ? score : t('similar.bar', { percent: row.percent }),
+      why: row.reasons.length ? t('similar.reasons', { reasons: row.reasons.join(', ') }) : '',
+      // "Fallback" in words (E54.10): what the row shows instead of the sample, and why.
+      fallbackWords: specimen.fallback ? fallbackTitle(specimen.fallback, specimen.missing) : '',
+      ...specimen,
     };
   }),
 );
@@ -187,14 +184,36 @@ function onKeyDown(e: KeyboardEvent): void {
     @keydown="onKeyDown"
   >
     <header class="head">
+      <UiIcon name="similar" class="icon" data-testid="similar-icon" />
       <h2 id="fm-similar-title" class="title">
         {{ titleParts.before }}<bdi>{{ targetName }}</bdi
         >{{ titleParts.after }}
       </h2>
-      <p class="hint">{{ t('similar.hint') }}</p>
-      <UiIconButton icon="close" :label="t('similar.close')" @click="close" />
+      <span v-if="count" class="count" data-testid="similar-count">{{ count }}</span>
+      <span class="spacer" />
+      <UiButton
+        class="back"
+        data-testid="similar-back"
+        aria-keyshortcuts="Escape"
+        :title="t('similar.backTitle')"
+        @click="close"
+      >
+        {{ t('similar.back') }} <kbd>{{ t('similar.backKey') }}</kbd>
+      </UiButton>
+      <UiIconButton
+        icon="close"
+        :label="t('similar.close')"
+        :shortcut="t('similar.backKey')"
+        @click="close"
+      />
     </header>
-    <div v-if="source" class="source" data-testid="similar-source">
+    <section
+      v-if="source"
+      class="reference"
+      aria-labelledby="fm-similar-reference"
+      data-testid="similar-source"
+    >
+      <h3 id="fm-similar-reference" class="reference-label">{{ t('similar.reference') }}</h3>
       <FontPreviewRow
         class="preview"
         :face="source.face"
@@ -207,14 +226,24 @@ function onKeyDown(e: KeyboardEvent): void {
         :fallback="source.fallback"
         :missing="source.missing"
       />
-    </div>
+    </section>
     <p v-if="similar.loading" class="message" role="status">{{ t('similar.loading') }}</p>
     <p v-else-if="similar.error" class="message error" role="alert">
       {{ t('similar.error', { message: errorMessage(similar.error) }) }}
     </p>
-    <p v-else-if="!items.length" class="message" role="status">
-      {{ t('similar.none', { name: targetName }) }}
-    </p>
+    <div v-else-if="!items.length" class="empty" data-testid="similar-empty">
+      <div role="status">
+        <UiEmptyState :title="emptyTitle" :body="emptyBody" />
+      </div>
+      <UiButton
+        class="back"
+        data-testid="similar-empty-back"
+        aria-keyshortcuts="Escape"
+        @click="close"
+      >
+        {{ t('similar.back') }} <kbd>{{ t('similar.backKey') }}</kbd>
+      </UiButton>
+    </div>
     <ul v-else ref="list" class="list" :aria-label="t('similar.results')">
       <li v-for="item in items" :key="item.r.face.id">
         <button
@@ -225,7 +254,7 @@ function onKeyDown(e: KeyboardEvent): void {
             t('similar.resultLabel', { name: item.name, score: item.score }) +
             (item.more ? `, ${item.more}` : '')
           "
-          :aria-describedby="`${item.id}-why`"
+          :aria-describedby="`${item.id}-why ${item.id}-fallback`"
           :aria-current="similar.picked === item.r.face.id ? 'true' : undefined"
           @click="select(item.r.face)"
         >
@@ -239,18 +268,27 @@ function onKeyDown(e: KeyboardEvent): void {
             :tracking-em="preview.trackingEm"
             :align="preview.align"
             :fallback="item.fallback"
+            :fallback-badge="false"
             :missing="item.missing"
           >
             <template #detail>
               <span class="score" data-testid="similar-score">{{ item.score }}</span>
-              <span class="bar" aria-hidden="true"
-                ><span class="fill" :style="{ inlineSize: `${item.percent}%` }"
+              <span
+                class="bar"
+                role="meter"
+                data-testid="similar-bar"
+                :aria-label="item.bar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-valuenow="item.percent ?? undefined"
+                ><span class="fill" :style="{ inlineSize: `${item.percent ?? 0}%` }"
               /></span>
               <span v-if="item.more" class="more">{{ item.more }}</span>
             </template>
           </FontPreviewRow>
-          <span :id="`${item.id}-why`" class="why">{{
-            item.why ? t('similar.reasons', { reasons: item.why }) : ''
+          <span :id="`${item.id}-why`" class="why">{{ item.why }}</span>
+          <span :id="`${item.id}-fallback`" class="why" data-testid="similar-fallback">{{
+            item.fallbackWords
           }}</span>
         </button>
       </li>
@@ -273,26 +311,64 @@ function onKeyDown(e: KeyboardEvent): void {
   outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
 }
+/* The view titles' row (AppToolbar): a 13 px semibold title, a muted count, the actions at the end. */
 .head {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 16px 4px;
+  flex: none;
+  align-items: center;
+  gap: var(--fm-space-2);
+  min-height: 40px;
+  padding-inline: var(--fm-space-4) var(--fm-space-2);
+  border-bottom: 1px solid var(--fm-border);
+}
+.icon {
+  flex: none;
+  color: var(--fm-muted);
 }
 .title {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   font-size: var(--fm-text-md);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.hint {
+.count {
+  flex: none;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.spacer {
   flex: 1;
+}
+.back kbd {
+  margin-inline-start: var(--fm-space-1);
+}
+/* The reference: its own block on the surface, under a small label, apart from the results. */
+.reference {
+  flex: none;
+  padding-block-start: var(--fm-space-2);
+  border-bottom: 1px solid var(--fm-border-strong);
+  background-color: var(--fm-surface);
+}
+.reference-label {
   margin: 0;
+  padding: 0 var(--fm-space-4);
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.source {
-  border-bottom: 1px solid var(--fm-border);
-  background-color: var(--fm-surface);
+.empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fm-space-3);
+  padding: var(--fm-space-4);
 }
 .bar {
   display: inline-block;

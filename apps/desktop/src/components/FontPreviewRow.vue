@@ -63,6 +63,11 @@ const props = withDefaults(
     defer?: boolean;
     /** Shows the "Variable" badge; Waterfall shows it on its first line only. */
     showVariable?: boolean;
+    /**
+     * Shows the "Fallback" badge for a fallback text. The Similar panel (E54.10) turns it
+     * off and says what it means in words of its own instead.
+     */
+    fallbackBadge?: boolean;
   }>(),
   {
     label: undefined,
@@ -79,6 +84,7 @@ const props = withDefaults(
     outline: false,
     defer: false,
     showVariable: true,
+    fallbackBadge: true,
   },
 );
 
@@ -265,7 +271,7 @@ const deferredStyle = computed(() => ({
       }}</UiBadge>
       <slot name="detail" />
       <UiBadge
-        v-if="fallback"
+        v-if="fallback && fallbackBadge"
         data-testid="fallback-hint"
         :title="fallbackTitle"
         :aria-label="fallbackTitle"

@@ -524,3 +524,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E54.9 #619] apps/desktop/src/views/FamilyView.vue:381 — the family page's Compare shows no shortcut in its tooltip while Tag and Similar beside it show T and S.
 - [E54.9 #619] apps/desktop/src/components/FontGrid.vue:811 — the wall card's "like this" letter buttons are card actions that still use a native `title` (text buttons, not UiIconButton).
 - [E54.9 #619] apps/desktop/src/components/ui/UiTooltip.vue:27 — the tooltip has its own copy of UiPopover's place-and-clamp math and no resize handler; two copies to keep in step.
+
+## 2026-11-18
+
+- [E54.10 #620] apps/desktop/src/components/SimilarPanel.vue:422 — the loading, error and empty `role="status"`/`alert` nodes are inserted together with their text, so some screen readers do not announce them.
