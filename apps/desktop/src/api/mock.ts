@@ -1186,6 +1186,13 @@ export interface MockOptions {
    * update section is hidden and a platform note says why).
    */
   update?: 'none' | 'patch' | 'major' | 'offline' | 'unsigned' | 'managed';
+  /**
+   * The first-run setup (E55.4): `rule` (the default) answers `setupStatus` with the rule
+   * of fm-core; `none` never has an open step (browser mode without `?mockSetup`, so the
+   * other specs are not blocked); `first` is a first start: the rule, and the library has
+   * no watched folder yet (only the system fonts).
+   */
+  setup?: 'rule' | 'none' | 'first';
   /** Called with every install the mock accepts (tests). */
   onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
@@ -1763,6 +1770,9 @@ function passes(
 
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
 export const mockPickedFolders: (string | null)[] = [];
+
+/** A picked folder under this path is "not there": `addSource` refuses it as fm-core does. */
+export const MOCK_GONE_FOLDER = '/Volumes/Gone';
 
 /** Files the mock file picker returns, one per call; `null` is a cancel. */
 export const mockPickedFiles: (string | null)[] = [];
@@ -2801,7 +2811,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   );
   /** Faces ever activated, active now or not. */
   const everActivated = new Set<FaceId>(active.keys());
-  const sources = structuredClone([...mockSources, ...(options.moreSources ?? [])]);
+  const sources = structuredClone([...mockSources, ...(options.moreSources ?? [])]).filter(
+    (s) => options.setup !== 'first' || s.kind === 'system',
+  );
   const sets = structuredClone(options.sets ?? []);
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
@@ -2927,7 +2939,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     return tags || favorite ? { ...f, tags: [...(tags ?? f.tags)], favorite } : f;
   });
   // The wall's watched folder holds its own faces.
-  if (options.library === 'wall') sources[0]!.faceCount = faces.length;
+  const wallFolder = sources.find((s) => s.kind === 'watched');
+  if (options.library === 'wall' && wallFolder) wallFolder.faceCount = faces.length;
   // Tags by id; a face holds their names (`FaceDetail.tags`), like the Rust mock.
   const tags: { id: TagId; name: string }[] = [];
   // Like fm-core's `COLLATE NOCASE`: only A–Z case is folded ("Äb" and "äb" are two tags).
@@ -4628,8 +4641,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         throw { code: 'invalidRequest', message: 'Choose a folder to add.', detail: null };
       if (sources.some((s) => s.path === req.path))
         throw { code: 'conflict', message: 'This folder is already in the library.', detail: null };
+      // The same refusals as fm-core's `add_source` (E55.4): a folder inside a source, and
+      // one that is not there (a picked path under `MOCK_GONE_FOLDER` stands in for it).
+      const outer = sources.find((s) => req.path.startsWith(`${s.path.replace(/\/+$/, '')}/`));
+      if (outer)
+        throw {
+          code: 'conflict',
+          message: `This folder is inside ${outer.path}, which is already in the library.`,
+          detail: null,
+        };
+      if (req.path.startsWith(MOCK_GONE_FOLDER))
+        throw { code: 'notFound', message: `The folder ${req.path} was not found.`, detail: null };
+      // At a first start (`setup: 'first'`) the sample faces wait for a folder: the first one
+      // added takes the sample folder's id, so its scan "finds" them (the setup's pane, E55.4).
+      const id =
+        options.setup === 'first' && !sources.some((s) => s.id === mockSources[0]!.id)
+          ? mockSources[0]!.id
+          : ++nextId;
       const source: Source = {
-        id: ++nextId,
+        id,
         path: req.path,
         kind: 'watched',
         paused: false,
@@ -4749,14 +4779,17 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     getAppFolders: async () => ({ ...mockFolders }),
     setupStatus: async () => ({
-      open: mockOpenSetupSteps({
-        sources: sources.map((s) => s.kind),
-        catalogOn: (await client.listCatalogs()).some((c) => c.enabled),
-        downloadFolder: settings.downloadFolder != null,
-        updatesOffered: options.update !== 'managed',
-        checkAutomatically: settings.checkUpdatesAutomatically === true,
-        answers: { ...setupAnswers },
-      }),
+      open:
+        options.setup === 'none'
+          ? []
+          : mockOpenSetupSteps({
+              sources: sources.map((s) => s.kind),
+              catalogOn: (await client.listCatalogs()).some((c) => c.enabled),
+              downloadFolder: settings.downloadFolder != null,
+              updatesOffered: options.update !== 'managed',
+              checkAutomatically: settings.checkUpdatesAutomatically === true,
+              answers: { ...setupAnswers },
+            }),
     }),
     answerSetupStep: async (req) => {
       // The same refusal as `download_folder_is_chosen` in fm-api.
@@ -4882,6 +4915,12 @@ function sessionStorageOf(): Storage | undefined {
   }
 }
 
+/** `?mockSetup=first`: a first start with the setup open (E55.4); else no open step. */
+function setupFromUrl(): 'none' | 'first' {
+  if (typeof location === 'undefined') return 'none';
+  return new URLSearchParams(location.search).get('mockSetup') === 'first' ? 'first' : 'none';
+}
+
 function platformFromUrl(): AppInfo['platform'] | undefined {
   if (typeof location === 'undefined') return undefined;
   const p = new URLSearchParams(location.search).get('mockPlatform');
@@ -4948,6 +4987,9 @@ export const mockClient: FmClient = createMockClient({
   moreSources: countFromUrl('mockSources', 1) ? mockMoreSources : [],
   settingsStorage: sessionStorageOf(),
   library,
+  // `?mockSetup=first` opens the first-run setup as at a first start (E55.4); without it the
+  // setup has no open step, so the other specs see the library.
+  setup: setupFromUrl(),
   ...(library === 'wall'
     ? wallExtras()
     : {

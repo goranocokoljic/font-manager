@@ -1529,7 +1529,10 @@
       "rescanInterval": "Quellen neu einlesen alle (Minuten)",
       "rescanHint": "0 schaltet das automatische Neueinlesen aus.",
       "logsFolder": "Protokollordner",
-      "logsFolderLabel": "Protokollordner"
+      "logsFolderLabel": "Protokollordner",
+      "setup": "Ersteinrichtung",
+      "runSetup": "Einrichtung erneut starten",
+      "runSetupHint": "Öffnet jeden Schritt mit deinen jetzigen Einstellungen. Ein Schritt, den du so lässt, ändert nichts."
     },
     "localApi": {
       "note": "Andere Programme auf diesem Computer, etwa der Befehl fm und Plug-ins für Design-Apps, erreichen Font Fu über diese Adresse, solange die App läuft. Jede Anfrage braucht das Token.",
@@ -2169,5 +2172,67 @@
     "show": "Zeigen",
     "chip": "Neu in {source} · {count}",
     "unknownSource": "einem überwachten Ordner"
+  },
+  "setup": {
+    "label": "Ersteinrichtung",
+    "stepsLabel": "Schritte der Einrichtung",
+    "steps": {
+      "fontFolders": "Schriftordner",
+      "catalogs": "Online-Kataloge",
+      "updates": "Updates"
+    },
+    "goToStep": "Zu {name}",
+    "close": "Einrichtung schließen",
+    "continue": "Weiter",
+    "finish": "Fertig",
+    "back": "Zurück",
+    "skip": "Später",
+    "folders": {
+      "heading": "Wo sind deine Schriften?",
+      "lead": "Füge die Ordner hinzu, in denen du Schriften aufbewahrst. Font Fu liest sie dort, wo sie sind: Nichts wird kopiert, verschoben oder umbenannt.",
+      "system": "Die im System installierten Schriften sind schon dabei.",
+      "pickerTitle": "Ordner mit Schriften wählen",
+      "emptyTitle": "Noch keine Ordner",
+      "emptyNote": "Du kannst so viele hinzufügen, wie du willst.",
+      "add": "Ordner hinzufügen…",
+      "addAnother": "Weiteren Ordner hinzufügen…",
+      "listLabel": "Deine Schriftordner",
+      "fonts": {
+        "one": "{count} Schrift",
+        "other": "{count} Schriften"
+      },
+      "scanningCount": "{done} von {total} Schriften",
+      "soFar": "bisher",
+      "readJustNow": "Gerade gelesen",
+      "read": "Gelesen {when}",
+      "notRead": "Noch nicht gelesen",
+      "scanningBadge": "Wird gelesen",
+      "scanningLabel": "{name} wird gelesen",
+      "refusedBadge": "Nicht hinzugefügt",
+      "removeLabel": "{name} aus der Bibliothek entfernen",
+      "dismissLabel": "{name} ausblenden"
+    },
+    "library": {
+      "title": "Deine Bibliothek",
+      "titleSoFar": "Deine Bibliothek bisher",
+      "emptyTitle": "Deine Bibliothek ist leer",
+      "emptyNote": "Schriften erscheinen hier, während Font Fu deine Ordner liest. Du kannst schon zum nächsten Schritt gehen.",
+      "found": {
+        "one": "{count} Familie gefunden",
+        "other": "{count} Familien gefunden"
+      },
+      "inFolders": {
+        "one": "In {count} Ordner.",
+        "other": "In {count} Ordnern."
+      },
+      "stillReading": "{name} wird noch gelesen.",
+      "footer": "Schriften erscheinen, sobald ein Ordner gelesen ist. Du kannst weitermachen, während Font Fu arbeitet.",
+      "styles": {
+        "one": "{count} Schnitt",
+        "other": "{count} Schnitte"
+      },
+      "variable": "Variabel",
+      "listLabel": "Bisher gefundene Familien"
+    }
   }
 }

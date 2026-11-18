@@ -9,6 +9,23 @@ Font Fu does not copy, move or change your font files. It reads the folders you
 choose and keeps a list of the fonts in them. When you remove a folder from the app,
 the files stay on your disk.
 
+## The first start
+
+The first time you open Font Fu, it asks **Where are your fonts?** in place of the
+library.
+
+1. Select **Add folder…** and choose a folder that holds fonts. Do it again for each
+   folder you keep fonts in.
+2. Font Fu adds each folder at once and starts to read it. Each folder shows how many
+   fonts it has. The right side shows the families found so far.
+3. To take a folder out again, select **×** on its row. The files stay on your disk.
+4. Select **Finish** (or **Continue**) when you are done. Font Fu goes on reading your
+   folders while you work.
+
+If you do not want to add a folder now, select **Skip for now**. The setup does not ask
+again. You can add folders later from **Sources**, as below. To see the setup again,
+go to **Settings › Advanced** and select **Run setup again**.
+
 ## Add your first folder
 
 1. In the sidebar, under **Sources**, select **Add folder**.

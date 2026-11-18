@@ -900,6 +900,27 @@ impl LibraryService for CoreApi {
         if !req.path.trim().is_empty() && !path.is_dir() {
             return Err(FmError::not_found(format!("The folder {}", req.path)).into());
         }
+        // A folder inside a source (a watched folder, the library folder or the system
+        // fonts) would index the same files twice (E55.4). The same folder again keeps
+        // the index's own "already in the library" answer.
+        if !req.path.trim().is_empty() {
+            let os = Os::current();
+            let outer = self.lock().sources()?.into_iter().find(|s| {
+                let dir = Path::new(&s.path);
+                fm_platform::paths::is_within(os, path, dir)
+                    && !fm_platform::paths::is_within(os, dir, path)
+            });
+            if let Some(outer) = outer {
+                return Err(FmError::new(
+                    ErrorCode::Conflict,
+                    format!(
+                        "This folder is inside {}, which is already in the library.",
+                        outer.path
+                    ),
+                )
+                .into());
+            }
+        }
         let source = self.lock().add_source(&req.path, SourceKind::Watched)?;
         self.sync_watch();
         Ok(source)

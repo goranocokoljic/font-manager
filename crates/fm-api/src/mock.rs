@@ -1693,6 +1693,20 @@ impl LibraryService for MockApi {
                 "This folder is already in the library.",
             ));
         }
+        // The same refusal as fm-core's `add_source` (E55.4): a folder inside a source.
+        if let Some(outer) = st
+            .sources
+            .iter()
+            .find(|s| std::path::Path::new(&req.path).starts_with(&s.path))
+        {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!(
+                    "This folder is inside {}, which is already in the library.",
+                    outer.path
+                ),
+            ));
+        }
         let source = Source {
             id: SourceId(st.next()),
             path: req.path,

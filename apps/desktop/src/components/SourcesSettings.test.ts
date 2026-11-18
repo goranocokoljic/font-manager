@@ -252,6 +252,8 @@ describe('Settings › Sources (E50.13)', () => {
 
     for (const s of await client.listSources())
       if (s.kind !== 'system') await client.removeSource(s.id);
+    // With no folder the first-run setup would take the window (E55.4): the step is skipped.
+    await client.answerSetupStep({ step: 'fontFolders', answer: 'skipped' });
     const empty = await mountSources();
     expect(empty.wrapper.find('.cards').exists()).toBe(false);
     expect(empty.wrapper.get('[data-testid="sources-drop"]').text()).toContain('No folders yet');

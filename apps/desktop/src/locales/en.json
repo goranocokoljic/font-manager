@@ -1529,7 +1529,10 @@
       "rescanInterval": "Rescan sources every (minutes)",
       "rescanHint": "0 turns automatic rescans off.",
       "logsFolder": "Logs folder",
-      "logsFolderLabel": "logs folder"
+      "logsFolderLabel": "logs folder",
+      "setup": "First-run setup",
+      "runSetup": "Run setup again",
+      "runSetupHint": "Opens every step with your current choices. A step you leave as it is changes nothing."
     },
     "localApi": {
       "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Fu through this address while the app runs. Each request needs the token.",
@@ -2169,5 +2172,67 @@
     "show": "Show",
     "chip": "New in {source} · {count}",
     "unknownSource": "a watched folder"
+  },
+  "setup": {
+    "label": "First-run setup",
+    "stepsLabel": "Setup steps",
+    "steps": {
+      "fontFolders": "Font folders",
+      "catalogs": "Online catalogs",
+      "updates": "Updates"
+    },
+    "goToStep": "Go to {name}",
+    "close": "Close the setup",
+    "continue": "Continue",
+    "finish": "Finish",
+    "back": "Back",
+    "skip": "Skip for now",
+    "folders": {
+      "heading": "Where are your fonts?",
+      "lead": "Add the folders you keep fonts in. Font Fu reads them where they are: nothing is copied, moved or renamed.",
+      "system": "Fonts installed in the system are already included.",
+      "pickerTitle": "Choose a folder with fonts",
+      "emptyTitle": "No folders yet",
+      "emptyNote": "You can add as many as you like.",
+      "add": "Add folder…",
+      "addAnother": "Add another folder…",
+      "listLabel": "Your font folders",
+      "fonts": {
+        "one": "{count} font",
+        "other": "{count} fonts"
+      },
+      "scanningCount": "{done} of {total} fonts",
+      "soFar": "so far",
+      "readJustNow": "Read just now",
+      "read": "Read {when}",
+      "notRead": "Not read yet",
+      "scanningBadge": "Scanning",
+      "scanningLabel": "Reading {name}",
+      "refusedBadge": "Not added",
+      "removeLabel": "Remove {name} from the library",
+      "dismissLabel": "Dismiss {name}"
+    },
+    "library": {
+      "title": "Your library",
+      "titleSoFar": "Your library so far",
+      "emptyTitle": "Your library is empty",
+      "emptyNote": "Fonts show up here while Font Fu reads your folders. You can go on to the next step while it works.",
+      "found": {
+        "one": "{count} family found",
+        "other": "{count} families found"
+      },
+      "inFolders": {
+        "one": "In {count} folder.",
+        "other": "In {count} folders."
+      },
+      "stillReading": "Still reading {name}.",
+      "footer": "Fonts appear as each folder is read. You can go on while Font Fu works.",
+      "styles": {
+        "one": "{count} style",
+        "other": "{count} styles"
+      },
+      "variable": "Variable",
+      "listLabel": "Families found so far"
+    }
   }
 }

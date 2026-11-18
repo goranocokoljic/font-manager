@@ -1380,6 +1380,29 @@ fn bad_source_requests_are_errors_not_panics() {
         })
         .expect_err("missing folder");
     assert_eq!(err.code, ErrorCode::NotFound);
+    // A folder inside a source is refused with a message that names the source; the
+    // same folder again keeps "already in the library" (E55.4, the setup's folder rows).
+    let outer = lib.dir.path().join("outer");
+    let inner = outer.join("inner");
+    std::fs::create_dir_all(&inner).expect("folders");
+    let add = |p: &Path| {
+        lib.api.add_source(AddSourceRequest {
+            path: p.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+    };
+    add(&outer).expect("outer");
+    let err = add(&inner).expect_err("inside a source");
+    assert_eq!(err.code, ErrorCode::Conflict);
+    assert!(err.message.contains("is inside"), "{}", err.message);
+    assert!(err.message.contains(&outer.display().to_string()));
+    let err = add(&outer).expect_err("again");
+    assert_eq!(err.code, ErrorCode::Conflict);
+    assert_eq!(err.message, "This folder is already in the library.");
+    // A sibling whose name starts like the source is not inside it.
+    let sibling = lib.dir.path().join("outer-sibling");
+    std::fs::create_dir_all(&sibling).expect("sibling");
+    add(&sibling).expect("a sibling is not inside");
     is_unsupported(lib.api.add_source(AddSourceRequest {
         path: lib.root.display().to_string(),
         mode: ImportMode::CopyTo {
