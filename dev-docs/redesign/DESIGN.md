@@ -114,6 +114,17 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   the theme: every preview draws in the theme's text colour on the theme's surface. The slider
   knob follows the one-accent rule above; the blue knob in the exports is the canvas browser's
   default, not a second colour.
+- **First-run setup (board 13, E55):** shown in the main window in place of the library while a
+  setup question is open; never a second window. Two panes: the left one (648 px, `--fm-bg`)
+  asks, the right one (`--fm-surface`) shows what the answer leads to: the fonts found so far,
+  the folder tree an install lands in, what an update check does. Three steps at most (Font
+  folders, Online catalogs, Updates) in a step indicator that counts only the steps shown; a
+  step that already has an answer is not shown. One primary action per step ("Add folder…"
+  while the list is empty, then Continue, Finish on the last); Back is a quiet button; "Skip
+  for now" appears only on the folders step while no folder is added, and records the step as
+  skipped. Folder and catalog rows are the Sources cards; switches, the select and the radio
+  list are the app's own controls. Reopened from Settings it shows every step, the step names
+  become links and a close button appears.
 - **Letters (match by letters, board 8, E49):** the letters in the preview field are the
   controls: a letter that has traits carries a hairline underline, a letter with a value
   chosen carries an accent underline, and the field's right edge says what to do ("click an
