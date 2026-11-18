@@ -8,6 +8,7 @@ import { catalogFontPath } from './catalogFont';
 import { mockClient } from './mock';
 import { decodePreview, type PreviewBytes } from './preview';
 import type {
+  AnswerSetupStepRequest,
   Catalog,
   CatalogDownload,
   ThemeDefinition,
@@ -128,6 +129,7 @@ import type {
   SizeFactor,
   SizeFactorRequest,
   UpdateCollectionRulesRequest,
+  SetupStatus,
   Source,
   SourceId,
   Tag,
@@ -395,6 +397,10 @@ export interface FmClient {
   /** The themes the app ships, the default first (`themeId` in the settings holds one id). */
   listThemes(): Promise<ThemeDefinition[]>;
   getAppFolders(): Promise<AppFolders>;
+  /** The first-run setup's open steps, in the order it asks them (decided in fm-core). */
+  setupStatus(): Promise<SetupStatus>;
+  /** Records in config.json that the user answered or skipped a setup step; the open steps after it. */
+  answerSetupStep(req: AnswerSetupStepRequest): Promise<SetupStatus>;
   /** The local API endpoint: its address (while it runs) and the token (Settings → Local API). */
   endpointInfo(): Promise<EndpointInfo>;
   /** Makes a new local API token; the old one fails at once. */
@@ -560,6 +566,8 @@ export const tauriClient: FmClient = {
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
   listThemes: () => invoke<ThemeDefinition[]>('list_themes'),
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
+  setupStatus: () => invoke<SetupStatus>('setup_status'),
+  answerSetupStep: (req) => invoke<SetupStatus>('answer_setup_step', { req }),
   endpointInfo: () => invoke<EndpointInfo>('endpoint_info'),
   regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),
   mcpStatus: () => invoke<McpStatus>('mcp_status'),

@@ -208,6 +208,10 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     window_only!(seen, c; set_mcp_grant, json!({ "tool": "tag_fonts", "granted": true }));
     window_only!(seen, c; answer_mcp_confirmation, json!({ "id": 1, "allow": true }));
     same!(seen, d, c; mcp_status);
+    same!(seen, d, c; setup_status);
+    same!(seen, d, c; answer_setup_step, json!({ "step": "downloadFolder", "answer": "skipped" }));
+    same!(seen, d, c; answer_setup_step, json!({ "step": "catalogs", "answer": "skipped" }));
+    same!(seen, d, c; setup_status);
     // layout
     same!(seen, d, c; layout_presets);
     same!(seen, d, c; clamp_layout, layout.clone());

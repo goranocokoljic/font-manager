@@ -259,6 +259,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             "answer_mcp_confirmation",
             r#"{"id":1,"allow":false}"#.into(),
         ),
+        ("setup_status", String::new()),
+        (
+            "answer_setup_step",
+            r#"{"step":"catalogs","answer":"skipped"}"#.into(),
+        ),
         // layout
         ("layout_presets", String::new()),
         ("clamp_layout", layout.to_string()),

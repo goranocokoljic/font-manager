@@ -49,6 +49,17 @@ export type AddSourceRequest = {
 	mode: ImportMode,
 };
 
+/**  Record the user's answer to one setup step. */
+export type AnswerSetupStepRequest = {
+	/**
+	 *  The step. [`SetupStep::DownloadFolder`] is refused: it is answered by
+	 *  choosing the folder (`update_settings` with `download_folder`).
+	 */
+	step: SetupStep,
+	/**  Answered or skipped; either way the step is not asked again. */
+	answer: SetupAnswer,
+};
+
 /**  A failed request. */
 export type ApiError = {
 	/**  Stable code for programs. */
@@ -3594,6 +3605,49 @@ export type SettingsUpdate = {
 	 */
 	themeId?: string | null,
 };
+
+/**  How the user closed a setup step. */
+export type SetupAnswer = 
+/**
+ *  The user made the step's choice (even "no catalogs" or "no automatic
+ *  check").
+ */
+"answered" | 
+/**  The user went past the step without a choice; it is not asked again. */
+"skipped";
+
+/**  The setup steps still open. */
+export type SetupStatus = {
+	/**
+	 *  The open steps, in the order the setup asks them; empty when the setup
+	 *  has nothing to ask.
+	 */
+	open: SetupStep[],
+};
+
+/**  A question of the first-run setup, in the order the setup asks them. */
+export type SetupStep = 
+/**
+ *  The folders that hold the user's fonts. Open while the library has no
+ *  watched folder and no library folder and the step was never answered
+ *  or skipped.
+ */
+"fontFolders" | 
+/**
+ *  Whether to use the online catalogs. Open while no catalog is on and the
+ *  step was never answered or skipped.
+ */
+"catalogs" | 
+/**
+ *  Where catalog installs go. Open while a catalog is on and the download
+ *  folder is not set; it closes only when the folder is chosen.
+ */
+"downloadFolder" | 
+/**
+ *  Check for updates automatically. Open while this copy updates itself,
+ *  the automatic check is off and the step was never answered or skipped.
+ */
+"updates";
 
 /**  The shortlist for a brief. */
 export type Shortlist = {

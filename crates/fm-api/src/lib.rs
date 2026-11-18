@@ -35,6 +35,7 @@ pub mod organization;
 pub mod preview;
 pub mod search;
 pub mod settings;
+pub mod setup;
 pub mod update;
 pub mod version;
 pub mod workflows;
@@ -302,6 +303,11 @@ pub fn types() -> specta::Types {
         settings::ThemeTokens,
         settings::McpToolCall,
         settings::McpConfirmationAnswer,
+        // first-run setup
+        setup::SetupStep,
+        setup::SetupAnswer,
+        setup::SetupStatus,
+        setup::AnswerSetupStepRequest,
         // updates
         update::UpdateKind,
         update::AvailableUpdate,

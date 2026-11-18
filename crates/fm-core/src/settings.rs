@@ -7,13 +7,15 @@
 //! "Start at login" is not in the file: its state is the OS's login entry
 //! ([`fm_platform::Autostart`], ADR 0011), read on every request.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use fm_api::settings::{
-    AppFolders, DEFAULT_THEME_ID, Settings, SettingsUpdate, ThemeDefinition, unknown_theme,
+    AppFolders, DEFAULT_THEME_ID, Settings, SettingsUpdate, ThemeDefinition,
+    download_folder_is_chosen, unknown_theme,
 };
+use fm_api::setup::{SetupAnswer, SetupStep};
 use fm_api::{ApiError, ApiResult, ErrorCode, SettingsService};
 use fm_platform::{AppPaths, Autostart};
 
@@ -148,6 +150,29 @@ impl SettingsStore {
     }
 }
 
+impl SettingsStore {
+    /// The first-run setup steps the user answered or skipped (E55.2); read
+    /// from the file on every call.
+    pub fn setup_answers(&self) -> ApiResult<BTreeMap<SetupStep, SetupAnswer>> {
+        Ok(Config::load(&self.file)?.setup_answers)
+    }
+
+    /// Records the answer to a setup step and saves it; the other keys of the
+    /// file are kept. The download folder is refused: it is answered by
+    /// choosing the folder.
+    pub fn answer_setup_step(&self, step: SetupStep, answer: SetupAnswer) -> ApiResult<()> {
+        if step == SetupStep::DownloadFolder {
+            return Err(download_folder_is_chosen());
+        }
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut config = Config::load(&self.file)?;
+        if config.setup_answers.insert(step, answer) != Some(answer) {
+            config.save(&self.file)?;
+        }
+        Ok(())
+    }
+}
+
 /// These settings as a caller sees them: a theme id this version does not ship
 /// (a hand edit, a file from a newer version) reads as the default, so the UI
 /// always gets a listed theme. The file keeps the id until the user picks one.
@@ -231,6 +256,66 @@ mod tests {
             logs: root.join("logs"),
             library: root.join("Fonts"),
         }
+    }
+
+    #[test]
+    fn a_setup_answer_is_saved_in_the_file_and_read_by_the_next_start() {
+        let dir = TempDir::new("settings-setup");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        assert!(
+            store.setup_answers().expect("read").is_empty(),
+            "none at first"
+        );
+        store
+            .update_settings(SettingsUpdate {
+                theme: Some(Theme::Dark),
+                ..SettingsUpdate::default()
+            })
+            .expect("updated");
+        store
+            .answer_setup_step(SetupStep::FontFolders, SetupAnswer::Skipped)
+            .expect("skipped");
+        store
+            .answer_setup_step(SetupStep::Updates, SetupAnswer::Answered)
+            .expect("answered");
+
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(paths.config_file()).expect("file"))
+                .expect("json");
+        assert_eq!(
+            json["setupAnswers"],
+            serde_json::json!({ "fontFolders": "skipped", "updates": "answered" })
+        );
+        assert_eq!(json["theme"], "dark", "the other keys are kept");
+
+        let next = SettingsStore::new(&paths);
+        assert_eq!(
+            next.setup_answers().expect("read"),
+            BTreeMap::from([
+                (SetupStep::FontFolders, SetupAnswer::Skipped),
+                (SetupStep::Updates, SetupAnswer::Answered),
+            ])
+        );
+        // A later answer replaces the earlier one.
+        next.answer_setup_step(SetupStep::FontFolders, SetupAnswer::Answered)
+            .expect("answered");
+        assert_eq!(
+            store.setup_answers().expect("read")[&SetupStep::FontFolders],
+            SetupAnswer::Answered
+        );
+    }
+
+    #[test]
+    fn the_download_folder_cannot_be_skipped_and_nothing_is_written() {
+        let dir = TempDir::new("settings-setup-folder");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        let err = store
+            .answer_setup_step(SetupStep::DownloadFolder, SetupAnswer::Skipped)
+            .expect_err("refused");
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+        assert!(!paths.config_file().exists(), "nothing written");
     }
 
     #[test]

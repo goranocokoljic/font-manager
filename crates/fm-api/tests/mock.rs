@@ -4166,3 +4166,50 @@ fn catalog_sample_texts_mark_what_a_preview_file_lacks() {
     assert!(got[1].missing.is_empty(), "Inter maps Latin Extended");
     assert!(got[2].missing.is_empty(), "not judged");
 }
+
+/// E55.2: the mock's setup status follows its own state, like the core.
+#[test]
+fn the_setup_status_follows_the_mock_state_and_answers() {
+    use fm_api::catalog::{CatalogId, SetCatalogEnabledRequest};
+    use fm_api::settings::SettingsUpdate;
+    use fm_api::setup::{AnswerSetupStepRequest, SetupAnswer, SetupStep};
+    use fm_api::{CatalogService, SettingsService};
+
+    let api = MockApi::new();
+    let open = || api.setup_status().expect("status").open;
+    // The sample library has a watched folder; every catalog is off.
+    assert_eq!(open(), vec![SetupStep::Catalogs, SetupStep::Updates]);
+    api.set_catalog_enabled(SetCatalogEnabledRequest {
+        id: CatalogId::Fontshare,
+        enabled: true,
+    })
+    .expect("on");
+    assert_eq!(open(), vec![SetupStep::DownloadFolder, SetupStep::Updates]);
+    let err = api
+        .answer_setup_step(AnswerSetupStepRequest {
+            step: SetupStep::DownloadFolder,
+            answer: SetupAnswer::Skipped,
+        })
+        .expect_err("refused");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    api.update_settings(SettingsUpdate {
+        download_folder: Some("/Users/demo/Font Fu Fonts".into()),
+        ..SettingsUpdate::default()
+    })
+    .expect("folder");
+    assert_eq!(open(), vec![SetupStep::Updates]);
+    let status = api
+        .answer_setup_step(AnswerSetupStepRequest {
+            step: SetupStep::Updates,
+            answer: SetupAnswer::Skipped,
+        })
+        .expect("skipped");
+    assert!(status.open.is_empty());
+
+    let managed = MockApi::new();
+    managed.set_updates_offered(false);
+    assert_eq!(
+        managed.setup_status().expect("status").open,
+        vec![SetupStep::Catalogs]
+    );
+}

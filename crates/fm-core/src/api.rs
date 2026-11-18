@@ -89,6 +89,7 @@ use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
     McpUpdate, Settings, SettingsService, SettingsUpdate, ThemeDefinition,
 };
+use fm_api::setup::{AnswerSetupStepRequest, SetupStatus};
 use fm_api::workflows::{
     BriefRequest, Candidate, DocumentFonts, DocumentFontsCheck, DocumentFontsRequest,
     PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
@@ -183,6 +184,10 @@ pub struct CoreApi {
     /// The folder watcher (E51.1); `None` until [`CoreApi::with_watcher`]
     /// starts it (the app does, the CLI and most tests do not).
     watching: Option<Arc<watch::Watching>>,
+    /// Whether this copy updates itself, as the shell found it (E55.2);
+    /// `None` without a shell (the CLI's direct link, most tests), when the
+    /// setup never asks about updates.
+    update_support: Option<fm_api::update::UpdateSupport>,
 }
 
 impl std::fmt::Debug for CoreApi {
@@ -262,7 +267,35 @@ impl CoreApi {
             tray: Mutex::new(None),
             file_drag: Mutex::new(None),
             watching: None,
+            update_support: None,
         }
+    }
+
+    /// Tells the API whether this copy updates itself (the app passes what
+    /// `fm_core::update::support` found), for the setup's updates step.
+    #[must_use]
+    pub fn with_update_support(mut self, support: fm_api::update::UpdateSupport) -> Self {
+        self.update_support = Some(support);
+        self
+    }
+
+    /// The facts the setup status is decided from: the sources in the index,
+    /// the catalogs' on/off file, `config.json`. No network, no scan.
+    fn setup_facts(&self) -> ApiResult<crate::setup::SetupFacts> {
+        let settings = self.settings.get_settings()?;
+        let has_font_folder = self
+            .lock()
+            .sources()?
+            .iter()
+            .any(|s| crate::setup::is_font_folder(s.kind));
+        Ok(crate::setup::SetupFacts {
+            has_font_folder,
+            catalog_on: self.catalogs.as_ref().is_some_and(Catalogs::any_enabled),
+            download_folder_set: settings.download_folder.is_some(),
+            updates_offered: self.update_support.as_ref().is_some_and(|u| u.offered),
+            check_updates_automatically: settings.check_updates_automatically,
+            answers: self.settings.setup_answers()?,
+        })
     }
 
     /// Turns the background glyph trait pass on (E49.4) and starts it: it
@@ -2158,6 +2191,15 @@ impl SettingsService for CoreApi {
     fn answer_mcp_confirmation(&self, req: McpConfirmationAnswer) -> ApiResult<()> {
         let emit = |e: &Event| self.events.send(e);
         self.mcp_confirmations.answer(req.id, req.allow, &emit)
+    }
+
+    fn setup_status(&self) -> ApiResult<SetupStatus> {
+        Ok(crate::setup::open_steps(&self.setup_facts()?))
+    }
+
+    fn answer_setup_step(&self, req: AnswerSetupStepRequest) -> ApiResult<SetupStatus> {
+        self.settings.answer_setup_step(req.step, req.answer)?;
+        self.setup_status()
     }
 }
 
