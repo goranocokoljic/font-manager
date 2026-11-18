@@ -112,7 +112,7 @@ part that differs per catalog needs one narrow seam.
   that is `Conflict` before any request (rule 4), as are no folder and an off catalog.
   The folder becomes a `watched` source, indexed in place, when no watched source holds
   it (one inside a watched source uses that source, so no file is indexed twice). The
-  call writes `<folder>/<family>/` as a download does, records the provenance, rescans
+  call writes `<folder>/<catalog>/<family>/` (amendment below), records the provenance, rescans
   the source on the calling thread and returns when the index holds the faces; then it
   activates the faces of the files written in `Settings::activation_mode` with
   `Settings::on_conflict`, sending only faces not active yet (a permanent face sent again
@@ -137,6 +137,32 @@ part that differs per catalog needs one narrow seam.
   within 60 s (a request still running then is abandoned and its answer dropped, so
   nothing it fetched is written). The answer lists what was downloaded in `fetched`, so
   the plugins can say "Downloaded 1 family from Google Fonts: Alegreya".
+
+## Amendment — one folder per catalog (E55.3, Goran, 18 Nov 2026)
+
+- **Layout.** `install_family` writes a family the library does not have into
+  `<download folder>/<catalog folder>/<family>/`: `Google Fonts/Inter`,
+  `Fontshare/Satoshi`. The catalog folder names are fixed
+  (`fm_core::catalog::catalog_folder_name`), in English and the same in every UI
+  language, so a folder made once is found again after a language change; they are
+  made safe by `safe_file_name`, as a family's name is (`catalog_folder`). Install is
+  one click with nothing to choose, and a family of the same name in both catalogs
+  gets two folders and two provenance records.
+- **Families installed before.** A family is still found as installed by its newest
+  recorded download whose files the library has, wherever they are now, so a family
+  in the earlier `<download folder>/<family>/` is not downloaded again and no file is
+  moved or renamed (rule 2). Without a record, the faces in
+  `<download folder>/<catalog folder>/<family>/`, else in the earlier
+  `<download folder>/<family>/`, are the family's, except files another catalog's
+  download recorded: those are that catalog's, so installing one catalog's family
+  never reports the other's as installed.
+- **Unchanged.** `fonts_needed` with `fetch_missing_fonts` uses the same path
+  (`place_family`), so the same folders. "Download…" (`download_family`) still writes
+  `<source>/<family>/` into the watched folder the user picks. The download folder is
+  still one source, not one per catalog; one inside a watched source uses that source;
+  a system font folder is still refused. An update (E22.4) is still only reported:
+  nothing moves a downloaded family, so it stays, and is updated, where it is. No
+  `fm-api` type changed.
 
 ## Consequences
 

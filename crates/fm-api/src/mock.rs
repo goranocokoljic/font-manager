@@ -6258,6 +6258,15 @@ impl ComparisonService for MockApi {
 const MOCK_NO_DOWNLOAD_FOLDER: &str =
     "Choose the folder for installed fonts first, under Settings → Online catalogs.";
 
+/// The folder of a catalog's installs inside the download folder, as
+/// `fm_core::catalog::catalog_folder_name` names it (E55.3).
+fn mock_catalog_folder(id: CatalogId) -> &'static str {
+    match id {
+        CatalogId::GoogleFonts => "Google Fonts",
+        CatalogId::Fontshare => "Fontshare",
+    }
+}
+
 /// The sample families a refreshed catalog of the mock holds.
 fn mock_catalog_families() -> Vec<CatalogFamily> {
     let family = |name: &str, category: &str, weights: &[u32], axes: Vec<Axis>| CatalogFamily {
@@ -6531,7 +6540,8 @@ impl CatalogService for MockApi {
 
     /// The rules of the core without a request or a file: no download
     /// folder, an off catalog or a folder of system fonts is `Conflict`; a
-    /// family already downloaded is not downloaded again. The folder becomes
+    /// family already downloaded is not downloaded again; a new one goes
+    /// into `<download folder>/<catalog>/<family>` (E55.3). The folder becomes
     /// a watched source when no source holds it; the faces are the mock
     /// library's faces of the family (the mock's scan finds no new file),
     /// and only those not active yet are activated.
@@ -6585,19 +6595,44 @@ impl CatalogService for MockApi {
                     Some(id) => id,
                     None => {
                         self.add_source(AddSourceRequest {
-                            path: folder,
+                            path: folder.clone(),
                             mode: ImportMode::IndexInPlace,
                         })?
                         .id
                     }
                 };
-                self.download_family(DownloadFamilyRequest {
-                    id: req.id,
-                    family: req.family.clone(),
-                    kind: req.kind,
-                    source,
-                })?
-                .download
+                let got = self
+                    .download_family(DownloadFamilyRequest {
+                        id: req.id,
+                        family: req.family.clone(),
+                        kind: req.kind,
+                        source,
+                    })?
+                    .download;
+                // Into the catalog's folder of the download folder, as the
+                // core does (E55.3), not the source's root.
+                let into = format!(
+                    "{}/{}/{}",
+                    folder.trim_end_matches('/'),
+                    mock_catalog_folder(req.id),
+                    got.family
+                );
+                let download = CatalogDownload {
+                    files: got
+                        .files
+                        .iter()
+                        .map(|f| CatalogDownloadFile {
+                            path: Some(format!("{into}/{}", f.name)),
+                            ..f.clone()
+                        })
+                        .collect(),
+                    folder: into,
+                    ..got
+                };
+                if let Some(last) = self.state().catalog_downloads.last_mut() {
+                    *last = download.clone();
+                }
+                download
             }
         };
         let (faces, inactive) = {

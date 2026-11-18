@@ -3568,8 +3568,23 @@ fn a_mock_install_downloads_once_into_the_download_folder_and_activates_the_fami
     let got = install().expect("install");
     assert!(!got.already_installed);
     assert_eq!(
-        got.download.folder,
-        "/Users/demo/Documents/Font Fu Fonts/Inter"
+        got.download.folder, "/Users/demo/Documents/Font Fu Fonts/Google Fonts/Inter",
+        "the catalog's folder of the download folder (E55.3)"
+    );
+    assert!(
+        got.download
+            .files
+            .iter()
+            .all(|f| f.path.as_deref().is_some_and(
+                |p| p.starts_with("/Users/demo/Documents/Font Fu Fonts/Google Fonts/Inter/")
+            )),
+        "{:?}",
+        got.download.files
+    );
+    assert_eq!(
+        api.list_catalog_downloads().expect("downloads")[0],
+        got.download,
+        "recorded with that folder"
     );
     assert_eq!(api.list_sources().expect("sources").len(), sources + 1);
     assert!(!got.faces.is_empty());
