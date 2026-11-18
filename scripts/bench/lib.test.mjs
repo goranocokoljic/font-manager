@@ -471,7 +471,18 @@ describe('bench.sh end to end', () => {
     assert.match(r.stderr, /build-reference-library\.sh/);
   });
 
-  test('measures every metric on the fixtures and writes the report', { timeout: 600_000 }, () => {
+  // fm-bench links fm-platform, which on Linux needs the GTK/WebKit dev
+  // packages. The OS jobs install them; the CI `light` job does not (it runs
+  // only for harness/doc changes — a change to scripts/bench always takes the
+  // full matrix, see scripts/harness/ci-scope.mjs). Without them, the build
+  // cannot run, so skip with the reason instead of failing on the host.
+  const nativeDeps = process.platform !== 'linux'
+    || spawnSync('pkg-config', ['--exists', 'glib-2.0', 'gtk+-3.0'], { stdio: 'ignore' }).status === 0;
+
+  test('measures every metric on the fixtures and writes the report', {
+    timeout: 600_000,
+    skip: nativeDeps ? false : 'Linux system packages for fm-platform (glib, gtk) are not installed',
+  }, () => {
     execFileSync('cargo', ['build', '-q', '-p', 'fm-bench'], { cwd: ROOT, stdio: 'inherit' });
     const bin = join(ROOT, 'target', 'debug', `fm-bench${process.platform === 'win32' ? '.exe' : ''}`);
     const dir = tmp();
