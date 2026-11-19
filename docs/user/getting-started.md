@@ -353,6 +353,12 @@ Installing quits Font Fu first, so session activations end, and then starts the 
 version. Turn on **Check automatically when Font Fu starts** to check at every start.
 It is off until you turn it on.
 
+An update that an automatic check finds never opens a window by itself. Font Fu shows a
+small notice with the version and **See what's new**, and a dot next to **Settings** in
+the status bar. Close the notice and it stays away until Font Fu starts again. The dot
+stays until you install the update. The notice, the dot, the update item in the tray
+and **Check for updates** all open the same update dialog.
+
 Font Fu installs only updates signed with its release key. If you installed it with
 Flatpak or a package manager, that tool installs the updates, and Settings → About says
 so under Platform notes. Font Fu never asks for administrator rights, so a copy

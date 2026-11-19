@@ -1187,6 +1187,11 @@ export interface MockOptions {
    */
   update?: 'none' | 'patch' | 'major' | 'offline' | 'unsigned' | 'managed';
   /**
+   * "Check automatically" is on from the start (E55.8), unless saved settings say otherwise.
+   * The mock then runs the shell's quiet check at start, as `auto_update` does.
+   */
+  checkUpdatesAutomatically?: boolean;
+  /**
    * The first-run setup (E55.4): `rule` (the default) answers `setupStatus` with the rule
    * of fm-core; `none` never has an open step (browser mode without `?mockSetup`, so the
    * other specs are not blocked); `first` is a first start: the rule, and the library has
@@ -2840,6 +2845,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     {
       ...defaultSettings,
       startAtLogin: options.startAtLogin === 'unsupported' ? null : false,
+      checkUpdatesAutomatically: options.checkUpdatesAutomatically === true,
     },
     options.settingsStorage,
   );
@@ -4960,6 +4966,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return (method as (...a: unknown[]) => unknown)(...args);
     };
   }
+  // The shell's check at start (E55.7): with "Check automatically" on, it asks the release
+  // server once, quietly, as the app starts.
+  if (settings.checkUpdatesAutomatically) automaticCheckTurnedOn();
   return client;
 }
 
@@ -5095,6 +5104,9 @@ export const mockClient: FmClient = createMockClient({
   update: (['patch', 'major', 'offline', 'unsigned', 'managed'] as const)[
     countFromUrl('mockUpdate', 5) - 1
   ],
+  // `?mockAutoUpdate=1` starts with "Check automatically" on, so the shell's quiet check
+  // runs at start (E55.8).
+  checkUpdatesAutomatically: countFromUrl('mockAutoUpdate', 1) > 0,
   // `?mockColor=1` adds a color font with two palettes.
   colorFace: countFromUrl('mockColor', 1) > 0,
   // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.

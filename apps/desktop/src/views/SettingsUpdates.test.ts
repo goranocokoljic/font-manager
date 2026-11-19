@@ -236,3 +236,100 @@ describe('Updates (Settings → About)', () => {
     w.unmount();
   });
 });
+
+describe('An update found automatically is shown quietly (E55.8)', () => {
+  const notice = (w: Wrapper) => w.find('[data-testid="update-notice"]');
+  const dot = (w: Wrapper) => w.find('[data-testid="update-dot"]');
+
+  /** The app with "Check automatically" on: the mock runs the shell's quiet check at start. */
+  async function quietStart(update: MockOptions['update'] = 'patch') {
+    const handles = client({ update, checkUpdatesAutomatically: true });
+    const w = await mountAt('/');
+    await new Promise((r) => setTimeout(r, 0));
+    await flushPromises();
+    return { ...handles, w };
+  }
+
+  it('shows a notice and a dot, never the dialog; asks nothing more', async () => {
+    const { c, check, w } = await quietStart();
+    const pending = vi.spyOn(c, 'pendingUpdate');
+    expect(dialog(w).exists()).toBe(false);
+    expect(notice(w).text()).toContain('Font Fu 0.1.1 is available.');
+    expect(notice(w).text()).toContain("See what's new");
+    expect(dot(w).text()).toBe("Font Fu 0.1.1 is available: see what's new");
+    expect(check).not.toHaveBeenCalled();
+    // The UI hears of finds by the event; it does not poll.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pending).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  it('a dismissed notice stays away until the next start; the dot and About stay', async () => {
+    const { c, w } = await quietStart();
+    await notice(w).get('button[aria-label="Dismiss"]').trigger('click');
+    await flushPromises();
+    expect(notice(w).exists()).toBe(false);
+    expect(dot(w).exists()).toBe(true);
+    // The shell's daily check finds the same release again: still no notice.
+    useUpdatesStore().onEvent({ type: 'updateAvailable', update: (await c.pendingUpdate())! });
+    await flushPromises();
+    expect(notice(w).exists()).toBe(false);
+    w.unmount();
+
+    const about = await mountAt('/settings?section=about');
+    expect(about.get('.updates [role="status"]').text()).toBe('Version 0.1.1 is available.');
+    about.unmount();
+    // The next start: a new app, the shell's find is on offer again, so is the notice.
+    const next = await mountAt('/');
+    expect(notice(next).exists()).toBe(true);
+    next.unmount();
+  });
+
+  it('the notice opens the update dialog and goes; Later keeps the dot', async () => {
+    const { w } = await quietStart();
+    await button(w, "See what's new")!.trigger('click');
+    await flushPromises();
+    expect(dialog(w).text()).toContain('Font Fu 0.1.1 is available');
+    expect(notice(w).exists()).toBe(false);
+    await button(w, 'Later')!.trigger('click');
+    await flushPromises();
+    expect(dialog(w).exists()).toBe(false);
+    expect(notice(w).exists()).toBe(false);
+    expect(dot(w).exists()).toBe(true);
+    w.unmount();
+  });
+
+  it('the dot opens the same dialog, where a major update asks twice', async () => {
+    const { installs, w } = await quietStart('major');
+    await dot(w).trigger('click');
+    await flushPromises();
+    expect(dialog(w).text()).toContain('Font Fu 1.0.0 is available');
+    await button(w, 'Install and restart')!.trigger('click');
+    await flushPromises();
+    expect(installs).toEqual([]);
+    expect(dialog(w).text()).toContain('Install a major update?');
+    await button(w, 'Install version 1.0.0')!.trigger('click');
+    await flushPromises();
+    expect(installs).toEqual([{ version: '1.0.0', confirmMajor: true }]);
+    w.unmount();
+  });
+
+  it('a check the user started opens the dialog at once and shows no notice', async () => {
+    const { check } = client({ update: 'patch' });
+    const w = await mountAt('/settings?section=about');
+    await checkNow(w);
+    expect(check).toHaveBeenCalledOnce();
+    expect(dialog(w).exists()).toBe(true);
+    await button(w, 'Later')!.trigger('click');
+    await flushPromises();
+    expect(notice(w).exists()).toBe(false);
+    w.unmount();
+  });
+
+  it('no notice and no dot without an update', async () => {
+    const { w } = await quietStart('none');
+    expect(notice(w).exists()).toBe(false);
+    expect(dot(w).exists()).toBe(false);
+    w.unmount();
+  });
+});
