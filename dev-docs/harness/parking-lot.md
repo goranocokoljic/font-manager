@@ -546,3 +546,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.6 #645] apps/desktop/src/stores/setup.ts:104 — closing the setup (X or Escape, reopened only) on any step leaves that step open for the next start; pre-existing close behavior.
 - [E55.8 #647] apps/desktop/src/stores/updates.ts:82 — `offer()` resets `confirmingMajor` while the dialog may be on its second "Install a major update?" step, so a new version found mid-confirmation drops back to the first step (since E55.7).
 - [E55.9 #648] apps/desktop/src/stores/updates.ts:143 — after a failed install at quit, if the same version is still offered at the next start, the "could not install" toast and the quiet notice show together.
+- [E55.10 #649] crates/fm-core/src/update/on_quit.rs:313 — `write_atomic` uses `path.with_extension("tmp")`, so `update.pkg` and `update.json` share one scratch file `update.tmp`; safe only while the two writes stay sequential.
+- [E55.10 #649] apps/desktop/src-tauri/src/updater.rs:192 — the last-check record is written with blocking file I/O inside the async `check_and_keep` (one small JSON write).
+- [E55.10 #649] apps/desktop/src/stores/updates.ts:110 — fm-api has no settings-changed event, so an update level changed through the CLI, MCP or endpoint while Settings → About is open stays stale until the view mounts again.
+- [E55.10 #649] apps/desktop/src/views/SettingsView.vue:136 — `choose()` for the other settings radios ignores a failed save, so those radios can show an unsaved value.
+- [E55.10 #649] apps/desktop/src/stores/setup.ts:199 — the setup step toggles only `checkUpdatesAutomatically`; a leftover `installUpdatesOnQuit=true` brings back the install-on-quit level when setup turns the check on again.
