@@ -141,6 +141,7 @@ import type {
   AvailableUpdate,
   UpdateSupport,
   UpdateNotice,
+  UpdateStatus,
   UserMetaUpdate,
   VirtualStyle,
   VirtualStyleId,
@@ -466,6 +467,12 @@ export interface FmClient {
    * a second call returns `null`.
    */
   takeUpdateNotice(): Promise<UpdateNotice | null>;
+  /**
+   * What Settings → About shows under the update control (E55.10): the level, the levels
+   * this copy offers, the last check and the version waiting for the quit. Asks the release
+   * server nothing; `updateStatusChanged` says when to read it again.
+   */
+  updateStatus(): Promise<UpdateStatus>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
@@ -617,6 +624,7 @@ export const tauriClient: FmClient = {
   pendingUpdate: () => invoke<AvailableUpdate | null>('pending_update'),
   installUpdate: (req) => invoke<void>('install_update', { req }),
   takeUpdateNotice: () => invoke<UpdateNotice | null>('take_update_notice'),
+  updateStatus: () => invoke<UpdateStatus>('update_status'),
 };
 
 let current: FmClient | undefined;

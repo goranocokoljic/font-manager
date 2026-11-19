@@ -350,8 +350,20 @@ Open Settings → About and click **Check for updates**. If a new version is out
 Fu shows its number and release notes, and installs it only when you click
 **Install and restart**. A major version (for example 1.x to 2.0) asks you a second time.
 Installing quits Font Fu first, so session activations end, and then starts the new
-version. Turn on **Check automatically when Font Fu starts** to check at every start.
-It is off until you turn it on.
+version.
+
+Under **Automatic updates** you choose one of three levels:
+
+- **Off**: Font Fu checks only when you click **Check for updates**. This is the level
+  until you choose another one.
+- **Tell me when there is an update**: Font Fu checks when it starts and once a day, and
+  tells you quietly when it finds an update.
+- **Download updates and install them when I quit**: Font Fu also downloads the update
+  and installs it when you quit (see below).
+
+Under the levels, Font Fu says when it last checked and what it found. While an update is
+downloaded and waits, it says **<version> will be installed when you quit**, with
+**Install now** to install it at once from the update dialog.
 
 An update that an automatic check finds never opens a window by itself. Font Fu shows a
 small notice with the version and **See what's new**, and a dot next to **Settings** in
@@ -359,8 +371,7 @@ the status bar. Close the notice and it stays away until Font Fu starts again. T
 stays until you install the update. The notice, the dot, the update item in the tray
 and **Check for updates** all open the same update dialog.
 
-With automatic checks on, you can also turn on **Install updates when I quit**. Then a
-bug-fix or feature update downloads in the background, and Font Fu installs it when you
+With **Download updates and install them when I quit**, a bug-fix or feature update downloads in the background, and Font Fu installs it when you
 quit: with Quit in the menu or the tray, or by closing the window when Font Fu does not
 keep running in the tray. Nothing installs while you use the app, and Font Fu does not
 start again by itself after the install. The next time you open it, it says **Updated to

@@ -111,31 +111,68 @@ describe('Updates (Settings → About)', () => {
     w.unmount();
   });
 
-  it('saves the "Check automatically" switch', async () => {
-    const { c } = client();
+  it('one control of three levels sets the two settings (E55.10)', async () => {
+    const { c, check } = client();
     const w = await mountAt('/settings?section=about');
-    const box = w.get('input[name="check-updates-automatically"]');
-    expect((box.element as HTMLInputElement).checked).toBe(false);
-    await box.setValue(true);
-    await flushPromises();
-    expect((await c.getSettings()).checkUpdatesAutomatically).toBe(true);
+    const radios = () => w.findAll('input[name="update-level"]');
+    const labels = () => radios().map((r) => r.element.parentElement!.textContent!.trim());
+    expect(labels()).toEqual([
+      'Off',
+      'Tell me when there is an update',
+      'Download updates and install them when I quit',
+    ]);
+    const checked = () => radios().findIndex((r) => (r.element as HTMLInputElement).checked);
+    expect(checked()).toBe(0);
+    const pick = async (i: number) => {
+      await radios()[i]!.setValue(true);
+      await flushPromises();
+      const s = await c.getSettings();
+      return [s.checkUpdatesAutomatically, s.installUpdatesOnQuit];
+    };
+    expect(await pick(2)).toEqual([true, true]);
+    expect(checked()).toBe(2);
+    expect(await pick(1)).toEqual([true, false]);
+    expect(checked()).toBe(1);
+    // Off turns both off, so the check turned on again never installs by surprise.
+    await pick(2);
+    expect(await pick(0)).toEqual([false, false]);
+    expect(checked()).toBe(0);
+    // The third choice names the two consequences, tied to it for screen readers.
+    const third = radios()[2]!.element as HTMLInputElement;
+    const notes = document.getElementById(third.getAttribute('aria-describedby')!)!;
+    expect(notes.textContent).toContain('A major version always asks you first.');
+    expect(notes.textContent).toContain('Fonts activated for the session end when you quit');
+    expect(radios()[0]!.attributes('aria-describedby')).toBeUndefined();
+    // Choosing a level asks the release server nothing by itself (the shell's timer does).
+    expect(check).toHaveBeenCalledTimes(0);
     w.unmount();
   });
 
-  it('"Install updates when I quit" is off, works only with the automatic check, and saves (E55.9)', async () => {
-    const { c, check } = client();
+  it('under the control: the last check, and the waiting update with Install now (E55.10)', async () => {
+    client({ updateWaiting: true });
     const w = await mountAt('/settings?section=about');
-    const box = () => w.get('input[name="install-updates-on-quit"]');
-    const input = () => box().element as HTMLInputElement;
-    expect(input().checked).toBe(false);
-    expect(input().disabled).toBe(true);
-    await w.get('input[name="check-updates-automatically"]').setValue(true);
+    expect(w.text()).toContain('version 0.1.1 was available');
+    expect(w.text()).toContain('0.1.1 will be installed when you quit.');
+    expect(dialog(w).exists()).toBe(false);
+    await button(w, 'Install now')!.trigger('click');
     await flushPromises();
-    expect(input().disabled).toBe(false);
-    await box().setValue(true);
-    await flushPromises();
-    expect((await c.getSettings()).installUpdatesOnQuit).toBe(true);
-    expect(check).not.toHaveBeenCalled();
+    expect(dialog(w).text()).toContain('Font Fu 0.1.1 is available');
+    w.unmount();
+  });
+
+  it('says when no check ran yet, and what a failed check said', async () => {
+    client({ update: 'offline' });
+    const w = await mountAt('/settings?section=about');
+    expect(w.text()).toContain('Font Fu has not checked for updates yet.');
+    await checkNow(w);
+    expect(w.text()).toContain('the check failed. Font Fu could not reach its release server.');
+    w.unmount();
+  });
+
+  it('a Flatpak copy shows no level control', async () => {
+    client({ update: 'managed' });
+    const w = await mountAt('/settings?section=about');
+    expect(w.findAll('input[name="update-level"]')).toHaveLength(0);
     w.unmount();
   });
 
@@ -146,6 +183,11 @@ describe('Updates (Settings → About)', () => {
     });
     expect((await c.getSettings()).installUpdatesOnQuit).toBe(false);
     await c.updateSettings({ installUpdatesOnQuit: false });
+    await expect(c.updateSettings({ updateLevel: 'installOnQuit' })).rejects.toMatchObject({
+      code: 'unsupported',
+    });
+    await c.updateSettings({ updateLevel: 'notify' });
+    expect((await c.getSettings()).checkUpdatesAutomatically).toBe(true);
   });
 
   it('the start after an install at quit says once "Updated to <version>" with a link', async () => {

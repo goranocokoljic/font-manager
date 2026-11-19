@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import type { FullSettings } from '../api/client';
-import type { Language, SettingsUpdate } from '../api/types';
+import type { Language, SettingsUpdate, UpdateLevel } from '../api/types';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import AppLogo from '../components/AppLogo.vue';
 import CopyValue from '../components/CopyValue.vue';
@@ -19,6 +19,7 @@ import {
   CATALOGS,
   LOCALES,
   errorMessage,
+  formatDate,
   resolveLocale,
   t,
   type Catalog,
@@ -110,6 +111,7 @@ onMounted(async () => {
     store.loadWindow(),
     app.info ? undefined : app.load(),
     updates.support ? undefined : updates.loadSupport(),
+    updates.loadOverview(),
     sources.load(),
     catalogs.load(),
     themes.themes.length ? undefined : themes.load(),
@@ -166,6 +168,31 @@ const saveCacheLimit = (v: number | '') => saveNumber('cacheLimitMb', v);
 const saveRescanInterval = (v: number | '') => saveNumber('rescanIntervalMinutes', v);
 const KEEP_EXISTING = 'keepExisting' satisfies FullSettings['onConflict'];
 const upToDate = computed(() => updates.status === 'upToDate');
+
+/** The update levels this copy offers (E55.10); none where it does not update itself. */
+const levels = computed(() => updates.overview?.levels ?? []);
+const INSTALL_ON_QUIT = 'installOnQuit' satisfies UpdateLevel;
+const levelLabel = (level: UpdateLevel) => t(`updates.level.${level}` as MessageKey);
+
+/** Saves the level (both settings at once), then reads the status under the control again. */
+async function chooseLevel(level: UpdateLevel): Promise<void> {
+  await store.update({ updateLevel: level });
+  await updates.loadOverview();
+}
+
+/** When the last check ran and what it found. */
+const lastCheckText = computed(() => {
+  const last = updates.overview?.lastCheck;
+  if (!last) return t('updates.lastCheck.never');
+  const ms = Date.parse(last.at);
+  const when = Number.isFinite(ms) ? formatDate(ms) : last.at;
+  const outcome = last.outcome;
+  if (outcome.type === 'found')
+    return t('updates.lastCheck.found', { when, version: outcome.version });
+  if (outcome.type === 'failed')
+    return t('updates.lastCheck.failed', { when, message: outcome.message });
+  return t('updates.lastCheck.upToDate', { when });
+});
 
 /** A section's title, which is also its heading. */
 const sectionTitle = (id: SectionId) => t(`settings.sections.${id}` as MessageKey);
@@ -548,39 +575,44 @@ function chooseLanguage(value: string): void {
             <p v-if="updates.error && !updates.open" role="alert" class="error">
               {{ errorMessage(updates.error) }}
             </p>
-            <label v-if="s" class="choice">
-              <input
-                type="checkbox"
-                name="check-updates-automatically"
-                aria-describedby="check-updates-hint"
-                :checked="s.checkUpdatesAutomatically"
-                @change="
-                  choose({ checkUpdatesAutomatically: ($event.target as HTMLInputElement).checked })
-                "
-              />
-              {{ t('updates.checkAutomatically') }}
-            </label>
-            <p id="check-updates-hint" class="note hint">
+            <!-- E55.10: one control over "Check automatically" and "Install updates when I
+                 quit"; fm-api maps each level to the two settings, so no combination it
+                 refuses is shown. Native radios: arrow keys move between the levels. -->
+            <fieldset v-if="s && levels.length" class="group">
+              <legend>{{ t('updates.level.legend') }}</legend>
+              <template v-for="level in levels" :key="level">
+                <label class="choice">
+                  <input
+                    type="radio"
+                    name="update-level"
+                    :checked="updates.overview?.level === level"
+                    :aria-describedby="
+                      level === INSTALL_ON_QUIT ? 'install-on-quit-notes' : undefined
+                    "
+                    @change="chooseLevel(level)"
+                  />
+                  {{ levelLabel(level) }}
+                </label>
+                <ul
+                  v-if="level === INSTALL_ON_QUIT"
+                  id="install-on-quit-notes"
+                  class="note hint level-notes"
+                >
+                  <li>{{ t('updates.level.majorAsks') }}</li>
+                  <li>{{ t('updates.level.sessionEnds') }}</li>
+                </ul>
+              </template>
+            </fieldset>
+            <p class="note level-hint">
               {{ t('updates.checkAutomaticallyHint') }}
             </p>
-            <!-- E55.9: has an effect only with the automatic check on; fm-api refuses it
-                 where this copy does not update itself (then this section is hidden). -->
-            <label v-if="s" class="choice">
-              <input
-                type="checkbox"
-                name="install-updates-on-quit"
-                aria-describedby="install-on-quit-hint"
-                :checked="s.installUpdatesOnQuit"
-                :disabled="!s.checkUpdatesAutomatically"
-                @change="
-                  choose({ installUpdatesOnQuit: ($event.target as HTMLInputElement).checked })
-                "
-              />
-              {{ t('updates.installOnQuit') }}
-            </label>
-            <p id="install-on-quit-hint" class="note hint">
-              {{ t('updates.installOnQuitHint') }}
-            </p>
+            <p v-if="updates.overview" class="note last-check">{{ lastCheckText }}</p>
+            <div v-if="updates.overview?.waiting" class="add waiting">
+              <p class="note">
+                {{ t('updates.waiting', { version: updates.overview.waiting }) }}
+              </p>
+              <UiButton @click="updates.openDialog()">{{ t('updates.installNow') }}</UiButton>
+            </div>
           </section>
           <h3 id="platform-notes-title" class="subheading">
             {{ t('settings.about.platformNotes') }}
@@ -686,6 +718,22 @@ function chooseLanguage(value: string): void {
 .hint {
   margin-block: 4px 0;
   margin-inline: 22px 0;
+}
+.level-notes {
+  margin-block: 2px 4px;
+  padding-inline-start: 18px;
+}
+.level-hint {
+  margin: 4px 0 0;
+}
+.last-check {
+  margin-top: 8px;
+}
+.waiting {
+  align-items: center;
+}
+.waiting .note {
+  margin: 0;
 }
 .start-at-login {
   margin-top: 12px;

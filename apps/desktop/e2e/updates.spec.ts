@@ -7,7 +7,7 @@ const about = (mock: number) => `/?mockUpdate=${mock}#/settings?section=about`;
 test('nothing is checked until the user clicks; a major update asks twice', async ({ page }) => {
   await page.goto(about(2));
   const updates = page.getByRole('region', { name: 'Updates' });
-  await expect(updates.getByRole('checkbox', { name: /Check automatically/ })).not.toBeChecked();
+  await expect(updates.getByRole('radio', { name: 'Off' })).toBeChecked();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await updates.getByRole('button', { name: 'Check for updates' }).click();
@@ -52,18 +52,67 @@ test('a Flatpak copy shows no update section, and the platform notes say why', a
   await expect(page.getByRole('button', { name: 'Check for updates' })).toHaveCount(0);
 });
 
-// E55.9 "Install updates when I quit".
-test('"Install updates when I quit" needs the automatic check and is saved', async ({ page }) => {
+// E55.10: one control of three levels over the two settings; keyboard only.
+test('the update level is one control of three choices, saved and keyboard-complete', async ({
+  page,
+}) => {
   await page.goto(about(1));
   const updates = page.getByRole('region', { name: 'Updates' });
-  const onQuit = updates.getByRole('checkbox', { name: 'Install updates when I quit' });
-  await expect(onQuit).not.toBeChecked();
-  await expect(onQuit).toBeDisabled();
-  await updates.getByRole('checkbox', { name: /Check automatically/ }).check();
-  await expect(onQuit).toBeEnabled();
-  await onQuit.check();
+  const level = updates.getByRole('group', { name: 'Automatic updates' });
+  const off = level.getByRole('radio', { name: 'Off' });
+  const notify = level.getByRole('radio', { name: 'Tell me when there is an update' });
+  const onQuit = level.getByRole('radio', {
+    name: 'Download updates and install them when I quit',
+  });
+  await expect(level.getByRole('radio')).toHaveCount(3);
+  await expect(off).toBeChecked();
+  await expect(updates).toContainText('Font Fu has not checked for updates yet.');
+  await expect(onQuit).toHaveAccessibleDescription(/A major version always asks you first\./);
+  await expect(onQuit).toHaveAccessibleDescription(
+    /Fonts activated for the session end when you quit, as they always do\./,
+  );
+
+  // Arrow keys move between the levels; each one is saved at once.
+  await off.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(notify).toBeChecked();
+  await expect(notify).toBeFocused();
+  // "Tell me": the automatic check runs quietly and the last check shows what it found.
+  await expect(updates).toContainText('version 0.1.1 was available');
+  await expect(page.getByRole('dialog', { name: /is available/ })).toHaveCount(0);
+  await page.keyboard.press('ArrowDown');
   await expect(onQuit).toBeChecked();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.reload();
+  await expect(onQuit).toBeChecked();
+  await onQuit.focus();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(off).toBeChecked();
+  await page.reload();
+  await expect(off).toBeChecked();
+});
+
+test('while an update waits for the quit, "Install now" opens the update dialog', async ({
+  page,
+}) => {
+  await page.goto('/?mockUpdateWaiting=1#/settings?section=about');
+  const updates = page.getByRole('region', { name: 'Updates' });
+  await expect(
+    updates.getByRole('radio', { name: 'Download updates and install them when I quit' }),
+  ).toBeChecked();
+  await expect(updates).toContainText('version 0.1.1 was available');
+  await expect(updates).toContainText('0.1.1 will be installed when you quit.');
+  const now = updates.getByRole('button', { name: 'Install now' });
+  await now.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Font Fu 0.1.1 is available' });
+  await expect(dialog).toBeVisible();
+  // "Tell me" instead: nothing waits any more.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await updates.getByRole('radio', { name: 'Tell me when there is an update' }).check();
+  await expect(updates).not.toContainText('will be installed when you quit');
+  await expect(updates.getByRole('button', { name: 'Install now' })).toHaveCount(0);
 });
 
 test('the start after an install at quit says "Updated to" once, with what is new', async ({

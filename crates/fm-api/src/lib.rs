@@ -314,6 +314,10 @@ pub fn types() -> specta::Types {
         update::UpdateCheck,
         update::UpdateSupport,
         update::InstallUpdateRequest,
+        update::UpdateLevel,
+        update::UpdateCheckOutcome,
+        update::LastUpdateCheck,
+        update::UpdateStatus,
         // layout
         layout::Layout,
         layout::TextBlock,

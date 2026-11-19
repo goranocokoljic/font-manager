@@ -184,6 +184,12 @@ pub struct SettingsUpdate {
     /// it on is refused where this copy does not update itself.
     #[serde(default)]
     pub install_updates_on_quit: Option<bool>,
+    /// The update control of Settings → About (E55.10): sets
+    /// [`Self::check_updates_automatically`] and
+    /// [`Self::install_updates_on_quit`] together
+    /// ([`crate::update::UpdateLevel::settings`]) and wins over them.
+    #[serde(default)]
+    pub update_level: Option<crate::update::UpdateLevel>,
     /// The language of the UI.
     #[serde(default)]
     pub language: Option<Language>,
@@ -235,6 +241,17 @@ impl Settings {
                 "Start at login is not available on this system.",
             ));
         }
+        let (check_updates_automatically, install_updates_on_quit) = match update.update_level {
+            Some(level) => level.settings(),
+            None => (
+                update
+                    .check_updates_automatically
+                    .unwrap_or(self.check_updates_automatically),
+                update
+                    .install_updates_on_quit
+                    .unwrap_or(self.install_updates_on_quit),
+            ),
+        };
         Ok(Self {
             activation_mode: update.activation_mode.unwrap_or(self.activation_mode),
             on_conflict: update.on_conflict.unwrap_or(self.on_conflict),
@@ -249,12 +266,8 @@ impl Settings {
                 .unwrap_or(self.rescan_interval_minutes),
             keep_in_tray: update.keep_in_tray.unwrap_or(self.keep_in_tray),
             start_at_login: update.start_at_login.or(self.start_at_login),
-            check_updates_automatically: update
-                .check_updates_automatically
-                .unwrap_or(self.check_updates_automatically),
-            install_updates_on_quit: update
-                .install_updates_on_quit
-                .unwrap_or(self.install_updates_on_quit),
+            check_updates_automatically,
+            install_updates_on_quit,
             language: update.language.unwrap_or(self.language),
             download_folder,
             fetch_missing_fonts: update

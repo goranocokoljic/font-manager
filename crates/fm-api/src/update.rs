@@ -122,6 +122,127 @@ pub fn installs_on_quit(settings: &crate::settings::Settings, support: &UpdateSu
     settings.install_updates_on_quit && checks_automatically(settings, support)
 }
 
+/// The one control for updates in Settings → About (E55.10): three levels
+/// over the two settings "Check automatically" and "Install updates when I
+/// quit", so the UI never shows a combination that does nothing or that
+/// fm-api refuses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateLevel {
+    /// No automatic check: the app asks the release server only when the
+    /// user clicks "Check for updates".
+    Off,
+    /// Check automatically and tell the user quietly when there is an update.
+    Notify,
+    /// Check automatically, download a patch or minor update and install it
+    /// when the user quits. A major update always asks first.
+    InstallOnQuit,
+}
+
+impl UpdateLevel {
+    /// The level `settings` are at. "Install updates when I quit" without the
+    /// automatic check does nothing, so it reads as [`Self::Off`].
+    pub fn of(settings: &crate::settings::Settings) -> Self {
+        match (
+            settings.check_updates_automatically,
+            settings.install_updates_on_quit,
+        ) {
+            (false, _) => Self::Off,
+            (true, false) => Self::Notify,
+            (true, true) => Self::InstallOnQuit,
+        }
+    }
+
+    /// The values of the two settings this level stands for:
+    /// `(check_updates_automatically, install_updates_on_quit)`.
+    pub fn settings(self) -> (bool, bool) {
+        match self {
+            Self::Off => (false, false),
+            Self::Notify => (true, false),
+            Self::InstallOnQuit => (true, true),
+        }
+    }
+}
+
+/// The levels a copy with `support` offers, in the order the control shows
+/// them; none where this copy does not update itself (the control is hidden
+/// and the platform notes say why).
+pub fn update_levels(support: &UpdateSupport) -> Vec<UpdateLevel> {
+    if support.offered {
+        vec![
+            UpdateLevel::Off,
+            UpdateLevel::Notify,
+            UpdateLevel::InstallOnQuit,
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
+/// What a check of the release server found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum UpdateCheckOutcome {
+    /// The running version is the newest.
+    UpToDate,
+    /// A newer version is on offer.
+    #[serde(rename_all = "camelCase")]
+    Found {
+        /// The version on offer.
+        version: String,
+    },
+    /// The release server could not be reached or answered with an error.
+    #[serde(rename_all = "camelCase")]
+    Failed {
+        /// One user-facing sentence on why.
+        message: String,
+    },
+}
+
+/// The last check of the release server, manual or automatic, kept across
+/// starts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LastUpdateCheck {
+    /// When it ran.
+    pub at: crate::common::Timestamp,
+    /// What it found.
+    pub outcome: UpdateCheckOutcome,
+}
+
+/// What Settings → About shows under the update control (E55.10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateStatus {
+    /// The level the settings are at ([`UpdateLevel::of`]).
+    pub level: UpdateLevel,
+    /// The levels the control offers ([`update_levels`]); empty where this
+    /// copy does not update itself.
+    pub levels: Vec<UpdateLevel>,
+    /// The last check; `None` when the app never checked.
+    #[serde(default)]
+    pub last_check: Option<LastUpdateCheck>,
+    /// The version downloaded and waiting to install when the user quits;
+    /// `None` when nothing waits.
+    #[serde(default)]
+    pub waiting: Option<String>,
+}
+
+impl UpdateCheckOutcome {
+    /// The outcome of a check that answered `result`.
+    pub fn of(result: &ApiResult<Option<AvailableUpdate>>) -> Self {
+        match result {
+            Ok(None) => Self::UpToDate,
+            Ok(Some(update)) => Self::Found {
+                version: update.version.clone(),
+            },
+            Err(e) => Self::Failed {
+                message: e.message.clone(),
+            },
+        }
+    }
+}
+
 /// `Ok` when `update` may be saved by a copy of the app with `support`
 /// (`None`: a caller that does not know, such as the CLI's direct link).
 /// Turning "Install updates when I quit" on is refused where this copy does
@@ -130,7 +251,9 @@ pub fn check_settings_update(
     update: &crate::settings::SettingsUpdate,
     support: Option<&UpdateSupport>,
 ) -> ApiResult<()> {
-    if update.install_updates_on_quit != Some(true) || support.is_some_and(|s| s.offered) {
+    let installs = update.install_updates_on_quit == Some(true)
+        || update.update_level == Some(UpdateLevel::InstallOnQuit);
+    if !installs || support.is_some_and(|s| s.offered) {
         return Ok(());
     }
     let reason = support
@@ -474,6 +597,110 @@ mod tests {
         assert!(check_settings_update(&off, Some(&support(false))).is_ok());
         assert!(check_settings_update(&off, None).is_ok());
         assert!(check_settings_update(&Default::default(), None).is_ok());
+    }
+
+    #[test]
+    fn the_three_levels_set_the_two_settings_and_read_back() {
+        use crate::settings::{Settings, SettingsUpdate};
+        let start = Settings::default();
+        assert_eq!(UpdateLevel::of(&start), UpdateLevel::Off);
+        for level in [
+            UpdateLevel::Notify,
+            UpdateLevel::InstallOnQuit,
+            UpdateLevel::Off,
+        ] {
+            // The level wins over the two switches sent with it.
+            let next = start
+                .apply(&SettingsUpdate {
+                    update_level: Some(level),
+                    check_updates_automatically: Some(level == UpdateLevel::Off),
+                    install_updates_on_quit: Some(level != UpdateLevel::InstallOnQuit),
+                    ..Default::default()
+                })
+                .expect("valid");
+            assert_eq!(UpdateLevel::of(&next), level);
+            assert_eq!(
+                (
+                    next.check_updates_automatically,
+                    next.install_updates_on_quit
+                ),
+                level.settings()
+            );
+        }
+        // "Off" also clears "Install updates when I quit", so turning the check on
+        // again never installs by surprise.
+        let on_quit = start
+            .apply(&SettingsUpdate {
+                update_level: Some(UpdateLevel::InstallOnQuit),
+                ..Default::default()
+            })
+            .expect("valid");
+        let off = on_quit
+            .apply(&SettingsUpdate {
+                update_level: Some(UpdateLevel::Off),
+                ..Default::default()
+            })
+            .expect("valid");
+        assert!(!off.install_updates_on_quit);
+        // Install-on-quit without the check does nothing: it reads as off.
+        let stale = Settings {
+            install_updates_on_quit: true,
+            ..Settings::default()
+        };
+        assert_eq!(UpdateLevel::of(&stale), UpdateLevel::Off);
+        let json = serde_json::to_value(UpdateLevel::InstallOnQuit).expect("json");
+        assert_eq!(json, "installOnQuit");
+    }
+
+    #[test]
+    fn only_a_copy_that_updates_itself_offers_the_levels() {
+        assert_eq!(
+            update_levels(&support(true)),
+            vec![
+                UpdateLevel::Off,
+                UpdateLevel::Notify,
+                UpdateLevel::InstallOnQuit
+            ]
+        );
+        assert!(update_levels(&support(false)).is_empty());
+        let install = crate::settings::SettingsUpdate {
+            update_level: Some(UpdateLevel::InstallOnQuit),
+            ..Default::default()
+        };
+        assert!(check_settings_update(&install, Some(&support(true))).is_ok());
+        let e = check_settings_update(&install, Some(&support(false))).expect_err("refused");
+        assert_eq!(e.code, ErrorCode::Unsupported);
+        for level in [UpdateLevel::Off, UpdateLevel::Notify] {
+            let update = crate::settings::SettingsUpdate {
+                update_level: Some(level),
+                ..Default::default()
+            };
+            assert!(check_settings_update(&update, Some(&support(false))).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_check_outcome_says_what_was_found() {
+        assert_eq!(
+            UpdateCheckOutcome::of(&Ok(None)),
+            UpdateCheckOutcome::UpToDate
+        );
+        let found = AvailableUpdate::new("1.4.0", "1.5.0", None, None).expect("semver");
+        assert_eq!(
+            UpdateCheckOutcome::of(&Ok(found)),
+            UpdateCheckOutcome::Found {
+                version: "1.5.0".into()
+            }
+        );
+        let failed = UpdateCheckOutcome::of(&Err(ApiError::new(ErrorCode::Io, "offline")));
+        assert_eq!(
+            failed,
+            UpdateCheckOutcome::Failed {
+                message: "offline".into()
+            }
+        );
+        let json = serde_json::to_value(&failed).expect("json");
+        assert_eq!(json["type"], "failed");
     }
 
     #[test]

@@ -614,3 +614,42 @@ fn at_exit_the_quit_path_runs_before_the_kept_install_and_only_once() {
         "reactivate on launch lost the real session"
     );
 }
+
+// E55.10: every check, found, up to date or failed, is recorded in the app's
+// data folder, so Settings → About shows it after the next start too.
+#[test]
+fn every_check_is_recorded_and_read_after_the_next_start() {
+    use fm_api::update::{AvailableUpdate, UpdateCheckOutcome};
+    use fm_app_lib::updater::record_check;
+
+    let home = Home::new("last-check");
+    let (state, _core) = home.serve();
+    // Without app folders nothing is recorded.
+    assert!(!record_check(state.last_check(), &Ok(None)));
+    let state = state.with_quit_install(&home.paths);
+    let found = AvailableUpdate::new("1.0.0", "1.1.0", None, None).expect("semver");
+    assert!(record_check(state.last_check(), &Ok(found)));
+    let last = state.last_check().and_then(|l| l.read()).expect("recorded");
+    assert_eq!(
+        last.outcome,
+        UpdateCheckOutcome::Found {
+            version: "1.1.0".into()
+        }
+    );
+    assert!(
+        std::fs::read_dir(&home.paths.data)
+            .expect("data")
+            .any(|e| e.expect("entry").file_name() == "update-last-check.json"),
+        "the record is in the app's data folder"
+    );
+    let offline = ApiError::new(ErrorCode::Io, "Font Fu could not reach its release server.");
+    assert!(record_check(state.last_check(), &Err(offline)));
+    drop(state);
+    let next = fm_core::update::last_check::LastCheck::new(&home.paths);
+    assert_eq!(
+        next.read().map(|c| c.outcome),
+        Some(UpdateCheckOutcome::Failed {
+            message: "Font Fu could not reach its release server.".into()
+        })
+    );
+}

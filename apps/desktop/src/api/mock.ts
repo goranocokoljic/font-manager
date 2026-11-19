@@ -39,6 +39,9 @@ import {
   type AvailableUpdate,
   type InstallUpdateRequest,
   type UpdateNotice,
+  type UpdateCheckOutcome,
+  type UpdateLevel,
+  type LastUpdateCheck,
   type Classification,
   type CssValues,
   type CssValuesRequest,
@@ -675,6 +678,19 @@ const MOCK_THEMES: ThemeDefinition[] = [paperTheme, graphiteTheme, indigoTheme, 
   }),
 );
 
+/** `UpdateLevel::settings` in fm-api: `[checkUpdatesAutomatically, installUpdatesOnQuit]`. */
+const MOCK_LEVEL_SETTINGS: Record<UpdateLevel, [boolean, boolean]> = {
+  off: [false, false],
+  notify: [true, false],
+  installOnQuit: [true, true],
+};
+
+/** `UpdateLevel::of` in fm-api. */
+function mockUpdateLevel(s: { checkUpdatesAutomatically: boolean; installUpdatesOnQuit: boolean }) {
+  if (!s.checkUpdatesAutomatically) return 'off' as const;
+  return s.installUpdatesOnQuit ? ('installOnQuit' as const) : ('notify' as const);
+}
+
 /** The releases the mock's server can offer the mock app (0.1.0). */
 export const mockUpdates = {
   patch: {
@@ -1206,6 +1222,11 @@ export interface MockOptions {
    * `takeUpdateNotice`; none when absent.
    */
   updateNotice?: UpdateNotice;
+  /**
+   * A patch update was found by the automatic check and downloaded; it waits for the quit
+   * (E55.10). Settings start at "Download updates and install them when I quit".
+   */
+  updateWaiting?: boolean;
   /** Called with every install the mock accepts (tests). */
   onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
@@ -2853,7 +2874,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     {
       ...defaultSettings,
       startAtLogin: options.startAtLogin === 'unsupported' ? null : false,
-      checkUpdatesAutomatically: options.checkUpdatesAutomatically === true,
+      checkUpdatesAutomatically:
+        options.checkUpdatesAutomatically === true || options.updateWaiting === true,
+      installUpdatesOnQuit: options.updateWaiting === true,
     },
     options.settingsStorage,
   );
@@ -3542,8 +3565,23 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   // The same reason fm-core gives a Flatpak (update.rs).
   const managedReason =
     'Flatpak installs the updates of this copy (flatpak update, or your software center), so Check for updates is not shown.';
-  let pendingUpdate: AvailableUpdate | null = null;
+  let pendingUpdate: AvailableUpdate | null = options.updateWaiting
+    ? { ...mockUpdates.patch }
+    : null;
   let updateNotice: UpdateNotice | null = options.updateNotice ?? null;
+  /** The last check (`LastCheck` in fm-core); the waiting state starts with one. */
+  let lastCheck: LastUpdateCheck | null = options.updateWaiting
+    ? {
+        at: '2026-11-19T08:00:00Z',
+        outcome: { type: 'found', version: mockUpdates.patch.version },
+      }
+    : null;
+  /** The version of the package kept for the quit (`QuitInstall::staged_version`). */
+  let staged: string | null = options.updateWaiting ? mockUpdates.patch.version : null;
+  const recordCheck = (outcome: UpdateCheckOutcome) => {
+    lastCheck = { at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), outcome };
+    emit({ type: 'updateStatusChanged' });
+  };
   /**
    * A request to the release server (`update::check` in the shell). Every one is kept in
    * `window.__fmMockUpdateChecks` (`manual` from "Check for updates", `automatic` from the
@@ -3554,12 +3592,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     (w.__fmMockUpdateChecks ??= []).push(how);
     if (options.update === 'managed')
       throw { code: 'unsupported' as const, message: managedReason, detail: null };
-    if (options.update === 'offline')
-      throw {
-        code: 'io' as const,
-        message: 'Font Fu could not reach its release server. Check your connection and try again.',
-        detail: 'dns error',
-      };
+    if (options.update === 'offline') {
+      const message =
+        'Font Fu could not reach its release server. Check your connection and try again.';
+      recordCheck({ type: 'failed', message });
+      throw { code: 'io' as const, message, detail: 'dns error' };
+    }
     const found =
       options.update === 'major'
         ? mockUpdates.major
@@ -3567,6 +3605,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           ? mockUpdates.patch
           : null;
     pendingUpdate = found ? { ...found } : null;
+    recordCheck(found ? { type: 'found', version: found.version } : { type: 'upToDate' });
     return pendingUpdate;
   };
   /**
@@ -3581,6 +3620,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       try {
         const found = askReleaseServer('automatic');
         if (found) emit({ type: 'updateAvailable', update: { ...found } });
+        // `quit_install::on_found`: a patch or minor update downloads for the quit.
+        if (found && found.kind !== 'major' && settings.installUpdatesOnQuit) {
+          staged = found.version;
+          emit({ type: 'updateStatusChanged' });
+        }
       } catch {
         // A failed automatic check is silent; the next one is a day later.
       }
@@ -3658,6 +3702,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: 'Minisign(InvalidSignature)',
         };
       options.onInstall?.({ ...req });
+    },
+    // `fm_core::update::status`: the level, the levels offered, the last check, and the
+    // version that waits for the quit (`waiting_version`: the setting still on, the kept
+    // package is the patch or minor update on offer).
+    updateStatus: async () => {
+      const level = mockUpdateLevel(settings);
+      const offered = options.update !== 'managed';
+      const waits =
+        offered &&
+        level === 'installOnQuit' &&
+        staged !== null &&
+        pendingUpdate?.version === staged &&
+        pendingUpdate.kind !== 'major';
+      return {
+        level,
+        levels: offered ? (['off', 'notify', 'installOnQuit'] as const).slice() : [],
+        lastCheck: lastCheck ? structuredClone(lastCheck) : null,
+        waiting: waits ? staged : null,
+      };
     },
     takeUpdateNotice: async () => {
       const notice = updateNotice;
@@ -4839,8 +4902,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             : 'Start at login could not be turned off: the system refused to remove the login entry.',
           detail: 'blocked by policy',
         };
-      // The same rule as `check_settings_update` in fm-api (E55.9).
-      if (req.installUpdatesOnQuit === true && options.update === 'managed')
+      // The same rule as `check_settings_update` in fm-api (E55.9, E55.10).
+      if (
+        (req.installUpdatesOnQuit === true || req.updateLevel === 'installOnQuit') &&
+        options.update === 'managed'
+      )
         throw {
           code: 'unsupported' as const,
           message: `Font Fu cannot install updates when you quit here. ${managedReason}`,
@@ -4863,8 +4929,15 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: 'Fonts cannot be installed into a system font folder. Choose another folder.',
           detail: null,
         };
-      for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
+      for (const [k, v] of Object.entries(req))
+        if (v != null && k !== 'updateLevel') Object.assign(next, { [k]: v });
       if (req.downloadFolder != null) next.downloadFolder = folder || null;
+      // `UpdateLevel::settings` in fm-api: the level sets the two switches and wins.
+      if (req.updateLevel != null) {
+        const [check, onQuit] = MOCK_LEVEL_SETTINGS[req.updateLevel];
+        next.checkUpdatesAutomatically = check;
+        next.installUpdatesOnQuit = onQuit;
+      }
       const turnedOn = !settings.checkUpdatesAutomatically && next.checkUpdatesAutomatically;
       settings = next;
       if (turnedOn) automaticCheckTurnedOn();
@@ -4989,7 +5062,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   }
   // The shell's check at start (E55.7): with "Check automatically" on, it asks the release
   // server once, quietly, as the app starts.
-  if (settings.checkUpdatesAutomatically) automaticCheckTurnedOn();
+  // The waiting state starts after the check that found and downloaded the update.
+  if (settings.checkUpdatesAutomatically && !options.updateWaiting) automaticCheckTurnedOn();
   return client;
 }
 
@@ -5128,6 +5202,8 @@ export const mockClient: FmClient = createMockClient({
   // `?mockAutoUpdate=1` starts with "Check automatically" on, so the shell's quiet check
   // runs at start (E55.8).
   checkUpdatesAutomatically: countFromUrl('mockAutoUpdate', 1) > 0,
+  // `?mockUpdateWaiting=1`: 0.1.1 was downloaded and installs when you quit (E55.10).
+  updateWaiting: countFromUrl('mockUpdateWaiting', 1) > 0,
   // `?mockUpdateNotice=1`: the start after an install at quit says it updated to 0.1.1,
   // `=2` that it could not install it (E55.9).
   ...([

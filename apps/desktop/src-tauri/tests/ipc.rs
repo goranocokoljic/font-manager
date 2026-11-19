@@ -1576,6 +1576,50 @@ fn pending_update_without_a_check_is_none_and_asks_nothing() {
     assert_eq!(pending, None);
 }
 
+// E55.10: the one update control sets the two settings, and the status under
+// it reads them back; nothing is asked of the release server.
+#[test]
+fn the_update_level_round_trips_through_update_status() {
+    use fm_api::update::{UpdateLevel, UpdateStatus};
+
+    let (_app, webview) = app().unwrap();
+    let status = || -> UpdateStatus {
+        send(&webview, "update_status", serde_json::json!({}))
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let start = status();
+    assert_eq!(start.level, UpdateLevel::Off);
+    assert_eq!(start.last_check, None, "never checked");
+    assert_eq!(start.waiting, None);
+    send(
+        &webview,
+        "update_settings",
+        serde_json::json!({ "req": { "updateLevel": "notify" } }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(status().level, UpdateLevel::Notify);
+    let settings: fm_api::settings::Settings =
+        send(&webview, "get_settings", serde_json::json!({}))
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap();
+    assert!(settings.check_updates_automatically);
+    assert!(!settings.install_updates_on_quit);
+    send(
+        &webview,
+        "update_settings",
+        serde_json::json!({ "req": { "updateLevel": "off" } }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(status().level, UpdateLevel::Off);
+}
+
 #[test]
 fn a_settings_change_with_the_automatic_check_off_starts_no_timer() {
     use fm_app_lib::auto_update::AutoCheck;

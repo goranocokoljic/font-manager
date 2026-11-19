@@ -1592,8 +1592,7 @@
     "checking": "Suche nach Updates…",
     "upToDate": "Font Fu ist auf dem neuesten Stand.",
     "available": "Version {version} ist verfügbar.",
-    "checkAutomatically": "Automatisch suchen, wenn Font Fu startet",
-    "checkAutomaticallyHint": "Font Fu kontaktiert seinen Release-Server nur, wenn du suchst oder, solange das hier an ist, beim Start und einmal am Tag. Nichts wird installiert, bevor du es bestätigst, außer du schaltest den Schalter unten ein.",
+    "checkAutomaticallyHint": "Mit einer automatischen Stufe kontaktiert Font Fu seinen Release-Server beim Start und einmal am Tag, sonst nur, wenn du suchst. Nichts wird installiert, bevor du es bestätigst, außer du wählst die Installation beim Beenden.",
     "notice": {
       "label": "Update verfügbar",
       "message": "Font Fu {version} ist verfügbar.",
@@ -1618,8 +1617,22 @@
       "installVersion": "Version {version} installieren",
       "installAndRestart": "Installieren und neu starten"
     },
-    "installOnQuit": "Updates beim Beenden installieren",
-    "installOnQuitHint": "Wirkt, solange die automatische Suche an ist. Ein Fehlerbehebungs- oder Funktionsupdate wird im Hintergrund geladen und beim Beenden von Font Fu installiert; Font Fu startet danach nicht von selbst neu. Ein großes Update fragt dich immer zuerst."
+    "level": {
+      "legend": "Automatische Updates",
+      "off": "Aus",
+      "notify": "Mir sagen, wenn es ein Update gibt",
+      "installOnQuit": "Updates laden und beim Beenden installieren",
+      "majorAsks": "Eine neue Hauptversion fragt dich immer zuerst.",
+      "sessionEnds": "Für die Sitzung aktivierte Schriften enden beim Beenden, wie immer."
+    },
+    "lastCheck": {
+      "never": "Font Fu hat noch nicht nach Updates gesucht.",
+      "upToDate": "Zuletzt gesucht {when}: Font Fu war aktuell.",
+      "found": "Zuletzt gesucht {when}: Version {version} war verfügbar.",
+      "failed": "Zuletzt gesucht {when}: Die Suche ist fehlgeschlagen. {message}"
+    },
+    "waiting": "{version} wird beim Beenden installiert.",
+    "installNow": "Jetzt installieren"
   },
   "family": {
     "library": "Bibliothek",

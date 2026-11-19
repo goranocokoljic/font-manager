@@ -143,6 +143,10 @@ pub enum Event {
         /// What to say.
         notice: crate::update::UpdateNotice,
     },
+    /// What Settings → About shows under the update control changed (E55.10):
+    /// a check ran, or an update downloaded and waits for the quit. The UI
+    /// reads `update_status` again.
+    UpdateStatusChanged,
 }
 
 /// The event stream.
