@@ -563,6 +563,24 @@ function chooseLanguage(value: string): void {
             <p id="check-updates-hint" class="note hint">
               {{ t('updates.checkAutomaticallyHint') }}
             </p>
+            <!-- E55.9: has an effect only with the automatic check on; fm-api refuses it
+                 where this copy does not update itself (then this section is hidden). -->
+            <label v-if="s" class="choice">
+              <input
+                type="checkbox"
+                name="install-updates-on-quit"
+                aria-describedby="install-on-quit-hint"
+                :checked="s.installUpdatesOnQuit"
+                :disabled="!s.checkUpdatesAutomatically"
+                @change="
+                  choose({ installUpdatesOnQuit: ($event.target as HTMLInputElement).checked })
+                "
+              />
+              {{ t('updates.installOnQuit') }}
+            </label>
+            <p id="install-on-quit-hint" class="note hint">
+              {{ t('updates.installOnQuitHint') }}
+            </p>
           </section>
           <h3 id="platform-notes-title" class="subheading">
             {{ t('settings.about.platformNotes') }}

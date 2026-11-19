@@ -21,7 +21,7 @@ use fm_api::update::{AUTOMATIC_CHECK_INTERVAL_SECS, AvailableUpdate, automatic_c
 use fm_api::{ApiResult, Event};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-use crate::{AppState, EVENT_CHANNEL, tray, updater};
+use crate::{AppState, EVENT_CHANNEL, quit_install, tray, updater};
 
 /// Asks the release server once; `Some` when it offers a newer version.
 pub trait ReleaseServer: Send + Sync {
@@ -214,9 +214,12 @@ fn enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 /// Announces `update`: the typed event to the UI, "Update to <version>…" in
-/// the tray. No window is shown, raised or focused.
+/// the tray. No window is shown, raised or focused. With "Install updates
+/// when I quit" on, a patch or minor update is also downloaded in the
+/// background for the next quit (E55.9).
 pub fn announce<R: Runtime>(app: &AppHandle<R>, update: AvailableUpdate) {
     tray::offer_update(app, &update.version);
+    quit_install::on_found(app, &update);
     if let Err(e) = app.emit(EVENT_CHANNEL, Event::UpdateAvailable { update }) {
         tracing::warn!(error = %e, "could not announce the update to the UI");
     }

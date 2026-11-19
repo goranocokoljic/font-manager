@@ -69,7 +69,8 @@ impl PendingUpdate {
         *self.0.lock().unwrap_or_else(PoisonError::into_inner) = update;
     }
 
-    fn get(&self) -> Option<(AvailableUpdate, Update)> {
+    /// The update on offer, with what the user was shown of it.
+    pub fn get(&self) -> Option<(AvailableUpdate, Update)> {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)

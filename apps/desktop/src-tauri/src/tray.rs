@@ -288,8 +288,9 @@ pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent, api: &Ar
                 }
             });
         }
-        // The normal quit: `RunEvent::Exit` deregisters the session fonts.
-        ID_QUIT => app.exit(0),
+        // The user's quit: `RunEvent::Exit` deregisters the session fonts,
+        // then installs an update kept for the quit (E55.9).
+        ID_QUIT => crate::quit_install::quit(app),
         _ => {}
     }
 }

@@ -129,6 +129,7 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, slug: &str) -> ApiResult<()> {
 pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::default(app)?;
     let locale = shell_text::current(app);
+    crate::menu::replace_quit(app, &menu, fm_platform::Os::current(), &locale)?;
     crate::menu::add_settings_item(app, &menu, fm_platform::Os::current(), &locale)?;
     if let Some(help) = menu
         .get(HELP_SUBMENU_ID)

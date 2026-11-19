@@ -5143,6 +5143,13 @@ impl SettingsService for MockApi {
                 "Fonts cannot be installed into a system font folder. Choose another folder.",
             ));
         }
+        // "Install updates when I quit" only where this copy updates itself (E55.9).
+        let support = crate::update::UpdateSupport {
+            offered: st.updates_offered,
+            reason: None,
+            release_host: None,
+        };
+        crate::update::check_settings_update(&req, Some(&support))?;
         st.settings = st.settings.apply(&req)?;
         Ok(st.settings.clone())
     }

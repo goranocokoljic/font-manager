@@ -6,6 +6,7 @@ import { setClient, type FmClient } from '../api/client';
 import { createMockClient, shellNavigateHandlers, type MockOptions } from '../api/mock';
 import type { InstallUpdateRequest } from '../api/types';
 import { createAppRouter } from '../router';
+import { useToastStore } from '../stores/toast';
 import { useUpdatesStore } from '../stores/updates';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -118,6 +119,95 @@ describe('Updates (Settings → About)', () => {
     await box.setValue(true);
     await flushPromises();
     expect((await c.getSettings()).checkUpdatesAutomatically).toBe(true);
+    w.unmount();
+  });
+
+  it('"Install updates when I quit" is off, works only with the automatic check, and saves (E55.9)', async () => {
+    const { c, check } = client();
+    const w = await mountAt('/settings?section=about');
+    const box = () => w.get('input[name="install-updates-on-quit"]');
+    const input = () => box().element as HTMLInputElement;
+    expect(input().checked).toBe(false);
+    expect(input().disabled).toBe(true);
+    await w.get('input[name="check-updates-automatically"]').setValue(true);
+    await flushPromises();
+    expect(input().disabled).toBe(false);
+    await box().setValue(true);
+    await flushPromises();
+    expect((await c.getSettings()).installUpdatesOnQuit).toBe(true);
+    expect(check).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  it('fm-api refuses "Install updates when I quit" where this copy does not update itself', async () => {
+    const { c } = client({ update: 'managed' });
+    await expect(c.updateSettings({ installUpdatesOnQuit: true })).rejects.toMatchObject({
+      code: 'unsupported',
+    });
+    expect((await c.getSettings()).installUpdatesOnQuit).toBe(false);
+    await c.updateSettings({ installUpdatesOnQuit: false });
+  });
+
+  it('the start after an install at quit says once "Updated to <version>" with a link', async () => {
+    const { c } = client({
+      updateNotice: {
+        type: 'updated',
+        version: '0.1.1',
+        notesUrl: 'https://example.invalid/v0.1.1',
+      },
+    });
+    const open = vi.spyOn(c, 'openUrl').mockResolvedValue();
+    const w = await mountAt('/');
+    const toasts = useToastStore();
+    expect(toasts.toast?.message).toBe('Updated to 0.1.1.');
+    expect(toasts.toast?.action?.label).toBe('What’s new');
+    toasts.act();
+    expect(open).toHaveBeenCalledWith('https://example.invalid/v0.1.1');
+    w.unmount();
+    toasts.clear();
+    // Said once: the next start says nothing.
+    await mountAt('/');
+    expect(useToastStore().toast).toBeNull();
+  });
+
+  it('the start after a failed install says so once and offers the dialog', async () => {
+    const { check } = client({
+      update: 'patch',
+      updateNotice: {
+        type: 'notInstalled',
+        version: '0.1.1',
+        message:
+          'Font Fu could not install version 0.1.1 when it quit, so version 0.1.0 started as before.',
+      },
+    });
+    const w = await mountAt('/');
+    const toasts = useToastStore();
+    expect(toasts.toast?.message).toContain('could not install version 0.1.1');
+    expect(dialog(w).exists()).toBe(false);
+    expect(check).not.toHaveBeenCalled();
+    toasts.act();
+    await flushPromises();
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(dialog(w).text()).toContain('Font Fu 0.1.1 is available');
+    w.unmount();
+  });
+
+  it('a package refused while the app runs is reported once (updateNotice event)', async () => {
+    const { c } = client();
+    const take = vi.spyOn(c, 'takeUpdateNotice');
+    const w = await mountAt('/');
+    take.mockClear();
+    useUpdatesStore().onEvent({
+      type: 'updateNotice',
+      notice: {
+        type: 'notInstalled',
+        version: '0.1.1',
+        message: "The update was not installed: it is not signed with Font Fu's release key.",
+      },
+    });
+    await flushPromises();
+    expect(useToastStore().toast?.message).toContain('not signed');
+    expect(take).toHaveBeenCalledTimes(1);
     w.unmount();
   });
 

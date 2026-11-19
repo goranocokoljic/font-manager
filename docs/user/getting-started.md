@@ -359,6 +359,16 @@ the status bar. Close the notice and it stays away until Font Fu starts again. T
 stays until you install the update. The notice, the dot, the update item in the tray
 and **Check for updates** all open the same update dialog.
 
+With automatic checks on, you can also turn on **Install updates when I quit**. Then a
+bug-fix or feature update downloads in the background, and Font Fu installs it when you
+quit: with Quit in the menu or the tray, or by closing the window when Font Fu does not
+keep running in the tray. Nothing installs while you use the app, and Font Fu does not
+start again by itself after the install. The next time you open it, it says **Updated to
+<version>**, with a link to what is new. If the install did not work, the earlier
+version opens as before and says so, and you can install the update from there. A major
+version is never installed this way: it asks you first, as above. When you log out or
+shut down the computer with Font Fu open, the update waits for the next time you quit.
+
 Font Fu installs only updates signed with its release key. If you installed it with
 Flatpak or a package manager, that tool installs the updates, and Settings → About says
 so under Platform notes. Font Fu never asks for administrator rights, so a copy

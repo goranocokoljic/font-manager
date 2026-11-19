@@ -538,5 +538,11 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.3 #642] crates/fm-api/src/catalog.rs:37 — `CatalogId::name()` returns the same two strings as `catalog_folder_name`, `mock_catalog_folder` and `MOCK_CATALOG_FOLDERS`; three copies to keep in step if a catalog is added.
 - [E55.7 #646] apps/desktop/src-tauri/tests/ipc.rs:1459 — the tray tests for the new "Update to <version>…" item are `#[cfg(not(target_os = "macos"))]` (the main-thread limit), so the item has no test on macOS.
 - [E55.5 #644] apps/desktop/src/views/SettingsView.vue:378 — the Settings catalog checkbox is `disabled` while its catalog is busy, so keyboard focus can drop to the body.
+- [E55.9 #648] apps/desktop/src/components/ToastMessage.vue:137 — a toast's action button is last in tab order and the toast closes after 10 s unless focused, so a keyboard user may miss the new "What's new" / "Update…" notices.
+- [E55.9 #648] apps/desktop/src/views/SettingsView.vue:717 — `.choice` has no disabled style, so a disabled checkbox label (now also "Install updates when I quit") looks enabled.
+- [E55.9 #648] crates/fm-core/src/catalog.rs:1143 — `write_atomic` exists in four private copies (catalog, layout/store, preview/cache, update/on_quit).
+- [E55.9 #648] tauri-plugin-updater-2.14.0/src/updater.rs:1580 — on macOS the library falls back to an admin prompt when the bundle swap gets PermissionDenied; rule 4 relies only on the folder probe just before.
+- [E55.9 #648] crates/fm-platform/src/linux/activator.rs:16 — a Linux SIGTERM logout skips the quit path; session links stay until the next start's clear_session.
 - [E55.6 #645] apps/desktop/src/stores/setup.ts:104 — closing the setup (X or Escape, reopened only) on any step leaves that step open for the next start; pre-existing close behavior.
 - [E55.8 #647] apps/desktop/src/stores/updates.ts:82 — `offer()` resets `confirmingMajor` while the dialog may be on its second "Install a major update?" step, so a new version found mid-confirmation drops back to the first step (since E55.7).
+- [E55.9 #648] apps/desktop/src/stores/updates.ts:143 — after a failed install at quit, if the same version is still offered at the next start, the "could not install" toast and the quiet notice show together.
