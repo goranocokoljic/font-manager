@@ -13,6 +13,7 @@ fn offered() -> UpdateSupport {
     UpdateSupport {
         offered: true,
         reason: None,
+        release_host: Some("github.com".into()),
     }
 }
 
@@ -185,6 +186,7 @@ fn where_the_copy_does_not_update_itself_the_updates_step_is_never_open() {
     lib.api = lib.api.with_update_support(UpdateSupport {
         offered: false,
         reason: Some("Flatpak".into()),
+        release_host: Some("github.com".into()),
     });
     assert_eq!(
         open(&lib),

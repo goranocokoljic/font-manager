@@ -89,6 +89,35 @@ pub struct UpdateSupport {
     /// when offered.
     #[serde(default)]
     pub reason: Option<String>,
+    /// The host of the release server a check asks (`github.com`), read from
+    /// the endpoint the app was built with, so no text names it by hand.
+    /// `None` when the build names no endpoint.
+    #[serde(default)]
+    pub release_host: Option<String>,
+}
+
+/// How often an automatic check runs while the app runs: once a day.
+pub const AUTOMATIC_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
+
+/// Whether the app checks for updates by itself: the user turned "Check
+/// automatically" on and this copy updates itself. Otherwise no timer runs
+/// and no request is made (rule 7).
+pub fn checks_automatically(settings: &crate::settings::Settings, support: &UpdateSupport) -> bool {
+    settings.check_updates_automatically && support.offered
+}
+
+/// Seconds until the next automatic check is due; 0 means now.
+///
+/// `last_check` is when the last automatic check started in this run of the
+/// app, `now` the time now, both in seconds on one clock; `None` means none
+/// yet, so the check at start is due at once. A check that failed counts as
+/// a check: the next one is a full interval later, never sooner. A `now`
+/// before `last_check` (a clock that went back) waits the full interval.
+pub fn automatic_check_wait(last_check: Option<u64>, now: u64) -> u64 {
+    match last_check {
+        None => 0,
+        Some(last) => AUTOMATIC_CHECK_INTERVAL_SECS.saturating_sub(now.saturating_sub(last)),
+    }
 }
 
 /// Install the update a check found. The app quits as it does on Quit
@@ -260,10 +289,65 @@ mod tests {
         let support = UpdateSupport {
             offered: false,
             reason: Some("Flatpak".into()),
+            release_host: Some("github.com".into()),
         };
+        let json = serde_json::to_value(support).expect("json");
+        assert_eq!(json["offered"], false);
+        assert_eq!(json["releaseHost"], "github.com");
+    }
+
+    #[test]
+    fn support_written_before_the_release_host_still_reads() {
+        let old: UpdateSupport =
+            serde_json::from_str(r#"{"offered":true,"reason":null}"#).expect("old support");
+        assert_eq!(old.release_host, None);
+    }
+
+    #[test]
+    fn the_check_at_start_is_due_at_once() {
+        assert_eq!(automatic_check_wait(None, 0), 0);
+        assert_eq!(automatic_check_wait(None, 5_000_000), 0);
+    }
+
+    #[test]
+    fn the_next_check_is_due_a_day_after_the_last() {
+        let day = AUTOMATIC_CHECK_INTERVAL_SECS;
+        assert_eq!(day, 86_400);
+        assert_eq!(automatic_check_wait(Some(100), 100), day);
+        assert_eq!(automatic_check_wait(Some(100), 100 + 3_600), day - 3_600);
+        assert_eq!(automatic_check_wait(Some(100), 100 + day - 1), 1);
+        assert_eq!(automatic_check_wait(Some(100), 100 + day), 0);
+        assert_eq!(automatic_check_wait(Some(100), 100 + 3 * day), 0);
+    }
+
+    #[test]
+    fn a_clock_that_went_back_waits_the_full_day() {
         assert_eq!(
-            serde_json::to_value(support).expect("json")["offered"],
-            false
+            automatic_check_wait(Some(10_000), 50),
+            AUTOMATIC_CHECK_INTERVAL_SECS
         );
+    }
+
+    #[test]
+    fn only_a_copy_that_updates_itself_with_the_setting_on_checks_by_itself() {
+        let offered = UpdateSupport {
+            offered: true,
+            reason: None,
+            release_host: Some("github.com".into()),
+        };
+        let managed = UpdateSupport {
+            offered: false,
+            reason: Some("Flatpak".into()),
+            release_host: Some("github.com".into()),
+        };
+        let off = crate::settings::Settings::default();
+        let on = crate::settings::Settings {
+            check_updates_automatically: true,
+            ..off.clone()
+        };
+        assert!(checks_automatically(&on, &offered));
+        assert!(!checks_automatically(&off, &offered));
+        assert!(!checks_automatically(&on, &managed));
+        assert!(!checks_automatically(&off, &managed));
     }
 }

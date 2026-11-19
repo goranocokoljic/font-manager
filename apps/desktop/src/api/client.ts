@@ -138,6 +138,7 @@ import type {
   UntagFacesRequest,
   InstallUpdateRequest,
   UpdateCheck,
+  AvailableUpdate,
   UpdateSupport,
   UserMetaUpdate,
   VirtualStyle,
@@ -449,8 +450,13 @@ export interface FmClient {
   onShellNavigate(handler: (route: string) => void): Promise<Unsubscribe>;
   /** Whether this copy updates itself; where not, Settings hides the update section. */
   updateSupport(): Promise<UpdateSupport>;
-  /** Asks the release server once (a user action, or "Check automatically" at start). */
+  /** Asks the release server once: the user clicked "Check for updates". */
   checkForUpdate(): Promise<UpdateCheck>;
+  /**
+   * The update the last check found (the user's or the shell's automatic one), without a
+   * request; `null` when none is on offer.
+   */
+  pendingUpdate(): Promise<AvailableUpdate | null>;
   /** Installs the update the last check found; the app quits, installs and restarts. */
   installUpdate(req: InstallUpdateRequest): Promise<void>;
 }
@@ -601,6 +607,7 @@ export const tauriClient: FmClient = {
   onShellNavigate: (handler) => listen<string>(SHELL_NAVIGATE, (e) => handler(e.payload)),
   updateSupport: () => invoke<UpdateSupport>('update_support'),
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
+  pendingUpdate: () => invoke<AvailableUpdate | null>('pending_update'),
   installUpdate: (req) => invoke<void>('install_update', { req }),
 };
 

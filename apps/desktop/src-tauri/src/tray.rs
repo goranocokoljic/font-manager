@@ -26,6 +26,7 @@ const ID_SETTINGS: &str = "tray:settings";
 const ID_COUNT: &str = "tray:count";
 const ID_DEACTIVATE: &str = "tray:deactivate-session";
 const ID_QUIT: &str = "tray:quit";
+const ID_UPDATE: &str = "tray:update";
 
 /// Whether the app has a tray item; managed state, read by the close handler.
 #[derive(Debug)]
@@ -81,11 +82,24 @@ struct TrayItems<R: Runtime> {
     count: MenuItem<R>,
     deactivate: MenuItem<R>,
     quit: MenuItem<R>,
+    /// "Update to <version>…"; in the menu only once a check found one.
+    update: MenuItem<R>,
+    /// The version `update` offers, once it is in the menu.
+    update_version: Mutex<Option<String>>,
+    menu: Menu<R>,
     api: Arc<dyn Api>,
 }
 
 impl<R: Runtime> TrayItems<R> {
     fn label(&self, locale: &str) -> tauri::Result<()> {
+        if let Some(version) = self
+            .update_version
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_deref()
+        {
+            self.update.set_text(update_label(locale, version))?;
+        }
         self.open
             .set_text(shell_text::text(locale, "shell.tray.open"))?;
         self.settings
@@ -143,6 +157,7 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>, api: Arc<dyn Api>) -> tauri::Result<
         true,
         None::<&str>,
     )?;
+    let update = MenuItem::with_id(app, ID_UPDATE, "", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
@@ -154,9 +169,50 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>, api: Arc<dyn Api>) -> tauri::Result<
         count,
         deactivate,
         quit,
+        update,
+        update_version: Mutex::new(None),
+        menu: menu.clone(),
         api,
     });
     Ok(menu)
+}
+
+/// "Update to <version>…" in `locale`.
+pub fn update_label(locale: &str, version: &str) -> String {
+    shell_text::text(locale, "shell.tray.update").replace("{version}", version)
+}
+
+/// Puts "Update to <version>…" at the top of the tray menu, or relabels it
+/// for a newer version; nothing without a tray item. The window is left
+/// alone: the user opens it from the item.
+pub fn offer_update<R: Runtime>(app: &AppHandle<R>, version: &str) {
+    let Some(items) = app.try_state::<TrayItems<R>>() else {
+        return;
+    };
+    let mut shown = items
+        .update_version
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let result = items
+        .update
+        .set_text(update_label(&shell_text::current(app), version))
+        .and_then(|()| match shown.as_deref() {
+            Some(_) => Ok(()),
+            None => items.menu.insert(&items.update, 0),
+        });
+    match result {
+        Ok(()) => *shown = Some(version.to_owned()),
+        Err(e) => tracing::warn!(error = %e, "the tray menu does not offer the update"),
+    }
+}
+
+/// The version the tray menu offers to update to, if any.
+pub fn offered_update<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
+    app.try_state::<TrayItems<R>>()?
+        .update_version
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
 }
 
 fn build<R: Runtime>(app: &AppHandle<R>, tray: &dyn Tray, api: Arc<dyn Api>) -> tauri::Result<()> {
@@ -216,9 +272,11 @@ fn active_count(api: &dyn Api) -> usize {
     })
 }
 
-/// The tray menu's events: Open, Settings…, Deactivate session fonts, Quit.
+/// The tray menu's events: Update to <version>…, Open, Settings…, Deactivate
+/// session fonts, Quit.
 pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent, api: &Arc<dyn Api>) {
     match event.id().as_ref() {
+        ID_UPDATE => crate::menu::open_update(app),
         ID_OPEN => show_main(app),
         ID_SETTINGS => crate::menu::open_settings(app),
         ID_DEACTIVATE => {

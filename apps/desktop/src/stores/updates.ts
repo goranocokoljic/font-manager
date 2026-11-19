@@ -1,16 +1,20 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { useClient, type FullSettings } from '../api/client';
-import type { ApiError, AvailableUpdate, UpdateSupport } from '../api/types';
+import { useClient, type Unsubscribe } from '../api/client';
+import type { ApiError, AvailableUpdate, Event, UpdateSupport } from '../api/types';
 
 /** Where "Check for updates" is: what the Settings section and the dialog show. */
 export type UpdateStatus = 'idle' | 'checking' | 'upToDate' | 'available' | 'installing';
 
 /**
  * In-app updates (E18.2). The app asks the release server only when the user clicks
- * "Check for updates" or has turned on "Check automatically" (rule 7). fm-api decides
- * how big a step an update is (`kind`) and refuses a major install without the second
- * confirmation; this store only keeps what the user was shown and what they confirmed.
+ * "Check for updates" or has turned on "Check automatically" (rule 7). The automatic
+ * check (at start and once a day) runs in the shell, not here (E55.7): it announces a
+ * found update with the `updateAvailable` event, and this store only records it; the
+ * dialog opens on a click (the tray's "Update to <version>…", Settings → About). fm-api
+ * decides how big a step an update is (`kind`) and refuses a major install without the
+ * second confirmation; this store only keeps what the user was shown and what they
+ * confirmed.
  */
 export const useUpdatesStore = defineStore('updates', () => {
   const support = ref<UpdateSupport | null>(null);
@@ -21,6 +25,7 @@ export const useUpdatesStore = defineStore('updates', () => {
   /** The dialog asks the second time, for a major update. */
   const confirmingMajor = ref(false);
   const error = ref<ApiError | null>(null);
+  let unsubscribe: Promise<Unsubscribe> | undefined;
 
   async function loadSupport(): Promise<UpdateSupport | null> {
     try {
@@ -31,14 +36,11 @@ export const useUpdatesStore = defineStore('updates', () => {
     return support.value;
   }
 
-  /**
-   * Asks the release server. A found update opens the dialog. `quiet` (the check at
-   * start) shows nothing when the app is up to date or the server cannot be reached.
-   */
-  async function check({ quiet = false } = {}): Promise<void> {
+  /** "Check for updates": asks the release server. A found update opens the dialog. */
+  async function check(): Promise<void> {
     if (status.value === 'checking' || status.value === 'installing') return;
     status.value = 'checking';
-    if (!quiet) error.value = null;
+    error.value = null;
     try {
       const found = await useClient().checkForUpdate();
       update.value = found.update ?? null;
@@ -50,15 +52,55 @@ export const useUpdatesStore = defineStore('updates', () => {
       }
     } catch (e) {
       status.value = 'idle';
-      if (!quiet) error.value = e as ApiError;
+      error.value = e as ApiError;
     }
   }
 
-  /** At app start: checks once, quietly, when the user turned "Check automatically" on. */
-  async function checkAtStart(settings: FullSettings | null): Promise<void> {
-    if (!settings?.checkUpdatesAutomatically) return;
-    const s = support.value ?? (await loadSupport());
-    if (s?.offered) await check({ quiet: true });
+  /** Records an update the shell found by itself; nothing opens. */
+  function offer(found: AvailableUpdate): void {
+    if (status.value === 'installing' || status.value === 'checking') return;
+    if (update.value?.version !== found.version) confirmingMajor.value = false;
+    update.value = found;
+    status.value = 'available';
+  }
+
+  function onEvent(event: Event): void {
+    if (event.type === 'updateAvailable') offer(event.update);
+  }
+
+  /**
+   * At app start: listens for the shell's automatic finds (once) and reads the one it may
+   * have announced before the window listened. Asks the release server nothing.
+   */
+  async function start(): Promise<void> {
+    unsubscribe ??= useClient().onEvent(onEvent);
+    await unsubscribe.catch(() => undefined);
+    try {
+      const found = await useClient().pendingUpdate();
+      if (found) offer(found);
+    } catch {
+      // Nothing on offer that the UI can show; "Check for updates" still works.
+    }
+  }
+
+  /** Stops listening. */
+  async function stop(): Promise<void> {
+    const pending = unsubscribe;
+    unsubscribe = undefined;
+    (await pending?.catch(() => undefined))?.();
+  }
+
+  /** The tray's "Update to <version>…": opens the dialog for the update on offer. */
+  async function openDialog(): Promise<void> {
+    if (!update.value) {
+      const found = await useClient()
+        .pendingUpdate()
+        .catch(() => null);
+      if (found) offer(found);
+    }
+    if (!update.value || status.value === 'installing') return;
+    error.value = null;
+    open.value = true;
   }
 
   /**
@@ -98,7 +140,10 @@ export const useUpdatesStore = defineStore('updates', () => {
     error,
     loadSupport,
     check,
-    checkAtStart,
+    start,
+    stop,
+    onEvent,
+    openDialog,
     install,
     dismiss,
   };

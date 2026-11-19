@@ -57,6 +57,7 @@
     },
     "tray": {
       "tooltip": "Font Fu",
+      "update": "Auf {version} aktualisieren…",
       "open": "Font Fu öffnen",
       "deactivateSession": "Sitzungsschriften deaktivieren",
       "quit": "Font Fu beenden",
@@ -1591,7 +1592,7 @@
     "upToDate": "Font Fu ist auf dem neuesten Stand.",
     "available": "Version {version} ist verfügbar.",
     "checkAutomatically": "Automatisch suchen, wenn Font Fu startet",
-    "checkAutomaticallyHint": "Font Fu kontaktiert seinen Release-Server nur, wenn du suchst oder wenn das hier an ist. Nichts wird installiert, bevor du es bestätigst.",
+    "checkAutomaticallyHint": "Font Fu kontaktiert seinen Release-Server nur, wenn du suchst oder, solange das hier an ist, beim Start und einmal am Tag. Nichts wird installiert, bevor du es bestätigst.",
     "dialog": {
       "title": "Font Fu {version} ist verfügbar",
       "currentVersion": "Du hast Version {version}.",

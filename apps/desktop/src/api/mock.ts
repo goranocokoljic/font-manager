@@ -3561,8 +3561,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     updateSupport: async () =>
       options.update === 'managed'
-        ? { offered: false, reason: managedReason }
-        : { offered: true, reason: null },
+        ? { offered: false, reason: managedReason, releaseHost: 'github.com' }
+        : { offered: true, reason: null, releaseHost: 'github.com' },
     checkForUpdate: async () => {
       if (options.update === 'managed')
         throw { code: 'unsupported' as const, message: managedReason, detail: null };
@@ -3582,6 +3582,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       pendingUpdate = found ? { ...found } : null;
       return { currentVersion: mockAppInfo.version, update: pendingUpdate };
     },
+    pendingUpdate: async () => (pendingUpdate ? { ...pendingUpdate } : null),
     // The same rules as `InstallUpdateRequest::check` in fm-api.
     installUpdate: async (req) => {
       if (!pendingUpdate)

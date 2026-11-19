@@ -3,9 +3,10 @@ import { createPinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, type MockOptions } from '../api/mock';
+import { createMockClient, shellNavigateHandlers, type MockOptions } from '../api/mock';
 import type { InstallUpdateRequest } from '../api/types';
 import { createAppRouter } from '../router';
+import { useUpdatesStore } from '../stores/updates';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
@@ -53,21 +54,55 @@ describe('Updates (Settings → About)', () => {
     about.unmount();
   });
 
-  it('checks once at start when "Check automatically" is on, and shows the offer', async () => {
+  it('never checks by itself with "Check automatically" on: the shell does (E55.7)', async () => {
     const { c, check } = client({ update: 'patch' });
     await c.updateSettings({ checkUpdatesAutomatically: true });
     const w = await mountAt('/');
-    expect(check).toHaveBeenCalledTimes(1);
-    expect(dialog(w).text()).toContain('Font Fu 0.1.1 is available');
+    expect(check).not.toHaveBeenCalled();
+    expect(dialog(w).exists()).toBe(false);
     w.unmount();
   });
 
-  it('a quiet check at start shows nothing when the server cannot be reached', async () => {
-    const { c, check } = client({ update: 'offline' });
-    await c.updateSettings({ checkUpdatesAutomatically: true });
+  it('records an update the shell found at start without opening the dialog', async () => {
+    const { c, check } = client({ update: 'patch' });
+    // The shell's check at start, before the window listened.
+    await c.checkForUpdate();
+    check.mockClear();
     const w = await mountAt('/');
-    expect(check).toHaveBeenCalledTimes(1);
-    expect(w.find('[role="alert"]').exists()).toBe(false);
+    expect(check).not.toHaveBeenCalled();
+    expect(dialog(w).exists()).toBe(false);
+    expect(useUpdatesStore().status).toBe('available');
+    expect(useUpdatesStore().update?.version).toBe('0.1.1');
+    w.unmount();
+  });
+
+  it('an updateAvailable event records the update; the tray item opens the dialog', async () => {
+    const { c, check } = client({ update: 'patch' });
+    const w = await mountAt('/');
+    const store = useUpdatesStore();
+    expect(store.update).toBeNull();
+    const found = (await c.checkForUpdate()).update!;
+    check.mockClear();
+    store.onEvent({ type: 'updateAvailable', update: found });
+    await flushPromises();
+    expect(dialog(w).exists()).toBe(false);
+    expect(store.status).toBe('available');
+
+    // "Update to 0.1.1…" in the tray: the shell shows the window, the UI opens the dialog.
+    shellNavigateHandlers.forEach((h) => h('update'));
+    await flushPromises();
+    expect(dialog(w).text()).toContain('Font Fu 0.1.1 is available');
+    expect(check).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  it('the tray item opens nothing when no update is on offer', async () => {
+    const { check } = client({ update: 'patch' });
+    const w = await mountAt('/');
+    shellNavigateHandlers.forEach((h) => h('update'));
+    await flushPromises();
+    expect(dialog(w).exists()).toBe(false);
+    expect(check).not.toHaveBeenCalled();
     w.unmount();
   });
 

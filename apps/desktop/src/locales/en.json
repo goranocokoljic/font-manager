@@ -57,6 +57,7 @@
     },
     "tray": {
       "tooltip": "Font Fu",
+      "update": "Update to {version}…",
       "open": "Open Font Fu",
       "deactivateSession": "Deactivate session fonts",
       "quit": "Quit Font Fu",
@@ -1591,7 +1592,7 @@
     "upToDate": "Font Fu is up to date.",
     "available": "Version {version} is available.",
     "checkAutomatically": "Check automatically when Font Fu starts",
-    "checkAutomaticallyHint": "Font Fu contacts its release server only when you check or when this is on. Nothing installs until you confirm it.",
+    "checkAutomaticallyHint": "Font Fu contacts its release server only when you check or, while this is on, at start and once a day. Nothing installs until you confirm it.",
     "dialog": {
       "title": "Font Fu {version} is available",
       "currentVersion": "You have version {version}.",

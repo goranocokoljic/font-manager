@@ -1,6 +1,6 @@
 # 0012 — In-app updates from signed releases
 
-Status: Accepted (2026-10-21)
+Status: Accepted (2026-10-21); amended 2026-11-19 (E55.7: the daily check, the release address)
 
 ## Context
 
@@ -28,12 +28,28 @@ it. Flatpak and package managers already install updates for their copies.
   older package. A refused package gives a user-facing error and nothing is
   installed.
 - **Only after a user action.** The app asks the release server when the
-  user clicks "Check for updates" (Settings → About) or, once at start, when
-  the user turned on "Check automatically" (`Settings.check_updates_automatically`,
-  off by default). Nothing installs until the user confirms; a major update
+  user clicks "Check for updates" (Settings → About) or, at start and once a
+  day, when the user turned on "Check automatically"
+  (`Settings.check_updates_automatically`, off by default; Goran,
+  18 Nov 2026). Nothing installs until the user confirms; a major update
   (`fm_api::update::update_kind` with `semver`; before 1.0 a new minor
   version counts as major) asks a second time, and fm-api refuses an install
   request without `confirm_major`.
+- **The automatic check** (E55.7) runs in the shell, not in the UI, so it
+  keeps running while the app waits in the tray. `fm_api::update::checks_automatically`
+  decides whether it runs (the setting is on and this copy updates itself);
+  `fm_api::update::automatic_check_wait` decides when the next one is due
+  (24 hours after the last one started). The timer (`fm-app`
+  `auto_update`) is one thread parked between checks; it runs only while
+  automatic checks are on and ends when they are turned off, so then no
+  timer runs and nothing is asked. The time of the last check is kept for
+  the running app only: every start checks. A check that fails (offline, the
+  server down) is silent and counts as a check: the next one is at the next
+  start or 24 hours later, never sooner. A found update is announced with
+  `Event::UpdateAvailable` and the tray item "Update to <version>…", which
+  opens the window at the update dialog; an automatic check never opens,
+  raises or focuses a window. `UpdateSupport.release_host` names the host of
+  the configured endpoint, so no UI text hard-codes it.
 - **The normal quit first.** Before the installer runs, the shell runs the
   quit path every quit uses (`AppState::run_quit_path`: session fonts are
   deregistered and remembered for "reactivate on launch"). It runs once: the
@@ -72,6 +88,16 @@ it. Flatpak and package managers already install updates for their copies.
   installers. The app reads
   `https://github.com/goranocokoljic/font-manager/releases/latest/download/latest.json`;
   nightly pre-releases are never "latest".
+- **The release address is GitHub releases for now** (Goran,
+  18 Nov 2026); it may move to the project's website later, or stay.
+  Moving it takes three things. Copies already installed keep asking the
+  address they were built with (`plugins.updater.endpoints` is compiled in),
+  so that address must keep answering, with a `latest.json` that leads them
+  to a version that knows the new one. The new address goes in front of the
+  endpoint list with GitHub kept after it: the updater asks the next
+  address only when one gives a non-2xx answer, so GitHub stays the fallback.
+  The signing key does not change: the packages are checked against the
+  same public key wherever they come from.
 
 ## Consequences
 

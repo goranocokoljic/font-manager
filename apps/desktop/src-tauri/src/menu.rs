@@ -21,6 +21,9 @@ pub const FILE_SUBMENU_ID: &str = "app:file";
 pub const SHELL_NAVIGATE: &str = "shell:navigate";
 /// The route name of Settings in the UI's router.
 pub const SETTINGS_ROUTE: &str = "settings";
+/// The name that asks the webview to open the update dialog (E55.7); not a
+/// route, the UI handles it before its router.
+pub const UPDATE_DIALOG: &str = "update";
 
 /// The accelerator of the menu bar's Settings… item on `os`: Ctrl+, on
 /// Windows and Linux, ⌘, on a Mac. Tauri has no getter for an item's
@@ -124,6 +127,15 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// Shows and focuses the main window, then asks it to open the update
+/// dialog: the tray's "Update to <version>…", a user's click.
+pub fn open_update<R: Runtime>(app: &AppHandle<R>) {
+    tray::show_main(app);
+    if let Err(e) = app.emit_to(MAIN_WINDOW, SHELL_NAVIGATE, UPDATE_DIALOG) {
+        tracing::warn!(error = %e, "the update dialog could not be opened");
+    }
+}
+
 /// The menu bar's events: Settings… opens Settings, a Help page opens its page.
 pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     if event.id().as_ref() == MENU_ID_SETTINGS {
@@ -148,5 +160,6 @@ mod tests {
     fn the_shell_event_names_the_settings_route() {
         assert_eq!(SHELL_NAVIGATE, "shell:navigate");
         assert_eq!(SETTINGS_ROUTE, "settings");
+        assert_eq!(UPDATE_DIALOG, "update");
     }
 }

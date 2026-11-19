@@ -560,6 +560,16 @@ mod tests {
     }
 
     #[test]
+    fn an_update_found_by_an_automatic_check_leaves_the_window_alone() {
+        let update = fm_api::update::AvailableUpdate::new("1.4.0", "2.0.0", None, None)
+            .expect("versions")
+            .expect("newer");
+        let found = Event::UpdateAvailable { update };
+        assert_eq!(window_call(&found, &[]), None);
+        assert_eq!(window_call(&found, &[closed(1)]), None);
+    }
+
+    #[test]
     fn only_a_waiting_confirmation_raises_the_window() {
         assert_eq!(window_call(&requested(4), &[]), Some(WindowCall::Raise));
         // Another confirmation closing behind it does not count.

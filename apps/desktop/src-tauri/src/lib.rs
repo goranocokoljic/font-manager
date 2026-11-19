@@ -67,6 +67,7 @@ use tauri::http::{Response, StatusCode, header};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, Webview, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
+pub mod auto_update;
 pub mod help;
 pub mod menu;
 pub mod shell_text;
@@ -1378,8 +1379,15 @@ async fn get_settings(state: State<'_, AppState>) -> ApiResult<Settings> {
 
 /// Changes and saves some settings; returns all of them.
 #[tauri::command]
-async fn update_settings(state: State<'_, AppState>, req: SettingsUpdate) -> ApiResult<Settings> {
-    call_settings(&state, move |s| s.update_settings(req)).await
+async fn update_settings<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    req: SettingsUpdate,
+) -> ApiResult<Settings> {
+    let saved = call_settings(&state, move |s| s.update_settings(req)).await;
+    // "Check automatically" may have changed: start, wake or end the timer.
+    auto_update::refresh(&app);
+    saved
 }
 
 /// The themes the app ships.
@@ -1403,11 +1411,15 @@ async fn setup_status(state: State<'_, AppState>) -> ApiResult<SetupStatus> {
 
 /// Records that the user answered or skipped a setup step.
 #[tauri::command]
-async fn answer_setup_step(
+async fn answer_setup_step<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, AppState>,
     req: AnswerSetupStepRequest,
 ) -> ApiResult<SetupStatus> {
-    call(&state, move |api| api.answer_setup_step(req)).await
+    let status = call(&state, move |api| api.answer_setup_step(req)).await;
+    // The updates step may have turned "Check automatically" on.
+    auto_update::refresh(&app);
+    status
 }
 
 /// The local API endpoint's address and token (Settings → Local API).
@@ -1530,6 +1542,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
         .manage(shell_text::ShellLocale::new(locale))
         .manage(state)
         .manage(updater::PendingUpdate::default())
+        .manage(auto_update::AutoCheck::default())
         .manage(tray::TrayState::new(TraySupport::Unavailable(
             "no tray item yet".into(),
         )))
@@ -1565,6 +1578,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
                 core.set_file_drag_support(fm_platform::drag::system().support());
             }
             launch(app.handle(), &support, std::env::args_os().skip(1));
+            // The check at start and once a day, when the user turned it on
+            // (E55.7); off its own thread, so the window never waits for it.
+            auto_update::refresh(app.handle());
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("fm-events".into())
@@ -1701,7 +1717,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             print_page,
             updater::update_support,
             updater::check_for_update,
-            updater::install_update
+            updater::install_update,
+            updater::pending_update
         ])
 }
 
