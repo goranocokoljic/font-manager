@@ -310,7 +310,7 @@ describe('catalogs store: install (E22.7)', () => {
     expect(settings.settings?.downloadFolder).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
     const result = store.install!.result!;
     expect(result.alreadyInstalled).toBe(false);
-    expect(result.download.folder).toBe(`${MOCK_SUGGESTED_DOWNLOAD_FOLDER}/Inter`);
+    expect(result.download.folder).toBe(`${MOCK_SUGGESTED_DOWNLOAD_FOLDER}/Google Fonts/Inter`);
     expect(result.faces.length).toBeGreaterThan(0);
     expect(installedActive(result)).toBe(result.faces.length);
     const active = (await client.listActive()).map((a) => a.face);
@@ -325,7 +325,7 @@ describe('catalogs store: install (E22.7)', () => {
     await useSettingsStore().update({ downloadFolder: '/Users/demo/Installed' });
     await store.askInstall(inter);
     expect(store.install?.phase).toBe('done');
-    expect(store.install?.result?.download.folder).toBe('/Users/demo/Installed/Inter');
+    expect(store.install?.result?.download.folder).toBe('/Users/demo/Installed/Google Fonts/Inter');
     store.closeInstall();
     expect(store.install).toBeNull();
 
@@ -349,7 +349,7 @@ describe('catalogs store: install (E22.7)', () => {
     await store.chooseInstallFolder();
     expect(store.install?.phase).toBe('done');
     expect(useSettingsStore().settings?.downloadFolder).toBe('/Users/demo/My fonts');
-    expect(store.install?.result?.download.folder).toBe('/Users/demo/My fonts/Inter');
+    expect(store.install?.result?.download.folder).toBe('/Users/demo/My fonts/Google Fonts/Inter');
   });
 
   it('an install turns both buttons off while it runs and says why it failed', async () => {

@@ -3,7 +3,9 @@
 //! the faces it brought.
 //!
 //! The download folder is the one folder the app writes into without a
-//! choice per download; the user chose it once (rule 2). It is never a system
+//! choice per download; the user chose it once (rule 2). A new install goes
+//! into `<download folder>/<catalog>/<family>` (E55.3); a family installed
+//! before stays where it is. It is never a system
 //! font folder (rule 4). A family already in the library is not downloaded
 //! again: what is there is activated.
 
@@ -46,7 +48,7 @@ impl Placed {
         }
     }
 }
-use crate::catalog::{family_folder, now_rfc3339};
+use crate::catalog::{catalog_folder, family_folder, now_rfc3339};
 
 /// The answer to an install while no download folder is set.
 pub const NO_DOWNLOAD_FOLDER: &str =
@@ -118,18 +120,37 @@ impl CoreApi {
         }
 
         let source = self.download_source(os, &folder, &sources)?;
-        let family_dir = family_folder(&folder, &req.family);
-        // Files already on disk in the family folder but not in the library
-        // (a removed source, a folder chosen with an earlier download): index
-        // them first, so they are activated, not fetched again.
-        if std::fs::read_dir(&family_dir).is_ok_and(|mut entries| entries.next().is_some()) {
+        // A new install goes into the catalog's own folder (E55.3), so a
+        // family of the same name in two catalogs gets two folders.
+        let catalog_dir = catalog_folder(&folder, req.id);
+        let family_dir = family_folder(&catalog_dir, &req.family);
+        // Files already on disk in the family folder, or in the folder an
+        // install used before E55.3, but not in the library (a removed
+        // source, a folder chosen with an earlier download): index them
+        // first, so they are activated, not fetched again.
+        let has_files =
+            |dir: &Path| std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some());
+        if has_files(&family_dir) || has_files(&family_folder(&folder, &req.family)) {
             self.scan_and_wait(&source)?;
             if let Some(found) = self.installed_already(os, req, &folder)? {
                 return Ok(Placed::found(found));
             }
         }
-        let saved =
-            self.save_download(req.id, &req.family, req.kind, &source, &folder, deadline)?;
+        std::fs::create_dir_all(&catalog_dir).map_err(|e| {
+            ApiError::from(crate::error::FmError::io(
+                "The downloaded fonts could not be saved.",
+                &catalog_dir,
+                &e,
+            ))
+        })?;
+        let saved = self.save_download(
+            req.id,
+            &req.family,
+            req.kind,
+            &source,
+            &catalog_dir,
+            deadline,
+        )?;
         self.scan_and_wait(&source)?;
         // Every face in the family folder: the files written and the ones the
         // download skipped because they were already there.
@@ -143,20 +164,24 @@ impl CoreApi {
     }
 
     /// The family's provenance and faces when the library has it: the newest
-    /// download recorded for it whose files are still in the library, else
-    /// the faces of the library in its folder inside `folder` (files put
-    /// there before provenance was recorded, or by hand). `None` when the
-    /// library has none of its files.
+    /// download recorded for it whose files are still in the library,
+    /// wherever they are now; else the faces of the library in its folder
+    /// inside the catalog's folder of `folder` (`<folder>/Google Fonts/Inter`,
+    /// E55.3), else in the folder installs used before E55.3
+    /// (`<folder>/Inter`): files put there before provenance was recorded,
+    /// or by hand. Files another catalog's download recorded are not this
+    /// catalog's, so a family of the same name in both catalogs is not
+    /// reported installed by the other's files. `None` when the library has
+    /// none of its files.
     fn installed_already(
         &self,
         os: Os,
         req: &InstallFamilyRequest,
         folder: &Path,
     ) -> ApiResult<Option<(CatalogDownload, Vec<FaceId>)>> {
-        let recorded = self
-            .lock()
-            .catalog_downloads()?
-            .into_iter()
+        let downloads = self.lock().catalog_downloads()?;
+        let recorded = downloads
+            .iter()
             .find(|d| d.catalog == req.id && d.family == req.family);
         if let Some(download) = recorded {
             let paths: Vec<PathBuf> = download
@@ -166,14 +191,42 @@ impl CoreApi {
                 .collect();
             let faces = self.faces_at(os, &paths)?;
             if !faces.is_empty() {
-                return Ok(Some((download, faces)));
+                return Ok(Some((download.clone(), faces)));
             }
         }
-        let family_dir = family_folder(folder, &req.family);
-        let found = self.faces_with_files_within(os, &family_dir)?;
-        if found.is_empty() {
-            return Ok(None);
+        let others: Vec<PathBuf> = downloads
+            .iter()
+            .filter(|d| d.catalog != req.id)
+            .flat_map(|d| d.files.iter().filter_map(|f| f.path.as_ref()))
+            .map(PathBuf::from)
+            .collect();
+        let same = |a: &Path, b: &Path| is_within(os, a, b) && is_within(os, b, a);
+        let dirs = [
+            family_folder(&catalog_folder(folder, req.id), &req.family),
+            family_folder(folder, &req.family),
+        ];
+        for family_dir in dirs {
+            let found: Vec<(FaceId, PathBuf)> = self
+                .faces_with_files_within(os, &family_dir)?
+                .into_iter()
+                .filter(|(_, path)| !others.iter().any(|o| same(path, o)))
+                .collect();
+            if !found.is_empty() {
+                return Ok(Some(self.found_in(os, req, &family_dir, found)?));
+            }
         }
+        Ok(None)
+    }
+
+    /// The provenance of `found`, faces of the library in `family_dir` that
+    /// no download recorded, and the faces by id.
+    fn found_in(
+        &self,
+        os: Os,
+        req: &InstallFamilyRequest,
+        family_dir: &Path,
+        found: Vec<(FaceId, PathBuf)>,
+    ) -> ApiResult<(CatalogDownload, Vec<FaceId>)> {
         let mut files: Vec<CatalogDownloadFile> = Vec::new();
         let mut seen = HashSet::new();
         for (_, path) in &found {
@@ -196,7 +249,7 @@ impl CoreApi {
             .lock()
             .sources()?
             .into_iter()
-            .find(|s| is_within(os, &family_dir, Path::new(&s.path)))
+            .find(|s| is_within(os, family_dir, Path::new(&s.path)))
             .map_or(fm_api::SourceId(0), |s| s.id);
         let download = CatalogDownload {
             catalog: req.id,
@@ -212,7 +265,7 @@ impl CoreApi {
         let mut faces: Vec<FaceId> = found.into_iter().map(|(f, _)| f).collect();
         faces.sort();
         faces.dedup();
-        Ok(Some((download, faces)))
+        Ok((download, faces))
     }
 
     /// The watched source the download folder is in: the source of that

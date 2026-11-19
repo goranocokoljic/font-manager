@@ -2242,6 +2242,15 @@ export function mockCatalogFamilies(extra = 0): CatalogFamily[] {
 /** The folder the mock's first Install proposes (`suggestedDownloadFolder`). */
 export const MOCK_SUGGESTED_DOWNLOAD_FOLDER = '/Users/demo/Documents/Font Fu Fonts';
 
+/**
+ * The folder of a catalog's installs inside the download folder, as
+ * `fm_core::catalog::catalog_folder_name` names it (E55.3): fixed, the same in every UI language.
+ */
+export const MOCK_CATALOG_FOLDERS: Record<CatalogId, string> = {
+  googleFonts: 'Google Fonts',
+  fontshare: 'Fontshare',
+};
+
 /** What the mock's `installFamily` needs from the rest of the mock client. */
 interface MockInstallHooks {
   settings: () => FullSettings;
@@ -2509,8 +2518,9 @@ function createMockCatalogs(
     suggestedDownloadFolder: async () => MOCK_SUGGESTED_DOWNLOAD_FOLDER,
     // The rules of the core (`install_family` of the Rust mock): no download folder, an off
     // catalog or a system font folder is a conflict; a family already downloaded is not
-    // downloaded again. The folder becomes a watched source when none holds it; the faces are
-    // the mock library's faces of the family, and only those not active yet are activated.
+    // downloaded again; a new one goes into `<download folder>/<catalog>/<family>` (E55.3).
+    // The folder becomes a watched source when none holds it; the faces are the mock
+    // library's faces of the family, and only those not active yet are activated.
     installFamily: async (req) => {
       if (!hooks) throw { code: 'unsupported', message: 'Not in this mock.', detail: null };
       const settings = hooks.settings();
@@ -2548,9 +2558,10 @@ function createMockCatalogs(
         const source =
           sources.find((s) => s.kind === 'watched' && within(s.path))?.id ??
           hooks.addSource(folder);
-        // Downloaded into the folder itself, as the core does, not the source's root.
+        // Downloaded into the catalog's folder of the download folder, as the core does
+        // (E55.3), not the source's root.
         const got = await api.downloadFamily({ ...req, source });
-        const into = `${folder}/${req.family}`;
+        const into = `${folder.replace(/\/$/, '')}/${MOCK_CATALOG_FOLDERS[req.id]}/${req.family}`;
         record = {
           ...got.download,
           folder: into,

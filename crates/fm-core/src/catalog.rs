@@ -184,6 +184,24 @@ pub fn family_folder(into: &Path, family: &str) -> PathBuf {
     into.join(safe_file_name(family).unwrap_or_else(|| "Font".to_owned()))
 }
 
+/// The name of `id`'s folder inside the download folder (E55.3): fixed,
+/// English, the same in every UI language, so a folder made once is found
+/// again after the user switches language.
+pub fn catalog_folder_name(id: CatalogId) -> &'static str {
+    match id {
+        CatalogId::GoogleFonts => "Google Fonts",
+        CatalogId::Fontshare => "Fontshare",
+    }
+}
+
+/// The folder [`fm_api::CatalogService::install_family`] puts `id`'s
+/// families into inside the download folder `into` (E55.3):
+/// `<into>/<catalog>/`, the name made safe as a family's is. A family then
+/// goes into [`family_folder`] of it: `<into>/Google Fonts/Inter`.
+pub fn catalog_folder(into: &Path, id: CatalogId) -> PathBuf {
+    family_folder(into, catalog_folder_name(id))
+}
+
 /// One file a download wrote.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadedFile {

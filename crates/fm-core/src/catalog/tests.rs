@@ -584,7 +584,12 @@ const VARIABLE: &str = "fonts/google-repo/castoro/Castoro[wght].ttf";
 /// static files, one variable file and the license, served from itself;
 /// `bold` answers the bold file (status and body).
 pub(crate) fn lato_server(bold: (u16, Vec<u8>)) -> crate::test_support::LocalServer {
-    crate::test_support::LocalServer::start_with(|base| {
+    crate::test_support::LocalServer::start_with(|base| lato_routes(base, bold))
+}
+
+/// The routes of [`lato_server`] on `base`, for a server that serves more.
+pub(crate) fn lato_routes(base: &str, bold: (u16, Vec<u8>)) -> Vec<(String, u16, Vec<u8>)> {
+    {
         let list = format!(
             r#")]}}'
 {{"manifest":{{"files":[{{"filename":"OFL.txt","contents":"SIL Open Font License"}}],
@@ -604,7 +609,7 @@ pub(crate) fn lato_server(bold: (u16, Vec<u8>)) -> crate::test_support::LocalSer
             ("/f/bold".to_owned(), bold.0, bold.1),
             ("/f/variable".to_owned(), 200, fixture(VARIABLE)),
         ]
-    })
+    }
 }
 
 /// A file name no file system takes (over 255 characters): saving it fails
