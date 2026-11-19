@@ -1598,7 +1598,10 @@
       "label": "Update available",
       "message": "Font Fu {version} is available.",
       "seeWhatsNew": "See what's new",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "updated": "Updated to {version}.",
+      "whatsNew": "What’s new",
+      "retry": "Update…"
     },
     "dot": "Font Fu {version} is available: see what's new",
     "dialog": {
@@ -1616,12 +1619,7 @@
       "installAndRestart": "Install and restart"
     },
     "installOnQuit": "Install updates when I quit",
-    "installOnQuitHint": "Works while automatic checks are on. A bug-fix or feature update downloads in the background and installs when you quit Font Fu; Font Fu does not start again by itself. A major update always asks you first.",
-    "notice": {
-      "updated": "Updated to {version}.",
-      "whatsNew": "What’s new",
-      "retry": "Update…"
-    }
+    "installOnQuitHint": "Works while automatic checks are on. A bug-fix or feature update downloads in the background and installs when you quit Font Fu; Font Fu does not start again by itself. A major update always asks you first."
   },
   "family": {
     "library": "Library",
