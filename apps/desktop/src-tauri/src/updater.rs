@@ -6,22 +6,52 @@
 //! after the normal quit path.
 //!
 //! The app asks the server only when the user clicks "Check for updates" or
-//! has turned on "Check automatically" (rule 7). A package installs only when
+//! has turned on "Check automatically" (rule 7; the timer of the automatic
+//! check is `crate::auto_update`). A package installs only when
 //! its minisign signature matches the public key in `tauri.conf.json` and was
 //! made for the announced version (`requireSignedVersion`).
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, OnceLock, PoisonError};
 
 use fm_api::update::{AvailableUpdate, InstallUpdateRequest, UpdateCheck, UpdateSupport};
 use fm_api::{ApiError, ApiResult, ErrorCode};
-use tauri::{AppHandle, Runtime, State};
+use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_updater::{Error as UpdaterError, Update, UpdaterExt};
 
 use crate::AppState;
 
-/// Whether this copy of the app updates itself.
+/// Whether this copy of the app updates itself, and the host of the release
+/// server it asks.
 pub fn support() -> UpdateSupport {
-    fm_core::update::support(&fm_platform::updater::distribution())
+    fm_core::update::support_from(
+        &fm_platform::updater::distribution(),
+        endpoints().iter().map(String::as_str),
+    )
+}
+
+/// The release server addresses the app was built with
+/// (`plugins.updater.endpoints` of `tauri.conf.json`), in the order the
+/// updater asks them.
+pub fn endpoints() -> &'static [String] {
+    static ENDPOINTS: OnceLock<Vec<String>> = OnceLock::new();
+    ENDPOINTS.get_or_init(|| configured_endpoints(include_str!("../tauri.conf.json")))
+}
+
+/// The `plugins.updater.endpoints` of the Tauri config `conf`; none when it
+/// has none or is not JSON.
+pub fn configured_endpoints(conf: &str) -> Vec<String> {
+    serde_json::from_str::<serde_json::Value>(conf)
+        .ok()
+        .and_then(|c| {
+            c.pointer("/plugins/updater/endpoints")?
+                .as_array()
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|e| e.as_str().map(str::to_owned))
+                        .collect()
+                })
+        })
+        .unwrap_or_default()
 }
 
 /// The update the last check found, with what the user was shown of it.
@@ -139,14 +169,19 @@ pub fn install_after_quit(
 /// "Check for updates": asks the release server once and keeps what it
 /// offers for [`install_update`].
 #[tauri::command]
-pub async fn check_for_update<R: Runtime>(
-    app: AppHandle<R>,
-    pending: State<'_, PendingUpdate>,
-) -> ApiResult<UpdateCheck> {
+pub async fn check_for_update<R: Runtime>(app: AppHandle<R>) -> ApiResult<UpdateCheck> {
+    check_and_keep(&app).await
+}
+
+/// Asks the release server once and keeps what it offers for
+/// [`install_update`]: the check behind "Check for updates" and the
+/// automatic one.
+pub async fn check_and_keep<R: Runtime>(app: &AppHandle<R>) -> ApiResult<UpdateCheck> {
     let support = support();
     if !support.offered {
         return Err(not_offered(&support));
     }
+    let pending = app.state::<PendingUpdate>();
     let found = app
         .updater()
         .map_err(check_error)?
@@ -200,4 +235,44 @@ pub async fn install_update<R: Runtime>(
 #[tauri::command]
 pub fn update_support() -> UpdateSupport {
     support()
+}
+
+/// The update the last check found, manual or automatic; no request is made.
+/// The UI reads it at start, since the automatic check may announce an
+/// update before the window listens.
+#[tauri::command]
+pub fn pending_update(pending: State<'_, PendingUpdate>) -> Option<AvailableUpdate> {
+    pending.get().map(|(shown, _)| shown)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_shipped_config_names_github_releases() {
+        let shipped = endpoints();
+        assert_eq!(
+            shipped.first().map(String::as_str),
+            Some(
+                "https://github.com/goranocokoljic/font-manager/releases/latest/download/latest.json"
+            )
+        );
+        assert_eq!(support().release_host.as_deref(), Some("github.com"));
+    }
+
+    #[test]
+    fn a_config_without_endpoints_names_none() {
+        assert!(configured_endpoints("{}").is_empty());
+        assert!(configured_endpoints("not json").is_empty());
+        assert_eq!(
+            configured_endpoints(
+                r#"{"plugins":{"updater":{"endpoints":["https://a.example/x", 3, "https://b.example/y"]}}}"#
+            ),
+            vec![
+                "https://a.example/x".to_owned(),
+                "https://b.example/y".to_owned()
+            ]
+        );
+    }
 }

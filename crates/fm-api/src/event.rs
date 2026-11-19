@@ -125,6 +125,15 @@ pub enum Event {
         /// Whether the call may run.
         allowed: bool,
     },
+    /// An automatic check (E55.7) found a newer release. The UI shows it
+    /// quietly and the tray offers "Update to <version>…"; nothing opens,
+    /// raises or focuses a window, and nothing installs until the user
+    /// confirms (ADR 0012).
+    #[serde(rename_all = "camelCase")]
+    UpdateAvailable {
+        /// The update on offer.
+        update: crate::update::AvailableUpdate,
+    },
 }
 
 /// The event stream.
@@ -244,5 +253,18 @@ mod tests {
             serde_json::to_string(&closed).unwrap(),
             r#"{"type":"mcpConfirmationClosed","id":2,"allowed":false}"#
         );
+    }
+
+    #[test]
+    fn update_available_carries_the_update() {
+        let update = crate::update::AvailableUpdate::new("1.4.0", "1.5.0", None, None)
+            .unwrap()
+            .unwrap();
+        let e = Event::UpdateAvailable { update };
+        let json = serde_json::to_value(&e).unwrap();
+        assert_eq!(json["type"], "updateAvailable");
+        assert_eq!(json["update"]["version"], "1.5.0");
+        assert_eq!(json["update"]["kind"], "minor");
+        assert_eq!(serde_json::from_value::<Event>(json).unwrap(), e);
     }
 }

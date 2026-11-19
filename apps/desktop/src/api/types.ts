@@ -1224,7 +1224,16 @@ timeoutSecs: number } |
 /**  The confirmation. */
 id: number; 
 /**  Whether the call may run. */
-allowed: boolean };
+allowed: boolean } | 
+/**
+ *  An automatic check (E55.7) found a newer release. The UI shows it
+ *  quietly and the tray offers "Update to <version>…"; nothing opens,
+ *  raises or focuses a window, and nothing installs until the user
+ *  confirms (ADR 0012).
+ */
+{ type: "updateAvailable"; 
+/**  The update on offer. */
+update: AvailableUpdate };
 
 /**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
 export type ExportLayoutPngRequest = {
@@ -4149,6 +4158,12 @@ export type UpdateSupport = {
 	 *  when offered.
 	 */
 	reason?: string | null,
+	/**
+	 *  The host of the release server a check asks (`github.com`), read from
+	 *  the endpoint the app was built with, so no text names it by hand.
+	 *  `None` when the build names no endpoint.
+	 */
+	releaseHost?: string | null,
 };
 
 /**  Change user metadata on faces; absent fields are left as they are. */

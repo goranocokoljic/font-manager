@@ -1456,3 +1456,119 @@ fn settings_in_the_menu_bar_and_the_tray_ask_the_main_window_to_open_settings() 
         "not the fm-api event channel"
     );
 }
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn an_update_found_automatically_is_announced_and_offered_in_the_tray() {
+    use fm_app_lib::{EVENT_CHANNEL, auto_update, tray};
+
+    let (app, webview) = app().unwrap();
+    let menu = tray::menu(app.handle(), Arc::new(MockApi::new())).unwrap();
+    let labels = || -> Vec<String> {
+        menu.items()
+            .unwrap()
+            .iter()
+            .filter_map(|i| i.as_menuitem().map(|m| m.text().unwrap()))
+            .collect()
+    };
+    assert_eq!(labels().len(), 5, "no update item before a check found one");
+    assert_eq!(tray::offered_update(app.handle()), None);
+
+    let events = Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+    let seen = Arc::clone(&events);
+    app.listen(EVENT_CHANNEL, move |e| {
+        seen.lock()
+            .unwrap()
+            .push(serde_json::from_str(e.payload()).unwrap());
+    });
+    let update = |v: &str| {
+        fm_api::update::AvailableUpdate::new("1.4.0", v, None, None)
+            .unwrap()
+            .unwrap()
+    };
+    auto_update::announce(app.handle(), update("1.5.0"));
+    assert_eq!(labels()[0], "Update to 1.5.0…");
+    assert_eq!(labels().len(), 6);
+    {
+        let events = events.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["type"], "updateAvailable");
+        assert_eq!(events[0]["update"]["version"], "1.5.0");
+    }
+
+    // A newer find relabels the one item; the language follows the shell.
+    auto_update::announce(app.handle(), update("1.6.0"));
+    assert_eq!(labels()[0], "Update to 1.6.0…");
+    assert_eq!(labels().len(), 6, "one update item");
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "de" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(labels()[0], "Auf 1.6.0 aktualisieren…");
+    assert_eq!(tray::offered_update(app.handle()).as_deref(), Some("1.6.0"));
+}
+
+#[test]
+fn pending_update_without_a_check_is_none_and_asks_nothing() {
+    let (_app, webview) = app().unwrap();
+    let body = send(&webview, "pending_update", serde_json::json!({}))
+        .unwrap()
+        .unwrap();
+    let pending: Option<fm_api::update::AvailableUpdate> = body.deserialize().unwrap();
+    assert_eq!(pending, None);
+}
+
+#[test]
+fn a_settings_change_with_the_automatic_check_off_starts_no_timer() {
+    use fm_app_lib::auto_update::AutoCheck;
+    use tauri::Manager;
+
+    let (app, webview) = app().unwrap();
+    send(
+        &webview,
+        "update_settings",
+        serde_json::json!({ "req": { "keepInTray": false } }),
+    )
+    .unwrap()
+    .unwrap();
+    let timer = app.state::<AutoCheck>();
+    assert!(!timer.is_running());
+    assert_eq!(timer.requests(), 0);
+}
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_tray_update_item_asks_the_main_window_for_the_update_dialog() {
+    use fm_app_lib::menu::{SHELL_NAVIGATE, UPDATE_DIALOG};
+    use fm_app_lib::{auto_update, tray};
+    use tauri::menu::MenuEvent;
+
+    let (app, webview) = app().unwrap();
+    let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sink = Arc::clone(&seen);
+    webview.listen(SHELL_NAVIGATE, move |e| {
+        sink.lock().unwrap().push(e.payload().to_owned());
+    });
+    let api: Arc<dyn fm_api::Api> = Arc::new(MockApi::new());
+    let _menu = tray::menu(app.handle(), Arc::clone(&api)).unwrap();
+    let update = fm_api::update::AvailableUpdate::new("1.4.0", "1.5.0", None, None)
+        .unwrap()
+        .unwrap();
+    // The announcement alone asks the window for nothing.
+    auto_update::announce(app.handle(), update);
+    assert!(seen.lock().unwrap().is_empty());
+    tray::on_menu_event(
+        app.handle(),
+        &MenuEvent {
+            id: "tray:update".into(),
+        },
+        &api,
+    );
+    let expected = serde_json::to_string(UPDATE_DIALOG).unwrap();
+    assert_eq!(*seen.lock().unwrap(), [expected]);
+}

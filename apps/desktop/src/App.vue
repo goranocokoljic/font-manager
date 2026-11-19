@@ -72,7 +72,9 @@ let stopShellNavigate: (() => void) | undefined;
 onMounted(() => {
   useClient()
     .onShellNavigate((route) => {
-      if (router.hasRoute(route)) void router.push({ name: route });
+      // The tray's "Update to <version>…" (E55.7): the dialog, over the page shown.
+      if (route === 'update') void updates.openDialog();
+      else if (router.hasRoute(route)) void router.push({ name: route });
     })
     .then((stop) => (stopShellNavigate = stop))
     .catch((e: unknown) => console.warn('the shell menu cannot open Settings', e));
@@ -84,11 +86,12 @@ const watchNotice = useWatchNoticeStore();
 onMounted(() => void watchNotice.start(() => router.push({ name: 'home' })));
 onUnmounted(() => void watchNotice.stop());
 
-// The one check without a click: only when the user turned "Check automatically" on.
+// The automatic update check runs in the shell (E55.7); the UI only hears of what it found.
 onMounted(async () => {
   await Promise.all([settings.load(), themes.load()]);
-  await updates.checkAtStart(settings.settings);
 });
+onMounted(() => void updates.start());
+onUnmounted(() => void updates.stop());
 
 // The named theme (E47.2) comes from the settings, so a restart keeps it: its token set for
 // the current light or dark mode goes onto the root element whenever either changes.
