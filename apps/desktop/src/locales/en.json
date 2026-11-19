@@ -2226,7 +2226,7 @@
       "landingTitle": "An install lands here:",
       "familyPlaceholder": "<Family>",
       "cloud": "This folder syncs: its files go to everyone who shares it. Each catalog’s license decides whether its fonts may be shared.",
-      "license": "{name} license",
+      "license": "Read the {name} license",
       "paneTitle": "Where installs go",
       "paneEmptyTitle": "Nothing is downloaded",
       "paneEmptyNote": "Turn a catalog on to see where its fonts go. You can turn catalogs on later in the sidebar.",

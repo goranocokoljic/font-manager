@@ -201,8 +201,8 @@ test('a system font folder shows the message of the API; a cloud font folder nam
   await expect(cloud).toContainText(
     'This folder syncs: its files go to everyone who shares it. Each catalog’s license decides whether its fonts may be shared.',
   );
-  await expect(cloud.getByRole('button', { name: 'Google Fonts license' })).toBeVisible();
-  await expect(cloud.getByRole('button', { name: 'Fontshare license' })).toBeVisible();
+  await expect(cloud.getByRole('button', { name: 'Read the Google Fonts license' })).toBeVisible();
+  await expect(cloud.getByRole('button', { name: 'Read the Fontshare license' })).toBeVisible();
   await expect(landing(page).getByRole('listitem')).toHaveText([
     '/Users/demo/Dropbox/Studio type/Google Fonts/<Family>',
     '/Users/demo/Dropbox/Studio type/Fontshare/<Family>',
