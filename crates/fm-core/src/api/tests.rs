@@ -5317,8 +5317,8 @@ fn an_install_downloads_into_the_download_folder_added_once_and_activates_its_fa
     assert_eq!(got.error, None);
     assert_eq!(
         got.download.folder,
-        folder.join("Lato").to_string_lossy(),
-        "a subfolder named after the family"
+        folder.join("Google Fonts").join("Lato").to_string_lossy(),
+        "the catalog's folder, then a subfolder named after the family (E55.3)"
     );
     let names: Vec<&str> = got.download.files.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(names, ["Lato-Bold.ttf", "Lato-Regular.ttf"]);
@@ -5476,7 +5476,202 @@ fn a_download_folder_inside_a_watched_source_uses_that_source() {
     assert_eq!(got.download.source, source.id, "no nested source");
     assert_eq!(watched_paths(&lib).len(), 1);
     assert_eq!(got.faces.len(), 2);
-    assert!(folder.join("Lato").join("Lato-Regular.ttf").is_file());
+    assert!(
+        folder
+            .join("Google Fonts")
+            .join("Lato")
+            .join("Lato-Regular.ttf")
+            .is_file()
+    );
+}
+
+/// As [`downloading`], with Fontshare on too, both catalogs served by one
+/// local server: each lists a family named Lato. Google Fonts' Lato has the
+/// two static files of [`crate::catalog::tests::lato_server`]; Fontshare's
+/// has one file, a different font (Castoro), so the faces tell them apart.
+fn downloading_both(label: &str) -> (Lib, Source, crate::test_support::LocalServer) {
+    let server = crate::test_support::LocalServer::start_with(|base| {
+        let mut routes = crate::catalog::tests::lato_routes(
+            base,
+            (200, crate::catalog::tests::lato_font("bold")),
+        );
+        let index = format!(
+            r#"{{"fonts":[{{"name":"Lato","slug":"lato-fs","version":"1.0","license_type":"sil_ofl",
+"styles":[{{"file":"{base}/fs/regular","weight":{{"name":"Regular","weight":400}},
+"is_variable":false,"is_italic":false}}]}}]}}"#
+        );
+        routes.push(("/v2/fonts".to_owned(), 200, index.into_bytes()));
+        routes.push((
+            "/fs/regular.ttf".to_owned(),
+            200,
+            crate::catalog::tests::lato_font("variable"),
+        ));
+        routes
+    });
+    let (lib, source, _) = Lib::scanned(label);
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        Arc::new(crate::catalog::HttpFetcher::new()),
+        vec![
+            Arc::new(GoogleFonts::with_base_url(server.base())),
+            Arc::new(crate::catalog::fontshare::Fontshare::with_base_url(
+                server.base(),
+            )),
+        ],
+    );
+    let lib = Lib {
+        api: lib.api.with_catalogs(catalogs),
+        ..lib
+    };
+    for id in fm_api::catalog::CatalogId::ALL {
+        lib.api
+            .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+            .expect("on");
+        lib.api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    }
+    (lib, source, server)
+}
+
+fn install_fontshare_lato(lib: &Lib) -> ApiResult<InstallFamilyResponse> {
+    lib.api.install_family(InstallFamilyRequest {
+        id: fm_api::catalog::CatalogId::Fontshare,
+        family: "Lato".into(),
+        kind: fm_api::catalog::CatalogFileKind::Static,
+    })
+}
+
+#[test]
+fn the_catalog_folders_have_fixed_names_made_safe() {
+    use fm_api::catalog::CatalogId;
+    let into = Path::new("downloads");
+    for id in CatalogId::ALL {
+        let name = crate::catalog::catalog_folder_name(id);
+        assert_eq!(
+            crate::catalog::safe_file_name(name).as_deref(),
+            Some(name),
+            "already safe on every OS"
+        );
+        assert_eq!(crate::catalog::catalog_folder(into, id), into.join(name));
+    }
+    assert_eq!(
+        crate::catalog::catalog_folder_name(CatalogId::GoogleFonts),
+        "Google Fonts"
+    );
+    assert_eq!(
+        crate::catalog::catalog_folder_name(CatalogId::Fontshare),
+        "Fontshare"
+    );
+}
+
+#[test]
+fn a_family_in_both_catalogs_gets_two_folders_and_two_provenance_records() {
+    let (lib, _source, server) = downloading_both("catalog-install-both");
+    let folder = lib.dir.path().join("Font Fu Fonts");
+    set_download_folder(&lib, &folder);
+
+    let google = install_lato(&lib).expect("Google Fonts");
+    assert!(!google.already_installed);
+    assert_eq!(
+        google.download.folder,
+        folder.join("Google Fonts").join("Lato").to_string_lossy()
+    );
+    assert_eq!(google.faces.len(), 2);
+
+    // Installing Google Fonts' Lato does not make Fontshare's installed.
+    let hits = server.hits();
+    let fontshare = install_fontshare_lato(&lib).expect("Fontshare");
+    assert!(!fontshare.already_installed, "{fontshare:?}");
+    assert!(server.hits() > hits, "downloaded");
+    assert_eq!(
+        fontshare.download.folder,
+        folder.join("Fontshare").join("Lato").to_string_lossy()
+    );
+    assert_eq!(fontshare.download.catalog_family_id, "lato-fs");
+    assert_eq!(fontshare.faces.len(), 1, "{fontshare:?}");
+    assert!(
+        fontshare.faces.iter().all(|f| !google.faces.contains(f)),
+        "only the Fontshare files' faces"
+    );
+    assert_eq!(
+        listing_of(&folder.join("Fontshare").join("Lato")),
+        ["Lato-Regular.ttf"]
+    );
+    assert_eq!(
+        listing_of(&folder.join("Google Fonts").join("Lato")),
+        ["Lato-Bold.ttf", "Lato-Regular.ttf"],
+        "the other catalog's folder is left as it was"
+    );
+    assert_eq!(listing_of(&folder), ["Fontshare", "Google Fonts"]);
+
+    let listed = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(listed.len(), 2, "two provenance records: {listed:?}");
+    assert!(listed.contains(&google.download));
+    assert!(listed.contains(&fontshare.download));
+    // The download folder is still one source, not one per catalog.
+    let watched = watched_paths(&lib);
+    assert_eq!(watched.len(), 2, "{watched:?}");
+    assert!(watched.contains(&folder.to_string_lossy().into_owned()));
+
+    // Each is installed now, with its own faces, and nothing is fetched.
+    let hits = server.hits();
+    let again = install_lato(&lib).expect("Google Fonts again");
+    assert!(again.already_installed);
+    assert_eq!(again.faces, google.faces);
+    let again = install_fontshare_lato(&lib).expect("Fontshare again");
+    assert!(again.already_installed);
+    assert_eq!(again.faces, fontshare.faces);
+    assert_eq!(server.hits(), hits, "no request");
+}
+
+#[test]
+fn a_family_installed_before_stays_in_its_folder_and_is_not_the_other_catalogs() {
+    // Before E55.3 an install wrote `<download folder>/<Family>`: a download
+    // into a source at the download folder writes the same folder, with
+    // Google Fonts' provenance.
+    let (lib, _source, server) = downloading_both("catalog-install-earlier");
+    let folder = lib.dir.path().join("Font Fu Fonts");
+    std::fs::create_dir_all(&folder).expect("folder");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.to_string_lossy().into_owned(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    let (earlier, _) = download_lato(&lib, source.id);
+    assert_eq!(
+        earlier.download.folder,
+        folder.join("Lato").to_string_lossy()
+    );
+    set_download_folder(&lib, &folder);
+
+    // Found where it is: not downloaded again, nothing moved or renamed.
+    let hits = server.hits();
+    let got = install_lato(&lib).expect("install");
+    assert!(got.already_installed);
+    assert_eq!(server.hits(), hits, "no request");
+    assert_eq!(got.download, earlier.download, "the recorded provenance");
+    assert_eq!(got.faces.len(), 2);
+    assert_eq!(
+        listing_of(&folder.join("Lato")),
+        ["Lato-Bold.ttf", "Lato-Regular.ttf"]
+    );
+    assert_eq!(listing_of(&folder), ["Lato"], "no catalog folder made");
+
+    // Those files are Google Fonts': Fontshare's Lato is not installed by them.
+    let fontshare = install_fontshare_lato(&lib).expect("Fontshare");
+    assert!(!fontshare.already_installed, "{fontshare:?}");
+    assert_eq!(
+        fontshare.download.folder,
+        folder.join("Fontshare").join("Lato").to_string_lossy()
+    );
+    assert_eq!(fontshare.faces.len(), 1);
+    assert_eq!(fontshare.download.source, source.id, "the same source");
+    assert_eq!(
+        listing_of(&folder.join("Lato")),
+        ["Lato-Bold.ttf", "Lato-Regular.ttf"],
+        "left as it was"
+    );
 }
 
 #[test]
@@ -7342,7 +7537,16 @@ fn with_the_fetch_switch_off_a_missing_font_stays_unmatched_and_nothing_is_fetch
     assert_eq!(res.unmatched, lato_fonts());
     assert!(res.fetched.is_empty());
     assert_eq!(server.hits(), hits, "no request");
-    assert!(listing_of_or_none(&lib.dir.path().join("Font Fu Fonts").join("Lato")).is_empty());
+    assert!(
+        listing_of_or_none(
+            &lib.dir
+                .path()
+                .join("Font Fu Fonts")
+                .join("Google Fonts")
+                .join("Lato")
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -7411,7 +7615,12 @@ fn a_missing_font_whose_family_is_cached_is_downloaded_once_activated_and_matche
     assert!(offer.contains(&res.matched[1].face), "{offer:?}");
 
     // The files went into the download folder, recorded as a download.
-    let folder = lib.dir.path().join("Font Fu Fonts").join("Lato");
+    let folder = lib
+        .dir
+        .path()
+        .join("Font Fu Fonts")
+        .join("Google Fonts")
+        .join("Lato");
     assert_eq!(listing_of(&folder), ["Lato-Bold.ttf", "Lato-Regular.ttf"]);
     assert_eq!(
         lib.api.list_catalog_downloads().expect("downloads").len(),
@@ -7495,7 +7704,14 @@ fn a_failing_download_leaves_its_font_unmatched_and_the_others_are_fine() {
     assert_eq!(res.outcomes.len(), 1);
     assert_eq!(res.outcomes[0].outcome, OutcomeStatus::Done);
     assert!(
-        listing_of_or_none(&lib.dir.path().join("Font Fu Fonts").join("Lato")).is_empty(),
+        listing_of_or_none(
+            &lib.dir
+                .path()
+                .join("Font Fu Fonts")
+                .join("Google Fonts")
+                .join("Lato")
+        )
+        .is_empty(),
         "a failed request writes nothing"
     );
 }

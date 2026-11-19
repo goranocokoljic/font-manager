@@ -120,7 +120,8 @@ off until you turn it on:
 When a document needs a font that your library does not have, Font Fu looks
 for its family in the font lists of the catalogs you turned on. It looks only in
 the lists it already has, so the search itself does not use the internet. When it
-finds the family, it downloads it into the folder for installed fonts, adds it to
+finds the family, it downloads it into the folder of its catalog in the folder
+for installed fonts (for example `Font Fu Fonts/Google Fonts/Alegreya`), adds it to
 your library and activates the font for the document. The plugin tells you, for
 example "Downloaded 1 family from Google Fonts: Alegreya".
 

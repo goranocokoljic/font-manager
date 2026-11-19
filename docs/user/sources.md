@@ -113,6 +113,22 @@ Font Fu remembers the folder. It is the one folder that Font Fu puts
 fonts into without asking each time. It is never a system font folder. Later,
 **Install** starts at once.
 
+#### Where installed fonts are
+
+Each catalog has its own folder inside the folder for installed fonts:
+**Google Fonts** and **Fontshare**. Each family goes into a folder with its
+name, inside the folder of its catalog. For example:
+
+- `Documents/Font Fu Fonts/Google Fonts/Alegreya`
+- `Documents/Font Fu Fonts/Fontshare/Satoshi`
+
+These folder names are always in English, in every language of the app. A
+family with the same name in both catalogs gets two folders.
+
+A family that you installed before Font Fu used these folders stays where it
+is, for example `Documents/Font Fu Fonts/Alegreya`. Font Fu still knows it is
+installed. It does not move or rename the files.
+
 A line above the list tells you what happens: downloading, adding to the
 library, then the result, for example "Installed Alegreya: 6 styles active".
 Font Fu adds the folder to your library if it is not there yet. It
@@ -134,8 +150,8 @@ chosen and at least one catalog is on.
 
 Font Fu downloads only from the catalogs you turned on. It looks for the
 family only in the font lists it already has; refresh a catalog to get its
-newest list. The family goes into the folder for installed fonts, the same as
-**Install**. See [Fonts a document needs](activation.md#fonts-a-document-needs).
+newest list. The family goes into the folder of its catalog in the folder for
+installed fonts, the same as **Install**. See [Fonts a document needs](activation.md#fonts-a-document-needs).
 
 ### Download a family into a folder you choose
 
