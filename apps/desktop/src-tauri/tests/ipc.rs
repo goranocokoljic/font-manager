@@ -1636,7 +1636,6 @@ mod install_on_quit {
     use super::*;
     use fm_app_lib::menu::{self, MENU_ID_QUIT};
     use fm_app_lib::quit_install::{self, OnQuit};
-    use fm_app_lib::tray;
     use fm_core::update::on_quit::QuitInstall;
     use fm_platform::AppPaths;
     use tauri::Manager;
@@ -1698,6 +1697,7 @@ mod install_on_quit {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn the_trays_quit_is_the_users_quit() {
+        use fm_app_lib::tray;
         let (app, _store, _home) = app_with_kept_update("tray").unwrap();
         let api: Arc<dyn fm_api::Api> = Arc::new(MockApi::new());
         let _menu = tray::menu(app.handle(), Arc::clone(&api)).unwrap();
