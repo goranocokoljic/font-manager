@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
-import type { ApiError, AvailableUpdate, Event, UpdateNotice, UpdateSupport } from '../api/types';
+import type {
+  ApiError,
+  AvailableUpdate,
+  Event,
+  UpdateNotice,
+  UpdateStatus as ShellUpdateStatus,
+  UpdateSupport,
+} from '../api/types';
 import { t } from '../i18n';
 import { useToastStore } from './toast';
 
@@ -35,6 +42,12 @@ export const useUpdatesStore = defineStore('updates', () => {
   /** The dialog asks the second time, for a major update. */
   const confirmingMajor = ref(false);
   const error = ref<ApiError | null>(null);
+  /**
+   * What Settings → About shows under the update control (E55.10): the level, the levels
+   * offered, the last check and the version waiting for the quit. Read from the shell;
+   * `updateStatusChanged` says when to read it again.
+   */
+  const overview = ref<ShellUpdateStatus | null>(null);
   /** The update on offer came from the shell's automatic check, not from a click. */
   const foundQuietly = ref(false);
   /** The user dismissed the notice; it stays away until the next start (the store is new). */
@@ -65,6 +78,16 @@ export const useUpdatesStore = defineStore('updates', () => {
     return support.value;
   }
 
+  /** Reads what the update control shows; a failure keeps the last answer. */
+  async function loadOverview(): Promise<ShellUpdateStatus | null> {
+    try {
+      overview.value = await useClient().updateStatus();
+    } catch {
+      // The control keeps what it showed.
+    }
+    return overview.value;
+  }
+
   /** "Check for updates": asks the release server. A found update opens the dialog. */
   async function check(): Promise<void> {
     if (status.value === 'checking' || status.value === 'installing') return;
@@ -84,6 +107,7 @@ export const useUpdatesStore = defineStore('updates', () => {
       status.value = 'idle';
       error.value = e as ApiError;
     }
+    void loadOverview();
   }
 
   /** Records an update the shell found by itself; nothing opens. */
@@ -116,6 +140,8 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   function onEvent(event: Event): void {
     if (event.type === 'updateAvailable') offer(event.update);
+    if (event.type === 'updateStatusChanged' || event.type === 'updateAvailable')
+      void loadOverview();
     if (event.type === 'updateNotice') {
       say(event.notice);
       // Said now: the shell keeps it for the next start only until it is read.
@@ -206,9 +232,11 @@ export const useUpdatesStore = defineStore('updates', () => {
     open,
     confirmingMajor,
     error,
+    overview,
     notice,
     dot,
     loadSupport,
+    loadOverview,
     check,
     start,
     stop,

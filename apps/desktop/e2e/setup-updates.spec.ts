@@ -74,7 +74,9 @@ test('on: one question, preselected; no request until Finish; then the first che
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await openAbout(page);
   const updates = page.getByRole('region', { name: 'Updates' });
-  await expect(updates.getByRole('checkbox', { name: /Check automatically/ })).toBeChecked();
+  await expect(
+    updates.getByRole('radio', { name: 'Tell me when there is an update' }),
+  ).toBeChecked();
   await expect(updates).toContainText('Version 0.1.1 is available.');
 });
 
@@ -87,7 +89,7 @@ test("off: the setting stays off and 'Check for updates' works as before", async
   await openAbout(page);
   expect(await checks(page)).toEqual([]);
   const updates = page.getByRole('region', { name: 'Updates' });
-  await expect(updates.getByRole('checkbox', { name: /Check automatically/ })).not.toBeChecked();
+  await expect(updates.getByRole('radio', { name: 'Off' })).toBeChecked();
   await updates.getByRole('button', { name: 'Check for updates' }).click();
   await expect(page.getByRole('dialog', { name: 'Font Fu 0.1.1 is available' })).toBeVisible();
   expect(await checks(page)).toEqual(['manual']);

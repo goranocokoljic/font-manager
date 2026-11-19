@@ -13,12 +13,17 @@
 
 use std::sync::{Mutex, OnceLock, PoisonError};
 
-use fm_api::update::{AvailableUpdate, InstallUpdateRequest, UpdateCheck, UpdateSupport};
-use fm_api::{ApiError, ApiResult, ErrorCode};
-use tauri::{AppHandle, Manager, Runtime, State};
+use fm_api::update::{
+    AvailableUpdate, InstallUpdateRequest, UpdateCheck, UpdateCheckOutcome, UpdateStatus,
+    UpdateSupport,
+};
+use fm_api::{ApiError, ApiResult, ErrorCode, Event};
+use fm_core::update::last_check::LastCheck;
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_updater::{Error as UpdaterError, Update, UpdaterExt};
 
-use crate::AppState;
+use crate::quit_install::OnQuit;
+use crate::{AppState, EVENT_CHANNEL};
 
 /// Whether this copy of the app updates itself, and the host of the release
 /// server it asks.
@@ -183,21 +188,87 @@ pub async fn check_and_keep<R: Runtime>(app: &AppHandle<R>) -> ApiResult<UpdateC
         return Err(not_offered(&support));
     }
     let pending = app.state::<PendingUpdate>();
+    let offer = ask(app).await;
+    let shown = offer
+        .as_ref()
+        .map(|o| o.as_ref().map(|(shown, _)| shown.clone()))
+        .map_err(Clone::clone);
+    if let Some(state) = app.try_state::<AppState>() {
+        record_check(state.last_check(), &shown);
+    }
+    status_changed(app);
+    let offer = offer?;
+    pending.set(offer.clone());
+    Ok(UpdateCheck {
+        current_version: app.package_info().version.to_string(),
+        update: offer.map(|(shown, _)| shown),
+    })
+}
+
+/// One request to the release server: the update it offers, if newer.
+async fn ask<R: Runtime>(app: &AppHandle<R>) -> ApiResult<Option<(AvailableUpdate, Update)>> {
     let found = app
         .updater()
         .map_err(check_error)?
         .check()
         .await
         .map_err(check_error)?;
-    let offer = match found {
+    Ok(match found {
         Some(update) => available(&update)?.map(|shown| (shown, update)),
         None => None,
-    };
-    pending.set(offer.clone());
-    Ok(UpdateCheck {
-        current_version: app.package_info().version.to_string(),
-        update: offer.map(|(shown, _)| shown),
     })
+}
+
+/// Records in `last` that a check ran now and answered `result` (E55.10);
+/// nothing without app folders. Returns whether it was recorded.
+pub fn record_check(last: Option<&LastCheck>, result: &ApiResult<Option<AvailableUpdate>>) -> bool {
+    let Some(last) = last else {
+        return false;
+    };
+    match last.record(UpdateCheckOutcome::of(result)) {
+        Ok(_) => true,
+        Err(e) => {
+            tracing::warn!(error = %e, "the last update check was not recorded");
+            false
+        }
+    }
+}
+
+/// Tells the UI that what Settings → About shows under the update control
+/// changed (E55.10).
+pub fn status_changed<R: Runtime>(app: &AppHandle<R>) {
+    if let Err(e) = app.emit(EVENT_CHANNEL, Event::UpdateStatusChanged) {
+        tracing::warn!(error = %e, "could not tell the UI the update status changed");
+    }
+}
+
+/// What Settings → About shows under the update control (E55.10): the level,
+/// the levels offered, the last check and the version waiting for the quit.
+/// No request is made.
+#[tauri::command]
+pub fn update_status<R: Runtime>(app: AppHandle<R>) -> UpdateStatus {
+    let state = app.try_state::<AppState>();
+    let settings = state
+        .as_ref()
+        .map(|s| s.current_settings())
+        .unwrap_or_default();
+    let last_check = state
+        .as_ref()
+        .and_then(|s| s.last_check().and_then(LastCheck::read));
+    let pending = app
+        .try_state::<PendingUpdate>()
+        .and_then(|p| p.get())
+        .map(|(shown, _)| shown);
+    let staged = app
+        .try_state::<OnQuit>()
+        .and_then(|o| o.store().and_then(|s| s.staged_version()));
+    fm_core::update::status(
+        &settings,
+        &support(),
+        last_check,
+        pending.as_ref(),
+        staged.as_deref(),
+    )
 }
 
 /// Installs the update the last check found, after the user confirmed it

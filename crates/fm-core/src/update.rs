@@ -1,11 +1,36 @@
 //! Whether this copy of the app offers "Check for updates" (E18.2, ADR 0012),
 //! the platform note that says why not, and the release server it asks
 //! (E55.7). [`on_quit`]: the files of "Install updates when I quit" (E55.9).
+//! [`last_check`] and [`status`]: what Settings → About shows under the
+//! update control (E55.10).
 
+pub mod last_check;
 pub mod on_quit;
 
-use fm_api::update::UpdateSupport;
+use fm_api::settings::Settings;
+use fm_api::update::{
+    AvailableUpdate, LastUpdateCheck, UpdateLevel, UpdateStatus, UpdateSupport, update_levels,
+};
 use fm_platform::Distribution;
+
+/// What Settings → About shows under the update control (E55.10): the level
+/// `settings` are at, the levels a copy with `support` offers, the
+/// `last_check`, and the version waiting for the quit (the kept package of
+/// `staged` that the next quit installs for the update on offer, `pending`).
+pub fn status(
+    settings: &Settings,
+    support: &UpdateSupport,
+    last_check: Option<LastUpdateCheck>,
+    pending: Option<&AvailableUpdate>,
+    staged: Option<&str>,
+) -> UpdateStatus {
+    UpdateStatus {
+        level: UpdateLevel::of(settings),
+        levels: update_levels(support),
+        last_check,
+        waiting: on_quit::waiting_version(settings, support, pending, staged),
+    }
+}
 
 /// What Settings shows for a copy installed as `distribution`: the update
 /// section for the release installers and the AppImage; a platform note
@@ -106,6 +131,53 @@ pub fn release_notes_url<'a>(
 
 #[cfg(test)]
 mod tests {
+    use fm_api::update::UpdateCheckOutcome;
+
+    use super::*;
+
+    #[test]
+    fn the_status_names_the_level_the_last_check_and_what_waits() {
+        let on_quit = Settings {
+            check_updates_automatically: true,
+            install_updates_on_quit: true,
+            ..Settings::default()
+        };
+        let offered = support(&Distribution::Installer);
+        let minor = AvailableUpdate::new("1.4.0", "1.5.0", None, None)
+            .expect("valid")
+            .expect("newer");
+        let last = LastUpdateCheck {
+            at: "2026-11-19T08:00:00Z".into(),
+            outcome: UpdateCheckOutcome::Found {
+                version: "1.5.0".into(),
+            },
+        };
+        let shown = status(
+            &on_quit,
+            &offered,
+            Some(last.clone()),
+            Some(&minor),
+            Some("1.5.0"),
+        );
+        assert_eq!(shown.level, UpdateLevel::InstallOnQuit);
+        assert_eq!(shown.levels.len(), 3);
+        assert_eq!(shown.last_check, Some(last));
+        assert_eq!(shown.waiting.as_deref(), Some("1.5.0"));
+        // "Tell me": the same package does not wait.
+        let notify = Settings {
+            install_updates_on_quit: false,
+            ..on_quit.clone()
+        };
+        let shown = status(&notify, &offered, None, Some(&minor), Some("1.5.0"));
+        assert_eq!(shown.level, UpdateLevel::Notify);
+        assert_eq!(shown.waiting, None);
+        // A Flatpak offers no level, so the control is hidden.
+        let flatpak = support(&Distribution::Flatpak);
+        let shown = status(&on_quit, &flatpak, None, Some(&minor), Some("1.5.0"));
+        assert!(shown.levels.is_empty());
+        assert_eq!(shown.waiting, None);
+    }
+
     #[test]
     fn the_notes_link_is_the_github_release_page_of_the_version() {
         let shipped =
@@ -130,8 +202,6 @@ mod tests {
             None
         );
     }
-
-    use super::*;
 
     #[test]
     fn installers_and_the_appimage_offer_updates_without_a_note() {

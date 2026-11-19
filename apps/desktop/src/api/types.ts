@@ -1242,7 +1242,13 @@ update: AvailableUpdate } |
  */
 { type: "updateNotice"; 
 /**  What to say. */
-notice: UpdateNotice };
+notice: UpdateNotice } | 
+/**
+ *  What Settings → About shows under the update control changed (E55.10):
+ *  a check ran, or an update downloaded and waits for the quit. The UI
+ *  reads `update_status` again.
+ */
+{ type: "updateStatusChanged" };
 
 /**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
 export type ExportLayoutPngRequest = {
@@ -2391,6 +2397,17 @@ export type LanguagePreset = {
 	 *  is in the preset's characters. `None` when the preset has none (E42.10).
 	 */
 	sampleGlyphs?: string | null,
+};
+
+/**
+ *  The last check of the release server, manual or automatic, kept across
+ *  starts.
+ */
+export type LastUpdateCheck = {
+	/**  When it ran. */
+	at: string,
+	/**  What it found. */
+	outcome: UpdateCheckOutcome,
 };
 
 /**  A layout: a list of text blocks, top to bottom. */
@@ -3634,6 +3651,13 @@ export type SettingsUpdate = {
 	 *  it on is refused where this copy does not update itself.
 	 */
 	installUpdatesOnQuit?: boolean | null,
+	/**
+	 *  The update control of Settings → About (E55.10): sets
+	 *  [`Self::check_updates_automatically`] and
+	 *  [`Self::install_updates_on_quit`] together
+	 *  ([`crate::update::UpdateLevel::settings`]) and wins over them.
+	 */
+	updateLevel?: UpdateLevel | null,
 	/**  The language of the UI. */
 	language?: Language | null,
 	/**
@@ -4145,6 +4169,19 @@ export type UpdateCheck = {
 	update?: AvailableUpdate | null,
 };
 
+/**  What a check of the release server found. */
+export type UpdateCheckOutcome = 
+/**  The running version is the newest. */
+{ type: "upToDate" } | 
+/**  A newer version is on offer. */
+{ type: "found"; 
+/**  The version on offer. */
+version: string } | 
+/**  The release server could not be reached or answered with an error. */
+{ type: "failed"; 
+/**  One user-facing sentence on why. */
+message: string };
+
 /**
  *  Replace the rule of a smart collection (E14.1). The rule is checked as
  *  `create_collection` checks it.
@@ -4170,6 +4207,26 @@ export type UpdateKind =
 "major";
 
 /**
+ *  The one control for updates in Settings → About (E55.10): three levels
+ *  over the two settings "Check automatically" and "Install updates when I
+ *  quit", so the UI never shows a combination that does nothing or that
+ *  fm-api refuses.
+ */
+export type UpdateLevel = 
+/**
+ *  No automatic check: the app asks the release server only when the
+ *  user clicks "Check for updates".
+ */
+"off" | 
+/**  Check automatically and tell the user quietly when there is an update. */
+"notify" | 
+/**
+ *  Check automatically, download a patch or minor update and install it
+ *  when the user quits. A major update always asks first.
+ */
+"installOnQuit";
+
+/**
  *  What the app says once about an update installed when the user quit
  *  (E55.9): at the next start whether it installed, or while it runs that a
  *  package downloaded for it was refused.
@@ -4193,6 +4250,24 @@ notesUrl?: string | null } |
 version: string; 
 /**  One user-facing sentence on why. */
 message: string };
+
+/**  What Settings → About shows under the update control (E55.10). */
+export type UpdateStatus = {
+	/**  The level the settings are at ([`UpdateLevel::of`]). */
+	level: UpdateLevel,
+	/**
+	 *  The levels the control offers ([`update_levels`]); empty where this
+	 *  copy does not update itself.
+	 */
+	levels: UpdateLevel[],
+	/**  The last check; `None` when the app never checked. */
+	lastCheck?: LastUpdateCheck | null,
+	/**
+	 *  The version downloaded and waiting to install when the user quits;
+	 *  `None` when nothing waits.
+	 */
+	waiting?: string | null,
+};
 
 /**  Whether this copy of the app updates itself. */
 export type UpdateSupport = {

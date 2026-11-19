@@ -1592,8 +1592,7 @@
     "checking": "Checking for updates…",
     "upToDate": "Font Fu is up to date.",
     "available": "Version {version} is available.",
-    "checkAutomatically": "Check automatically when Font Fu starts",
-    "checkAutomaticallyHint": "Font Fu contacts its release server only when you check or, while this is on, at start and once a day. Nothing installs until you confirm it, unless you turn on the switch below.",
+    "checkAutomaticallyHint": "With an automatic level, Font Fu contacts its release server at start and once a day; otherwise only when you check. Nothing installs until you confirm it, unless you choose to install when you quit.",
     "notice": {
       "label": "Update available",
       "message": "Font Fu {version} is available.",
@@ -1618,8 +1617,22 @@
       "installVersion": "Install version {version}",
       "installAndRestart": "Install and restart"
     },
-    "installOnQuit": "Install updates when I quit",
-    "installOnQuitHint": "Works while automatic checks are on. A bug-fix or feature update downloads in the background and installs when you quit Font Fu; Font Fu does not start again by itself. A major update always asks you first."
+    "level": {
+      "legend": "Automatic updates",
+      "off": "Off",
+      "notify": "Tell me when there is an update",
+      "installOnQuit": "Download updates and install them when I quit",
+      "majorAsks": "A major version always asks you first.",
+      "sessionEnds": "Fonts activated for the session end when you quit, as they always do."
+    },
+    "lastCheck": {
+      "never": "Font Fu has not checked for updates yet.",
+      "upToDate": "Last checked {when}: Font Fu was up to date.",
+      "found": "Last checked {when}: version {version} was available.",
+      "failed": "Last checked {when}: the check failed. {message}"
+    },
+    "waiting": "{version} will be installed when you quit.",
+    "installNow": "Install now"
   },
   "family": {
     "library": "Library",

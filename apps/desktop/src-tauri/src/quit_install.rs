@@ -161,7 +161,10 @@ pub fn on_found<R: Runtime>(app: &AppHandle<R>, found: &AvailableUpdate) {
         };
         match downloaded {
             Ok(bytes) => match store.stage(&version, &bytes) {
-                Ok(()) => tracing::info!(%version, "update downloaded; it installs when you quit"),
+                Ok(()) => {
+                    tracing::info!(%version, "update downloaded; it installs when you quit");
+                    updater::status_changed(&app);
+                }
                 Err(e) => tracing::warn!(error = %e, "the downloaded update was not kept"),
             },
             Err(e) if updater::is_signature_error(&e) => {

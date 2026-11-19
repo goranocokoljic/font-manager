@@ -114,6 +114,8 @@ pub struct AppState {
     /// The files of "Install updates when I quit" (E55.9); without them
     /// nothing is downloaded or installed at quit.
     quit_install: Option<fm_core::update::on_quit::QuitInstall>,
+    /// The record of the last update check (E55.10), in the same app folders.
+    last_check: Option<fm_core::update::last_check::LastCheck>,
 }
 
 /// The local API endpoint while it runs, and whether the quit path stopped it.
@@ -137,6 +139,7 @@ impl AppState {
             endpoint: Arc::default(),
             ipc: None,
             quit_install: None,
+            last_check: None,
         }
     }
 
@@ -152,6 +155,7 @@ impl AppState {
             endpoint: Arc::default(),
             ipc: None,
             quit_install: None,
+            last_check: None,
         }
     }
 
@@ -163,12 +167,18 @@ impl AppState {
         self
     }
 
-    /// Keeps an update for "Install updates when I quit" (E55.9) in the app
-    /// folders `paths`.
+    /// Keeps an update for "Install updates when I quit" (E55.9) and the
+    /// record of the last update check (E55.10) in the app folders `paths`.
     #[must_use]
     pub fn with_quit_install(mut self, paths: &AppPaths) -> Self {
         self.quit_install = Some(fm_core::update::on_quit::QuitInstall::new(paths));
+        self.last_check = Some(fm_core::update::last_check::LastCheck::new(paths));
         self
+    }
+
+    /// The record of the last update check; `None` without app folders.
+    pub fn last_check(&self) -> Option<&fm_core::update::last_check::LastCheck> {
+        self.last_check.as_ref()
     }
 
     /// Shows a tray item from `tray` when the app starts ([`tray::install`]).
@@ -1740,6 +1750,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             updater::check_for_update,
             updater::install_update,
             updater::pending_update,
+            updater::update_status,
             quit_install::take_update_notice
         ])
 }

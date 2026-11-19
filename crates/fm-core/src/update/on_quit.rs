@@ -103,6 +103,23 @@ pub fn exit_step(
     }
 }
 
+/// The version downloaded and waiting to install when the user quits, as
+/// Settings → About shows it (E55.10): the package of `staged` would install
+/// at the user's next quit ([`exit_step`] with the same `settings`,
+/// `support` and `pending`). `None` when nothing waits or the kept package
+/// no longer applies.
+pub fn waiting_version(
+    settings: &Settings,
+    support: &UpdateSupport,
+    pending: Option<&AvailableUpdate>,
+    staged: Option<&str>,
+) -> Option<String> {
+    match exit_step(true, settings, support, pending, staged) {
+        ExitStep::Install(version) => Some(version),
+        ExitStep::Keep | ExitStep::Discard => None,
+    }
+}
+
 const PACKAGE: &str = "update.pkg";
 const PACKAGE_INFO: &str = "update.json";
 const INSTALL_MARKER: &str = "update-install.json";
@@ -292,7 +309,7 @@ fn remove(path: &Path) {
 
 /// Writes `data` through a temporary file, so a crash never leaves half a
 /// package or record in place.
-fn write_atomic(path: &Path, data: &[u8], failed: &str) -> FmResult<()> {
+pub(super) fn write_atomic(path: &Path, data: &[u8], failed: &str) -> FmResult<()> {
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, data).map_err(|e| FmError::io(failed, &tmp, &e))?;
     fs::rename(&tmp, path).map_err(|e| {
@@ -504,6 +521,43 @@ mod tests {
             exit_step(true, &on, &support(true), Some(&minor), None),
             ExitStep::Keep
         );
+    }
+
+    #[test]
+    fn a_package_waits_only_while_the_next_quit_would_install_it() {
+        let on = settings(true, true);
+        let minor = update("1.4.0", "1.5.0");
+        assert_eq!(
+            waiting_version(&on, &support(true), Some(&minor), Some("1.5.0")).as_deref(),
+            Some("1.5.0")
+        );
+        let other = update("1.4.0", "1.5.1");
+        let major = update("1.4.0", "2.0.0");
+        for (s, sup, pending, staged) in [
+            // Nothing downloaded yet.
+            (on.clone(), support(true), Some(&minor), None),
+            // The level is "Tell me", or off.
+            (
+                settings(true, false),
+                support(true),
+                Some(&minor),
+                Some("1.5.0"),
+            ),
+            (
+                settings(false, true),
+                support(true),
+                Some(&minor),
+                Some("1.5.0"),
+            ),
+            // The copy no longer updates itself.
+            (on.clone(), support(false), Some(&minor), Some("1.5.0")),
+            // The offer is gone, another version, or major.
+            (on.clone(), support(true), None, Some("1.5.0")),
+            (on.clone(), support(true), Some(&other), Some("1.5.0")),
+            (on.clone(), support(true), Some(&major), Some("2.0.0")),
+        ] {
+            assert_eq!(waiting_version(&s, &sup, pending, staged), None);
+        }
     }
 
     #[test]
