@@ -532,4 +532,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-11-19
 
+- [E55.4 #643] crates/fm-core/src/api/tests.rs:1383 — the new "inside a source" refusal of add_source is tested only with a watched outer folder, not with the library folder or the system source as the outer one.
+- [E55.4 #643] crates/fm-core/src/api/install.rs:240 — `download_source` adds a watched source through the index directly, so a download folder inside a library-folder source still becomes a nested source and bypasses add_source's new refusal.
+- [E55.4 #643] crates/fm-core/src/api.rs:911 — the same folder spelled differently (case on Windows/macOS, a trailing slash) skips the new nested check and relies on the index's exact string match for "already in the library".
 - [E55.3 #642] crates/fm-api/src/catalog.rs:37 — `CatalogId::name()` returns the same two strings as `catalog_folder_name`, `mock_catalog_folder` and `MOCK_CATALOG_FOLDERS`; three copies to keep in step if a catalog is added.

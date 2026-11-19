@@ -28,6 +28,7 @@ import { useAppStore } from '../stores/app';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
+import { useSetupStore } from '../stores/setup';
 import { useSourcesStore } from '../stores/sources';
 import { useThemesStore } from '../stores/themes';
 import { useToastStore } from '../stores/toast';
@@ -41,6 +42,7 @@ const app = useAppStore();
 const toast = useToastStore();
 const updates = useUpdatesStore();
 const themes = useThemesStore();
+const setup = useSetupStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -470,6 +472,19 @@ function chooseLanguage(value: string): void {
               />
             </span>
           </div>
+          <div class="field">
+            <span>{{ t('settings.advanced.setup') }}</span>
+            <span>
+              <UiButton
+                aria-describedby="run-setup-hint"
+                data-testid="settings-run-setup"
+                @click="setup.runAgain()"
+              >
+                {{ t('settings.advanced.runSetup') }}
+              </UiButton>
+            </span>
+          </div>
+          <p id="run-setup-hint" class="note">{{ t('settings.advanced.runSetupHint') }}</p>
         </template>
 
         <LocalApiSettings v-else-if="current === 'localApi'" />

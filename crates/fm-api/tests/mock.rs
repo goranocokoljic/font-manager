@@ -123,6 +123,20 @@ fn sources_reject_bad_input_with_structured_errors() {
         })
         .unwrap_err();
     assert_eq!(dup.code, ErrorCode::Conflict);
+    // A folder inside a source is refused as fm-core refuses it (E55.4).
+    let inside = api
+        .add_source(AddSourceRequest {
+            path: "/Users/demo/Fonts/Client".into(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .unwrap_err();
+    assert_eq!(inside.code, ErrorCode::Conflict);
+    assert!(inside.message.contains("is inside /Users/demo/Fonts"));
+    api.add_source(AddSourceRequest {
+        path: "/Users/demo/Fonts-old".into(),
+        mode: ImportMode::IndexInPlace,
+    })
+    .expect("a sibling is not inside");
     assert_eq!(
         api.remove_source(SourceId(2)).unwrap_err().code,
         ErrorCode::PermissionDenied

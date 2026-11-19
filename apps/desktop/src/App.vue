@@ -6,6 +6,7 @@ import CommandPalette from './components/CommandPalette.vue';
 import ShortcutSheet from './components/ShortcutSheet.vue';
 import TextFieldMenu from './components/TextFieldMenu.vue';
 import McpConfirmToast from './components/McpConfirmToast.vue';
+import SetupView from './components/SetupView.vue';
 import ToastMessage from './components/ToastMessage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
 import { HELP_PAGES } from './help';
@@ -13,6 +14,7 @@ import { direction, locale, resolveLocale, setLocale, t, type MessageKey } from 
 import { ACTIONS } from './keyboard/keymap';
 import { useActions, useCommandsStore, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
+import { useSetupStore } from './stores/setup';
 import { useThemesStore } from './stores/themes';
 import { useUpdatesStore } from './stores/updates';
 import { useWatchNoticeStore } from './stores/watchNotice';
@@ -21,7 +23,12 @@ const settings = useSettingsStore();
 const updates = useUpdatesStore();
 const themes = useThemesStore();
 const commands = useCommandsStore();
+const setup = useSetupStore();
 const router = useRouter();
+
+// The first-run setup (E55.4) takes the library's place while a step is open; the main window
+// waits for the one `setupStatus` answer so the library does not flash before it.
+onMounted(() => void setup.load());
 
 useShortcuts();
 // Getters: the palette shows the titles in the language chosen now.
@@ -141,7 +148,10 @@ watch(
 </script>
 
 <template>
-  <RouterView />
+  <template v-if="setup.ready">
+    <SetupView v-if="setup.visible" />
+    <RouterView v-else />
+  </template>
   <CommandPalette />
   <ShortcutSheet />
   <ToastMessage />

@@ -505,6 +505,25 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await violations(page), 'menu').toEqual([]);
     });
 
+    test('the first-run setup, empty and with folders, first start and from Settings', async ({
+      page,
+    }) => {
+      await open(page, '/', '?mockSetup=first');
+      const setup = page.getByRole('main', { name: 'First-run setup' });
+      await expect(setup).toBeVisible();
+      await inTheme(page);
+      expect(await violations(page), 'empty').toEqual([]);
+      expect(await unnamedControls(page), 'empty').toEqual([]);
+      await setup.getByRole('button', { name: 'Add folder…' }).click();
+      await expect(setup.getByRole('listitem', { name: 'Added 1' })).toBeVisible();
+      expect(await violations(page), 'with a folder').toEqual([]);
+      await open(page, '/settings?section=advanced');
+      await page.getByRole('button', { name: 'Run setup again' }).click();
+      await expect(setup).toBeVisible();
+      expect(await violations(page), 'from Settings').toEqual([]);
+      expect(await unnamedControls(page), 'from Settings').toEqual([]);
+    });
+
     test('every Settings tab', async ({ page }) => {
       await open(page, '/settings');
       await inTheme(page);

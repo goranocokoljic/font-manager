@@ -96,12 +96,25 @@ export const useSourcesStore = defineStore('sources', () => {
   async function add(): Promise<void> {
     const path = await attempt(() => useClient().pickFolder(t('sources.addFolderTitle')));
     if (!path) return;
-    const source = await attempt(() =>
-      useClient().addSource({ path, mode: { kind: 'indexInPlace' } }),
-    );
-    if (!source) return;
+    await attempt(() => addPath(path));
+  }
+
+  /**
+   * Adds a folder as a watched source indexed in place and starts its scan. A refusal
+   * (already added, inside another source, not there) is thrown to the caller, which
+   * shows it next to that folder (the setup's rows, E55.4).
+   */
+  async function addPath(path: string): Promise<Source> {
+    const source = await useClient().addSource({ path, mode: { kind: 'indexInPlace' } });
     sources.value = [...sources.value, source];
     await rescan(source.id);
+    return source;
+  }
+
+  /** Removes a source; a refusal is thrown to the caller. Its files stay where they are. */
+  async function removeOrThrow(source: SourceId): Promise<void> {
+    await useClient().removeSource(source);
+    sources.value = sources.value.filter((s) => s.id !== source);
   }
 
   async function setPaused(source: SourceId, paused: boolean): Promise<void> {
@@ -111,11 +124,7 @@ export const useSourcesStore = defineStore('sources', () => {
 
   /** Removes a source from the library; its files stay where they are. */
   async function remove(source: SourceId): Promise<void> {
-    const done = await attempt(async () => {
-      await useClient().removeSource(source);
-      return true;
-    });
-    if (done) sources.value = sources.value.filter((s) => s.id !== source);
+    await attempt(() => removeOrThrow(source));
   }
 
   /** Shows the source's folder in the OS file manager (Settings › Sources, E50.13). */
@@ -146,6 +155,8 @@ export const useSourcesStore = defineStore('sources', () => {
     load,
     stop,
     add,
+    addPath,
+    removeOrThrow,
     rescan,
     setPaused,
     remove,
