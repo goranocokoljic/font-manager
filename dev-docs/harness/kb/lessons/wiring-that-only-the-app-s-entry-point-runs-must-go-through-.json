@@ -6,10 +6,11 @@
   "rationale": "E9.5 (#93): the native Help menu (criterion 2) was set with `.menu(help::menu).on_menu_event(...)` in `run()`, which no test calls; the menu-id helpers were tested, so removing the menu kept every test green.",
   "severity": "must",
   "status": "active",
-  "occurrences": 2,
+  "occurrences": 3,
   "source_issues": [
     93,
-    444
+    444,
+    648
   ],
   "file_globs": [
     "apps/desktop/src-tauri/src/**",
@@ -18,5 +19,5 @@
     "apps/desktop/e2e/**"
   ],
   "first_seen": "2026-10-19T03:00:42.420Z",
-  "last_seen": "2026-11-03T21:09:55.600Z"
+  "last_seen": "2026-11-19T09:15:30.545Z"
 }
