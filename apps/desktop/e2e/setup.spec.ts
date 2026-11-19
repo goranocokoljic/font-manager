@@ -107,6 +107,27 @@ test('reopened from Settings: every step with the current folders, a close butto
   await expect(page.getByRole('button', { name: 'Run setup again' })).toBeVisible();
 });
 
+test('a folder added in the setup reopened from Settings shows its scan and count', async ({
+  page,
+}) => {
+  // Settings subscribes the sources store to the scan events and stops it as it unmounts:
+  // the setup that takes its place must still see the scan of a folder added in it.
+  await page.goto('/#/settings?section=advanced');
+  await page.getByRole('button', { name: 'Run setup again' }).click();
+  await setup(page).getByRole('button', { name: 'Add another folder…' }).click();
+  const added = row(page, 'Added 1');
+  await expect(added.getByRole('progressbar', { name: 'Reading Added 1' })).toBeVisible();
+  await expect(added.getByRole('progressbar')).toHaveCount(0);
+  await expect(added.getByText(/^[1-9]\d* fonts?$/)).toBeVisible();
+  await expect(added.getByText('Read just now')).toBeVisible();
+  // Closed again, Settings › Sources still follows the events.
+  await setup(page).getByRole('button', { name: 'Close the setup' }).click();
+  await page.getByRole('tab', { name: 'Sources' }).click();
+  const card = page.getByRole('listitem', { name: 'Added 1', exact: true });
+  await card.getByRole('button', { name: 'Rescan Added 1' }).click();
+  await expect(card.getByRole('progressbar', { name: 'Scanning Added 1' })).toBeVisible();
+});
+
 test('the setup is keyboard-complete', async ({ page }) => {
   await firstStart(page);
   // Tab from the heading reaches Add folder…; Enter adds; Tab reaches Finish.

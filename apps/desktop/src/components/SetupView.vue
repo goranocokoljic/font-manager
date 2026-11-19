@@ -5,9 +5,11 @@
 // the setup store (`setupStatus`, decided in fm-core); this file only lays them out. Focus
 // moves to each step's heading (the step focuses it when it mounts, after the fade); reopened from Settings, the step names are links and a close
 // button appears.
+import { onBeforeUnmount, onMounted } from 'vue';
 import { t, type MessageKey } from '../i18n';
 import FmFade from '../motion/FmFade.vue';
 import { useSetupStore } from '../stores/setup';
+import { useSourcesStore } from '../stores/sources';
 import AppLogo from './AppLogo.vue';
 import SetupFoldersStep from './SetupFoldersStep.vue';
 import SetupLibraryPane from './SetupLibraryPane.vue';
@@ -16,6 +18,13 @@ import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 
 const setup = useSetupStore();
+const sources = useSourcesStore();
+
+// The folder rows show the scan through the sources store's events. The view this one
+// replaces (Settings, when the setup is reopened from there) stops that subscription as it
+// unmounts, before this view mounts, so the setup holds its own while it is on screen.
+onMounted(() => void sources.load());
+onBeforeUnmount(() => void sources.stop());
 
 const stepName = (step: string) => t(`setup.steps.${step}` as MessageKey);
 
