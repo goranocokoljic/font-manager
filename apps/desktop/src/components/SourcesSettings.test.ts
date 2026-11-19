@@ -11,7 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }
 let client: FmClient;
 
 beforeEach(() => {
-  client = createMockClient({ moreSources: mockMoreSources, scanStepMs: 5 });
+  client = createMockClient({ setup: 'none', moreSources: mockMoreSources, scanStepMs: 5 });
   setClient(client);
 });
 
@@ -116,7 +116,7 @@ describe('Settings › Sources (E50.13)', () => {
 
   it('shows Scanning and a progress bar fed by the scan events, then the new count', async () => {
     // Steps far apart: under a loaded test run the scan still lasts long enough to be seen.
-    client = createMockClient({ moreSources: mockMoreSources, scanStepMs: 100 });
+    client = createMockClient({ setup: 'none', moreSources: mockMoreSources, scanStepMs: 100 });
     setClient(client);
     const { wrapper } = await mountSources();
     await button(card(wrapper, 'Fonts'), 'Rescan Fonts').trigger('click');

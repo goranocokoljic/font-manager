@@ -267,6 +267,18 @@ export type Catalog = {
 	refreshedAt?: string | null,
 	/**  Families in the cache. */
 	familyCount: number,
+	/**
+	 *  The name of the catalog's folder inside the download folder
+	 *  (`Google Fonts`): an install lands in
+	 *  `<download folder>/<folder_name>/<Family>` (E55.3, E55.5). The same
+	 *  in every UI language. `None` from a version before E55.5.
+	 */
+	folderName?: string | null,
+	/**
+	 *  Where the catalog says under which license its fonts come, and so
+	 *  whether they may be shared (E55.5). `None` when it is not known.
+	 */
+	licenseUrl?: string | null,
 };
 
 /**  Where a downloaded family came from (its provenance). */

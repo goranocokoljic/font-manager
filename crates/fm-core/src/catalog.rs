@@ -194,6 +194,16 @@ pub fn catalog_folder_name(id: CatalogId) -> &'static str {
     }
 }
 
+/// Where `id` says under which license its fonts come (E55.5): the setup
+/// links it next to a font folder that syncs to other people, because the
+/// license decides whether the fonts may be shared.
+pub fn catalog_license_url(id: CatalogId) -> &'static str {
+    match id {
+        CatalogId::GoogleFonts => "https://fonts.google.com/faq",
+        CatalogId::Fontshare => "https://www.fontshare.com/licenses",
+    }
+}
+
 /// The folder [`fm_api::CatalogService::install_family`] puts `id`'s
 /// families into inside the download folder `into` (E55.3):
 /// `<into>/<catalog>/`, the name made safe as a family's is. A family then
@@ -961,6 +971,8 @@ impl Catalogs {
             enabled: state.enabled.contains(&id),
             refreshed_at: cache.as_ref().map(|c| c.refreshed_at.clone()),
             family_count: cache.as_ref().map_or(0, |c| count(c.families.len())),
+            folder_name: Some(catalog_folder_name(id).to_owned()),
+            license_url: Some(catalog_license_url(id).to_owned()),
         })
     }
 

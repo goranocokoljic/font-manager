@@ -14,7 +14,11 @@ afterEach(() => setClient(undefined));
 
 function client(options: MockOptions = {}) {
   const installs: InstallUpdateRequest[] = [];
-  const c: FmClient = createMockClient({ ...options, onInstall: (req) => installs.push(req) });
+  const c: FmClient = createMockClient({
+    setup: 'none',
+    ...options,
+    onInstall: (req) => installs.push(req),
+  });
   const check = vi.spyOn(c, 'checkForUpdate');
   setClient(c);
   return { c, installs, check };

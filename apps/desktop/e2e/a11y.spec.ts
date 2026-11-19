@@ -517,6 +517,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await setup.getByRole('button', { name: 'Add folder…' }).click();
       await expect(setup.getByRole('listitem', { name: 'Added 1' })).toBeVisible();
       expect(await violations(page), 'with a folder').toEqual([]);
+      // Step two (E55.5): the switches, then the folder question and the landing lines.
+      await setup.getByRole('button', { name: 'Continue' }).click();
+      await expect(setup.getByRole('heading', { name: 'Use the online catalogs?' })).toBeVisible();
+      expect(await violations(page), 'catalogs off').toEqual([]);
+      await setup.getByRole('switch', { name: 'Google Fonts' }).click();
+      await expect(setup.getByTestId('setup-landing')).toBeVisible();
+      expect(await violations(page), 'a catalog on').toEqual([]);
+      expect(await unnamedControls(page), 'a catalog on').toEqual([]);
       await open(page, '/settings?section=advanced');
       await page.getByRole('button', { name: 'Run setup again' }).click();
       await expect(setup).toBeVisible();

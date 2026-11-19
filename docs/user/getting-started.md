@@ -26,6 +26,33 @@ If you do not want to add a folder now, select **Skip for now**. The setup does 
 again. You can add folders later from **Sources**, as below. To see the setup again,
 go to **Settings › Advanced** and select **Run setup again**.
 
+### Online catalogs
+
+Then the setup asks **Use the online catalogs?** It shows a switch for Google Fonts and
+one for Fontshare. Both are off. When you turn one on, Font Fu connects to that catalog
+at once to get its list of fonts. Adobe Fonts is not in the list: Font Fu cannot
+download from it.
+
+If you leave both off, select **Continue** (or **Finish**). Nothing more is asked. If you
+turn a catalog on later, the first **Install** asks where its fonts go.
+
+If you turn a catalog on, the setup asks **Where should downloaded fonts go?**
+
+- **Inside my font folder** puts them in a folder you added in the first step. If you
+  added more than one, choose it in the list.
+- **Another folder** proposes `Documents/Font Fu Fonts`. Select **Choose…** to pick a
+  different folder.
+
+The setup shows where an install lands, for each catalog you turned on, for example
+`<folder>/Google Fonts/<Family>`. Font Fu does not accept a system font folder; the
+setup then says why. If your font folder is in a cloud sync folder (Dropbox, OneDrive,
+iCloud Drive and others), the setup tells you that everyone who shares the folder gets
+the files, and links to each catalog's license. The license tells you if you may share
+the fonts.
+
+After the setup, **Install** in a catalog is one click. **Settings › Online catalogs**
+shows the folder and the path of each catalog in it.
+
 ## Add your first folder
 
 1. In the sidebar, under **Sources**, select **Add folder**.

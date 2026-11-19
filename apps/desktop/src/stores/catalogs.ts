@@ -93,6 +93,18 @@ export function installedActive(result: InstallFamilyResponse): number {
   }).length;
 }
 
+/**
+ * Where an Install of `catalog` puts a family inside the download folder `folder` (E55.3,
+ * E55.5): `<folder>/<catalog's folder>/<family>`. fm-core names the catalog's folder
+ * (`folderName`); this only writes the three parts out, with the separator the folder's own
+ * path uses (a `C:\…` folder gets `\`).
+ */
+export function installPath(folder: string, catalog: Catalog, family: string): string {
+  const sep = folder.includes('\\') && !folder.includes('/') ? '\\' : '/';
+  const base = folder.endsWith(sep) ? folder.slice(0, -1) : folder;
+  return [base, catalog.folderName ?? catalog.name, family].join(sep);
+}
+
 function toApiError(e: unknown): ApiError {
   if (e && typeof e === 'object' && 'code' in e && 'message' in e) return e as ApiError;
   return { code: 'internal', message: String(e), detail: null };

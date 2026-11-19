@@ -2,7 +2,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
-import { createMockClient, MOCK_SUGGESTED_DOWNLOAD_FOLDER } from '../api/mock';
+import { createMockClient, MOCK_SUGGESTED_DOWNLOAD_FOLDER, mockPickedFolders } from '../api/mock';
 import { poolSize } from '../list/virtual';
 import { FaceLoader, catalogFamily, setFaceLoader } from '../preview/faceLoader';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
@@ -400,13 +400,17 @@ describe('CatalogBrowser: Install (E22.7)', () => {
 
   it('a refused install says why in an alert', async () => {
     const { w } = await opened();
-    await useSettingsStore().update({ downloadFolder: '/System/Library/Fonts/Mine' });
     await row(w, 'Lato').get('[data-testid="activation-dot"]').trigger('click');
+    await flushPromises();
+    // Choose… picks a system font folder: the API refuses it (E55.5) and the line says why.
+    mockPickedFolders.push('/System/Library/Fonts/Mine');
+    await w.get('[data-testid="catalog-install-choose"]').trigger('click');
     await flushPromises();
     const s = w.get('[data-testid="catalog-install-status"]');
     expect(s.attributes('role')).toBe('alert');
     expect(s.text()).toBe(
-      'Lato was not installed. Fonts cannot be installed into a system font folder. Choose another folder under Settings → Online catalogs.',
+      'Lato was not installed. Fonts cannot be installed into a system font folder. Choose another folder.',
     );
+    expect(useSettingsStore().settings?.downloadFolder ?? null).toBeNull();
   });
 });

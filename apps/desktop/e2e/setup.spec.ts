@@ -24,9 +24,8 @@ test('a first start: two folders added, one removed, then Finish', async ({ page
   await firstStart(page);
   // Only the open steps that have a screen; the folders step is first and current.
   const steps = setup(page).getByRole('navigation', { name: 'Setup steps' }).getByRole('listitem');
-  await expect(steps).toHaveCount(1);
+  await expect(steps).toHaveText(['Font folders', 'Online catalogs']);
   await expect(steps.first()).toHaveAttribute('aria-current', 'step');
-  await expect(steps.first()).toHaveText('Font folders');
   // The focus is on the step's heading.
   const heading = setup(page).getByRole('heading', { name: 'Where are your fonts?' });
   await expect(heading).toBeFocused();
@@ -69,7 +68,10 @@ test('a first start: two folders added, one removed, then Finish', async ({ page
     row(page, 'Added 1').getByRole('button', { name: 'Remove Added 1 from the library' }),
   ).toBeFocused();
 
-  // The only step is the last one: Finish goes to the library, with the folder in it.
+  // Continue goes to the catalogs step (setup-catalogs.spec.ts); Finish there to the library,
+  // with the folder in it.
+  await setup(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(steps.nth(1)).toHaveAttribute('aria-current', 'step');
   await setup(page).getByRole('button', { name: 'Finish' }).click();
   await expect(setup(page)).toHaveCount(0);
   const sources = page.getByRole('region', { name: 'Sources' });
@@ -80,6 +82,10 @@ test('a first start: two folders added, one removed, then Finish', async ({ page
 test('Skip for now goes on to the library, which still offers Add folder', async ({ page }) => {
   await firstStart(page);
   await setup(page).getByRole('button', { name: 'Skip for now' }).press('Enter');
+  await expect(
+    setup(page).getByRole('heading', { name: 'Use the online catalogs?' }),
+  ).toBeFocused();
+  await setup(page).getByRole('button', { name: 'Finish' }).click();
   await expect(setup(page)).toHaveCount(0);
   // The step is recorded as skipped (stores/setup.test.ts); the library's Sources keep Add folder.
   await expect(
@@ -130,15 +136,31 @@ test('a folder added in the setup reopened from Settings shows its scan and coun
 
 test('the setup is keyboard-complete', async ({ page }) => {
   await firstStart(page);
-  // Tab from the heading reaches Add folder…; Enter adds; Tab reaches Finish.
+  // Tab from the heading reaches Add folder…; Enter adds; Tab reaches Continue.
   await page.keyboard.press('Tab');
   await expect(setup(page).getByRole('button', { name: 'Add folder…' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(row(page, 'Added 1')).toBeVisible();
-  const finish = setup(page).getByRole('button', { name: 'Finish' });
-  for (let i = 0; i < 6 && !(await finish.evaluate((el) => el === document.activeElement)); i++)
-    await page.keyboard.press('Tab');
-  await expect(finish).toBeFocused();
+  const tabTo = async (name: string) => {
+    const target = setup(page).getByRole('button', { name, exact: true });
+    for (let i = 0; i < 8 && !(await target.evaluate((el) => el === document.activeElement)); i++)
+      await page.keyboard.press('Tab');
+    await expect(target).toBeFocused();
+  };
+  await tabTo('Continue');
+  await page.keyboard.press('Enter');
+  // The catalogs step: Tab reaches a switch, Space turns it on; Tab reaches Finish.
+  await expect(
+    setup(page).getByRole('heading', { name: 'Use the online catalogs?' }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(setup(page).getByRole('switch', { name: 'Google Fonts' })).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(setup(page).getByRole('switch', { name: 'Google Fonts' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await tabTo('Finish');
   await page.keyboard.press('Enter');
   await expect(setup(page)).toHaveCount(0);
 });

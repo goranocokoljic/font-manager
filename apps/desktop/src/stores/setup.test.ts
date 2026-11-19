@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import {
   MOCK_GONE_FOLDER,
+  MOCK_SUGGESTED_DOWNLOAD_FOLDER,
   createMockClient,
   mockPickedFolders,
   type MockOptions,
 } from '../api/mock';
 import type { SetupStep } from '../api/types';
-import { useSetupStore } from './setup';
+import { installPath, useCatalogsStore } from './catalogs';
+import { screensFor, useSetupStore } from './setup';
 import { useSourcesStore } from './sources';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -40,10 +42,10 @@ describe('setup store (E55.4)', () => {
     await setup.load();
     expect(setup.ready).toBe(true);
     expect(setup.visible).toBe(true);
-    // The API says fontFolders, catalogs and updates are open; catalogs and updates get
-    // their screens in E55.5 and E55.6.
+    // The API says fontFolders, catalogs and updates are open; updates gets its screen in
+    // E55.6.
     expect((await client.setupStatus()).open).toEqual(['fontFolders', 'catalogs', 'updates']);
-    expect(setup.steps).toEqual(['fontFolders']);
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs']);
     expect(setup.current).toBe('fontFolders');
   });
 
@@ -54,12 +56,19 @@ describe('setup store (E55.4)', () => {
     expect(setup.visible).toBe(false);
   });
 
-  it('never shows when the folders step is closed by a watched folder', async () => {
+  it('shows only the catalogs screen when a watched folder closes the folders step', async () => {
     // The sample library has a watched folder: only catalogs and updates are open.
     const setup = start({});
     await setup.load();
     expect((await client.setupStatus()).open).not.toContain('fontFolders' as SetupStep);
+    expect(setup.steps).toEqual(['catalogs']);
+    // Answered, nothing is open that this build can ask: it does not show again.
+    await setup.next();
     expect(setup.visible).toBe(false);
+    const later = start({});
+    await client.answerSetupStep({ step: 'catalogs', answer: 'answered' });
+    await later.load();
+    expect(later.visible).toBe(false);
   });
 
   it('lets the main window render when the status cannot be read', async () => {
@@ -163,7 +172,7 @@ describe('setup store (E55.4)', () => {
     expect(setup.canSkip).toBe(true);
     await setup.skip();
     expect(answer).toHaveBeenCalledWith({ step: 'fontFolders', answer: 'skipped' });
-    expect(setup.visible).toBe(false);
+    expect(setup.current).toBe('catalogs');
     expect((await client.setupStatus()).open).not.toContain('fontFolders' as SetupStep);
 
     const again = start();
@@ -171,9 +180,9 @@ describe('setup store (E55.4)', () => {
     const answer2 = vi.spyOn(client, 'answerSetupStep');
     mockPickedFolders.push('/Users/demo/Design fonts');
     await again.addFolder();
-    again.next();
-    expect(answer2).not.toHaveBeenCalled();
-    expect(again.visible).toBe(false);
+    await again.next();
+    expect(answer2, 'the folders step answers nothing').not.toHaveBeenCalled();
+    expect(again.current).toBe('catalogs');
   });
 
   it('a failed Skip stays on the step and says why', async () => {
@@ -190,6 +199,7 @@ describe('setup store (E55.4)', () => {
 
   it('Run setup again opens every step with the current folders and changes nothing on its own', async () => {
     const setup = start({});
+    await client.answerSetupStep({ step: 'catalogs', answer: 'skipped' });
     await setup.load();
     expect(setup.visible).toBe(false);
     const add = vi.spyOn(client, 'addSource');
@@ -198,10 +208,10 @@ describe('setup store (E55.4)', () => {
     await setup.runAgain();
     expect(setup.visible).toBe(true);
     expect(setup.again).toBe(true);
-    expect(setup.steps).toEqual(['fontFolders']);
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs']);
     expect(setup.folders.map((s) => s.path)).toEqual(['/Users/demo/Fonts']);
-    setup.next();
-    expect(setup.visible).toBe(false);
+    await setup.next();
+    expect(setup.current).toBe('catalogs');
     expect(add).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
     expect(answer).not.toHaveBeenCalled();
@@ -239,5 +249,174 @@ describe('setup store (E55.4)', () => {
     search.mockClear();
     await vi.advanceTimersByTimeAsync(1000);
     expect(search).toHaveBeenCalled();
+  });
+});
+
+describe('setup store: the catalogs screen (E55.5)', () => {
+  /** A first start with `paths` added in step one, then on to the catalogs screen. */
+  async function onCatalogs(...paths: string[]): Promise<ReturnType<typeof useSetupStore>> {
+    const setup = start();
+    await setup.load();
+    mockPickedFolders.push(...paths);
+    for (let i = 0; i < paths.length; i++) await setup.addFolder();
+    if (paths.length) await setup.next();
+    else await setup.skip();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setup.current).toBe('catalogs');
+    return setup;
+  }
+
+  it('maps the download folder step onto the catalogs screen, once', () => {
+    expect(screensFor(['downloadFolder', 'updates'])).toEqual(['catalogs']);
+    expect(screensFor(['fontFolders', 'catalogs', 'downloadFolder'])).toEqual([
+      'fontFolders',
+      'catalogs',
+    ]);
+  });
+
+  it('with no catalog on, Continue answers the step and saves no folder; Install still asks', async () => {
+    const setup = await onCatalogs('/Users/demo/Design fonts');
+    const catalogs = useCatalogsStore();
+    expect(catalogs.catalogs.map((c) => [c.id, c.enabled])).toEqual([
+      ['googleFonts', false],
+      ['fontshare', false],
+    ]);
+    expect(setup.catalogsOn).toEqual([]);
+    const answer = vi.spyOn(client, 'answerSetupStep');
+    const update = vi.spyOn(client, 'updateSettings');
+    await setup.next();
+    expect(answer).toHaveBeenCalledWith({ step: 'catalogs', answer: 'answered' });
+    expect(update).not.toHaveBeenCalled();
+    expect(setup.visible).toBe(false);
+    expect((await client.getSettings()).downloadFolder ?? null).toBeNull();
+    expect((await client.setupStatus()).open).not.toContain('catalogs' as SetupStep);
+    // A catalog turned on later: the first Install proposes the folder, as before.
+    await catalogs.setEnabled('googleFonts', true);
+    catalogs.show('googleFonts');
+    await vi.advanceTimersByTimeAsync(0);
+    await catalogs.askInstall(catalogs.families[0]!);
+    expect(catalogs.install?.phase).toBe('proposing');
+    expect(catalogs.install?.proposed).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+  });
+
+  it('turning a catalog on fetches its list now', async () => {
+    const setup = await onCatalogs('/Users/demo/Design fonts');
+    const refresh = vi.spyOn(client, 'refreshCatalog');
+    await setup.setCatalog('fontshare', true);
+    expect(refresh).toHaveBeenCalledWith({ id: 'fontshare' });
+    expect(setup.catalogsOn.map((c) => c.id)).toEqual(['fontshare']);
+  });
+
+  it('"Inside my font folder" saves the chosen font folder; Install is then one click', async () => {
+    const setup = await onCatalogs('/Users/demo/Design fonts', '/Users/demo/Client fonts');
+    await setup.setCatalog('googleFonts', true);
+    expect(setup.canPlaceInFontFolder).toBe(true);
+    expect(setup.place).toBe('fontFolder');
+    expect(setup.downloadFolder).toBe('/Users/demo/Design fonts');
+    setup.chooseFontFolder(setup.folders[1]!.id);
+    expect(setup.downloadFolder).toBe('/Users/demo/Client fonts');
+    const catalog = useCatalogsStore().catalogs[0]!;
+    expect(installPath(setup.downloadFolder!, catalog, '<Family>')).toBe(
+      '/Users/demo/Client fonts/Google Fonts/<Family>',
+    );
+    await setup.next();
+    expect(setup.visible).toBe(false);
+    expect((await client.getSettings()).downloadFolder).toBe('/Users/demo/Client fonts');
+    expect((await client.setupStatus()).open).toEqual(['updates']);
+
+    const catalogs = useCatalogsStore();
+    catalogs.show('googleFonts');
+    await vi.advanceTimersByTimeAsync(0);
+    const install = vi.spyOn(client, 'installFamily');
+    const suggest = vi.spyOn(client, 'suggestedDownloadFolder');
+    const run = catalogs.askInstall(catalogs.families[0]!);
+    await vi.advanceTimersByTimeAsync(5000);
+    await run;
+    expect(install).toHaveBeenCalledTimes(1);
+    expect(suggest, 'no folder question').not.toHaveBeenCalled();
+  });
+
+  it('without a font folder only "Another folder" is offered, with the proposal; a pick replaces it', async () => {
+    const setup = await onCatalogs();
+    await setup.setCatalog('fontshare', true);
+    expect(setup.canPlaceInFontFolder).toBe(false);
+    expect(setup.place).toBe('other');
+    expect(setup.downloadFolder).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+    // A cancelled picker keeps the proposal.
+    mockPickedFolders.push(null, '/Users/demo/Downloaded type');
+    await setup.pickOtherFolder();
+    expect(setup.downloadFolder).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+    await setup.pickOtherFolder();
+    expect(setup.downloadFolder).toBe('/Users/demo/Downloaded type');
+    await setup.next();
+    expect((await client.getSettings()).downloadFolder).toBe('/Users/demo/Downloaded type');
+  });
+
+  it('a system font folder is refused with the message of the API and the screen stays', async () => {
+    const setup = await onCatalogs('/Users/demo/Design fonts');
+    await setup.setCatalog('googleFonts', true);
+    setup.choosePlace('other');
+    mockPickedFolders.push('/System/Library/Fonts/Mine');
+    await setup.pickOtherFolder();
+    const answer = vi.spyOn(client, 'answerSetupStep');
+    await setup.next();
+    expect(setup.visible).toBe(true);
+    expect(setup.current).toBe('catalogs');
+    expect(setup.folderError).toBe(
+      'Fonts cannot be installed into a system font folder. Choose another folder.',
+    );
+    expect(answer).not.toHaveBeenCalled();
+    expect((await client.getSettings()).downloadFolder ?? null).toBeNull();
+    // Another choice clears the message and goes on.
+    setup.choosePlace('fontFolder');
+    expect(setup.folderError).toBeNull();
+    await setup.next();
+    expect(setup.visible).toBe(false);
+  });
+
+  it('marks a font folder inside a cloud sync folder, and only that one', async () => {
+    const setup = await onCatalogs('/Users/demo/Fonts here', '/Users/demo/Dropbox/Studio fonts');
+    await setup.setCatalog('googleFonts', true);
+    expect(setup.placeFolder?.cloud).toBe(false);
+    setup.chooseFontFolder(setup.folders[1]!.id);
+    expect(setup.placeFolder?.cloud).toBe(true);
+    expect(setup.catalogsOn[0]!.licenseUrl).toBe('https://fonts.google.com/faq');
+    const open = vi.spyOn(client, 'openUrl').mockResolvedValue();
+    await setup.openLicense(setup.catalogsOn[0]!);
+    expect(open).toHaveBeenCalledWith('https://fonts.google.com/faq');
+    // "Another folder" is not a font folder: no cloud line.
+    setup.choosePlace('other');
+    expect(setup.placeFolder).toBeNull();
+  });
+
+  it('starts from the saved folder when run again', async () => {
+    const setup = start({});
+    await client.setCatalogEnabled({ id: 'googleFonts', enabled: true });
+    await client.updateSettings({ downloadFolder: '/Users/demo/Fonts' });
+    await setup.runAgain();
+    setup.goTo(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setup.current).toBe('catalogs');
+    expect(setup.place).toBe('fontFolder');
+    expect(setup.downloadFolder).toBe('/Users/demo/Fonts');
+  });
+});
+
+describe('installPath', () => {
+  const catalog = {
+    id: 'fontshare',
+    name: 'Fontshare',
+    homepage: '',
+    enabled: true,
+    familyCount: 0,
+    folderName: 'Fontshare',
+  } as const;
+  it('joins with the separator the folder uses, once', () => {
+    expect(installPath('C:\\Users\\me\\Type\\', catalog, 'Satoshi')).toBe(
+      'C:\\Users\\me\\Type\\Fontshare\\Satoshi',
+    );
+    expect(installPath('/home/me/Type', catalog, 'Satoshi')).toBe(
+      '/home/me/Type/Fontshare/Satoshi',
+    );
   });
 });

@@ -5128,6 +5128,21 @@ impl SettingsService for MockApi {
             return Err(unknown_theme(id));
         }
         let mut st = self.state();
+        // fm-core's `check_download_folder` (E55.5): a download folder inside
+        // a system font folder is refused before it is saved.
+        if let Some(folder) = req.download_folder.as_deref().map(str::trim)
+            && !folder.is_empty()
+            && st.sources.iter().any(|s| {
+                let dir = s.path.trim_end_matches('/');
+                s.kind == SourceKind::System
+                    && (folder == dir || folder.starts_with(&format!("{dir}/")))
+            })
+        {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                "Fonts cannot be installed into a system font folder. Choose another folder.",
+            ));
+        }
         st.settings = st.settings.apply(&req)?;
         Ok(st.settings.clone())
     }
@@ -6330,6 +6345,15 @@ impl State {
             enabled: self.catalogs_on.contains(&id),
             refreshed_at: cache.map(|(at, _)| at.clone()),
             family_count: cache.map_or(0, |(_, f)| u32::try_from(f.len()).unwrap_or(u32::MAX)),
+            // fm-core's `catalog_folder_name` and `catalog_license_url`.
+            folder_name: Some(id.name().to_owned()),
+            license_url: Some(
+                match id {
+                    CatalogId::GoogleFonts => "https://fonts.google.com/faq",
+                    CatalogId::Fontshare => "https://www.fontshare.com/licenses",
+                }
+                .to_owned(),
+            ),
         }
     }
 }
