@@ -80,12 +80,33 @@ impl OnQuit {
 }
 
 /// Quit in the tray or the app menu: the user's quit, then the normal exit
-/// (`RunEvent::Exit` runs the quit path and [`at_exit`]).
+/// (`RunEvent::Exit` runs [`on_exit`]).
 pub fn quit<R: Runtime>(app: &AppHandle<R>) {
     if let Some(on_quit) = app.try_state::<OnQuit>() {
         on_quit.mark_user_quit();
     }
     app.exit(0);
+}
+
+/// `RunEvent::ExitRequested` with `code`: `None` means the last window
+/// closed ("keep in tray" off, or no tray), which is the user's quit. An exit
+/// the app asked for itself (`Some`: Quit, which marked itself, or the
+/// restart after a confirmed install) marks nothing; a logout or a shutdown
+/// sends no such event.
+pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, code: Option<i32>) {
+    if code.is_none()
+        && let Some(on_quit) = app.try_state::<OnQuit>()
+    {
+        on_quit.mark_user_quit();
+    }
+}
+
+/// `RunEvent::Exit`, every quit: the normal quit path (session fonts are
+/// deregistered and remembered for "reactivate on launch"), then `install`
+/// ([`at_exit`] in the app), in that order and once.
+pub fn on_exit(state: &AppState, install: impl FnOnce()) {
+    state.run_quit_path();
+    install();
 }
 
 /// Deletes the kept package of `version`, keeps the notice that it was not

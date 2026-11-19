@@ -585,3 +585,32 @@ fn a_package_announced_as_another_version_is_refused_at_quit() {
     assert_eq!(e.code, ErrorCode::PermissionDenied);
     assert_eq!(store.staged_version(), None);
 }
+
+#[test]
+fn at_exit_the_quit_path_runs_before_the_kept_install_and_only_once() {
+    let home = Home::new("on-exit-order");
+    let (state, core) = home.serve();
+    core.update_settings(SettingsUpdate {
+        reactivate_on_launch: Some(true),
+        ..SettingsUpdate::default()
+    })
+    .expect("settings");
+    let mut faces = session_font(&core);
+    faces.sort_by_key(|f| f.0);
+    let mut ran = 0;
+    fm_app_lib::quit_install::on_exit(&state, || {
+        assert!(
+            core.list_active().expect("active").is_empty(),
+            "the install ran before the quit path"
+        );
+        ran += 1;
+    });
+    assert_eq!(ran, 1);
+    drop((state, core));
+    let (_state, next) = home.serve();
+    assert_eq!(
+        sorted_active(&next),
+        faces,
+        "reactivate on launch lost the real session"
+    );
+}

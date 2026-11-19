@@ -1884,15 +1884,12 @@ pub fn run() {
     app.run(move |handle, event| match event {
         // The last window closed: the user's quit (E55.9). A logout or a
         // shutdown closes no window this way.
-        RunEvent::ExitRequested { code: None, .. } => {
-            if let Some(on_quit) = handle.try_state::<quit_install::OnQuit>() {
-                on_quit.mark_user_quit();
-            }
-        }
+        RunEvent::ExitRequested { code, .. } => quit_install::on_exit_requested(handle, code),
         RunEvent::Exit => {
-            handle.state::<AppState>().run_quit_path();
-            // After the quit path, once: an update kept for the quit (E55.9).
-            quit_install::at_exit(handle, || drop(startup.take()));
+            // The quit path, then, once, an update kept for the quit (E55.9).
+            quit_install::on_exit(&handle.state::<AppState>(), || {
+                quit_install::at_exit(handle, || drop(startup.take()));
+            });
             // `run` may exit the process without returning: flush the log now.
             drop(startup.take());
         }

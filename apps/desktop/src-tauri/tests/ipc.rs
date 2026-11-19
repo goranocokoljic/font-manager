@@ -1626,3 +1626,113 @@ fn the_tray_update_item_asks_the_main_window_for_the_update_dialog() {
     let expected = serde_json::to_string(UPDATE_DIALOG).unwrap();
     assert_eq!(*seen.lock().unwrap(), [expected]);
 }
+
+// E55.9: only the user's quit installs an update kept for the quit. The
+// tray's Quit, the menu bar's Quit and the last window closed mark it; an
+// exit the app asked for itself (the restart after a confirmed install) and
+// an exit without either (a logout, a shutdown) do not. The mock runtime
+// cannot exit, so a Quit handler's `app.exit` panics after it marked.
+mod install_on_quit {
+    use super::*;
+    use fm_app_lib::menu::{self, MENU_ID_QUIT};
+    use fm_app_lib::quit_install::{self, OnQuit};
+    use fm_app_lib::tray;
+    use fm_core::update::on_quit::QuitInstall;
+    use fm_platform::AppPaths;
+    use tauri::Manager;
+    use tauri::menu::MenuEvent;
+
+    struct Home(std::path::PathBuf);
+
+    impl Drop for Home {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    type Kept = (App<MockRuntime>, QuitInstall, Home);
+
+    fn app_with_kept_update(label: &str) -> Result<Kept, Box<dyn Error>> {
+        let root = std::env::temp_dir().join(format!("fm-ipc-quit-{label}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let paths = AppPaths::under(&root);
+        let state = AppState::new(Arc::new(MockApi::new())).with_quit_install(&paths);
+        let app = setup_state(mock_builder(), state).build(mock_context(noop_assets()))?;
+        let store = QuitInstall::new(&paths);
+        store.stage("1.1.0", b"package")?;
+        Ok((app, store, Home(root)))
+    }
+
+    fn is_user_quit(app: &App<MockRuntime>) -> bool {
+        app.state::<OnQuit>().is_user_quit()
+    }
+
+    /// Runs a Quit handler; the mock runtime's exit panics once it marked.
+    fn run_quit(f: impl FnOnce()) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    }
+
+    #[test]
+    fn an_exit_that_is_not_the_users_keeps_the_package_for_the_next_quit() {
+        let (app, store, _home) = app_with_kept_update("not-user").unwrap();
+        // The restart after a confirmed install asks with a code.
+        quit_install::on_exit_requested(app.handle(), Some(0));
+        assert!(!is_user_quit(&app));
+        // A logout or a shutdown: RunEvent::Exit without a user quit.
+        quit_install::at_exit(app.handle(), || {});
+        assert_eq!(store.staged_version().as_deref(), Some("1.1.0"), "kept");
+    }
+
+    #[test]
+    fn the_last_window_closed_is_the_users_quit() {
+        let (app, store, _home) = app_with_kept_update("last-window").unwrap();
+        quit_install::on_exit_requested(app.handle(), None);
+        assert!(is_user_quit(&app));
+        // The user's quit acts on the package: no update is on offer in this
+        // run, so it is not installed and is deleted.
+        quit_install::at_exit(app.handle(), || {});
+        assert_eq!(store.staged_version(), None);
+    }
+
+    // The tray menu is made on the main thread on macOS (as the menu tests above).
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn the_trays_quit_is_the_users_quit() {
+        let (app, _store, _home) = app_with_kept_update("tray").unwrap();
+        let api: Arc<dyn fm_api::Api> = Arc::new(MockApi::new());
+        let _menu = tray::menu(app.handle(), Arc::clone(&api)).unwrap();
+        run_quit(|| {
+            tray::on_menu_event(
+                app.handle(),
+                &MenuEvent {
+                    id: "tray:quit".into(),
+                },
+                &api,
+            );
+        });
+        assert!(is_user_quit(&app));
+    }
+
+    #[test]
+    fn the_menu_bars_quit_is_the_users_quit() {
+        let (app, _store, _home) = app_with_kept_update("menu").unwrap();
+        run_quit(|| {
+            menu::on_menu_event(
+                app.handle(),
+                MenuEvent {
+                    id: MENU_ID_QUIT.into(),
+                },
+            );
+        });
+        assert!(is_user_quit(&app));
+    }
+
+    #[test]
+    fn the_predefined_quit_items_are_recognised_on_every_os() {
+        assert!(menu::is_quit_text("Quit Font Fu"), "macOS");
+        assert!(menu::is_quit_text("&Exit"), "Windows");
+        assert!(menu::is_quit_text("&Quit"));
+        assert!(!menu::is_quit_text("Close Window"));
+        assert!(!menu::is_quit_text("Settings…"));
+    }
+}
