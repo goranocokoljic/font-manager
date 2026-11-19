@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
 import type { ApiError, AvailableUpdate, Event, UpdateNotice, UpdateSupport } from '../api/types';
 import { t } from '../i18n';
@@ -13,7 +13,9 @@ export type UpdateStatus = 'idle' | 'checking' | 'upToDate' | 'available' | 'ins
  * "Check for updates" or has turned on "Check automatically" (rule 7). The automatic
  * check (at start and once a day) runs in the shell, not here (E55.7): it announces a
  * found update with the `updateAvailable` event, and this store only records it; the
- * dialog opens on a click (the tray's "Update to <version>…", Settings → About). fm-api
+ * dialog opens on a click (the tray's "Update to <version>…", Settings → About). A quiet
+ * find shows a notice with "See what's new" and a dot on Settings (E55.8); the notice can
+ * be dismissed until the next start, the dot stays while the update is on offer. fm-api
  * decides how big a step an update is (`kind`) and refuses a major install without the
  * second confirmation; this store only keeps what the user was shown and what they
  * confirmed.
@@ -33,6 +35,25 @@ export const useUpdatesStore = defineStore('updates', () => {
   /** The dialog asks the second time, for a major update. */
   const confirmingMajor = ref(false);
   const error = ref<ApiError | null>(null);
+  /** The update on offer came from the shell's automatic check, not from a click. */
+  const foundQuietly = ref(false);
+  /** The user dismissed the notice; it stays away until the next start (the store is new). */
+  const noticeDismissed = ref(false);
+  /** The quiet notice shows: an automatic find, not dismissed, the dialog not open. */
+  const notice = computed(
+    () =>
+      update.value !== null &&
+      foundQuietly.value &&
+      !noticeDismissed.value &&
+      !open.value &&
+      status.value === 'available',
+  );
+  /** The dot on Settings: an update is on offer until it is installed. */
+  const dot = computed(() => update.value !== null);
+  // The dialog, opened from anywhere, shows the update: it is no longer a quiet find.
+  watch(open, (isOpen) => {
+    if (isOpen) foundQuietly.value = false;
+  });
   let unsubscribe: Promise<Unsubscribe> | undefined;
 
   async function loadSupport(): Promise<UpdateSupport | null> {
@@ -53,6 +74,7 @@ export const useUpdatesStore = defineStore('updates', () => {
       const found = await useClient().checkForUpdate();
       update.value = found.update ?? null;
       status.value = update.value ? 'available' : 'upToDate';
+      foundQuietly.value = false;
       if (update.value) {
         confirmingMajor.value = false;
         error.value = null;
@@ -67,7 +89,11 @@ export const useUpdatesStore = defineStore('updates', () => {
   /** Records an update the shell found by itself; nothing opens. */
   function offer(found: AvailableUpdate): void {
     if (status.value === 'installing' || status.value === 'checking') return;
-    if (update.value?.version !== found.version) confirmingMajor.value = false;
+    // A version the user already saw in the dialog stays shown that way: no notice for it.
+    if (update.value?.version !== found.version) {
+      confirmingMajor.value = false;
+      foundQuietly.value = true;
+    }
     update.value = found;
     status.value = 'available';
   }
@@ -140,6 +166,11 @@ export const useUpdatesStore = defineStore('updates', () => {
     open.value = true;
   }
 
+  /** The notice's close button: the notice goes until the next start; the dot stays. */
+  function dismissNotice(): void {
+    noticeDismissed.value = true;
+  }
+
   /**
    * "Install": a major update first asks a second time; the second yes sends
    * `confirmMajor`. The app then quits as Quit does, installs and restarts.
@@ -175,12 +206,15 @@ export const useUpdatesStore = defineStore('updates', () => {
     open,
     confirmingMajor,
     error,
+    notice,
+    dot,
     loadSupport,
     check,
     start,
     stop,
     onEvent,
     openDialog,
+    dismissNotice,
     install,
     dismiss,
   };

@@ -353,6 +353,12 @@ Installing quits Font Fu first, so session activations end, and then starts the 
 version. Turn on **Check automatically when Font Fu starts** to check at every start.
 It is off until you turn it on.
 
+An update that an automatic check finds never opens a window by itself. Font Fu shows a
+small notice with the version and **See what's new**, and a dot next to **Settings** in
+the status bar. Close the notice and it stays away until Font Fu starts again. The dot
+stays until you install the update. The notice, the dot, the update item in the tray
+and **Check for updates** all open the same update dialog.
+
 With automatic checks on, you can also turn on **Install updates when I quit**. Then a
 bug-fix or feature update downloads in the background, and Font Fu installs it when you
 quit: with Quit in the menu or the tray, or by closing the window when Font Fu does not

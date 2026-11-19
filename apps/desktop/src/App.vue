@@ -9,6 +9,7 @@ import McpConfirmToast from './components/McpConfirmToast.vue';
 import SetupView from './components/SetupView.vue';
 import ToastMessage from './components/ToastMessage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
+import UpdateNotice from './components/UpdateNotice.vue';
 import { HELP_PAGES } from './help';
 import { direction, locale, resolveLocale, setLocale, t, type MessageKey } from './i18n';
 import { ACTIONS } from './keyboard/keymap';
@@ -159,6 +160,7 @@ watch(
   <ShortcutSheet />
   <ToastMessage />
   <McpConfirmToast />
+  <UpdateNotice />
   <UpdateDialog />
   <TextFieldMenu />
 </template>
