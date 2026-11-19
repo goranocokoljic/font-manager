@@ -15,6 +15,8 @@ import SetupCatalogsPane from './SetupCatalogsPane.vue';
 import SetupCatalogsStep from './SetupCatalogsStep.vue';
 import SetupFoldersStep from './SetupFoldersStep.vue';
 import SetupLibraryPane from './SetupLibraryPane.vue';
+import SetupUpdatesPane from './SetupUpdatesPane.vue';
+import SetupUpdatesStep from './SetupUpdatesStep.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -81,6 +83,7 @@ function onKey(e: KeyboardEvent): void {
         <div :key="setup.current" class="step">
           <SetupFoldersStep v-if="setup.current === 'fontFolders'" />
           <SetupCatalogsStep v-else-if="setup.current === 'catalogs'" />
+          <SetupUpdatesStep v-else-if="setup.current === 'updates'" />
         </div>
       </FmFade>
 
@@ -114,6 +117,7 @@ function onKey(e: KeyboardEvent): void {
 
     <SetupLibraryPane v-if="setup.current === 'fontFolders'" class="show" />
     <SetupCatalogsPane v-else-if="setup.current === 'catalogs'" class="show" />
+    <SetupUpdatesPane v-else-if="setup.current === 'updates'" class="show" />
   </main>
 </template>
 

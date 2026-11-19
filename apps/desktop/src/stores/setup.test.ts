@@ -12,6 +12,7 @@ import type { SetupStep } from '../api/types';
 import { installPath, useCatalogsStore } from './catalogs';
 import { screensFor, useSetupStore } from './setup';
 import { useSourcesStore } from './sources';
+import { useUpdatesStore } from './updates';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
@@ -42,10 +43,8 @@ describe('setup store (E55.4)', () => {
     await setup.load();
     expect(setup.ready).toBe(true);
     expect(setup.visible).toBe(true);
-    // The API says fontFolders, catalogs and updates are open; updates gets its screen in
-    // E55.6.
     expect((await client.setupStatus()).open).toEqual(['fontFolders', 'catalogs', 'updates']);
-    expect(setup.steps).toEqual(['fontFolders', 'catalogs']);
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs', 'updates']);
     expect(setup.current).toBe('fontFolders');
   });
 
@@ -56,17 +55,19 @@ describe('setup store (E55.4)', () => {
     expect(setup.visible).toBe(false);
   });
 
-  it('shows only the catalogs screen when a watched folder closes the folders step', async () => {
+  it('shows only the open screens when a watched folder closes the folders step', async () => {
     // The sample library has a watched folder: only catalogs and updates are open.
     const setup = start({});
     await setup.load();
     expect((await client.setupStatus()).open).not.toContain('fontFolders' as SetupStep);
-    expect(setup.steps).toEqual(['catalogs']);
-    // Answered, nothing is open that this build can ask: it does not show again.
+    expect(setup.steps).toEqual(['catalogs', 'updates']);
+    // Both answered, nothing is open: it does not show again.
+    await setup.next();
     await setup.next();
     expect(setup.visible).toBe(false);
     const later = start({});
     await client.answerSetupStep({ step: 'catalogs', answer: 'answered' });
+    await client.answerSetupStep({ step: 'updates', answer: 'answered' });
     await later.load();
     expect(later.visible).toBe(false);
   });
@@ -200,6 +201,7 @@ describe('setup store (E55.4)', () => {
   it('Run setup again opens every step with the current folders and changes nothing on its own', async () => {
     const setup = start({});
     await client.answerSetupStep({ step: 'catalogs', answer: 'skipped' });
+    await client.answerSetupStep({ step: 'updates', answer: 'skipped' });
     await setup.load();
     expect(setup.visible).toBe(false);
     const add = vi.spyOn(client, 'addSource');
@@ -208,7 +210,7 @@ describe('setup store (E55.4)', () => {
     await setup.runAgain();
     expect(setup.visible).toBe(true);
     expect(setup.again).toBe(true);
-    expect(setup.steps).toEqual(['fontFolders', 'catalogs']);
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs', 'updates']);
     expect(setup.folders.map((s) => s.path)).toEqual(['/Users/demo/Fonts']);
     await setup.next();
     expect(setup.current).toBe('catalogs');
@@ -267,7 +269,7 @@ describe('setup store: the catalogs screen (E55.5)', () => {
   }
 
   it('maps the download folder step onto the catalogs screen, once', () => {
-    expect(screensFor(['downloadFolder', 'updates'])).toEqual(['catalogs']);
+    expect(screensFor(['downloadFolder', 'updates'])).toEqual(['catalogs', 'updates']);
     expect(screensFor(['fontFolders', 'catalogs', 'downloadFolder'])).toEqual([
       'fontFolders',
       'catalogs',
@@ -287,7 +289,7 @@ describe('setup store: the catalogs screen (E55.5)', () => {
     await setup.next();
     expect(answer).toHaveBeenCalledWith({ step: 'catalogs', answer: 'answered' });
     expect(update).not.toHaveBeenCalled();
-    expect(setup.visible).toBe(false);
+    expect(setup.current).toBe('updates');
     expect((await client.getSettings()).downloadFolder ?? null).toBeNull();
     expect((await client.setupStatus()).open).not.toContain('catalogs' as SetupStep);
     // A catalog turned on later: the first Install proposes the folder, as before.
@@ -320,7 +322,7 @@ describe('setup store: the catalogs screen (E55.5)', () => {
       '/Users/demo/Client fonts/Google Fonts/<Family>',
     );
     await setup.next();
-    expect(setup.visible).toBe(false);
+    expect(setup.current).toBe('updates');
     expect((await client.getSettings()).downloadFolder).toBe('/Users/demo/Client fonts');
     expect((await client.setupStatus()).open).toEqual(['updates']);
 
@@ -371,7 +373,7 @@ describe('setup store: the catalogs screen (E55.5)', () => {
     setup.choosePlace('fontFolder');
     expect(setup.folderError).toBeNull();
     await setup.next();
-    expect(setup.visible).toBe(false);
+    expect(setup.current).toBe('updates');
   });
 
   it('marks a font folder inside a cloud sync folder, and only that one', async () => {
@@ -399,6 +401,116 @@ describe('setup store: the catalogs screen (E55.5)', () => {
     expect(setup.current).toBe('catalogs');
     expect(setup.place).toBe('fontFolder');
     expect(setup.downloadFolder).toBe('/Users/demo/Fonts');
+  });
+});
+
+describe('setup store: the updates screen (E55.6)', () => {
+  /** The requests to the release server the mock saw (`manual` or `automatic`). */
+  const checks = () =>
+    (globalThis as { __fmMockUpdateChecks?: string[] }).__fmMockUpdateChecks ?? [];
+
+  beforeEach(() => {
+    delete (globalThis as { __fmMockUpdateChecks?: string[] }).__fmMockUpdateChecks;
+  });
+
+  /** A first start, step one skipped and step two answered: on the updates screen. */
+  async function onUpdates(options: MockOptions = { setup: 'first' }) {
+    const setup = start(options);
+    await setup.load();
+    await setup.skip();
+    await vi.advanceTimersByTimeAsync(0);
+    await setup.next();
+    expect(setup.current).toBe('updates');
+    expect(setup.last).toBe(true);
+    return setup;
+  }
+
+  it('is preselected on, names the host the API reports, and asks the server nothing', async () => {
+    const setup = await onUpdates({ setup: 'first', update: 'patch' });
+    const manual = vi.spyOn(client, 'checkForUpdate');
+    expect(setup.checkAutomatically).toBe(true);
+    expect(setup.releaseHost).toBe('github.com');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(manual).not.toHaveBeenCalled();
+    expect(checks(), 'no request before Finish').toEqual([]);
+    expect((await client.getSettings()).checkUpdatesAutomatically).toBe(false);
+  });
+
+  it('Finish with the switch on turns the automatic check on; its first check runs quietly', async () => {
+    const setup = await onUpdates({ setup: 'first', update: 'patch' });
+    const updates = useUpdatesStore();
+    await updates.start();
+    const answer = vi.spyOn(client, 'answerSetupStep');
+    await setup.next();
+    expect(setup.visible).toBe(false);
+    expect((await client.getSettings()).checkUpdatesAutomatically).toBe(true);
+    expect(answer).toHaveBeenCalledWith({ step: 'updates', answer: 'answered' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(checks()).toEqual(['automatic']);
+    // Found quietly: offered, no dialog opens.
+    expect(updates.status).toBe('available');
+    expect(updates.open).toBe(false);
+    expect((await client.setupStatus()).open).toEqual([]);
+    await updates.stop();
+  });
+
+  it('Finish with the switch off keeps the setting off; Check for updates works as before', async () => {
+    const setup = await onUpdates({ setup: 'first', update: 'patch' });
+    const update = vi.spyOn(client, 'updateSettings');
+    setup.checkAutomatically = false;
+    await setup.next();
+    expect(setup.visible).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect((await client.getSettings()).checkUpdatesAutomatically).toBe(false);
+    expect((await client.setupStatus()).open, 'not asked again').toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(checks()).toEqual([]);
+    const updates = useUpdatesStore();
+    await updates.check();
+    expect(checks()).toEqual(['manual']);
+    expect(updates.status).toBe('available');
+  });
+
+  it('a refused setting keeps the screen with its message and answers nothing', async () => {
+    const setup = await onUpdates();
+    vi.spyOn(client, 'updateSettings').mockRejectedValue({
+      code: 'io',
+      message: 'config.json could not be written.',
+      detail: null,
+    });
+    const answer = vi.spyOn(client, 'answerSetupStep');
+    await setup.next();
+    expect(setup.visible).toBe(true);
+    expect(setup.current).toBe('updates');
+    expect(setup.error).toBe('config.json could not be written.');
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('is not shown, and not counted, where this copy does not update itself', async () => {
+    const setup = start({ setup: 'first', update: 'managed' });
+    await setup.load();
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs']);
+    setup.close();
+    await setup.runAgain();
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs']);
+    expect(checks()).toEqual([]);
+  });
+
+  it('reopened from Settings, the switch starts from the saved setting', async () => {
+    const setup = start({});
+    await client.updateSettings({ checkUpdatesAutomatically: true });
+    await vi.advanceTimersByTimeAsync(0);
+    await setup.runAgain();
+    expect(setup.steps).toEqual(['fontFolders', 'catalogs', 'updates']);
+    expect(setup.checkAutomatically).toBe(true);
+    setup.goTo(2);
+    setup.checkAutomatically = false;
+    await setup.next();
+    expect((await client.getSettings()).checkUpdatesAutomatically).toBe(false);
+
+    setup.close();
+    await setup.runAgain();
+    expect(setup.checkAutomatically).toBe(false);
   });
 });
 

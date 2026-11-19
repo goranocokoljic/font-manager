@@ -3538,6 +3538,48 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     'Flatpak installs the updates of this copy (flatpak update, or your software center), so Check for updates is not shown.';
   let pendingUpdate: AvailableUpdate | null = null;
   let updateNotice: UpdateNotice | null = options.updateNotice ?? null;
+  /**
+   * A request to the release server (`update::check` in the shell). Every one is kept in
+   * `window.__fmMockUpdateChecks` (`manual` from "Check for updates", `automatic` from the
+   * shell's timer) so the browser specs can prove when none is made (E55.6, rule 7).
+   */
+  const askReleaseServer = (how: 'manual' | 'automatic'): AvailableUpdate | null => {
+    const w = globalThis as { __fmMockUpdateChecks?: string[] };
+    (w.__fmMockUpdateChecks ??= []).push(how);
+    if (options.update === 'managed')
+      throw { code: 'unsupported' as const, message: managedReason, detail: null };
+    if (options.update === 'offline')
+      throw {
+        code: 'io' as const,
+        message: 'Font Fu could not reach its release server. Check your connection and try again.',
+        detail: 'dns error',
+      };
+    const found =
+      options.update === 'major'
+        ? mockUpdates.major
+        : options.update === 'patch' || options.update === 'unsigned'
+          ? mockUpdates.patch
+          : null;
+    pendingUpdate = found ? { ...found } : null;
+    return pendingUpdate;
+  };
+  /**
+   * The shell's automatic check (E55.7, `auto_update::refresh` after `update_settings`):
+   * turned on where this copy updates itself, the first check runs at once and quietly; a
+   * found update is announced with `updateAvailable`, a failed one is silent. The browser
+   * mode has no day-long timer.
+   */
+  const automaticCheckTurnedOn = () => {
+    if (options.update === 'managed') return;
+    setTimeout(() => {
+      try {
+        const found = askReleaseServer('automatic');
+        if (found) emit({ type: 'updateAvailable', update: { ...found } });
+      } catch {
+        // A failed automatic check is silent; the next one is a day later.
+      }
+    }, 0);
+  };
 
   // The install hooks activate through the client's own `activate`, bound below.
   let activateFaces: FmClient['activate'] = async () => [];
@@ -3580,23 +3622,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         ? { offered: false, reason: managedReason, releaseHost: 'github.com' }
         : { offered: true, reason: null, releaseHost: 'github.com' },
     checkForUpdate: async () => {
-      if (options.update === 'managed')
-        throw { code: 'unsupported' as const, message: managedReason, detail: null };
-      if (options.update === 'offline')
-        throw {
-          code: 'io' as const,
-          message:
-            'Font Fu could not reach its release server. Check your connection and try again.',
-          detail: 'dns error',
-        };
-      const found =
-        options.update === 'major'
-          ? mockUpdates.major
-          : options.update === 'patch' || options.update === 'unsigned'
-            ? mockUpdates.patch
-            : null;
-      pendingUpdate = found ? { ...found } : null;
-      return { currentVersion: mockAppInfo.version, update: pendingUpdate };
+      const update = askReleaseServer('manual');
+      return { currentVersion: mockAppInfo.version, update };
     },
     pendingUpdate: async () => (pendingUpdate ? { ...pendingUpdate } : null),
     // The same rules as `InstallUpdateRequest::check` in fm-api.
@@ -4832,7 +4859,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
       if (req.downloadFolder != null) next.downloadFolder = folder || null;
+      const turnedOn = !settings.checkUpdatesAutomatically && next.checkUpdatesAutomatically;
       settings = next;
+      if (turnedOn) automaticCheckTurnedOn();
       options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
       return { ...settings };
     },

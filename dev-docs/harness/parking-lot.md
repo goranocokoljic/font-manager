@@ -543,3 +543,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.9 #648] crates/fm-core/src/catalog.rs:1143 — `write_atomic` exists in four private copies (catalog, layout/store, preview/cache, update/on_quit).
 - [E55.9 #648] tauri-plugin-updater-2.14.0/src/updater.rs:1580 — on macOS the library falls back to an admin prompt when the bundle swap gets PermissionDenied; rule 4 relies only on the folder probe just before.
 - [E55.9 #648] crates/fm-platform/src/linux/activator.rs:16 — a Linux SIGTERM logout skips the quit path; session links stay until the next start's clear_session.
+- [E55.6 #645] apps/desktop/src/stores/setup.ts:104 — closing the setup (X or Escape, reopened only) on any step leaves that step open for the next start; pre-existing close behavior.
