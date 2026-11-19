@@ -1,6 +1,7 @@
 # 0012 — In-app updates from signed releases
 
-Status: Accepted (2026-10-21); amended 2026-11-19 (E55.7: the daily check, the release address)
+Status: Accepted (2026-10-21); amended 2026-11-19 (E55.7: the daily check, the release address;
+E55.9: install when the user quits)
 
 ## Context
 
@@ -31,7 +32,8 @@ it. Flatpak and package managers already install updates for their copies.
   user clicks "Check for updates" (Settings → About) or, at start and once a
   day, when the user turned on "Check automatically"
   (`Settings.check_updates_automatically`, off by default; Goran,
-  18 Nov 2026). Nothing installs until the user confirms; a major update
+  18 Nov 2026). Nothing installs until the user confirms, with one
+  exception the user turns on ("Install updates when I quit", below); a major update
   (`fm_api::update::update_kind` with `semver`; before 1.0 a new minor
   version counts as major) asks a second time, and fm-api refuses an install
   request without `confirm_major`.
@@ -50,6 +52,51 @@ it. Flatpak and package managers already install updates for their copies.
   opens the window at the update dialog; an automatic check never opens,
   raises or focuses a window. `UpdateSupport.release_host` names the host of
   the configured endpoint, so no UI text hard-codes it.
+- **Install when the user quits** (E55.9; Goran, 18 Nov 2026): the one
+  exception to "nothing installs until the user confirms", and the user
+  turns it on. `Settings.install_updates_on_quit`, off by default
+  (`#[serde(default)]`), has an effect only while automatic checks run
+  (`fm_api::update::installs_on_quit`), and fm-api refuses to turn it on
+  where this copy does not update itself (`check_settings_update`; without
+  a shell, as in the CLI's direct link, it may only be turned off). The
+  rules:
+  - Only a **patch or minor** update an **automatic** check found
+    (`AvailableUpdate::installs_on_quit`). A major one (before 1.0 a minor
+    one too, as `update_kind` says) is only announced and asks twice.
+  - It is **downloaded in the background** into the app's cache folder
+    (`<cache>/updates`, `fm_core::update::on_quit::QuitInstall`) and verified
+    exactly as a confirmed install is: the download checks the signature and
+    the signed version, and the install checks them again on the kept bytes.
+    A refused package is deleted, reported once (`Event::UpdateNotice`, and
+    the next start), and nothing is installed; that version is not
+    downloaded again in this run. The folder probe of `update_folders` runs
+    before the download and again before the install; admin rights are never
+    asked for (rule 4).
+  - It **installs only when the user quits**: Quit in the app menu (the
+    shell's own item, which replaces Tauri's predefined one) or in the tray,
+    or the last window closed (`RunEvent::ExitRequested` without a code:
+    "keep in tray" off). `RunEvent::Exit` runs the quit path first, then the
+    install, once (`fm_core::update::on_quit::exit_step`). The app does not
+    start again after this install: the Windows installer gets no `/R`
+    (`restart_after_install(false)`), and macOS and Linux never restart by
+    themselves. Nothing installs while the app runs.
+  - **A logout or a shutdown never installs**; the package waits for the
+    next quit, since an installer cut off by the session end could leave a
+    half-replaced app. Windows: the session end (`WM_ENDSESSION`) ends the
+    process; no window closes and no menu item runs, so the quit is not
+    marked as the user's. macOS: the logout asks the app to terminate
+    (`applicationWillTerminate`), not through the menu item, so it is not
+    the user's quit either; the Dock's Quit counts the same way. Linux: the
+    session sends `SIGTERM`; the app ends without `RunEvent::Exit`.
+  - **The next start says once** what happened: before the installer runs
+    the app records the versions (`<data>/update-install.json`); the next
+    start compares them with the version that started and keeps a notice
+    (`fm_api::update::UpdateNotice`) the UI reads once
+    (`take_update_notice`): "Updated to <version>" with a link to the
+    release page of that version, or that the update could not be installed,
+    with a button that checks again and opens the update dialog. The quit
+    path ran once before the install, so "reactivate on launch" keeps the
+    real session in both cases.
 - **The normal quit first.** Before the installer runs, the shell runs the
   quit path every quit uses (`AppState::run_quit_path`: session fonts are
   deregistered and remembered for "reactivate on launch"). It runs once: the

@@ -273,3 +273,50 @@ fn the_download_folder_is_answered_by_choosing_it() {
         .expect("chosen");
     assert_eq!(open(&lib), Vec::<SetupStep>::new());
 }
+
+/// E55.9: "Install updates when I quit" is turned on only where this copy
+/// updates itself; turning it off always works.
+#[test]
+fn install_on_quit_is_refused_where_the_copy_does_not_update_itself() {
+    let on = SettingsUpdate {
+        install_updates_on_quit: Some(true),
+        ..SettingsUpdate::default()
+    };
+    let off = SettingsUpdate {
+        install_updates_on_quit: Some(false),
+        ..SettingsUpdate::default()
+    };
+    let mut lib = Lib::new("install-on-quit");
+    // Without a shell (the CLI's direct link) nothing says the copy updates itself.
+    let e = lib.api.update_settings(on.clone()).expect_err("refused");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    lib.api = lib.api.with_update_support(UpdateSupport {
+        offered: false,
+        reason: Some("Flatpak installs the updates of this copy.".into()),
+        release_host: Some("github.com".into()),
+    });
+    let e = lib.api.update_settings(on.clone()).expect_err("refused");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert!(e.message.contains("Flatpak"), "{e:?}");
+    assert!(
+        !lib.api
+            .get_settings()
+            .expect("settings")
+            .install_updates_on_quit
+    );
+    assert!(lib.api.update_settings(off.clone()).is_ok());
+
+    lib.api = lib.api.with_update_support(offered());
+    let saved = lib.api.update_settings(on).expect("saved");
+    assert!(saved.install_updates_on_quit);
+    assert!(
+        !saved.check_updates_automatically,
+        "it does not turn the automatic check on by itself"
+    );
+    assert!(
+        !lib.api
+            .update_settings(off)
+            .expect("saved")
+            .install_updates_on_quit
+    );
+}

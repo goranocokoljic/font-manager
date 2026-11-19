@@ -51,3 +51,33 @@ test('a Flatpak copy shows no update section, and the platform notes say why', a
   );
   await expect(page.getByRole('button', { name: 'Check for updates' })).toHaveCount(0);
 });
+
+// E55.9 "Install updates when I quit".
+test('"Install updates when I quit" needs the automatic check and is saved', async ({ page }) => {
+  await page.goto(about(1));
+  const updates = page.getByRole('region', { name: 'Updates' });
+  const onQuit = updates.getByRole('checkbox', { name: 'Install updates when I quit' });
+  await expect(onQuit).not.toBeChecked();
+  await expect(onQuit).toBeDisabled();
+  await updates.getByRole('checkbox', { name: /Check automatically/ }).check();
+  await expect(onQuit).toBeEnabled();
+  await onQuit.check();
+  await expect(onQuit).toBeChecked();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('the start after an install at quit says "Updated to" once, with what is new', async ({
+  page,
+}) => {
+  await page.goto('/?mockUpdateNotice=1');
+  const toast = page.getByText('Updated to 0.1.1.');
+  await expect(toast).toBeVisible();
+  await expect(page.getByRole('button', { name: 'What’s new' })).toBeVisible();
+});
+
+test('the start after a failed install says so and offers the update dialog', async ({ page }) => {
+  await page.goto('/?mockUpdate=1&mockUpdateNotice=2');
+  await expect(page.getByText('could not install version 0.1.1')).toBeVisible();
+  await page.getByRole('button', { name: 'Update…' }).click();
+  await expect(page.getByRole('dialog', { name: 'Font Fu 0.1.1 is available' })).toBeVisible();
+});

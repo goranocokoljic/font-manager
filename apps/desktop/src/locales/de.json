@@ -1593,7 +1593,7 @@
     "upToDate": "Font Fu ist auf dem neuesten Stand.",
     "available": "Version {version} ist verfügbar.",
     "checkAutomatically": "Automatisch suchen, wenn Font Fu startet",
-    "checkAutomaticallyHint": "Font Fu kontaktiert seinen Release-Server nur, wenn du suchst oder, solange das hier an ist, beim Start und einmal am Tag. Nichts wird installiert, bevor du es bestätigst.",
+    "checkAutomaticallyHint": "Font Fu kontaktiert seinen Release-Server nur, wenn du suchst oder, solange das hier an ist, beim Start und einmal am Tag. Nichts wird installiert, bevor du es bestätigst, außer du schaltest den Schalter unten ein.",
     "dialog": {
       "title": "Font Fu {version} ist verfügbar",
       "currentVersion": "Du hast Version {version}.",
@@ -1607,6 +1607,13 @@
       "later": "Später",
       "installVersion": "Version {version} installieren",
       "installAndRestart": "Installieren und neu starten"
+    },
+    "installOnQuit": "Updates beim Beenden installieren",
+    "installOnQuitHint": "Wirkt, solange die automatische Suche an ist. Ein Fehlerbehebungs- oder Funktionsupdate wird im Hintergrund geladen und beim Beenden von Font Fu installiert; Font Fu startet danach nicht von selbst neu. Ein großes Update fragt dich immer zuerst.",
+    "notice": {
+      "updated": "Auf Version {version} aktualisiert.",
+      "whatsNew": "Neuigkeiten",
+      "retry": "Aktualisieren…"
     }
   },
   "family": {

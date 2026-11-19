@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
-import type { ApiError, AvailableUpdate, Event, UpdateSupport } from '../api/types';
+import type { ApiError, AvailableUpdate, Event, UpdateNotice, UpdateSupport } from '../api/types';
+import { t } from '../i18n';
+import { useToastStore } from './toast';
 
 /** Where "Check for updates" is: what the Settings section and the dialog show. */
 export type UpdateStatus = 'idle' | 'checking' | 'upToDate' | 'available' | 'installing';
@@ -15,6 +17,12 @@ export type UpdateStatus = 'idle' | 'checking' | 'upToDate' | 'available' | 'ins
  * decides how big a step an update is (`kind`) and refuses a major install without the
  * second confirmation; this store only keeps what the user was shown and what they
  * confirmed.
+ *
+ * "Install updates when I quit" (E55.9) also runs in the shell: it downloads a patch or minor
+ * update in the background and installs it as the app quits. The start after it says once
+ * what happened (`takeUpdateNotice`): "Updated to <version>" with a link to what is new, or
+ * that the update could not be installed, with a button that checks again and opens the
+ * dialog. A package the shell refused while the app runs arrives as `updateNotice`.
  */
 export const useUpdatesStore = defineStore('updates', () => {
   const support = ref<UpdateSupport | null>(null);
@@ -64,8 +72,31 @@ export const useUpdatesStore = defineStore('updates', () => {
     status.value = 'available';
   }
 
+  /** Says `notice` once, as a toast with its one action. */
+  function say(notice: UpdateNotice): void {
+    const toasts = useToastStore();
+    if (notice.type === 'updated') {
+      const url = notice.notesUrl;
+      toasts.show(
+        t('updates.notice.updated', { version: notice.version }),
+        url
+          ? { label: t('updates.notice.whatsNew'), run: () => useClient().openUrl(url) }
+          : undefined,
+      );
+    } else {
+      toasts.show(notice.message, { label: t('updates.notice.retry'), run: () => check() });
+    }
+  }
+
   function onEvent(event: Event): void {
     if (event.type === 'updateAvailable') offer(event.update);
+    if (event.type === 'updateNotice') {
+      say(event.notice);
+      // Said now: the shell keeps it for the next start only until it is read.
+      void useClient()
+        .takeUpdateNotice()
+        .catch(() => null);
+    }
   }
 
   /**
@@ -80,6 +111,12 @@ export const useUpdatesStore = defineStore('updates', () => {
       if (found) offer(found);
     } catch {
       // Nothing on offer that the UI can show; "Check for updates" still works.
+    }
+    try {
+      const notice = await useClient().takeUpdateNotice();
+      if (notice) say(notice);
+    } catch {
+      // Nothing to say about the last quit.
     }
   }
 

@@ -1362,6 +1362,60 @@ fn the_menu_bar_holds_settings_where_each_os_keeps_it() {
     assert_eq!(item_texts(&file), ["Settings…"]);
 }
 
+// E55.9: the menu bar's Quit is the app's own item, so a quit from the menu
+// is known as the user's (an update kept for the quit installs only then).
+// Tauri's default menu is the host's: Windows has Quit at the end of File,
+// Linux has none. The same main-thread limit as above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_menu_bar_quit_is_the_apps_own_item() {
+    use fm_app_lib::menu::{self, MENU_ID_QUIT};
+    use fm_platform::Os;
+    use tauri::menu::Menu;
+
+    let (app, _webview) = app().unwrap();
+    let os = Os::current();
+    let bar = Menu::default(app.handle()).unwrap();
+    menu::replace_quit(app.handle(), &bar, os, "en").unwrap();
+    let quits: Vec<_> = bar
+        .items()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_submenu().cloned())
+        .filter_map(|s| s.get(MENU_ID_QUIT).map(|_| s))
+        .collect();
+    let predefined_quits = bar
+        .items()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i.as_submenu().cloned())
+        .flat_map(|s| s.items().unwrap())
+        .filter(|i| {
+            i.as_predefined_menuitem()
+                .is_some_and(|p| menu::is_quit_text(&p.text().unwrap()))
+        })
+        .count();
+    assert_eq!(predefined_quits, 0, "the predefined Quit is gone");
+    if os == Os::Windows {
+        let file = &quits[0];
+        assert_eq!(file.text().unwrap(), "File");
+        let last = file.items().unwrap().last().cloned().unwrap();
+        assert_eq!(last.id().as_ref(), MENU_ID_QUIT, "Quit stays last");
+        assert_eq!(last.as_menuitem().unwrap().text().unwrap(), "Quit Font Fu");
+    } else {
+        assert!(quits.is_empty(), "Linux's default menu has no Quit");
+    }
+    // Settings still goes above it.
+    menu::add_settings_item(app.handle(), &bar, os, "en").unwrap();
+    if os == Os::Windows {
+        let file = menu::settings_submenu(&bar).unwrap();
+        assert_eq!(
+            file.items().unwrap().last().unwrap().id().as_ref(),
+            MENU_ID_QUIT
+        );
+    }
+}
+
 // The same main-thread limit as the Help menu test above.
 #[cfg(not(target_os = "macos"))]
 #[test]

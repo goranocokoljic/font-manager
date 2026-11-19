@@ -18,13 +18,16 @@ use std::time::{Duration, Instant};
 use fm_api::activation::{ActivateRequest, ActivationMode, ConflictPolicy, Target};
 use fm_api::library::{AddSourceRequest, ImportMode, ScanRequest};
 use fm_api::settings::SettingsUpdate;
+use fm_api::update::UpdateNotice;
 use fm_api::{ActivationService, ApiError, ErrorCode, Event, EventSource, LibraryService};
 use fm_api::{FaceId, SettingsService};
+use fm_app_lib::quit_install::install_kept;
 use fm_app_lib::updater::{
     available, install_after_quit, install_error, is_signature_error, verify,
 };
 use fm_app_lib::{AppState, serve};
 use fm_core::CoreApi;
+use fm_core::update::on_quit::QuitInstall;
 use fm_platform::{AppPaths, MockActivator};
 use serde_json::{Value, json};
 use tauri::test::{MockRuntime, mock_builder, mock_context, noop_assets};
@@ -376,4 +379,209 @@ fn a_failed_install_brings_the_session_fonts_back_and_keeps_the_last_session() {
         faces,
         "the next launch did not reactivate the session"
     );
+}
+
+// E55.9 "Install updates when I quit": the package an automatic check kept
+// in the cache folder installs after the quit path, once, and the next start
+// says what happened. The installer is a stand-in that records the bytes it
+// was given (the real one replaces this test binary); the verification is
+// the real one, against the test key.
+
+fn trusted_update(app: &tauri::App<MockRuntime>) -> Update {
+    offered(app, "1.1.0", &signature())
+}
+
+fn kept(home: &Home, bytes: &[u8]) -> QuitInstall {
+    let store = QuitInstall::new(&home.paths);
+    store.stage("1.1.0", bytes).expect("kept");
+    assert!(
+        store.package_dir().starts_with(&home.paths.cache),
+        "the package is kept in the app's cache folder"
+    );
+    store
+}
+
+fn sorted_active(core: &CoreApi) -> Vec<FaceId> {
+    let mut v: Vec<FaceId> = core
+        .list_active()
+        .expect("active")
+        .into_iter()
+        .map(|a| a.face)
+        .collect();
+    v.sort_by_key(|f| f.0);
+    v
+}
+
+#[test]
+fn a_kept_update_installs_after_the_quit_path_once_and_the_next_start_says_updated() {
+    let home = Home::new("on-quit-ok");
+    let (state, core) = home.serve();
+    core.update_settings(SettingsUpdate {
+        reactivate_on_launch: Some(true),
+        ..SettingsUpdate::default()
+    })
+    .expect("settings");
+    let mut faces = session_font(&core);
+    faces.sort_by_key(|f| f.0);
+    let app = app_with(config_with_key(&read_text(&fixture("test-key.pub"))));
+    let update = trusted_update(&app);
+    let store = kept(&home, &package());
+
+    // RunEvent::Exit: the quit path, then the install.
+    state.run_quit_path();
+    let mut installed = Vec::new();
+    let mut flushed = false;
+    install_kept(
+        &store,
+        "0.1.0",
+        "1.1.0",
+        Some("https://example.invalid/v1.1.0".into()),
+        |bytes| verify(&update, bytes),
+        || flushed = true,
+        |bytes| {
+            assert!(
+                core.list_active().expect("active").is_empty(),
+                "session fonts were still registered when the installer ran"
+            );
+            installed.push(bytes.to_vec());
+            Ok(())
+        },
+    )
+    .expect("installed");
+    assert!(flushed, "the log is written out before the installer runs");
+    assert_eq!(installed, vec![package()], "installed once, the kept bytes");
+    // The process ends here; a second quit path would record an empty session.
+    state.run_quit_path();
+    drop((state, core));
+
+    // The next start is the new version.
+    assert_eq!(
+        store.resolve_at_start("1.1.0"),
+        Some(UpdateNotice::Updated {
+            version: "1.1.0".into(),
+            notes_url: Some("https://example.invalid/v1.1.0".into())
+        })
+    );
+    assert_eq!(
+        store.staged_version(),
+        None,
+        "the installed package is deleted"
+    );
+    assert!(matches!(
+        store.take_notice(),
+        Some(UpdateNotice::Updated { .. })
+    ));
+    assert_eq!(store.take_notice(), None, "said once");
+    let (_state, next) = home.serve();
+    assert_eq!(
+        sorted_active(&next),
+        faces,
+        "reactivate on launch lost the real session"
+    );
+}
+
+#[test]
+fn a_failed_install_at_quit_starts_the_earlier_version_which_says_so_once() {
+    let home = Home::new("on-quit-fails");
+    let (state, core) = home.serve();
+    core.update_settings(SettingsUpdate {
+        reactivate_on_launch: Some(true),
+        ..SettingsUpdate::default()
+    })
+    .expect("settings");
+    let mut faces = session_font(&core);
+    faces.sort_by_key(|f| f.0);
+    let app = app_with(config_with_key(&read_text(&fixture("test-key.pub"))));
+    let update = trusted_update(&app);
+    let store = kept(&home, &package());
+
+    state.run_quit_path();
+    let failed = install_kept(
+        &store,
+        "0.1.0",
+        "1.1.0",
+        None,
+        |bytes| verify(&update, bytes),
+        || {},
+        |_| Err(ApiError::new(ErrorCode::Io, "the installer did not start")),
+    );
+    assert_eq!(failed.expect_err("failed").code, ErrorCode::Io);
+    drop((state, core));
+
+    // The earlier version starts as before.
+    let Some(UpdateNotice::NotInstalled { version, message }) = store.resolve_at_start("0.1.0")
+    else {
+        panic!("the start does not say the update failed");
+    };
+    assert_eq!(version, "1.1.0");
+    assert!(message.contains("could not install"), "{message}");
+    assert!(matches!(
+        store.take_notice(),
+        Some(UpdateNotice::NotInstalled { .. })
+    ));
+    assert_eq!(store.take_notice(), None, "said once");
+    let (_state, next) = home.serve();
+    assert_eq!(
+        sorted_active(&next),
+        faces,
+        "reactivate on launch lost the real session"
+    );
+}
+
+#[test]
+fn a_tampered_kept_package_is_deleted_reported_once_and_nothing_installs() {
+    let home = Home::new("on-quit-tampered");
+    let app = app_with(config_with_key(&read_text(&fixture("test-key.pub"))));
+    let update = trusted_update(&app);
+    let mut bytes = package();
+    bytes[0] ^= 0x01;
+    let store = kept(&home, &bytes);
+    let e = install_kept(
+        &store,
+        "0.1.0",
+        "1.1.0",
+        None,
+        |bytes| verify(&update, bytes),
+        || {},
+        |_| panic!("a refused package must not install"),
+    )
+    .expect_err("refused");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(
+        store.staged_version(),
+        None,
+        "the refused package is deleted"
+    );
+    let Some(UpdateNotice::NotInstalled { message, .. }) = store.take_notice() else {
+        panic!("the refusal is not reported");
+    };
+    assert!(
+        message.contains("not signed with Font Fu's release key"),
+        "{message}"
+    );
+    assert_eq!(store.take_notice(), None, "reported once");
+    // No install began, so the next start has nothing to say.
+    assert_eq!(store.resolve_at_start("0.1.0"), None);
+}
+
+#[test]
+fn a_package_announced_as_another_version_is_refused_at_quit() {
+    let home = Home::new("on-quit-version");
+    let app = app_with(config_with_key(&read_text(&fixture("test-key.pub"))));
+    // The manifest says 2.0.0 for a package signed as 1.1.0.
+    let update = offered(&app, "2.0.0", &signature());
+    let store = QuitInstall::new(&home.paths);
+    store.stage("2.0.0", &package()).expect("kept");
+    let e = install_kept(
+        &store,
+        "0.1.0",
+        "2.0.0",
+        None,
+        |bytes| verify(&update, bytes),
+        || {},
+        |_| panic!("a refused package must not install"),
+    )
+    .expect_err("refused");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(store.staged_version(), None);
 }

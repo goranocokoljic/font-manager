@@ -70,6 +70,7 @@ use tauri_plugin_dialog::DialogExt;
 pub mod auto_update;
 pub mod help;
 pub mod menu;
+pub mod quit_install;
 pub mod shell_text;
 pub mod tray;
 pub mod updater;
@@ -110,6 +111,9 @@ pub struct AppState {
     endpoint: Arc<Mutex<EndpointSlot>>,
     /// Where the IPC endpoint listens (ADR 0016); without a name it does not start.
     ipc: Option<IpcName>,
+    /// The files of "Install updates when I quit" (E55.9); without them
+    /// nothing is downloaded or installed at quit.
+    quit_install: Option<fm_core::update::on_quit::QuitInstall>,
 }
 
 /// The local API endpoint while it runs, and whether the quit path stopped it.
@@ -132,6 +136,7 @@ impl AppState {
             quit_ran: AtomicBool::new(false),
             endpoint: Arc::default(),
             ipc: None,
+            quit_install: None,
         }
     }
 
@@ -146,6 +151,7 @@ impl AppState {
             quit_ran: AtomicBool::new(false),
             endpoint: Arc::default(),
             ipc: None,
+            quit_install: None,
         }
     }
 
@@ -154,6 +160,14 @@ impl AppState {
     #[must_use]
     pub fn with_ipc(mut self, name: IpcName) -> Self {
         self.ipc = Some(name);
+        self
+    }
+
+    /// Keeps an update for "Install updates when I quit" (E55.9) in the app
+    /// folders `paths`.
+    #[must_use]
+    pub fn with_quit_install(mut self, paths: &AppPaths) -> Self {
+        self.quit_install = Some(fm_core::update::on_quit::QuitInstall::new(paths));
         self
     }
 
@@ -1384,6 +1398,9 @@ async fn update_settings<R: Runtime>(
     state: State<'_, AppState>,
     req: SettingsUpdate,
 ) -> ApiResult<Settings> {
+    // "Install updates when I quit" only where this copy updates itself
+    // (E55.9); the core checks it too, the settings store alone does not.
+    fm_api::update::check_settings_update(&req, Some(&updater::support()))?;
     let saved = call_settings(&state, move |s| s.update_settings(req)).await;
     // "Check automatically" may have changed: start, wake or end the timer.
     auto_update::refresh(&app);
@@ -1538,8 +1555,10 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let tray = state.tray.clone();
     let core = state.core.clone();
     let locale = shell_text::initial_locale(state.current_settings().language);
+    let on_quit = quit_install::OnQuit::new(state.quit_install.clone());
     builder
         .manage(shell_text::ShellLocale::new(locale))
+        .manage(on_quit)
         .manage(state)
         .manage(updater::PendingUpdate::default())
         .manage(auto_update::AutoCheck::default())
@@ -1562,6 +1581,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             });
         })
         .setup(move |app| {
+            // What the install at the last quit did (E55.9), for the UI to say once.
+            quit_install::resolve_at_start(app.handle());
             // The tray is made once the event loop runs (macOS needs that).
             let support = match tray {
                 Some(tray) => {
@@ -1718,7 +1739,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             updater::update_support,
             updater::check_for_update,
             updater::install_update,
-            updater::pending_update
+            updater::pending_update,
+            quit_install::take_update_notice
         ])
 }
 
@@ -1839,6 +1861,10 @@ pub fn run() {
             .plugin(tauri_plugin_updater::Builder::new().build()),
     );
     let state = state.with_tray(fm_platform::tray::system());
+    let state = match &startup {
+        Some(startup) => state.with_quit_install(&startup.paths),
+        None => state,
+    };
     // The pipe or socket other programs of this user reach the app on (ADR 0016).
     let state = match &startup {
         Some(startup) => state.with_ipc(startup.paths.ipc_name()),
@@ -1855,12 +1881,22 @@ pub fn run() {
     };
     // Every quit ends here: the tray's Quit, the app menu's Quit, closing the
     // window without a tray item, the restart after an update.
-    app.run(move |handle, event| {
-        if let RunEvent::Exit = event {
+    app.run(move |handle, event| match event {
+        // The last window closed: the user's quit (E55.9). A logout or a
+        // shutdown closes no window this way.
+        RunEvent::ExitRequested { code: None, .. } => {
+            if let Some(on_quit) = handle.try_state::<quit_install::OnQuit>() {
+                on_quit.mark_user_quit();
+            }
+        }
+        RunEvent::Exit => {
             handle.state::<AppState>().run_quit_path();
+            // After the quit path, once: an update kept for the quit (E55.9).
+            quit_install::at_exit(handle, || drop(startup.take()));
             // `run` may exit the process without returning: flush the log now.
             drop(startup.take());
         }
+        _ => {}
     });
 }
 

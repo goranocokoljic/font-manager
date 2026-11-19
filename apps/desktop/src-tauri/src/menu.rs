@@ -14,6 +14,8 @@ use crate::tray::{self, MAIN_WINDOW};
 
 /// The id of the menu bar's Settings… item.
 pub const MENU_ID_SETTINGS: &str = "app:settings";
+/// The id of the app's own Quit item in the menu bar (E55.9).
+pub const MENU_ID_QUIT: &str = "app:quit";
 /// The id of the File menu the shell makes where the OS menu has none (Linux).
 pub const FILE_SUBMENU_ID: &str = "app:file";
 /// The shell event that asks the webview to go to a route; the payload is the
@@ -78,6 +80,56 @@ pub fn add_settings_item<R: Runtime>(
     Ok(())
 }
 
+/// Replaces the default menu's Quit with the app's own item (E55.9), so a
+/// quit from the menu is known as the user's: on a Mac the predefined item
+/// terminates the app the same way a logout or a shutdown does, and an
+/// update kept for the quit must not install during those. The app menu's
+/// last item on a Mac (⌘Q), the File menu's last item on Windows; Linux's
+/// default menu has no Quit.
+pub fn replace_quit<R: Runtime>(
+    app: &AppHandle<R>,
+    menu: &Menu<R>,
+    os: Os,
+    locale: &str,
+) -> tauri::Result<()> {
+    let holder = match os {
+        Os::MacOs => menu.items()?.first().and_then(|i| i.as_submenu().cloned()),
+        Os::Windows => file_menu(menu)?,
+        Os::Linux => None,
+    };
+    let Some(holder) = holder else {
+        return Ok(());
+    };
+    let items = holder.items()?;
+    let Some(last) = items.last() else {
+        return Ok(());
+    };
+    let is_quit = match last.as_predefined_menuitem() {
+        Some(item) => is_quit_text(&item.text()?),
+        None => false,
+    };
+    if !is_quit {
+        return Ok(());
+    }
+    holder.remove(last)?;
+    let accelerator = (os == Os::MacOs).then_some("CmdOrCtrl+Q");
+    let quit = MenuItem::with_id(
+        app,
+        MENU_ID_QUIT,
+        shell_text::text(locale, "shell.tray.quit"),
+        true,
+        accelerator,
+    )?;
+    holder.append(&quit)
+}
+
+/// Whether `text` is the predefined Quit item's: "Quit Font Fu" on a Mac,
+/// "&Exit" on Windows, "&Quit" elsewhere.
+pub fn is_quit_text(text: &str) -> bool {
+    let text = text.replace('&', "");
+    text.starts_with("Quit") || text == "Exit"
+}
+
 /// The OS menu's File menu: Tauri's default menu has one, untagged and first,
 /// on Windows; the one the shell made on Linux.
 fn file_menu<R: Runtime>(menu: &Menu<R>) -> tauri::Result<Option<Submenu<R>>> {
@@ -112,6 +164,13 @@ pub fn relabel<R: Runtime>(app: &AppHandle<R>, locale: &str) {
     {
         tracing::warn!(error = %e, "the Settings menu item was not relabelled");
     }
+    if let Some(quit) = submenu
+        .get(MENU_ID_QUIT)
+        .and_then(|i| i.as_menuitem().cloned())
+        && let Err(e) = quit.set_text(shell_text::text(locale, "shell.tray.quit"))
+    {
+        tracing::warn!(error = %e, "the Quit menu item was not relabelled");
+    }
     if lifecycle::settings_menu(Os::current()) == SettingsMenu::FileMenu
         && let Err(e) = submenu.set_text(shell_text::text(locale, "shell.fileMenu"))
     {
@@ -140,6 +199,8 @@ pub fn open_update<R: Runtime>(app: &AppHandle<R>) {
 pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     if event.id().as_ref() == MENU_ID_SETTINGS {
         open_settings(app);
+    } else if event.id().as_ref() == MENU_ID_QUIT {
+        crate::quit_install::quit(app);
     } else {
         crate::help::on_menu_event(app, event);
     }

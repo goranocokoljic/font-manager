@@ -1233,7 +1233,16 @@ allowed: boolean } |
  */
 { type: "updateAvailable"; 
 /**  The update on offer. */
-update: AvailableUpdate };
+update: AvailableUpdate } | 
+/**
+ *  Something the user is told once about an update installed when they
+ *  quit (E55.9): a package downloaded for it was refused. The UI reads
+ *  the notice of the last quit's install at start
+ *  (`take_update_notice`); this event only tells a window that is open.
+ */
+{ type: "updateNotice"; 
+/**  What to say. */
+notice: UpdateNotice };
 
 /**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
 export type ExportLayoutPngRequest = {
@@ -3559,6 +3568,15 @@ export type Settings = {
 	 */
 	checkUpdatesAutomatically?: boolean,
 	/**
+	 *  Install a patch or minor update when the user quits the app (E55.9,
+	 *  ADR 0012): an automatic check downloads it in the background and the
+	 *  normal quit installs it. Off by default; it has an effect only with
+	 *  [`Self::check_updates_automatically`] on and where this copy updates
+	 *  itself, and turning it on is refused elsewhere
+	 *  (`crate::update::check_settings_update`).
+	 */
+	installUpdatesOnQuit?: boolean,
+	/**
 	 *  The language of the UI, the native menus and the tray; `System` by
 	 *  default.
 	 */
@@ -3611,6 +3629,11 @@ export type SettingsUpdate = {
 	startAtLogin?: boolean | null,
 	/**  Check for a new version when the app starts. */
 	checkUpdatesAutomatically?: boolean | null,
+	/**
+	 *  Install a patch or minor update when the user quits the app. Turning
+	 *  it on is refused where this copy does not update itself.
+	 */
+	installUpdatesOnQuit?: boolean | null,
 	/**  The language of the UI. */
 	language?: Language | null,
 	/**
@@ -4145,6 +4168,31 @@ export type UpdateKind =
  *  major step too: semver gives 0.x no compatibility promise.
  */
 "major";
+
+/**
+ *  What the app says once about an update installed when the user quit
+ *  (E55.9): at the next start whether it installed, or while it runs that a
+ *  package downloaded for it was refused.
+ */
+export type UpdateNotice = 
+/**  The update installed: "Updated to <version>", with a link to what is new. */
+{ type: "updated"; 
+/**  The version now running. */
+version: string; 
+/**
+ *  The release notes of that version; `None` when the release
+ *  server has no page for them.
+ */
+notesUrl?: string | null } | 
+/**
+ *  The update was not installed: the earlier version runs as before. The
+ *  UI offers the update dialog.
+ */
+{ type: "notInstalled"; 
+/**  The version that was not installed. */
+version: string; 
+/**  One user-facing sentence on why. */
+message: string };
 
 /**  Whether this copy of the app updates itself. */
 export type UpdateSupport = {

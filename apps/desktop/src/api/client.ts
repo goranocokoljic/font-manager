@@ -140,6 +140,7 @@ import type {
   UpdateCheck,
   AvailableUpdate,
   UpdateSupport,
+  UpdateNotice,
   UserMetaUpdate,
   VirtualStyle,
   VirtualStyleId,
@@ -459,6 +460,12 @@ export interface FmClient {
   pendingUpdate(): Promise<AvailableUpdate | null>;
   /** Installs the update the last check found; the app quits, installs and restarts. */
   installUpdate(req: InstallUpdateRequest): Promise<void>;
+  /**
+   * What the app says once about an update installed when the user quit (E55.9): "Updated
+   * to <version>", or that it could not be installed. `null` when there is nothing to say;
+   * a second call returns `null`.
+   */
+  takeUpdateNotice(): Promise<UpdateNotice | null>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
@@ -609,6 +616,7 @@ export const tauriClient: FmClient = {
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
   pendingUpdate: () => invoke<AvailableUpdate | null>('pending_update'),
   installUpdate: (req) => invoke<void>('install_update', { req }),
+  takeUpdateNotice: () => invoke<UpdateNotice | null>('take_update_notice'),
 };
 
 let current: FmClient | undefined;

@@ -38,6 +38,7 @@ import {
   type CatalogId,
   type AvailableUpdate,
   type InstallUpdateRequest,
+  type UpdateNotice,
   type Classification,
   type CssValues,
   type CssValuesRequest,
@@ -642,6 +643,8 @@ export const defaultSettings: FullSettings = {
   startAtLogin: false,
   // Off unless the user turns it on (rule 7).
   checkUpdatesAutomatically: false,
+  // Off unless the user turns it on (E55.9).
+  installUpdatesOnQuit: false,
   // Follows the OS language until the user picks one.
   language: 'system',
   // Chosen by the user at the first Install (E22.7).
@@ -1193,6 +1196,11 @@ export interface MockOptions {
    * no watched folder yet (only the system fonts).
    */
   setup?: 'rule' | 'none' | 'first';
+  /**
+   * What the start after an install at quit says (E55.9), once through
+   * `takeUpdateNotice`; none when absent.
+   */
+  updateNotice?: UpdateNotice;
   /** Called with every install the mock accepts (tests). */
   onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
@@ -3529,6 +3537,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const managedReason =
     'Flatpak installs the updates of this copy (flatpak update, or your software center), so Check for updates is not shown.';
   let pendingUpdate: AvailableUpdate | null = null;
+  let updateNotice: UpdateNotice | null = options.updateNotice ?? null;
 
   // The install hooks activate through the client's own `activate`, bound below.
   let activateFaces: FmClient['activate'] = async () => [];
@@ -3616,6 +3625,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: 'Minisign(InvalidSignature)',
         };
       options.onInstall?.({ ...req });
+    },
+    takeUpdateNotice: async () => {
+      const notice = updateNotice;
+      updateNotice = null;
+      return notice ? structuredClone(notice) : null;
     },
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
@@ -4792,6 +4806,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             : 'Start at login could not be turned off: the system refused to remove the login entry.',
           detail: 'blocked by policy',
         };
+      // The same rule as `check_settings_update` in fm-api (E55.9).
+      if (req.installUpdatesOnQuit === true && options.update === 'managed')
+        throw {
+          code: 'unsupported' as const,
+          message: `Font Fu cannot install updates when you quit here. ${managedReason}`,
+          detail: null,
+        };
       const next = { ...settings };
       // The same rule as `Settings::apply`: a path with a root, or empty to forget it.
       const folder = req.downloadFolder?.trim();
@@ -5066,6 +5087,26 @@ export const mockClient: FmClient = createMockClient({
   update: (['patch', 'major', 'offline', 'unsigned', 'managed'] as const)[
     countFromUrl('mockUpdate', 5) - 1
   ],
+  // `?mockUpdateNotice=1`: the start after an install at quit says it updated to 0.1.1,
+  // `=2` that it could not install it (E55.9).
+  ...([
+    {},
+    {
+      updateNotice: {
+        type: 'updated' as const,
+        version: '0.1.1',
+        notesUrl: 'https://github.com/goranocokoljic/font-manager/releases/tag/v0.1.1',
+      },
+    },
+    {
+      updateNotice: {
+        type: 'notInstalled' as const,
+        version: '0.1.1',
+        message:
+          'Font Fu could not install version 0.1.1 when it quit, so version 0.1.0 started as before.',
+      },
+    },
+  ][countFromUrl('mockUpdateNotice', 2)] ?? {}),
   // `?mockColor=1` adds a color font with two palettes.
   colorFace: countFromUrl('mockColor', 1) > 0,
   // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.

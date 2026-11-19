@@ -65,6 +65,13 @@ impl AvailableUpdate {
     pub fn needs_second_confirmation(&self) -> bool {
         self.kind == UpdateKind::Major
     }
+
+    /// Whether "Install updates when I quit" may install this update (E55.9):
+    /// a patch or minor one. A major update (before 1.0 a minor one too, as
+    /// [`update_kind`] says) is only announced and asks twice.
+    pub fn installs_on_quit(&self) -> bool {
+        !self.needs_second_confirmation()
+    }
 }
 
 /// What a check for updates found.
@@ -104,6 +111,88 @@ pub const AUTOMATIC_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 /// and no request is made (rule 7).
 pub fn checks_automatically(settings: &crate::settings::Settings, support: &UpdateSupport) -> bool {
     settings.check_updates_automatically && support.offered
+}
+
+/// Whether an update an automatic check finds is downloaded in the
+/// background and installed when the user quits (E55.9, ADR 0012): the user
+/// turned on "Install updates when I quit", automatic checks run
+/// ([`checks_automatically`]) and this copy updates itself. Which updates
+/// qualify is [`AvailableUpdate::installs_on_quit`].
+pub fn installs_on_quit(settings: &crate::settings::Settings, support: &UpdateSupport) -> bool {
+    settings.install_updates_on_quit && checks_automatically(settings, support)
+}
+
+/// `Ok` when `update` may be saved by a copy of the app with `support`
+/// (`None`: a caller that does not know, such as the CLI's direct link).
+/// Turning "Install updates when I quit" on is refused where this copy does
+/// not update itself; turning it off is always allowed.
+pub fn check_settings_update(
+    update: &crate::settings::SettingsUpdate,
+    support: Option<&UpdateSupport>,
+) -> ApiResult<()> {
+    if update.install_updates_on_quit != Some(true) || support.is_some_and(|s| s.offered) {
+        return Ok(());
+    }
+    let reason = support
+        .and_then(|s| s.reason.clone())
+        .unwrap_or_else(|| "This copy of Font Fu does not update itself.".to_owned());
+    Err(ApiError::new(
+        ErrorCode::Unsupported,
+        format!("Font Fu cannot install updates when you quit here. {reason}"),
+    ))
+}
+
+/// What the app says once about an update installed when the user quit
+/// (E55.9): at the next start whether it installed, or while it runs that a
+/// package downloaded for it was refused.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum UpdateNotice {
+    /// The update installed: "Updated to <version>", with a link to what is new.
+    #[serde(rename_all = "camelCase")]
+    Updated {
+        /// The version now running.
+        version: String,
+        /// The release notes of that version; `None` when the release
+        /// server has no page for them.
+        #[serde(default)]
+        notes_url: Option<String>,
+    },
+    /// The update was not installed: the earlier version runs as before. The
+    /// UI offers the update dialog.
+    #[serde(rename_all = "camelCase")]
+    NotInstalled {
+        /// The version that was not installed.
+        version: String,
+        /// One user-facing sentence on why.
+        message: String,
+    },
+}
+
+impl UpdateNotice {
+    /// What the start after an install of `version` at quit says, with
+    /// `running` the version that started: installed when `running` is
+    /// `version` or newer, else not installed. `InvalidRequest` when either is
+    /// not a semantic version.
+    pub fn after_install(
+        version: &str,
+        running: &str,
+        notes_url: Option<String>,
+    ) -> ApiResult<Self> {
+        Ok(match update_kind(running, version)? {
+            None => Self::Updated {
+                version: running.to_owned(),
+                notes_url,
+            },
+            Some(_) => Self::NotInstalled {
+                version: version.to_owned(),
+                message: format!(
+                    "Font Fu could not install version {version} when it quit, so version \
+                     {running} started as before."
+                ),
+            },
+        })
+    }
 }
 
 /// Seconds until the next automatic check is due; 0 means now.
@@ -326,6 +415,101 @@ mod tests {
             automatic_check_wait(Some(10_000), 50),
             AUTOMATIC_CHECK_INTERVAL_SECS
         );
+    }
+
+    fn support(offered: bool) -> UpdateSupport {
+        UpdateSupport {
+            offered,
+            reason: (!offered).then(|| "Flatpak installs the updates of this copy.".to_owned()),
+            release_host: Some("github.com".into()),
+        }
+    }
+
+    #[test]
+    fn only_patch_and_minor_updates_install_on_quit() {
+        assert!(pending("1.4.0", "1.4.1").installs_on_quit());
+        assert!(pending("1.4.0", "1.5.0").installs_on_quit());
+        assert!(!pending("1.4.0", "2.0.0").installs_on_quit());
+        // Before 1.0 a minor step is major: announced, never installed at quit.
+        assert!(pending("0.3.0", "0.3.1").installs_on_quit());
+        assert!(!pending("0.3.0", "0.4.0").installs_on_quit());
+    }
+
+    #[test]
+    fn install_on_quit_needs_the_setting_the_automatic_check_and_a_copy_that_updates_itself() {
+        let off = crate::settings::Settings::default();
+        let on = crate::settings::Settings {
+            check_updates_automatically: true,
+            install_updates_on_quit: true,
+            ..off.clone()
+        };
+        let no_checks = crate::settings::Settings {
+            check_updates_automatically: false,
+            ..on.clone()
+        };
+        assert!(installs_on_quit(&on, &support(true)));
+        assert!(!installs_on_quit(&on, &support(false)));
+        assert!(!installs_on_quit(&no_checks, &support(true)));
+        assert!(!installs_on_quit(&off, &support(true)));
+    }
+
+    #[test]
+    fn turning_install_on_quit_on_is_refused_where_the_copy_does_not_update_itself() {
+        let on = crate::settings::SettingsUpdate {
+            install_updates_on_quit: Some(true),
+            ..Default::default()
+        };
+        let off = crate::settings::SettingsUpdate {
+            install_updates_on_quit: Some(false),
+            ..Default::default()
+        };
+        assert!(check_settings_update(&on, Some(&support(true))).is_ok());
+        let e = check_settings_update(&on, Some(&support(false))).expect_err("refused");
+        assert_eq!(e.code, ErrorCode::Unsupported);
+        assert!(e.message.contains("Flatpak"), "{e:?}");
+        assert_eq!(
+            check_settings_update(&on, None).expect_err("unknown").code,
+            ErrorCode::Unsupported
+        );
+        assert!(check_settings_update(&off, Some(&support(false))).is_ok());
+        assert!(check_settings_update(&off, None).is_ok());
+        assert!(check_settings_update(&Default::default(), None).is_ok());
+    }
+
+    #[test]
+    fn the_start_after_an_install_says_whether_it_installed() {
+        let url = Some("https://example.invalid/notes".to_owned());
+        assert_eq!(
+            UpdateNotice::after_install("1.5.0", "1.5.0", url.clone()).expect("valid"),
+            UpdateNotice::Updated {
+                version: "1.5.0".into(),
+                notes_url: url.clone()
+            }
+        );
+        let failed = UpdateNotice::after_install("1.5.0", "1.4.0", url).expect("valid");
+        let UpdateNotice::NotInstalled { version, message } = failed else {
+            panic!("not a failure: {failed:?}");
+        };
+        assert_eq!(version, "1.5.0");
+        assert!(message.contains("1.4.0"), "{message}");
+        assert!(UpdateNotice::after_install("x", "1.4.0", None).is_err());
+    }
+
+    #[test]
+    fn an_update_notice_is_tagged_camel_case() {
+        let json = serde_json::to_value(UpdateNotice::Updated {
+            version: "1.5.0".into(),
+            notes_url: None,
+        })
+        .expect("json");
+        assert_eq!(json["type"], "updated");
+        assert_eq!(json["notesUrl"], serde_json::Value::Null);
+        let json = serde_json::to_value(UpdateNotice::NotInstalled {
+            version: "1.5.0".into(),
+            message: "m".into(),
+        })
+        .expect("json");
+        assert_eq!(json["type"], "notInstalled");
     }
 
     #[test]

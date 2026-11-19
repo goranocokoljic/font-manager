@@ -134,6 +134,15 @@ pub enum Event {
         /// The update on offer.
         update: crate::update::AvailableUpdate,
     },
+    /// Something the user is told once about an update installed when they
+    /// quit (E55.9): a package downloaded for it was refused. The UI reads
+    /// the notice of the last quit's install at start
+    /// (`take_update_notice`); this event only tells a window that is open.
+    #[serde(rename_all = "camelCase")]
+    UpdateNotice {
+        /// What to say.
+        notice: crate::update::UpdateNotice,
+    },
 }
 
 /// The event stream.

@@ -92,6 +92,14 @@ pub struct Settings {
     /// the app does not update itself the switch is hidden.
     #[serde(default)]
     pub check_updates_automatically: bool,
+    /// Install a patch or minor update when the user quits the app (E55.9,
+    /// ADR 0012): an automatic check downloads it in the background and the
+    /// normal quit installs it. Off by default; it has an effect only with
+    /// [`Self::check_updates_automatically`] on and where this copy updates
+    /// itself, and turning it on is refused elsewhere
+    /// (`crate::update::check_settings_update`).
+    #[serde(default)]
+    pub install_updates_on_quit: bool,
     /// The language of the UI, the native menus and the tray; `System` by
     /// default.
     #[serde(default)]
@@ -128,6 +136,7 @@ impl Default for Settings {
             keep_in_tray: true,
             start_at_login: None,
             check_updates_automatically: false,
+            install_updates_on_quit: false,
             language: Language::System,
             download_folder: None,
             fetch_missing_fonts: false,
@@ -171,6 +180,10 @@ pub struct SettingsUpdate {
     /// Check for a new version when the app starts.
     #[serde(default)]
     pub check_updates_automatically: Option<bool>,
+    /// Install a patch or minor update when the user quits the app. Turning
+    /// it on is refused where this copy does not update itself.
+    #[serde(default)]
+    pub install_updates_on_quit: Option<bool>,
     /// The language of the UI.
     #[serde(default)]
     pub language: Option<Language>,
@@ -239,6 +252,9 @@ impl Settings {
             check_updates_automatically: update
                 .check_updates_automatically
                 .unwrap_or(self.check_updates_automatically),
+            install_updates_on_quit: update
+                .install_updates_on_quit
+                .unwrap_or(self.install_updates_on_quit),
             language: update.language.unwrap_or(self.language),
             download_folder,
             fetch_missing_fonts: update
@@ -569,6 +585,26 @@ mod tests {
         assert!(next.check_updates_automatically);
         let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
         assert!(unchanged.check_updates_automatically);
+    }
+
+    #[test]
+    fn install_on_quit_is_off_for_old_config_files_and_can_be_turned_on() {
+        // A config.json written before E55.9 never installs by itself.
+        let old: Settings =
+            serde_json::from_str(r#"{"checkUpdatesAutomatically":true}"#).expect("old config");
+        assert!(!old.install_updates_on_quit);
+        assert!(!Settings::default().install_updates_on_quit);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["installUpdatesOnQuit"], false);
+        let on: SettingsUpdate =
+            serde_json::from_str(r#"{"installUpdatesOnQuit":true}"#).expect("update");
+        let next = old.apply(&on).expect("valid");
+        assert!(next.install_updates_on_quit);
+        assert!(
+            next.apply(&SettingsUpdate::default())
+                .expect("valid")
+                .install_updates_on_quit
+        );
     }
 
     #[test]

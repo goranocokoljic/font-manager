@@ -1,6 +1,8 @@
 //! Whether this copy of the app offers "Check for updates" (E18.2, ADR 0012),
 //! the platform note that says why not, and the release server it asks
-//! (E55.7).
+//! (E55.7). [`on_quit`]: the files of "Install updates when I quit" (E55.9).
+
+pub mod on_quit;
 
 use fm_api::update::UpdateSupport;
 use fm_platform::Distribution;
@@ -70,8 +72,65 @@ pub fn support_from<'a>(
     }
 }
 
+/// The page of what is new in `version` (the "Updated to <version>" link,
+/// E55.9), from the first endpoint the app was built with that is a GitHub
+/// release address (`https://github.com/<owner>/<repo>/releases/…`): that
+/// repository's release page of the tag `v<version>`. `None` for any other
+/// release server: it names no notes page.
+pub fn release_notes_url<'a>(
+    endpoints: impl IntoIterator<Item = &'a str>,
+    version: &str,
+) -> Option<String> {
+    let tag = version.trim().trim_start_matches('v');
+    if tag.is_empty()
+        || !tag
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || ".-+".contains(c))
+    {
+        return None;
+    }
+    endpoints.into_iter().find_map(|endpoint| {
+        let rest = endpoint.trim().strip_prefix("https://github.com/")?;
+        let mut parts = rest.split('/');
+        let (owner, repo) = (parts.next()?, parts.next()?);
+        let releases = parts.next()?;
+        let name_ok = |s: &str| {
+            !s.is_empty()
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        };
+        (releases == "releases" && name_ok(owner) && name_ok(repo))
+            .then(|| format!("https://github.com/{owner}/{repo}/releases/tag/v{tag}"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_notes_link_is_the_github_release_page_of_the_version() {
+        let shipped =
+            "https://github.com/goranocokoljic/font-manager/releases/latest/download/latest.json";
+        assert_eq!(
+            super::release_notes_url([shipped], "1.5.0").as_deref(),
+            Some("https://github.com/goranocokoljic/font-manager/releases/tag/v1.5.0")
+        );
+        assert_eq!(
+            super::release_notes_url(["https://fonts.example/latest.json", shipped], "v1.5.0")
+                .as_deref(),
+            Some("https://github.com/goranocokoljic/font-manager/releases/tag/v1.5.0")
+        );
+        assert_eq!(
+            super::release_notes_url(["https://fonts.example/latest.json"], "1.5.0"),
+            None
+        );
+        assert_eq!(super::release_notes_url([shipped], "1.5.0/../x"), None);
+        assert_eq!(super::release_notes_url([shipped], ""), None);
+        assert_eq!(
+            super::release_notes_url(["https://github.com/o/r/archive/x"], "1.5.0"),
+            None
+        );
+    }
+
     use super::*;
 
     #[test]
