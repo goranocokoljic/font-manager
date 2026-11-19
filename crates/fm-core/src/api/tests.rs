@@ -5276,6 +5276,18 @@ fn set_download_folder(lib: &Lib, folder: &Path) {
         .expect("download folder");
 }
 
+/// Writes the download folder past `CoreApi::update_settings`'s check, as a
+/// hand edit of `config.json` would: install keeps its own refusal for it.
+fn write_download_folder(lib: &Lib, folder: &Path) {
+    lib.api
+        .settings
+        .update_settings(SettingsUpdate {
+            download_folder: Some(folder.to_string_lossy().into_owned()),
+            ..SettingsUpdate::default()
+        })
+        .expect("download folder");
+}
+
 fn install_lato(lib: &Lib) -> ApiResult<InstallFamilyResponse> {
     lib.api.install_family(InstallFamilyRequest {
         id: fm_api::catalog::CatalogId::GoogleFonts,
@@ -5564,6 +5576,38 @@ fn the_catalog_folders_have_fixed_names_made_safe() {
 }
 
 #[test]
+fn each_listed_catalog_names_the_folder_its_installs_land_in_and_its_license() {
+    let (lib, _source, _server) = downloading_both("catalog-folder-names");
+    let folder = lib.dir.path().join("Font Fu Fonts");
+    set_download_folder(&lib, &folder);
+    let listed = lib.api.list_catalogs().expect("catalogs");
+    assert_eq!(listed.len(), 2);
+    for c in &listed {
+        assert_eq!(
+            c.folder_name.as_deref(),
+            Some(crate::catalog::catalog_folder_name(c.id)),
+            "{:?}",
+            c.id
+        );
+        assert!(
+            c.license_url
+                .as_deref()
+                .is_some_and(|u| u.starts_with("https://")),
+            "{:?}",
+            c.license_url
+        );
+    }
+    // The folder the API names is the folder an install goes into.
+    let google = install_lato(&lib).expect("Google Fonts");
+    let name = listed[0].folder_name.as_deref().expect("name");
+    assert_eq!(
+        google.download.folder,
+        folder.join(name).join("Lato").to_string_lossy()
+    );
+    assert_ne!(listed[0].license_url, listed[1].license_url);
+}
+
+#[test]
 fn a_family_in_both_catalogs_gets_two_folders_and_two_provenance_records() {
     let (lib, _source, server) = downloading_both("catalog-install-both");
     let folder = lib.dir.path().join("Font Fu Fonts");
@@ -5703,7 +5747,27 @@ fn an_install_is_refused_without_a_folder_while_off_or_into_system_fonts_before_
         system.clone(),
         system_dotted,
     ] {
-        set_download_folder(&lib, &folder);
+        // Settings refuse it (E55.5) and keep what they had ...
+        let before = lib.api.get_settings().expect("settings").download_folder;
+        let e = lib
+            .api
+            .update_settings(SettingsUpdate {
+                download_folder: Some(folder.to_string_lossy().into_owned()),
+                ..SettingsUpdate::default()
+            })
+            .expect_err("a system font folder is refused");
+        assert_eq!(e.code, ErrorCode::Conflict, "{folder:?}");
+        assert_eq!(
+            e.message,
+            crate::api::install::SYSTEM_DOWNLOAD_FOLDER_CHOSEN
+        );
+        assert_eq!(
+            lib.api.get_settings().expect("settings").download_folder,
+            before,
+            "nothing saved"
+        );
+        // ... and install refuses one written into config.json by hand.
+        write_download_folder(&lib, &folder);
         let e = install_lato(&lib).expect_err("system fonts");
         assert_eq!(e.code, ErrorCode::Conflict, "{folder:?}");
         assert_eq!(e.message, crate::api::install::SYSTEM_DOWNLOAD_FOLDER);
@@ -5713,7 +5777,7 @@ fn an_install_is_refused_without_a_folder_while_off_or_into_system_fonts_before_
     // full path: refused before it is compared.
     let text = os_fonts[0].to_string_lossy().into_owned();
     if text.as_bytes().get(1) == Some(&b':') {
-        set_download_folder(&lib, Path::new(&text[2..]));
+        write_download_folder(&lib, Path::new(&text[2..]));
         let e = install_lato(&lib).expect_err("no drive");
         assert_eq!(e.code, ErrorCode::Conflict);
         assert_eq!(e.message, crate::api::install::RELATIVE_DOWNLOAD_FOLDER);

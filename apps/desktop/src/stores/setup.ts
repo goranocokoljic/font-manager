@@ -1,17 +1,39 @@
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
-import type { ApiError, Event, FamilyHit, SetupStep, Source } from '../api/types';
-import { t } from '../i18n';
+import type { ApiError, Catalog, Event, FamilyHit, SetupStep, Source } from '../api/types';
+import { errorMessage, t } from '../i18n';
+import { useCatalogsStore } from './catalogs';
+import { useSettingsStore } from './settings';
 import { useSourcesStore } from './sources';
 
 /**
- * The setup steps this build has a screen for, in the order the setup asks them. The
- * catalogs step (with the download folder, E55.5) and the updates step (E55.6) join this
- * list when they are built; until then an open step without a screen is not shown, so
- * the setup never opens for a question it cannot ask (ADR 0026: asked once, in order).
+ * The setup screens this build has, in the order the setup asks them. The updates step
+ * (E55.6) joins this list when it is built; until then an open step without a screen is not
+ * shown, so the setup never opens for a question it cannot ask (ADR 0026: asked once, in
+ * order).
  */
-export const SETUP_SCREENS: readonly SetupStep[] = ['fontFolders'];
+export const SETUP_SCREENS: readonly SetupStep[] = ['fontFolders', 'catalogs'];
+
+/**
+ * The screen a step is asked on: the download folder is the second half of the "Online
+ * catalogs" screen (board 13 has three screens at most), so a catalog turned on outside the
+ * setup brings that screen back until a folder is chosen (ADR 0026).
+ */
+export function screenOf(step: SetupStep): SetupStep {
+  return step === 'downloadFolder' ? 'catalogs' : step;
+}
+
+/** The screens for the open steps, in order, each once; only those this build has. */
+export function screensFor(open: readonly SetupStep[]): SetupStep[] {
+  const shown: SetupStep[] = [];
+  for (const step of open.map(screenOf))
+    if (SETUP_SCREENS.includes(step) && !shown.includes(step)) shown.push(step);
+  return shown;
+}
+
+/** Where downloaded fonts go (E55.5): inside a font folder of step one, or another folder. */
+export type DownloadPlace = 'fontFolder' | 'other';
 
 /** A folder the API refused: its row shows the API's message (E55.4). */
 export interface RefusedFolder {
@@ -32,6 +54,8 @@ const FOUND_THROTTLE_MS = 500;
  */
 export const useSetupStore = defineStore('setup', () => {
   const sources = useSourcesStore();
+  const catalogs = useCatalogsStore();
+  const settings = useSettingsStore();
   /** The setup is on screen. */
   const visible = ref(false);
   /** The first `setupStatus` answer arrived (or failed): the main window may render. */
@@ -49,6 +73,16 @@ export const useSetupStore = defineStore('setup', () => {
   const found = ref<{ families: FamilyHit[]; total: number }>({ families: [], total: 0 });
   /** The answer to a step (Skip) failed; shown under the actions. */
   const error = ref<string | null>(null);
+  /** The catalogs screen: where downloaded fonts go. */
+  const place = ref<DownloadPlace>('other');
+  /** The font folder chosen with "Inside my font folder". */
+  const placeSource = ref<number | null>(null);
+  /** The folder of "Another folder": the proposal, until the user picks one. */
+  const otherFolder = ref<string | null>(null);
+  /** The API refused the download folder; the catalogs screen shows its message. */
+  const folderError = ref<string | null>(null);
+  /** The user chose on the catalogs screen; entering it again keeps that choice. */
+  let placeChosen = false;
   let nextKey = 0;
   let unsubscribe: Promise<Unsubscribe> | undefined;
   let foundTimer: ReturnType<typeof setTimeout> | undefined;
@@ -60,12 +94,30 @@ export const useSetupStore = defineStore('setup', () => {
   const folders = computed<Source[]>(() => sources.sources.filter((s) => s.kind !== 'system'));
   /** "Skip for now" is offered on the folders step only while no folder is added. */
   const canSkip = computed(() => current.value === 'fontFolders' && folders.value.length === 0);
+  /** The catalogs the user turned on (the screen lists every catalog; Adobe Fonts is none). */
+  const catalogsOn = computed<Catalog[]>(() => catalogs.catalogs.filter((c) => c.enabled));
+  /** "Inside my font folder" is offered while step one has a folder. */
+  const canPlaceInFontFolder = computed(() => folders.value.length > 0);
+  /** The choice shown: "Inside my font folder" only while there is a font folder. */
+  const placeShown = computed<DownloadPlace>(() =>
+    place.value === 'fontFolder' && canPlaceInFontFolder.value ? 'fontFolder' : 'other',
+  );
+  /** The font folder of "Inside my font folder", while that is the choice. */
+  const placeFolder = computed<Source | null>(() =>
+    placeShown.value === 'fontFolder'
+      ? (folders.value.find((s) => s.id === placeSource.value) ?? folders.value[0] ?? null)
+      : null,
+  );
+  /** The download folder the answer saves; `null` while there is none to save. */
+  const downloadFolder = computed<string | null>(() =>
+    placeShown.value === 'fontFolder' ? (placeFolder.value?.path ?? null) : otherFolder.value,
+  );
 
   /** Reads the open steps once at start; the setup shows when one of them has a screen. */
   async function load(): Promise<void> {
     try {
       const status = await useClient().setupStatus();
-      const shown = status.open.filter((s) => SETUP_SCREENS.includes(s));
+      const shown = screensFor(status.open);
       if (shown.length) await open(shown, false);
     } catch (e) {
       console.warn('the setup status could not be read', e);
@@ -86,10 +138,108 @@ export const useSetupStore = defineStore('setup', () => {
     refused.value = [];
     removeErrors.value = {};
     error.value = null;
+    folderError.value = null;
+    placeChosen = false;
+    otherFolder.value = null;
     visible.value = true;
     unsubscribe ??= useClient().onEvent(onEvent);
     await sources.load();
     await refreshFound();
+    if (current.value === 'catalogs') await prepareCatalogs();
+  }
+
+  /**
+   * The catalogs screen, each time it is entered, starts from what is saved: a download folder
+   * that is one of the font folders is "Inside my font folder", any other is "Another folder";
+   * with none, a font folder of step one is offered first and "Another folder" proposes
+   * `<Documents>/Font Fu Fonts`, as the first Install does. A choice the user made on the
+   * screen is kept when they go back and come again.
+   */
+  async function prepareCatalogs(): Promise<void> {
+    await Promise.all([catalogs.load(), settings.settings ? undefined : settings.load()]);
+    const saved = settings.settings?.downloadFolder ?? null;
+    const inside = saved ? folders.value.find((s) => s.path === saved) : undefined;
+    if (!placeChosen) {
+      place.value = inside || (!saved && folders.value.length) ? 'fontFolder' : 'other';
+      placeSource.value = (inside ?? folders.value[0])?.id ?? null;
+    }
+    if (!otherFolder.value && saved && !inside) otherFolder.value = saved;
+    if (!otherFolder.value) {
+      try {
+        otherFolder.value = await useClient().suggestedDownloadFolder();
+      } catch (e) {
+        console.warn('no folder to propose for installed fonts', e);
+      }
+    }
+  }
+
+  /** A catalog's switch: on fetches its list now (the switch says so). */
+  async function setCatalog(id: Catalog['id'], on: boolean): Promise<void> {
+    await catalogs.setEnabled(id, on);
+  }
+
+  function choosePlace(next: DownloadPlace): void {
+    place.value = next === 'fontFolder' && !canPlaceInFontFolder.value ? 'other' : next;
+    placeChosen = true;
+    folderError.value = null;
+  }
+
+  function chooseFontFolder(id: number): void {
+    placeSource.value = id;
+    choosePlace('fontFolder');
+  }
+
+  /** "Another folder": the native picker; a cancel keeps the folder shown. */
+  async function pickOtherFolder(): Promise<void> {
+    let path: string | null;
+    try {
+      path = await useClient().pickFolder(t('catalogs.install.folderTitle'));
+    } catch (e) {
+      folderError.value = errorMessage(e);
+      return;
+    }
+    choosePlace('other');
+    if (path) otherFolder.value = path;
+  }
+
+  /** A license link next to the cloud line: opened in the browser (a user action). */
+  async function openLicense(catalog: Catalog): Promise<void> {
+    if (!catalog.licenseUrl) return;
+    try {
+      await useClient().openUrl(catalog.licenseUrl);
+    } catch (e) {
+      error.value = errorMessage(e);
+    }
+  }
+
+  /**
+   * Continue on the catalogs screen. With no catalog on it records the step as answered and
+   * asks nothing more: the first Install asks for the folder, as before. With one on it saves
+   * the download folder first; a folder the API refuses keeps the screen with its message.
+   */
+  async function answerCatalogs(): Promise<boolean> {
+    if (catalogsOn.value.length) {
+      const folder = downloadFolder.value;
+      if (!folder) {
+        folderError.value = t('setup.catalogs.noFolder');
+        return false;
+      }
+      if (
+        settings.settings?.downloadFolder !== folder &&
+        !(await settings.update({ downloadFolder: folder }))
+      ) {
+        folderError.value = errorMessage(settings.error);
+        return false;
+      }
+    }
+    folderError.value = null;
+    try {
+      await useClient().answerSetupStep({ step: 'catalogs', answer: 'answered' });
+    } catch (e) {
+      error.value = (e as ApiError).message;
+      return false;
+    }
+    return true;
   }
 
   /** Leaves the setup; the scans go on behind it. */
@@ -101,8 +251,18 @@ export const useSetupStore = defineStore('setup', () => {
     void pending?.then((stop) => stop()).catch(() => undefined);
   }
 
-  /** Continue (or Finish on the last step): only goes on, it answers nothing. */
-  function next(): void {
+  /**
+   * Continue (or Finish on the last step). The folders step only goes on (its folders are
+   * added as they are chosen); the catalogs step saves its answer first and stays when the
+   * API refuses it.
+   */
+  async function next(): Promise<void> {
+    if (current.value === 'catalogs' && !(await answerCatalogs())) return;
+    error.value = null;
+    advance();
+  }
+
+  function advance(): void {
     if (last.value) close();
     else index.value += 1;
   }
@@ -110,6 +270,12 @@ export const useSetupStore = defineStore('setup', () => {
   function back(): void {
     if (index.value > 0) index.value -= 1;
   }
+
+  // Entering the catalogs screen (Continue, Back, a step link) reads what it starts from:
+  // step one may have added the folder it offers.
+  watch(current, (step, before) => {
+    if (visible.value && step === 'catalogs' && before !== undefined) void prepareCatalogs();
+  });
 
   /** A step name in the indicator, reopened from Settings. */
   function goTo(i: number): void {
@@ -123,7 +289,7 @@ export const useSetupStore = defineStore('setup', () => {
     try {
       await useClient().answerSetupStep({ step, answer: 'skipped' });
       error.value = null;
-      next();
+      advance();
     } catch (e) {
       error.value = (e as ApiError).message;
     }
@@ -214,6 +380,18 @@ export const useSetupStore = defineStore('setup', () => {
     last,
     folders,
     canSkip,
+    catalogsOn,
+    canPlaceInFontFolder,
+    place: placeShown,
+    placeFolder,
+    otherFolder,
+    downloadFolder,
+    folderError,
+    setCatalog,
+    choosePlace,
+    chooseFontFolder,
+    pickOtherFolder,
+    openLicense,
     refused,
     removeErrors,
     found,

@@ -18,7 +18,7 @@ use fm_api::catalog::{
     CatalogDownload, CatalogDownloadFile, InstallFamilyRequest, InstallFamilyResponse,
 };
 use fm_api::library::{Source, SourceKind};
-use fm_api::settings::Settings;
+use fm_api::settings::{Settings, SettingsUpdate};
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId, SettingsService};
 use fm_platform::Os;
 use fm_platform::paths::{is_within, resolve_links, system_font_folders};
@@ -63,7 +63,52 @@ pub const RELATIVE_DOWNLOAD_FOLDER: &str =
 pub const SYSTEM_DOWNLOAD_FOLDER: &str = "Fonts cannot be installed into a system font folder. \
      Choose another folder under Settings → Online catalogs.";
 
+/// The answer to `update_settings` with a download folder inside a system
+/// font folder (rule 4, E55.5): refused before it is saved, so the setup and
+/// Settings say so at once instead of at the first Install.
+pub const SYSTEM_DOWNLOAD_FOLDER_CHOSEN: &str =
+    "Fonts cannot be installed into a system font folder. Choose another folder.";
+
+/// Whether `folder` is, or is inside, a folder the OS reads fonts from or a
+/// system source of the library; through links and `..` too.
+pub(super) fn in_system_font_folder(os: Os, folder: &Path, sources: &[Source]) -> bool {
+    let system = system_font_folders().into_iter().chain(
+        sources
+            .iter()
+            .filter(|s| s.kind == SourceKind::System)
+            .map(|s| PathBuf::from(&s.path)),
+    );
+    let real = resolve_links(folder);
+    let inside =
+        |dir: &Path| is_within(os, folder, dir) || is_within(os, &real, &resolve_links(dir));
+    system.into_iter().any(|dir| inside(&dir))
+}
+
 impl CoreApi {
+    /// Refuses a download folder of `update` that is inside a system font
+    /// folder (E55.5); any other value, or none, passes. A relative path is
+    /// left to the settings' own rule.
+    pub(super) fn check_download_folder(&self, update: &SettingsUpdate) -> ApiResult<()> {
+        let Some(folder) = update
+            .download_folder
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .map(PathBuf::from)
+            .filter(|f| f.is_absolute())
+        else {
+            return Ok(());
+        };
+        let sources = self.lock().sources()?;
+        if in_system_font_folder(Os::current(), &folder, &sources) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                SYSTEM_DOWNLOAD_FOLDER_CHOSEN,
+            ));
+        }
+        Ok(())
+    }
+
     /// [`fm_api::CatalogService::install_family`].
     pub(super) fn install(&self, req: InstallFamilyRequest) -> ApiResult<InstallFamilyResponse> {
         let settings = self.settings.get_settings()?;
@@ -102,16 +147,7 @@ impl CoreApi {
             return Err(ApiError::new(ErrorCode::Conflict, RELATIVE_DOWNLOAD_FOLDER));
         }
         let sources = self.lock().sources()?;
-        let system = system_font_folders().into_iter().chain(
-            sources
-                .iter()
-                .filter(|s| s.kind == SourceKind::System)
-                .map(|s| PathBuf::from(&s.path)),
-        );
-        let real = resolve_links(&folder);
-        let inside =
-            |dir: &Path| is_within(os, &folder, dir) || is_within(os, &real, &resolve_links(dir));
-        if system.into_iter().any(|dir| inside(&dir)) {
+        if in_system_font_folder(os, &folder, &sources) {
             return Err(ApiError::new(ErrorCode::Conflict, SYSTEM_DOWNLOAD_FOLDER));
         }
 

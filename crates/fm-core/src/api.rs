@@ -2122,6 +2122,7 @@ impl SettingsService for CoreApi {
 
     /// Saves the settings; a new cache limit applies to the preview cache at once.
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
+        self.check_download_folder(&req)?;
         let settings = self.settings.update_settings(req)?;
         if let Some(previews) = &self.previews {
             previews.set_limit(cache::limit_from_mb(settings.cache_limit_mb));

@@ -1771,6 +1771,10 @@ function passes(
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
 export const mockPickedFolders: (string | null)[] = [];
 
+/** A folder of a cloud sync client, by a part of its path (fm-core's list, E50.13). */
+const MOCK_CLOUD_FOLDER =
+  /\/(Dropbox|OneDrive[^/]*|iCloud Drive|Google Drive|Box|pCloud Drive)(\/|$)/;
+
 /** A picked folder under this path is "not there": `addSource` refuses it as fm-core does. */
 export const MOCK_GONE_FOLDER = '/Volumes/Gone';
 
@@ -2305,9 +2309,9 @@ function createMockCatalogs(
   | 'checkUpdates'
 > {
   // Every catalog of the Rust mock, in its order (`CatalogId::ALL`).
-  const sites: [CatalogId, string, string][] = [
-    ['googleFonts', 'Google Fonts', 'https://fonts.google.com'],
-    ['fontshare', 'Fontshare', 'https://www.fontshare.com'],
+  const sites: [CatalogId, string, string, string][] = [
+    ['googleFonts', 'Google Fonts', 'https://fonts.google.com', 'https://fonts.google.com/faq'],
+    ['fontshare', 'Fontshare', 'https://www.fontshare.com', 'https://www.fontshare.com/licenses'],
   ];
   const enabled = new Set<CatalogId>(mode === 'offline' ? ['googleFonts'] : []);
   /** The families "downloaded", newest first. */
@@ -2347,7 +2351,7 @@ function createMockCatalogs(
     return found;
   };
   const catalog = (id: CatalogId): Catalog => {
-    const [, name, homepage] = site(id);
+    const [, name, homepage, licenseUrl] = site(id);
     const cache = caches.get(id);
     return {
       id,
@@ -2356,6 +2360,9 @@ function createMockCatalogs(
       enabled: enabled.has(id),
       refreshedAt: cache?.refreshedAt ?? null,
       familyCount: cache?.families.length ?? 0,
+      // fm-core's `catalog_folder_name` and `catalog_license_url` (E55.5).
+      folderName: name,
+      licenseUrl,
     };
   };
   const api: Pick<
@@ -4677,7 +4684,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         faceCount: 0,
         lastScanned: null,
         missing: false,
-        cloud: false,
+        // Judged from the path, as fm-core does (E50.13).
+        cloud: MOCK_CLOUD_FOLDER.test(req.path),
       };
       sources.push(source);
       return structuredClone(source);
@@ -4729,8 +4737,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const w = globalThis as { __fmMockShownFolders?: string[] };
       (w.__fmMockShownFolders ??= []).push(s.path);
     },
-    pickFolder: async () =>
-      mockPickedFolders.length ? mockPickedFolders.shift()! : `/Users/demo/Added ${++picks}`,
+    pickFolder: async () => {
+      // A Playwright spec queues its picks on the page (`__fmMockPickFolders`); a unit test
+      // in `mockPickedFolders`.
+      const queued = (globalThis as { __fmMockPickFolders?: (string | null)[] })
+        .__fmMockPickFolders;
+      if (queued?.length) return queued.shift()!;
+      return mockPickedFolders.length ? mockPickedFolders.shift()! : `/Users/demo/Added ${++picks}`;
+    },
     pickFile: async () =>
       mockPickedFiles.length
         ? mockPickedFiles.shift()!
@@ -4782,6 +4796,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const folder = req.downloadFolder?.trim();
       if (folder && !/^([\\/]|[A-Za-z]:[\\/])/.test(folder))
         throw invalid('Choose the folder for installed fonts with its full path.');
+      // fm-core's `check_download_folder` (E55.5): a folder inside a system font folder is
+      // refused before it is saved.
+      const inSystem = (dir: string) => {
+        const d = dir.replace(/\/$/, '');
+        return folder === d || !!folder?.startsWith(`${d}/`);
+      };
+      if (folder && sources.some((s) => s.kind === 'system' && inSystem(s.path)))
+        throw {
+          code: 'conflict' as const,
+          message: 'Fonts cannot be installed into a system font folder. Choose another folder.',
+          detail: null,
+        };
       for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
       if (req.downloadFolder != null) next.downloadFolder = folder || null;
       settings = next;
