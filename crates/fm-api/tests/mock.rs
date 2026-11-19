@@ -3455,6 +3455,13 @@ fn catalogs_are_off_until_turned_on_and_list_from_the_refreshed_cache() {
     let ids: Vec<CatalogId> = catalogs.iter().map(|c| c.id).collect();
     assert_eq!(ids, [CatalogId::GoogleFonts, CatalogId::Fontshare]);
     assert_eq!(catalogs[1].name, "Fontshare");
+    // The folder an install lands in and the license, as fm-core names them (E55.5).
+    assert_eq!(catalogs[0].folder_name.as_deref(), Some("Google Fonts"));
+    assert_eq!(catalogs[1].folder_name.as_deref(), Some("Fontshare"));
+    assert_eq!(
+        catalogs[1].license_url.as_deref(),
+        Some("https://www.fontshare.com/licenses")
+    );
     assert!(catalogs.iter().all(|c| !c.enabled), "off by default");
     assert_eq!(catalogs[0].refreshed_at, None);
     assert_eq!(
@@ -3574,8 +3581,23 @@ fn a_mock_install_downloads_once_into_the_download_folder_and_activates_the_fami
         .expect("on");
     api.refresh_catalog(CatalogRef { id }).expect("refresh");
     assert_eq!(install().expect_err("no folder").code, ErrorCode::Conflict);
-    folder("/System/Library/Fonts/Mine");
-    assert_eq!(install().expect_err("system").code, ErrorCode::Conflict);
+    // A system font folder is refused when it is chosen (E55.5), and nothing is saved.
+    let refused = api
+        .update_settings(SettingsUpdate {
+            download_folder: Some("/System/Library/Fonts/Mine".into()),
+            ..SettingsUpdate::default()
+        })
+        .expect_err("system");
+    assert_eq!(refused.code, ErrorCode::Conflict);
+    assert!(
+        refused.message.contains("system font folder"),
+        "{refused:?}"
+    );
+    assert_eq!(api.get_settings().expect("settings").download_folder, None);
+    assert_eq!(
+        install().expect_err("still no folder").code,
+        ErrorCode::Conflict
+    );
 
     folder("/Users/demo/Documents/Font Fu Fonts");
     let sources = api.list_sources().expect("sources").len();

@@ -66,6 +66,16 @@ pub struct Catalog {
     pub refreshed_at: Option<String>,
     /// Families in the cache.
     pub family_count: u32,
+    /// The name of the catalog's folder inside the download folder
+    /// (`Google Fonts`): an install lands in
+    /// `<download folder>/<folder_name>/<Family>` (E55.3, E55.5). The same
+    /// in every UI language. `None` from a version before E55.5.
+    #[serde(default)]
+    pub folder_name: Option<String>,
+    /// Where the catalog says under which license its fonts come, and so
+    /// whether they may be shared (E55.5). `None` when it is not known.
+    #[serde(default)]
+    pub license_url: Option<String>,
 }
 
 /// One style a catalog family offers.

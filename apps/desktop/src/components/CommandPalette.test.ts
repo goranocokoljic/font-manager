@@ -37,7 +37,7 @@ const input = () => document.querySelector<HTMLInputElement>('input[role="combob
 
 beforeEach(() => {
   localStorage.clear(); // the layout store saves the inspector state
-  setClient(createMockClient());
+  setClient(createMockClient({ setup: 'none' }));
 });
 
 afterEach(() => {

@@ -19,7 +19,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }
 let client: FmClient;
 
 beforeEach(() => {
-  client = createMockClient();
+  client = createMockClient({ setup: 'none' });
   setClient(client);
   delete document.documentElement.dataset.theme;
 });
@@ -285,7 +285,7 @@ describe('Settings window', () => {
   });
 
   it('hides "Start at login" where fm-api does not offer it (a Flatpak sandbox)', async () => {
-    client = createMockClient({ startAtLogin: 'unsupported' });
+    client = createMockClient({ setup: 'none', startAtLogin: 'unsupported' });
     setClient(client);
     const { wrapper } = await mountAt('/settings?section=activation');
     expect((await client.getSettings()).startAtLogin).toBeNull();
@@ -309,7 +309,7 @@ describe('Settings window', () => {
   });
 
   it('shows a toast and the real state when the system refuses the login entry', async () => {
-    client = createMockClient({ startAtLogin: 'refuse' });
+    client = createMockClient({ setup: 'none', startAtLogin: 'refuse' });
     setClient(client);
     const { wrapper } = await mountAt('/settings?section=activation');
     const box = wrapper.get('input[name="start-at-login"]');

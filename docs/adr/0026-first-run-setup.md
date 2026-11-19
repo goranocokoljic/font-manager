@@ -73,5 +73,9 @@ they give the same answer for the same state.
   again until a folder is chosen.
 - A copy whose updates come from a package manager or Flatpak is never asked
   about updates.
+- The Catalogs and Download folder steps share one screen, "Online catalogs" (E55.5):
+  an open Download folder step alone shows that screen. Choosing a download folder
+  inside a system font folder is refused by `update_settings` (not only by
+  `install_family`), so the setup and Settings say so before the first Install.
 - A new setup step adds a `SetupStep` value, a row in the table above and
   cases in `fixtures/setup/status-cases.json`.

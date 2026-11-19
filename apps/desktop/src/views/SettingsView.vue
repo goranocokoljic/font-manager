@@ -25,7 +25,7 @@ import {
   type MessageKey,
 } from '../i18n';
 import { useAppStore } from '../stores/app';
-import { useCatalogsStore } from '../stores/catalogs';
+import { installPath, useCatalogsStore } from '../stores/catalogs';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSetupStore } from '../stores/setup';
@@ -417,6 +417,20 @@ function chooseLanguage(value: string): void {
           <p id="download-folder-hint" class="note hint">
             {{ t('settings.catalogs.downloadFolderHint') }}
           </p>
+          <ul
+            v-if="s?.downloadFolder"
+            class="catalog-paths"
+            :aria-label="t('settings.catalogs.pathsLabel')"
+            data-testid="settings-catalog-paths"
+          >
+            <li v-for="c in catalogs.catalogs" :key="c.id" :data-catalog="c.id">
+              <bdi>{{ c.name }}</bdi
+              >:
+              <bdi class="folder">{{
+                installPath(s.downloadFolder, c, t('setup.catalogs.familyPlaceholder'))
+              }}</bdi>
+            </li>
+          </ul>
           <label class="choice">
             <input
               type="checkbox"
@@ -724,6 +738,16 @@ function chooseLanguage(value: string): void {
 }
 .folder {
   overflow-wrap: anywhere;
+}
+.catalog-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+  list-style: none;
 }
 .input {
   padding: 4px 8px;

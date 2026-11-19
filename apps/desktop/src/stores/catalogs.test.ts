@@ -353,7 +353,7 @@ describe('catalogs store: install (E22.7)', () => {
   });
 
   it('an install turns both buttons off while it runs and says why it failed', async () => {
-    const { store, inter } = await opened({ catalogDownloadMs: 20 });
+    const { client, store, inter } = await opened({ catalogDownloadMs: 20 });
     await useSettingsStore().update({ downloadFolder: '/Users/demo/Installed' });
     const running = store.askInstall(inter);
     await flushPromises();
@@ -365,11 +365,18 @@ describe('catalogs store: install (E22.7)', () => {
     expect(store.downloading).toBe(false);
 
     store.closeInstall();
-    await useSettingsStore().update({ downloadFolder: '/System/Library/Fonts/Mine' });
+    // A system font folder is refused when it is chosen (E55.5); the folder stays.
+    const settings = useSettingsStore();
+    expect(await settings.update({ downloadFolder: '/System/Library/Fonts/Mine' })).toBe(false);
+    expect(settings.error?.code).toBe('conflict');
+    expect(settings.error?.message).toContain('system font folder');
+    expect(settings.settings?.downloadFolder).toBe('/Users/demo/Installed');
+    // The catalog turned off elsewhere: the install fails and says why.
+    await client.setCatalogEnabled({ id: 'googleFonts', enabled: false });
     await store.askInstall(inter);
     expect(store.install?.phase).toBe('failed');
     expect(store.install?.error?.code).toBe('conflict');
-    expect(store.install?.error?.message).toContain('system font folder');
+    expect(store.install?.error?.message).toContain('is turned off');
   });
 
   it('Settings "Change…" saves the folder picked and keeps it on a cancel', async () => {

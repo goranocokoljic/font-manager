@@ -11,6 +11,8 @@ import FmFade from '../motion/FmFade.vue';
 import { useSetupStore } from '../stores/setup';
 import { useSourcesStore } from '../stores/sources';
 import AppLogo from './AppLogo.vue';
+import SetupCatalogsPane from './SetupCatalogsPane.vue';
+import SetupCatalogsStep from './SetupCatalogsStep.vue';
 import SetupFoldersStep from './SetupFoldersStep.vue';
 import SetupLibraryPane from './SetupLibraryPane.vue';
 import UiButton from './ui/UiButton.vue';
@@ -78,6 +80,7 @@ function onKey(e: KeyboardEvent): void {
       <FmFade mode="out-in">
         <div :key="setup.current" class="step">
           <SetupFoldersStep v-if="setup.current === 'fontFolders'" />
+          <SetupCatalogsStep v-else-if="setup.current === 'catalogs'" />
         </div>
       </FmFade>
 
@@ -110,6 +113,7 @@ function onKey(e: KeyboardEvent): void {
     </section>
 
     <SetupLibraryPane v-if="setup.current === 'fontFolders'" class="show" />
+    <SetupCatalogsPane v-else-if="setup.current === 'catalogs'" class="show" />
   </main>
 </template>
 
