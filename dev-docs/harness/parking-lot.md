@@ -545,3 +545,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.9 #648] crates/fm-platform/src/linux/activator.rs:16 — a Linux SIGTERM logout skips the quit path; session links stay until the next start's clear_session.
 - [E55.6 #645] apps/desktop/src/stores/setup.ts:104 — closing the setup (X or Escape, reopened only) on any step leaves that step open for the next start; pre-existing close behavior.
 - [E55.8 #647] apps/desktop/src/stores/updates.ts:82 — `offer()` resets `confirmingMajor` while the dialog may be on its second "Install a major update?" step, so a new version found mid-confirmation drops back to the first step (since E55.7).
+- [E55.9 #648] apps/desktop/src/stores/updates.ts:143 — after a failed install at quit, if the same version is still offered at the next start, the "could not install" toast and the quiet notice show together.
