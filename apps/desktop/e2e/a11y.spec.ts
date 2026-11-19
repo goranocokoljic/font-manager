@@ -525,6 +525,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(setup.getByTestId('setup-landing')).toBeVisible();
       expect(await violations(page), 'a catalog on').toEqual([]);
       expect(await unnamedControls(page), 'a catalog on').toEqual([]);
+      // Step three (E55.6): the switch and what a check does.
+      await setup.getByRole('button', { name: 'Continue' }).click();
+      await expect(setup.getByRole('heading', { name: 'Keep Font Fu up to date?' })).toBeVisible();
+      expect(await violations(page), 'updates').toEqual([]);
+      expect(await unnamedControls(page), 'updates').toEqual([]);
       await open(page, '/settings?section=advanced');
       await page.getByRole('button', { name: 'Run setup again' }).click();
       await expect(setup).toBeVisible();

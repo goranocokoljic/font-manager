@@ -24,7 +24,7 @@ test('a first start: two folders added, one removed, then Finish', async ({ page
   await firstStart(page);
   // Only the open steps that have a screen; the folders step is first and current.
   const steps = setup(page).getByRole('navigation', { name: 'Setup steps' }).getByRole('listitem');
-  await expect(steps).toHaveText(['Font folders', 'Online catalogs']);
+  await expect(steps).toHaveText(['Font folders', 'Online catalogs', 'Updates']);
   await expect(steps.first()).toHaveAttribute('aria-current', 'step');
   // The focus is on the step's heading.
   const heading = setup(page).getByRole('heading', { name: 'Where are your fonts?' });
@@ -68,10 +68,12 @@ test('a first start: two folders added, one removed, then Finish', async ({ page
     row(page, 'Added 1').getByRole('button', { name: 'Remove Added 1 from the library' }),
   ).toBeFocused();
 
-  // Continue goes to the catalogs step (setup-catalogs.spec.ts); Finish there to the library,
-  // with the folder in it.
+  // Continue goes to the catalogs step (setup-catalogs.spec.ts), then to the updates step
+  // (setup-updates.spec.ts); Finish there to the library, with the folder in it.
   await setup(page).getByRole('button', { name: 'Continue' }).click();
   await expect(steps.nth(1)).toHaveAttribute('aria-current', 'step');
+  await setup(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(steps.nth(2)).toHaveAttribute('aria-current', 'step');
   await setup(page).getByRole('button', { name: 'Finish' }).click();
   await expect(setup(page)).toHaveCount(0);
   const sources = page.getByRole('region', { name: 'Sources' });
@@ -85,6 +87,7 @@ test('Skip for now goes on to the library, which still offers Add folder', async
   await expect(
     setup(page).getByRole('heading', { name: 'Use the online catalogs?' }),
   ).toBeFocused();
+  await setup(page).getByRole('button', { name: 'Continue' }).click();
   await setup(page).getByRole('button', { name: 'Finish' }).click();
   await expect(setup(page)).toHaveCount(0);
   // The step is recorded as skipped (stores/setup.test.ts); the library's Sources keep Add folder.
@@ -149,7 +152,7 @@ test('the setup is keyboard-complete', async ({ page }) => {
   };
   await tabTo('Continue');
   await page.keyboard.press('Enter');
-  // The catalogs step: Tab reaches a switch, Space turns it on; Tab reaches Finish.
+  // The catalogs step: Tab reaches a switch, Space turns it on; Tab reaches Continue.
   await expect(
     setup(page).getByRole('heading', { name: 'Use the online catalogs?' }),
   ).toBeFocused();
@@ -160,6 +163,17 @@ test('the setup is keyboard-complete', async ({ page }) => {
     'aria-checked',
     'true',
   );
+  await tabTo('Continue');
+  await page.keyboard.press('Enter');
+  // The updates step: Tab reaches its switch, Space turns it off; Tab reaches Finish.
+  await expect(
+    setup(page).getByRole('heading', { name: 'Keep Font Fu up to date?' }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  const updates = setup(page).getByRole('switch', { name: 'Check for updates automatically' });
+  await expect(updates).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(updates).toHaveAttribute('aria-checked', 'false');
   await tabTo('Finish');
   await page.keyboard.press('Enter');
   await expect(setup(page)).toHaveCount(0);

@@ -2255,6 +2255,21 @@
       },
       "variable": "Variabel",
       "listLabel": "Bisher gefundene Familien"
+    },
+    "updates": {
+      "heading": "Font Fu aktuell halten?",
+      "lead": "Font Fu kann selbst nach einer neuen Version suchen und Ihnen Bescheid geben, wenn es eine gibt. Ohne Ihre Zustimmung wird nichts installiert.",
+      "check": "Automatisch nach Updates suchen",
+      "checkHint": "Beim Start von Font Fu und einmal täglich, solange es läuft",
+      "later": "Sie können das jederzeit unter Einstellungen › Über ändern.",
+      "paneTitle": "Was eine Prüfung tut",
+      "asks": "Fragt {host} nach der neuesten Version",
+      "asksServer": "Fragt den Release-Server nach der neuesten Version",
+      "asksNote": "Eine Anfrage an den Release-Server beim Start von Font Fu und eine pro Tag, solange es läuft.",
+      "sendsNothing": "Sendet nichts über Sie oder Ihre Schriften",
+      "sendsNothingNote": "Kein Konto und nichts über Ihre Bibliothek wird mit der Anfrage gesendet.",
+      "installsNothing": "Installiert nichts von selbst",
+      "installsNothingNote": "Gibt es eine neue Version, sehen Sie, was sich geändert hat, und entscheiden selbst. Eine Hauptversion fragt zweimal nach."
     }
   }
 }

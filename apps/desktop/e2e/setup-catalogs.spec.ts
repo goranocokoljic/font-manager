@@ -55,6 +55,16 @@ async function toCatalogs(page: Page, ...folders: string[]): Promise<void> {
   ).toBeFocused();
 }
 
+/** Continue on the catalogs step, then Finish on the updates step (E55.6): the setup closes. */
+async function finish(page: Page): Promise<void> {
+  await setup(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(
+    setup(page).getByRole('heading', { name: 'Keep Font Fu up to date?' }),
+  ).toBeFocused();
+  await setup(page).getByRole('button', { name: 'Finish' }).click();
+  await expect(setup(page)).toHaveCount(0);
+}
+
 /** Opens `catalog` in the sidebar and presses the activation dot (Install) of `family`. */
 async function install(page: Page, catalog: string, family: string): Promise<void> {
   await sidebar(page)
@@ -77,7 +87,7 @@ test('both catalogs off: Continue asks nothing more and the first Install asks f
 }) => {
   await toCatalogs(page, '/Users/demo/Type');
   const steps = setup(page).getByRole('navigation', { name: 'Setup steps' }).getByRole('listitem');
-  await expect(steps).toHaveText(['Font folders', 'Online catalogs']);
+  await expect(steps).toHaveText(['Font folders', 'Online catalogs', 'Updates']);
   await expect(steps.nth(1)).toHaveAttribute('aria-current', 'step');
   // Two switches, both off, each saying that turning it on fetches the list now.
   for (const name of ['Google Fonts', 'Fontshare']) {
@@ -93,8 +103,7 @@ test('both catalogs off: Continue asks nothing more and the first Install asks f
   await expect(landing(page)).toHaveCount(0);
   await expect(page.getByTestId('setup-catalogs-pane')).toContainText('Nothing is downloaded');
 
-  await setup(page).getByRole('button', { name: 'Finish' }).click();
-  await expect(setup(page)).toHaveCount(0);
+  await finish(page);
   // Turned on later, the first Install proposes the folder, as before.
   const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   await catalogs.getByRole('button', { name: 'Turn on Google Fonts' }).click();
@@ -126,8 +135,7 @@ test("one catalog on, 'Inside my font folder': the landing line, then Install as
   await expect(page.getByTestId('setup-catalogs-pane')).toContainText('/Users/demo/Client type');
   await expect(setup(page).getByTestId('setup-cloud-line')).toHaveCount(0);
 
-  await setup(page).getByRole('button', { name: 'Finish' }).click();
-  await expect(setup(page)).toHaveCount(0);
+  await finish(page);
   await install(page, 'Google Fonts', 'Inter');
   const line = page.getByTestId('catalog-install');
   await expect(page.getByTestId('catalog-install-status')).toHaveText(
@@ -169,8 +177,7 @@ test("one catalog on, 'Another folder': the proposal, the picker, then Install a
     '/Users/demo/Downloaded type/Fontshare/<Family>',
   ]);
 
-  await setup(page).getByRole('button', { name: 'Finish' }).click();
-  await expect(setup(page)).toHaveCount(0);
+  await finish(page);
   await install(page, 'Fontshare', 'Lato');
   await expect(page.getByTestId('catalog-install-status')).toHaveText(
     /^Installed Lato: \d+ styles? active$/,
@@ -213,7 +220,7 @@ test('a system font folder shows the message of the API; a cloud font folder nam
   await expect(cloud).toHaveCount(0);
   await queuePicks(page, '/System/Library/Fonts/Mine');
   await setup(page).getByRole('button', { name: 'Choose…' }).click();
-  await setup(page).getByRole('button', { name: 'Finish' }).click();
+  await setup(page).getByRole('button', { name: 'Continue' }).click();
   await expect(setup(page).getByRole('alert')).toHaveText(
     'Fonts cannot be installed into a system font folder. Choose another folder.',
   );
