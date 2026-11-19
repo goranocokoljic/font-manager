@@ -1539,3 +1539,36 @@ fn a_settings_change_with_the_automatic_check_off_starts_no_timer() {
     assert!(!timer.is_running());
     assert_eq!(timer.requests(), 0);
 }
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_tray_update_item_asks_the_main_window_for_the_update_dialog() {
+    use fm_app_lib::menu::{SHELL_NAVIGATE, UPDATE_DIALOG};
+    use fm_app_lib::{auto_update, tray};
+    use tauri::menu::MenuEvent;
+
+    let (app, webview) = app().unwrap();
+    let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sink = Arc::clone(&seen);
+    webview.listen(SHELL_NAVIGATE, move |e| {
+        sink.lock().unwrap().push(e.payload().to_owned());
+    });
+    let api: Arc<dyn fm_api::Api> = Arc::new(MockApi::new());
+    let _menu = tray::menu(app.handle(), Arc::clone(&api)).unwrap();
+    let update = fm_api::update::AvailableUpdate::new("1.4.0", "1.5.0", None, None)
+        .unwrap()
+        .unwrap();
+    // The announcement alone asks the window for nothing.
+    auto_update::announce(app.handle(), update);
+    assert!(seen.lock().unwrap().is_empty());
+    tray::on_menu_event(
+        app.handle(),
+        &MenuEvent {
+            id: "tray:update".into(),
+        },
+        &api,
+    );
+    let expected = serde_json::to_string(UPDATE_DIALOG).unwrap();
+    assert_eq!(*seen.lock().unwrap(), [expected]);
+}
