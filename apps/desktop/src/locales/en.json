@@ -2255,6 +2255,21 @@
       },
       "variable": "Variable",
       "listLabel": "Families found so far"
+    },
+    "updates": {
+      "heading": "Keep Font Fu up to date?",
+      "lead": "Font Fu can look for a new version by itself and tell you when there is one. Nothing is installed without asking.",
+      "check": "Check for updates automatically",
+      "checkHint": "When Font Fu starts and once a day while it runs",
+      "later": "You can change this at any time under Settings › About.",
+      "paneTitle": "What a check does",
+      "asks": "Asks {host} for the newest version",
+      "asksServer": "Asks the release server for the newest version",
+      "asksNote": "One request to the release server when Font Fu starts, and one a day while it runs.",
+      "sendsNothing": "Sends nothing about you or your fonts",
+      "sendsNothingNote": "No account, and nothing about your library, goes with the request.",
+      "installsNothing": "Installs nothing by itself",
+      "installsNothingNote": "When there is a new version you see what changed and decide. A major version asks twice."
     }
   }
 }

@@ -6,14 +6,15 @@ import { errorMessage, t } from '../i18n';
 import { useCatalogsStore } from './catalogs';
 import { useSettingsStore } from './settings';
 import { useSourcesStore } from './sources';
+import { useUpdatesStore } from './updates';
 
 /**
- * The setup screens this build has, in the order the setup asks them. The updates step
- * (E55.6) joins this list when it is built; until then an open step without a screen is not
- * shown, so the setup never opens for a question it cannot ask (ADR 0026: asked once, in
- * order).
+ * The setup screens this build has, in the order the setup asks them. An open step without a
+ * screen is not shown, so the setup never opens for a question it cannot ask (ADR 0026: asked
+ * once, in order). The updates screen (E55.6) is shown only where this copy updates itself:
+ * fm-core opens that step only there, and "Run setup again" leaves it out elsewhere.
  */
-export const SETUP_SCREENS: readonly SetupStep[] = ['fontFolders', 'catalogs'];
+export const SETUP_SCREENS: readonly SetupStep[] = ['fontFolders', 'catalogs', 'updates'];
 
 /**
  * The screen a step is asked on: the download folder is the second half of the "Online
@@ -56,6 +57,7 @@ export const useSetupStore = defineStore('setup', () => {
   const sources = useSourcesStore();
   const catalogs = useCatalogsStore();
   const settings = useSettingsStore();
+  const updates = useUpdatesStore();
   /** The setup is on screen. */
   const visible = ref(false);
   /** The first `setupStatus` answer arrived (or failed): the main window may render. */
@@ -81,6 +83,12 @@ export const useSetupStore = defineStore('setup', () => {
   const otherFolder = ref<string | null>(null);
   /** The API refused the download folder; the catalogs screen shows its message. */
   const folderError = ref<string | null>(null);
+  /**
+   * The updates screen's switch, "Check for updates automatically": on at a first start (the
+   * owner's decision: Finish is the user action rule 7 asks for), the saved setting when the
+   * setup is reopened. Nothing is saved and no request is made until Finish (E55.6).
+   */
+  const checkAutomatically = ref(true);
   /** The user chose on the catalogs screen; entering it again keeps that choice. */
   let placeChosen = false;
   let nextKey = 0;
@@ -108,6 +116,11 @@ export const useSetupStore = defineStore('setup', () => {
       ? (folders.value.find((s) => s.id === placeSource.value) ?? folders.value[0] ?? null)
       : null,
   );
+  /**
+   * The release server a check asks (`github.com`), as the API names it from the endpoint the
+   * app was built with; `null` while unknown (the screen then says "the release server").
+   */
+  const releaseHost = computed<string | null>(() => updates.support?.releaseHost ?? null);
   /** The download folder the answer saves; `null` while there is none to save. */
   const downloadFolder = computed<string | null>(() =>
     placeShown.value === 'fontFolder' ? (placeFolder.value?.path ?? null) : otherFolder.value,
@@ -126,9 +139,17 @@ export const useSetupStore = defineStore('setup', () => {
     }
   }
 
-  /** "Run setup again" in Settings: every step with the current values. */
+  /**
+   * "Run setup again" in Settings: every step with the current values. The updates step only
+   * where this copy updates itself (`UpdateSupport.offered`); elsewhere it is not shown and the
+   * indicator does not count it (E55.6).
+   */
   async function runAgain(): Promise<void> {
-    await open([...SETUP_SCREENS], true);
+    const support = updates.support ?? (await updates.loadSupport());
+    await open(
+      SETUP_SCREENS.filter((step) => step !== 'updates' || support?.offered === true),
+      true,
+    );
   }
 
   async function open(shown: SetupStep[], reopened: boolean): Promise<void> {
@@ -146,6 +167,48 @@ export const useSetupStore = defineStore('setup', () => {
     await sources.load();
     await refreshFound();
     if (current.value === 'catalogs') await prepareCatalogs();
+    if (shown.includes('updates')) await prepareUpdates(reopened);
+  }
+
+  /**
+   * The updates screen starts on at a first start (fm-core opens the step only while the
+   * automatic check is off) and from the saved setting when reopened. It reads what this copy
+   * offers (`updateSupport`, no request to the release server) for the host it names.
+   */
+  async function prepareUpdates(reopened: boolean): Promise<void> {
+    await Promise.all([
+      updates.support ? undefined : updates.loadSupport(),
+      !reopened || settings.settings ? undefined : settings.load(),
+    ]);
+    checkAutomatically.value = reopened
+      ? settings.settings?.checkUpdatesAutomatically === true
+      : true;
+  }
+
+  /**
+   * Finish on the updates screen. On, it turns `checkUpdatesAutomatically` on: the shell then
+   * runs the first check quietly and once a day after (E55.7, E55.8). Off, the setting stays
+   * off (or is turned off, when the setup was reopened with it on) and "Check for updates" in
+   * Settings → About works as before. Either way the step is answered and not asked again. A
+   * setting the API refuses keeps the screen with its message.
+   */
+  async function answerUpdates(): Promise<boolean> {
+    const on = checkAutomatically.value;
+    if (!settings.settings) await settings.load();
+    if (
+      (settings.settings?.checkUpdatesAutomatically === true) !== on &&
+      !(await settings.update({ checkUpdatesAutomatically: on }))
+    ) {
+      error.value = errorMessage(settings.error);
+      return false;
+    }
+    try {
+      await useClient().answerSetupStep({ step: 'updates', answer: 'answered' });
+    } catch (e) {
+      error.value = (e as ApiError).message;
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -253,11 +316,12 @@ export const useSetupStore = defineStore('setup', () => {
 
   /**
    * Continue (or Finish on the last step). The folders step only goes on (its folders are
-   * added as they are chosen); the catalogs step saves its answer first and stays when the
-   * API refuses it.
+   * added as they are chosen); the catalogs and updates steps save their answer first and stay
+   * when the API refuses it.
    */
   async function next(): Promise<void> {
     if (current.value === 'catalogs' && !(await answerCatalogs())) return;
+    if (current.value === 'updates' && !(await answerUpdates())) return;
     error.value = null;
     advance();
   }
@@ -387,6 +451,8 @@ export const useSetupStore = defineStore('setup', () => {
     otherFolder,
     downloadFolder,
     folderError,
+    checkAutomatically,
+    releaseHost,
     setCatalog,
     choosePlace,
     chooseFontFolder,

@@ -538,3 +538,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.3 #642] crates/fm-api/src/catalog.rs:37 — `CatalogId::name()` returns the same two strings as `catalog_folder_name`, `mock_catalog_folder` and `MOCK_CATALOG_FOLDERS`; three copies to keep in step if a catalog is added.
 - [E55.7 #646] apps/desktop/src-tauri/tests/ipc.rs:1459 — the tray tests for the new "Update to <version>…" item are `#[cfg(not(target_os = "macos"))]` (the main-thread limit), so the item has no test on macOS.
 - [E55.5 #644] apps/desktop/src/views/SettingsView.vue:378 — the Settings catalog checkbox is `disabled` while its catalog is busy, so keyboard focus can drop to the body.
+- [E55.6 #645] apps/desktop/src/stores/setup.ts:104 — closing the setup (X or Escape, reopened only) on any step leaves that step open for the next start; pre-existing close behavior.
