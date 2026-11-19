@@ -539,3 +539,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.7 #646] apps/desktop/src-tauri/tests/ipc.rs:1459 — the tray tests for the new "Update to <version>…" item are `#[cfg(not(target_os = "macos"))]` (the main-thread limit), so the item has no test on macOS.
 - [E55.5 #644] apps/desktop/src/views/SettingsView.vue:378 — the Settings catalog checkbox is `disabled` while its catalog is busy, so keyboard focus can drop to the body.
 - [E55.6 #645] apps/desktop/src/stores/setup.ts:104 — closing the setup (X or Escape, reopened only) on any step leaves that step open for the next start; pre-existing close behavior.
+- [E55.8 #647] apps/desktop/src/stores/updates.ts:82 — `offer()` resets `confirmingMajor` while the dialog may be on its second "Install a major update?" step, so a new version found mid-confirmation drops back to the first step (since E55.7).

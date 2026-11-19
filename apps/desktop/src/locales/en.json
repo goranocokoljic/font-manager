@@ -1594,6 +1594,13 @@
     "available": "Version {version} is available.",
     "checkAutomatically": "Check automatically when Font Fu starts",
     "checkAutomaticallyHint": "Font Fu contacts its release server only when you check or, while this is on, at start and once a day. Nothing installs until you confirm it.",
+    "notice": {
+      "label": "Update available",
+      "message": "Font Fu {version} is available.",
+      "seeWhatsNew": "See what's new",
+      "dismiss": "Dismiss"
+    },
+    "dot": "Font Fu {version} is available: see what's new",
     "dialog": {
       "title": "Font Fu {version} is available",
       "currentVersion": "You have version {version}.",

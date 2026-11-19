@@ -537,6 +537,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await unnamedControls(page), 'from Settings').toEqual([]);
     });
 
+    test('the quiet update notice and the dot on Settings (E55.8)', async ({ page }) => {
+      await open(page, '/', '?mockAutoUpdate=1&mockUpdate=1');
+      await expect(page.getByRole('region', { name: 'Update available' })).toBeVisible();
+      await expect(page.getByTestId('update-dot')).toBeVisible();
+      await inTheme(page);
+      expect(await violations(page), 'notice').toEqual([]);
+      expect(await unnamedControls(page), 'notice').toEqual([]);
+    });
+
     test('every Settings tab', async ({ page }) => {
       await open(page, '/settings');
       await inTheme(page);

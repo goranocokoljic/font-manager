@@ -26,6 +26,7 @@ import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
 import { hasChosenFilters } from '../search/chips';
 import { useSourcesStore } from '../stores/sources';
+import { useUpdatesStore } from '../stores/updates';
 import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
@@ -74,6 +75,7 @@ import { useFamilyNavigation } from './useFamilyNavigation';
 import { useLiveLibrary } from './useLiveLibrary';
 
 const app = useAppStore();
+const updates = useUpdatesStore();
 const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
@@ -796,6 +798,18 @@ async function openFace(face: FaceId): Promise<void> {
         >
           {{ t('home.settings') }} <kbd>{{ formatChord(settingsChord) }}</kbd>
         </RouterLink>
+        <!-- An update on offer (E55.8): the dot stays until it is installed; it opens the
+             update dialog, as the notice and the tray item do. -->
+        <button
+          v-if="updates.dot && updates.update"
+          type="button"
+          class="update-dot"
+          data-testid="update-dot"
+          @click="updates.openDialog()"
+        >
+          <span class="dot" aria-hidden="true"></span>
+          <span class="sr-only">{{ t('updates.dot', { version: updates.update.version }) }}</span>
+        </button>
       </span>
     </template>
   </MainLayout>
@@ -893,6 +907,28 @@ async function openFace(face: FaceId): Promise<void> {
   align-items: center;
   gap: var(--fm-space-4);
   margin-inline-start: auto;
+}
+/* The update dot sits right after Settings: a 20 px target around an 8 px accent dot. */
+.update-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-inline-start: calc(-1 * var(--fm-space-4) + 2px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background-color: transparent;
+}
+.update-dot:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+.update-dot .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--fm-accent);
 }
 .error {
   margin: 0;
