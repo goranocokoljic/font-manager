@@ -529,3 +529,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E54.10 #620] apps/desktop/src/components/SimilarPanel.vue:422 — the loading, error and empty `role="status"`/`alert` nodes are inserted together with their text, so some screen readers do not announce them.
 - [E55.2 #641] crates/fm-platform/src/updater.rs:136 — `writable_dir` ignores a failed probe removal; now that update support is computed at every start, a stuck `.fm-update-probe-<pid>` file can be left in the program folder each start.
+
+## 2026-11-19
+
+- [E55.4 #643] crates/fm-core/src/api/tests.rs:1383 — the new "inside a source" refusal of add_source is tested only with a watched outer folder, not with the library folder or the system source as the outer one.
+- [E55.4 #643] crates/fm-core/src/api/install.rs:240 — `download_source` adds a watched source through the index directly, so a download folder inside a library-folder source still becomes a nested source and bypasses add_source's new refusal.
+- [E55.4 #643] crates/fm-core/src/api.rs:911 — the same folder spelled differently (case on Windows/macOS, a trailing slash) skips the new nested check and relies on the index's exact string match for "already in the library".
