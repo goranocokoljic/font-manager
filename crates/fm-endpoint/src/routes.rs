@@ -87,6 +87,7 @@ routes! {
     list_duplicates(),
     list_duplicate_sets(req),
     compare_copies(req),
+    preview_keeper_policy(req),
     keep_copy(req),
     list_resolutions(),
     undo_resolution(resolution),

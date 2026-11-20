@@ -3,8 +3,8 @@
 //!
 //! - files whose health is not `Ok` (truncated, missing tables, a format the
 //!   app cannot activate), among the files the library shows;
-//! - duplicate copies (E8.2): every copy of a [`Index::duplicates`] group but
-//!   its keeper, pointing at the keeper;
+//! - duplicate copies (E8.2): every copy of a [`Index::duplicates`] group not
+//!   marked `keep`, pointing at the keeper;
 //! - source folders that are not there or cannot be opened;
 //! - an index file that was damaged and replaced when it was opened
 //!   ([`Index::open`]), for the session that replaced it;
@@ -38,8 +38,16 @@ impl Index {
     /// folders, unhealthy files, duplicate copies and sidecar conflicts.
     /// Activation conflicts come from [`crate::ActivationManager::problems`],
     /// which asks the OS. Only a database error
-    /// fails; a damaged file or a folder that is gone is an entry.
+    /// fails; a damaged file or a folder that is gone is an entry. The
+    /// duplicate entries are those of [`Index::duplicates`] as
+    /// [`DuplicateGroup::choose_keeper`] orders them; the API passes the
+    /// groups of the saved keeper policy to [`Self::problems_with`].
     pub fn problems(&self) -> FmResult<Vec<Problem>> {
+        self.problems_with(&self.duplicates()?)
+    }
+
+    /// [`Self::problems`] with the duplicate entries of `groups`.
+    pub fn problems_with(&self, groups: &[DuplicateGroup]) -> FmResult<Vec<Problem>> {
         let mut out = Vec::new();
         if let Some(rebuilt) = &self.rebuilt {
             let path = self
@@ -59,7 +67,7 @@ impl Index {
         }
         out.extend(self.sources()?.iter().filter_map(missing_source));
         out.extend(self.unhealthy_files()?);
-        out.extend(self.duplicates()?.iter().flat_map(DuplicateGroup::problems));
+        out.extend(groups.iter().flat_map(DuplicateGroup::problems));
         out.extend(self.sidecar_problems()?);
         Ok(out)
     }

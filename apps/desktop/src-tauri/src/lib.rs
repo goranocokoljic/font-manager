@@ -28,8 +28,9 @@ use fm_api::library::{
     AddSourceRequest, AppInfo, CompareCopiesRequest, CopyComparison, DragFiles, DragFilesRequest,
     DuplicateGroup, DuplicateSet, FaceDetail, Family, FamilySummary, FontSwitchPayload,
     GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, KeepCopyRequest,
-    LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest, Problem, Resolution,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    KeeperPolicyPreview, LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest,
+    PreviewKeeperPolicyRequest, Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -957,6 +958,15 @@ async fn compare_copies(
     call(&state, move |api| api.compare_copies(req)).await
 }
 
+/// What a keeper policy would do over a scope, without saving it (E56.4).
+#[tauri::command]
+async fn preview_keeper_policy(
+    state: State<'_, AppState>,
+    req: PreviewKeeperPolicyRequest,
+) -> ApiResult<KeeperPolicyPreview> {
+    call(&state, move |api| api.preview_keeper_policy(req)).await
+}
+
 /// "Keep this one": moves the other copies to the OS trash, or with
 /// `dryRun` only says what would move.
 #[tauri::command]
@@ -1744,6 +1754,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_duplicates,
             list_duplicate_sets,
             compare_copies,
+            preview_keeper_policy,
             keep_copy,
             list_resolutions,
             undo_resolution,

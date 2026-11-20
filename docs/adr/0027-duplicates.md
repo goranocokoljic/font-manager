@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4)
 
 ## Context
 
@@ -107,6 +107,68 @@ stored. Every rule and guard of this epic that names "my languages" goes
 through `fm_core::my_languages::apply`: with the list empty it does nothing,
 and its answer carries `MyLanguagesStatus::NotSet`, so the UI can offer to
 set them.
+
+**The keeper policy (E56.4).** Which copy of a set to keep is answered by
+the keeper policy, stored in `config.json` as `Settings::keeper_policy` and
+set through `update_settings`: an ordered list of rules. A copy that wins a
+rule wins the set; a tie goes to the next rule; the last rule is always the
+path A to Z (`KeeperPolicy::normalized` moves it there), so the answer never
+depends on chance. The rules: covers more of my languages; has `locl` forms
+for more of my languages; newest version (as the versions above are
+compared; no version ranks after any version); format, in an order the user
+sets (default OpenType CFF, TrueType, WOFF2, WOFF, Type 1; a format not in
+the order ranks after every one in it); variable over static; most glyphs;
+in a folder the user prefers (an ordered list of absolute folders); in the
+library folder; carries the user's metadata (favorite, rating, tags, notes,
+collections, sets: more kinds wins); active or asked for by a document;
+path. A rule or format a newer version wrote is dropped on read, so the file
+still reads. **The default policy** is: covers my languages, newest
+version, format, the library folder, path. With no language set it is the
+E8.1 keeper rule with the format added: `DuplicateGroup::choose_keeper`
+ranks the format by the file's extension, because `DuplicateCopy` has no
+format and its type does not change; so the format rule ranks every copy by
+its extension too (an `.otf` with TrueType outlines ranks as OpenType CFF),
+and the two always agree.
+
+**The language guard is not a rule.** A rule can be moved down or taken out;
+the guard cannot, because losing the only copy of a language the user works
+in is the one mistake a cleanup must not make, whatever the user ranked
+first. After the rules chose the keeper, the guard keeps, one at a time, the
+copy that covers the most of my languages (in full) that no kept copy covers
+yet, the rules' order breaking a tie, until every language some copy of the
+set covers is kept. So a copy that is the only one covering one of my
+languages is never recommended for removal. A set in which no copy covers
+everything the others cover is answered "keep both" (`KeepBoth`), each kept
+copy with the languages it alone has. With no language set the guard does
+nothing (`my_languages::apply`) and says so.
+
+**What the policy never does.** It never applies to a copy in a system font
+folder: such a copy is not ranked and is always kept (rule 4); a set of
+system copies only is `AllSystem`. It never recommends removing the last
+copy of a font: the keeper is always kept, and while the copies to
+remove hold a font that no file outside them holds (two identical
+collections are the only files with one of their fonts), the first of them
+the rules rank is kept too.
+
+**Every recommendation carries its reason as data**: the rule that decided,
+the values it compared, the other copy, and one sentence ("Kept: covers
+Serbian (Cyrillic), the other copy does not."), so the UI, the CLI and MCP
+say the same thing. A set's `recommendation` holds the keeper, every kept
+copy with why, and every copy to remove with the rule it lost by.
+`preview_keeper_policy` tries a policy over a scope without saving it: how
+many sets get a keeper, how many are "keep both", and how many
+recommendations change against the saved policy.
+
+**The existing requests follow the policy from this version on** (Goran,
+20 Nov 2026). `list_duplicates`, `list_problems` and `fm doctor` take their
+keeper from the saved policy and the guard, so the Problems view, the CLI
+and the module never recommend different copies of one set. No type
+changes: the keeper is still first and marked `keep`; a copy the guard
+protects, a system copy and a last copy are marked `keep` too and are no
+Problems entry. The policy reads the copies' facts from the index only
+when a language is set or a rule weighs a fact, so the default costs one
+read of the files. The mocks have no index: their sets carry no
+recommendation and `list_duplicates` uses `choose_keeper`.
 
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files

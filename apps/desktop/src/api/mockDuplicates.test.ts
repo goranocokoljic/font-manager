@@ -113,3 +113,34 @@ describe('MockApi duplicate sets (E56.1)', () => {
     });
   });
 });
+
+describe('MockApi keeper policy (E56.4)', () => {
+  it('stores the policy normalized and refuses a relative preferred folder', async () => {
+    const client = createMockClient();
+    expect((await client.getSettings()).keeperPolicy?.rules).toEqual([
+      'myLanguages',
+      'newestVersion',
+      'format',
+      'libraryFolder',
+      'path',
+    ]);
+    const saved = await client.updateSettings({
+      keeperPolicy: { rules: ['path', 'mostGlyphs', 'mostGlyphs'], preferredFolders: [' /a ', ''] },
+    });
+    expect(saved.keeperPolicy?.rules).toEqual(['mostGlyphs', 'path']);
+    expect(saved.keeperPolicy?.preferredFolders).toEqual(['/a']);
+    await expect(
+      client.updateSettings({ keeperPolicy: { preferredFolders: ['fonts'] } }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+  });
+
+  it('previews a policy over a scope and refuses an unknown source', async () => {
+    const client = createMockClient();
+    const preview = await client.previewKeeperPolicy({ policy: { rules: ['path'] } });
+    expect(preview).toMatchObject({ keepBoth: 0, changed: 0, myLanguages: 'notSet' });
+    expect(preview.withKeeper).toBeLessThanOrEqual(preview.sets);
+    await expect(
+      client.previewKeeperPolicy({ scope: { kind: 'source', source: 999 }, policy: {} }),
+    ).rejects.toMatchObject({ code: 'notFound' });
+  });
+});

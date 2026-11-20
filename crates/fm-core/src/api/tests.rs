@@ -8290,6 +8290,7 @@ fn a_search_for_faces_lists_only_those_faces() {
     assert_eq!(search(Some(Vec::new()), "").total, 0);
 }
 
+mod keeper_policy;
 mod my_languages;
 mod setup;
 mod watching;

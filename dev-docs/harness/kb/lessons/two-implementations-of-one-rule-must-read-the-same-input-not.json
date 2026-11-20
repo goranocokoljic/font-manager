@@ -1,0 +1,19 @@
+{
+  "id": "two-implementations-of-one-rule-must-read-the-same-input-not",
+  "title": "Two implementations of one rule must read the same input, not two sources of the same fact",
+  "category": "correctness",
+  "rule": "When a criterion says two code paths give the same answer (a contract helper in fm-api the mocks use, and the fm-core engine), both must derive each compared value from the same source. If one side can only see the file extension (its type has no format field), the other side ranks by the extension too, not by the parsed magic bytes. Add a test with input where the two sources disagree (a TrueType-outline .otf) and assert the paths agree.",
+  "rationale": "E56.4 (#664): choose_keeper ranked the format by the extension and the policy by the stored parsed format, so a TrueType .otf beside a .ttf got different keepers in the mocks and fm-core (criteria 3 and 8).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    664
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**",
+    "crates/fm-api/src/**"
+  ],
+  "first_seen": "2026-11-20T21:41:27.169Z",
+  "last_seen": "2026-11-20T21:41:27.169Z"
+}

@@ -1232,7 +1232,8 @@ path: string };
 
 /**
  *  Files that hold the same font, at one [`DuplicateLevel`] (E56.1). The
- *  set chooses no keeper and calls no copy older or newer.
+ *  set itself calls no copy older or newer; which copy to keep is the keeper
+ *  policy's answer, [`Self::recommendation`] (E56.4).
  */
 export type DuplicateSet = {
 	/**  Stable id: `identical:<hash>` or `name:<PostScript name>`. */
@@ -1248,6 +1249,12 @@ export type DuplicateSet = {
 	formatsDiffer: boolean,
 	/**  The copies, two or more, by path. */
 	copies: DuplicateSetCopy[],
+	/**
+	 *  What the saved keeper policy and the language guard recommend for
+	 *  this set (E56.4); `None` from a service without an index to read the
+	 *  copies' facts from (the mocks).
+	 */
+	recommendation?: KeeperRecommendation | null,
 };
 
 /**  One copy of a duplicate set: one file, for the face the set is about. */
@@ -2569,6 +2576,174 @@ export type KeepCopyRequest = {
 	dryRun?: boolean,
 };
 
+/**  What the keeper policy answers for a set (E56.4). */
+export type KeeperOutcome = 
+/**
+ *  One copy is the keeper; the others are recommended for removal
+ *  unless something protects them ([`KeptCopy::because`]).
+ */
+"keeper" | 
+/**
+ *  No copy covers every one of my languages the others cover: keep the
+ *  copies that together cover them, each with the languages it alone has.
+ */
+"keepBoth" | 
+/**  Every copy is in a system font folder: the policy does not apply. */
+"allSystem";
+
+/**
+ *  The keeper policy (E56.4, ADR 0027): an ordered list of rules, stored in
+ *  `config.json` as [`crate::settings::Settings::keeper_policy`]. Values a
+ *  newer version wrote and this one does not know are dropped on read.
+ */
+export type KeeperPolicy = {
+	/**
+	 *  The rules, most important first; [`KeeperRule::Path`] always ends the
+	 *  list ([`Self::normalized`]).
+	 */
+	rules?: KeeperRule[],
+	/**
+	 *  The order of formats for [`KeeperRule::Format`], best first; a format
+	 *  not listed ranks after every listed one.
+	 */
+	formatOrder?: FontFormat[],
+	/**
+	 *  The folders for [`KeeperRule::PreferredFolder`], best first, as
+	 *  absolute paths.
+	 */
+	preferredFolders?: string[],
+};
+
+/**  What a keeper policy would do over a scope, against the saved one. */
+export type KeeperPolicyPreview = {
+	/**  The duplicate sets in the scope. */
+	sets: number,
+	/**  Sets that get one keeper ([`KeeperOutcome::Keeper`]). */
+	withKeeper: number,
+	/**  Sets answered "keep both" ([`KeeperOutcome::KeepBoth`]). */
+	keepBoth: number,
+	/**
+	 *  Sets whose recommendation (the keeper, or the copies kept) differs
+	 *  from the saved policy's.
+	 */
+	changed: number,
+	/**  Whether my languages were set. */
+	myLanguages: MyLanguagesStatus,
+};
+
+/**  The rule that decided between two copies and the values it compared. */
+export type KeeperReason = {
+	/**  The rule. */
+	rule: KeeperRule,
+	/**
+	 *  The kept copy's value(s): language preset ids, a version, a format,
+	 *  a glyph count, a folder, the kinds of metadata, a path.
+	 */
+	kept: string[],
+	/**  The other copy's value(s), of the same kind. */
+	other: string[],
+	/**  The other copy. */
+	otherPath: string,
+	/**
+	 *  The reason in one sentence, the same in the UI, the CLI and MCP:
+	 *  "Kept: covers Serbian Cyrillic, the other copy does not."
+	 */
+	sentence: string,
+};
+
+/**
+ *  What the keeper policy and the language guard recommend for one set
+ *  (E56.4). Every copy of the set is in exactly one of `keep` and `remove`.
+ */
+export type KeeperRecommendation = {
+	/**  Keeper, keep both, or every copy a system copy. */
+	outcome: KeeperOutcome,
+	/**  The copy the rules put first; `None` when every copy is a system copy. */
+	keeper: string | null,
+	/**
+	 *  Why the keeper stands before the next copy the rules rank; `None`
+	 *  when no other copy is ranked.
+	 */
+	reason: KeeperReason | null,
+	/**  The copies kept, the keeper first. */
+	keep: KeptCopy[],
+	/**  The copies recommended for removal. */
+	remove: RemovedCopy[],
+	/**
+	 *  Whether my languages were set; `NotSet` means the language rules and
+	 *  the guard did nothing.
+	 */
+	myLanguages: MyLanguagesStatus,
+};
+
+/**
+ *  One rule of the keeper policy (E56.4, ADR 0027). A copy that wins a rule
+ *  wins the set; a tie goes to the next rule.
+ */
+export type KeeperRule = 
+/**  Covers more of my languages in full. */
+"myLanguages" | 
+/**  Has `locl` forms for more of my languages. */
+"myLanguagesLocl" | 
+/**  The newest version (digit runs as numbers; no version last). */
+"newestVersion" | 
+/**  The format that stands first in [`KeeperPolicy::format_order`]. */
+"format" | 
+/**  A variable font over a static one. */
+"variable" | 
+/**  The most glyphs. */
+"mostGlyphs" | 
+/**  In the folder that stands first in [`KeeperPolicy::preferred_folders`]. */
+"preferredFolder" | 
+/**  In the library folder. */
+"libraryFolder" | 
+/**
+ *  Carries more kinds of the user's metadata (favorite, rating, tags,
+ *  notes, collections, sets).
+ */
+"userMetadata" | 
+/**  Active, or asked for by an open document. */
+"activeOrRequested" | 
+/**
+ *  The path A to Z. Always the last rule, so the answer never depends
+ *  on chance.
+ */
+"path";
+
+/**  Why a copy is kept. */
+export type KeptBecause = 
+/**  The policy's rules chose it. */
+"policy" | 
+/**
+ *  The language guard: it covers one of my languages in full that the
+ *  other kept copies do not.
+ */
+"languages" | 
+/**  It is in a system font folder; the policy never applies to it. */
+"system" | 
+/**  Its file holds a font no other file holds (a collection file). */
+"lastCopy";
+
+/**  One copy the recommendation keeps. */
+export type KeptCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  Why. */
+	because: KeptBecause,
+	/**
+	 *  My languages (preset ids) it covers in full that no other kept copy
+	 *  covers.
+	 */
+	languagesOnlyHere: string[],
+	/**
+	 *  For [`KeptBecause::LastCopy`]: the fonts (PostScript names) only its
+	 *  file holds.
+	 */
+	fontsOnlyHere: string[],
+	/**  Why, in one sentence. */
+	sentence: string,
+};
+
 /**
  *  The language of the UI. Each value but `System` names a message catalog the
  *  desktop app ships (`apps/desktop/src/locales/<tag>.json`); a new catalog adds
@@ -3073,6 +3248,20 @@ export type MoveCollectionRequest = {
 	position: number,
 };
 
+/**
+ *  Whether the user has set the languages they work in (E56.3). An answer of
+ *  a rule or guard that names "my languages" carries it, so the UI can offer
+ *  to set them.
+ */
+export type MyLanguagesStatus = 
+/**
+ *  No language is set: every rule and guard that names "my languages"
+ *  did nothing.
+ */
+"notSet" | 
+/**  At least one language is set and the rules and guards used them. */
+"set";
+
 /**  A named instance of a variable font, listed as a style. */
 export type NamedInstance = {
 	/**  Style name ("Semibold"). */
@@ -3311,6 +3500,17 @@ export type PreviewImage = {
 	png: number[],
 };
 
+/**
+ *  Preview a keeper policy without saving it
+ *  ([`LibraryService::preview_keeper_policy`]).
+ */
+export type PreviewKeeperPolicyRequest = {
+	/**  The sets to look at, as [`ListDuplicateSetsRequest::scope`]. */
+	scope?: DuplicateScope,
+	/**  The policy to try. */
+	policy: KeeperPolicy,
+};
+
 /**  Render a line of text in one face. */
 export type PreviewRequest = {
 	/**  The face. */
@@ -3436,6 +3636,17 @@ export type ReceiptPlace =
 "nextToFont" | 
 /**  In the app's data folder, on this machine only. */
 "appData";
+
+/**
+ *  One copy the recommendation would remove, with the rule it lost by
+ *  against the keeper.
+ */
+export type RemovedCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  The rule that put the keeper before it. */
+	reason: KeeperReason,
+};
 
 /**  Rename a collection, or change its colour. */
 export type RenameCollectionRequest = {
@@ -3871,6 +4082,12 @@ export type Settings = {
 	 *  once. Empty in every other answer.
 	 */
 	droppedLanguages?: string[],
+	/**
+	 *  The keeper policy of the Duplicates module (E56.4): the ordered rules
+	 *  that choose the copy of a duplicate set to keep. The default policy
+	 *  until the user changes it. Stored in `config.json`.
+	 */
+	keeperPolicy?: KeeperPolicy,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -3932,6 +4149,12 @@ export type SettingsUpdate = {
 	 *  stands.
 	 */
 	myLanguages?: string[] | null,
+	/**
+	 *  The keeper policy, replacing the saved one; it is stored normalized
+	 *  ([`KeeperPolicy::normalized`]). A preferred folder that is not an
+	 *  absolute path is refused and nothing changes.
+	 */
+	keeperPolicy?: KeeperPolicy | null,
 };
 
 /**  How the user closed a setup step. */
