@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{FetchedFont, FontsNeededRequest};
 use fm_api::catalog::{CatalogFileKind, CatalogId, InstallFamilyRequest};
-use fm_api::{ActivationService, ApiResult, FaceId, SettingsService};
+use fm_api::{ActivationService, ApiResult, FaceId};
 
 use super::CoreApi;
 
@@ -30,7 +30,7 @@ impl CoreApi {
     /// and its fonts stay unmatched, the others go on. A family the library
     /// already has is not downloaded again and not reported.
     pub(super) fn fetch_missing(&self, req: &FontsNeededRequest) -> ApiResult<Vec<FetchedFont>> {
-        let settings = self.settings.get_settings()?;
+        let settings = self.settings.read()?;
         let has_folder = settings
             .download_folder
             .as_deref()

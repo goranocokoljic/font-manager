@@ -203,6 +203,22 @@ impl SettingsStore {
     }
 }
 
+impl SettingsStore {
+    /// The settings for fm-core's own use (start, the watcher, installs,
+    /// the shell's close handler): a language id without a preset is left
+    /// out of the answer, but the file is not changed and nothing is
+    /// reported, so the one report goes to the next
+    /// [`SettingsService::get_settings`] an API caller makes (E56.3).
+    pub fn read(&self) -> ApiResult<Settings> {
+        let mut config = Config::load(&self.file)?;
+        Self::drop_unknown_languages(&mut config)?;
+        with_known_theme(Settings {
+            start_at_login: self.start_at_login(),
+            ..config.settings
+        })
+    }
+}
+
 impl SettingsService for SettingsStore {
     fn get_settings(&self) -> ApiResult<Settings> {
         let mut config = Config::load(&self.file)?;
@@ -521,6 +537,25 @@ mod tests {
         let second = store.get_settings().expect("read");
         assert_eq!(second.my_languages, ["de", "fr"]);
         assert!(second.dropped_languages.is_empty(), "reported once");
+    }
+
+    #[test]
+    fn a_quiet_read_leaves_out_an_unknown_language_but_changes_and_reports_nothing() {
+        let dir = TempDir::new("settings-my-languages-quiet");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        let file = paths.config_file();
+        let text = r#"{"myLanguages":["xx-Gone","de"]}"#;
+        fs::write(&file, text).expect("write");
+        let store = SettingsStore::new(&paths);
+        let quiet = store.read().expect("read");
+        assert_eq!(quiet.my_languages, ["de"]);
+        assert!(quiet.dropped_languages.is_empty());
+        assert_eq!(fs::read_to_string(&file).expect("read"), text, "unchanged");
+        assert_eq!(
+            store.get_settings().expect("read").dropped_languages,
+            ["xx-Gone"]
+        );
     }
 
     #[test]

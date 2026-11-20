@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use fm_api::library::Source;
-use fm_api::{Event, FaceId, SettingsService};
+use fm_api::{Event, FaceId};
 
 use super::{Broadcast, CoreApi, TraitPass, changes, lock};
 use crate::error::{FmError, FmResult};
@@ -87,7 +87,7 @@ impl CoreApi {
     pub fn with_watcher(self) -> Self {
         let settings = self
             .settings
-            .get_settings()
+            .read()
             .map(|s| WatchSettings::from_settings(&s))
             .unwrap_or_default();
         self.with_watch_settings(settings)
