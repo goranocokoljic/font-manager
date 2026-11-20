@@ -18,6 +18,7 @@
 //! fm-bench fonts-needed --home DIR             # 100 fonts by name, matched and activated in one request
 //! fm-bench preview-cache --home DIR [--rounds N]
 //! fm-bench duplicates --library DIR --home DIR [--rounds N] # copies a library folder into the home, times list_duplicate_sets
+//! fm-bench compare-copies --home DIR [--rounds N]  # after duplicates: times compare_copies on the largest pair
 //! ```
 //!
 //! Every command prints one JSON line on stdout; errors go to stderr with
@@ -29,13 +30,13 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use fm_bench::{
-    BenchResult, activate, duplicates, first_scan, fonts_needed, glyph_geometry, glyph_similar,
-    incremental, layout_png, pairings, preview_cache, search, serve_with, similar,
+    BenchResult, activate, compare_copies, duplicates, first_scan, fonts_needed, glyph_geometry,
+    glyph_similar, incremental, layout_png, pairings, preview_cache, search, serve_with, similar,
     smart_collections, start, trait_pass, trait_search,
 };
 use serde::Serialize;
 
-const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|smart|similar|pairings|layout-png|glyph-geometry|trait-pass|trait-search|glyph-similar|preview-cache|activate|fonts-needed|duplicates> --home DIR [--library DIR] [--rounds N]";
+const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|smart|similar|pairings|layout-png|glyph-geometry|trait-pass|trait-search|glyph-similar|preview-cache|activate|fonts-needed|duplicates|compare-copies> --home DIR [--library DIR] [--rounds N]";
 
 #[derive(Debug, Default)]
 struct Args {
@@ -108,6 +109,7 @@ fn run(args: Args) -> BenchResult<()> {
         "activate" => print(&activate(&home)?),
         "fonts-needed" => print(&fonts_needed(&home)?),
         "duplicates" => print(&duplicates(&library()?, &home, args.rounds.unwrap_or(20))?),
+        "compare-copies" => print(&compare_copies(&home, args.rounds.unwrap_or(20))?),
         other => Err(format!("unknown command: {other}\n{USAGE}").into()),
     }
 }

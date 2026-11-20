@@ -149,6 +149,8 @@ async function run(opts) {
     // Last: it copies one library folder into the bench home and indexes it (E56.1).
     const dupes = bench(bin, ['duplicates', '--library', library, '--home', home, '--rounds', String(opts.rounds)]);
     console.log(`duplicates: ${dupes.sets} sets with ${dupes.copied_folder} copied beside the library (${dupes.copied_files} files)`);
+    const compared = bench(bin, ['compare-copies', '--home', home, '--rounds', String(opts.rounds)]);
+    console.log(`copy comparison: ${compared.level} set ${compared.set}, ${compared.bytes} bytes`);
     const report = {
       schema: SCHEMA,
       os,
@@ -178,12 +180,13 @@ async function run(opts) {
           ? metric('similar_glyph', glyphSimilar.p95_ms)
           : metric('similar_glyph', null, 'no face draws R or g'),
         duplicate_sets: metric('duplicate_sets', dupes.p95_ms),
+        copy_comparison: metric('copy_comparison', compared.p95_ms),
         idle_memory: metric('idle_memory', idle),
         preview_cache_hit: previewCache.samples
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits, trait_search: traitSearch, similar_glyph: glyphSimilar, duplicate_sets: dupes },
+      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits, trait_search: traitSearch, similar_glyph: glyphSimilar, duplicate_sets: dupes, copy_comparison: compared },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');

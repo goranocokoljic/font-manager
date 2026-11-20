@@ -86,6 +86,9 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; list_duplicates);
     same!(seen, d, c; list_duplicate_sets, json!({ "scope": { "kind": "folder", "path": "/Users" } }));
     same!(seen, d, c; list_duplicate_sets, json!({ "scope": { "kind": "source", "source": 999 } }));
+    same!(seen, d, c; compare_copies, json!({ "a": 1, "b": 2 }));
+    same!(seen, d, c; compare_copies, json!({ "a": 1, "b": 1 }));
+    same!(seen, d, c; compare_copies, json!({ "a": 1, "b": 999_999 }));
     same!(seen, d, c; keep_copy, json!({ "keep": "/a.ttf", "trash": [], "dryRun": true }));
     same!(seen, d, c; list_resolutions);
     same!(seen, d, c; undo_resolution, json!(1));

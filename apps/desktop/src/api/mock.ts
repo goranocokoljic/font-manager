@@ -4767,6 +4767,62 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       return structuredClone(listDuplicateSets(setFiles(), req));
     },
+    compareCopies: async (req) => {
+      if (req.a === req.b) throw invalid('Choose two different copies to compare.');
+      const a = find(req.a);
+      if (!a) throw notFound(req.a);
+      const b = find(req.b);
+      if (!b) throw notFound(req.b);
+      // As fm_api::mock: the sample has no files, so only characters,
+      // features and axes are compared.
+      const side = (f: FaceDetail) => ({
+        face: f.face.id,
+        path: f.path,
+        format: f.face.format,
+        health: { kind: 'ok' as const },
+      });
+      const only = (x: FaceDetail, y: FaceDetail) => {
+        const theirs = mockChars(y);
+        const chars = [...mockChars(x)]
+          .filter((c) => !theirs.has(c))
+          .sort((p, q) => (p.codePointAt(0) ?? 0) - (q.codePointAt(0) ?? 0));
+        return {
+          count: chars.length,
+          first: chars
+            .slice(0, 10)
+            .map(
+              (c) =>
+                `${c} (U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')})`,
+            ),
+        };
+      };
+      const tags = (x: string[], y: string[]) => x.filter((t) => !y.includes(t));
+      const features = (f: FaceDetail) => f.features.map((x) => x.tag);
+      const axes = (f: FaceDetail) => f.axes.map((x) => x.tag);
+      return {
+        a: side(a),
+        b: side(b),
+        differences: {
+          languagesGained: [],
+          languagesLost: [],
+          glyphsAdded: only(b, a),
+          glyphsRemoved: only(a, b),
+          featuresAdded: tags(features(b), features(a)),
+          featuresRemoved: tags(features(a), features(b)),
+          axesAdded: tags(axes(b), axes(a)),
+          axesRemoved: tags(axes(a), axes(b)),
+          verticalMetricsChanged: false,
+          unitsPerEmChanged: false,
+          advanceWidthsChanged: 0,
+          mayReflow: false,
+          containerOnly: false,
+          tablesChanged: [],
+        },
+        summary: [
+          'The sample library has no font files: only characters, features and axes are compared.',
+        ],
+      };
+    },
     keepCopy: async (req) => {
       // The rule of `KeepCopyRequest::check`: only a copy listed with the keeper moves.
       const groups = duplicates().filter((g) => g.copies.some((c) => c.path === req.keep));

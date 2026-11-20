@@ -511,4 +511,17 @@ fn the_duplicates_bench_copies_a_folder_into_the_home_and_lists_its_sets() {
     // A second run reuses the copy.
     let again = duplicates(&fixtures(), home.path(), 1).expect("again");
     assert_eq!(again.sets, timed.sets);
+
+    // The copies of a set compare (E56.2).
+    let compared = compare_copies(home.path(), 2).expect("compare");
+    assert!(compared.read, "{compared:?}");
+    assert_eq!(compared.samples, 2);
+    assert!(compared.bytes > 0);
+    assert_ne!(compared.paths[0], compared.paths[1]);
+}
+
+#[test]
+fn compare_copies_needs_an_index_with_sets() {
+    let home = TempDir::new("compare-empty");
+    assert!(compare_copies(home.path(), 1).is_err());
 }

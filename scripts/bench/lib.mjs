@@ -23,7 +23,9 @@ export const SCHEMA = 1;
  * trait_search: E49.5, a search by glyph traits with filters and an order under 50 ms;
  * similar_glyph: E49.8, 20 faces ranked by one glyph's distance from cached descriptors under 150 ms;
  * duplicate_sets: E56.1, one page of list_duplicate_sets over the reference library with one
- * of its folders copied beside it, under 500 ms (ADR 0027)).
+ * of its folders copied beside it, under 500 ms (ADR 0027);
+ * copy_comparison: E56.2, compare_copies on the two copies of a duplicate set that hold the
+ * most bytes, both files read and parsed, under 150 ms (ADR 0027)).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
@@ -47,6 +49,7 @@ export const BUDGETS = {
   trait_search: { unit: 'ms', target: 50 },
   similar_glyph: { unit: 'ms', target: 150 },
   duplicate_sets: { unit: 'ms', target: 500 },
+  copy_comparison: { unit: 'ms', target: 150 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];

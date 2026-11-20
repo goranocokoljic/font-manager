@@ -282,6 +282,15 @@ static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| match charsets::load() 
     }
 });
 
+/// The English name of the language preset `code` ("Vietnamese"); `None`
+/// for a code `data/charsets` does not have.
+pub fn language_name(code: &str) -> Option<&'static str> {
+    PRESETS
+        .iter()
+        .find(|p| p.code == code)
+        .map(|p| p.name.as_str())
+}
+
 /// The coverage of every preset by a face that maps `set` and has `locl`
 /// forms for `locl` (`script/LANG` entries, see `ParsedFace::locl_languages`),
 /// in preset order. Presets with nothing covered and no `locl` are left out.

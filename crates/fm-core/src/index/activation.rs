@@ -479,7 +479,7 @@ fn mode_to_sql(mode: ActivationMode) -> &'static str {
     }
 }
 
-fn mode_from_sql(text: &str) -> FmResult<ActivationMode> {
+pub(super) fn mode_from_sql(text: &str) -> FmResult<ActivationMode> {
     match text {
         "session" => Ok(ActivationMode::Session),
         "permanent" => Ok(ActivationMode::Permanent),

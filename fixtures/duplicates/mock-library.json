@@ -25,6 +25,7 @@
         "copies": [
           {
             "face": 1,
+            "facts": null,
             "format": "ttf",
             "hash": "0000000000000000000000000000000000000000000000000000000000000001",
             "identicalWith": [],
@@ -39,6 +40,7 @@
           },
           {
             "face": null,
+            "facts": null,
             "format": "ttf",
             "hash": "1f00d",
             "identicalWith": [],
@@ -53,6 +55,7 @@
           },
           {
             "face": null,
+            "facts": null,
             "format": "ttf",
             "hash": "2beef",
             "identicalWith": [],
@@ -75,6 +78,7 @@
         "copies": [
           {
             "face": null,
+            "facts": null,
             "format": "ttf",
             "hash": "0000000000000000000000000000000000000000000000000000000000000006",
             "identicalWith": [
@@ -91,6 +95,7 @@
           },
           {
             "face": 6,
+            "facts": null,
             "format": "ttf",
             "hash": "0000000000000000000000000000000000000000000000000000000000000006",
             "identicalWith": [

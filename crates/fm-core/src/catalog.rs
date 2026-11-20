@@ -1173,7 +1173,7 @@ pub(crate) fn now_rfc3339() -> String {
 }
 
 /// `secs` since 1970 as RFC 3339 in UTC.
-fn rfc3339(secs: u64) -> String {
+pub(crate) fn rfc3339(secs: u64) -> String {
     let days = i64::try_from(secs / 86_400).unwrap_or(0);
     let rest = secs % 86_400;
     // The civil date of a day number (H. Hinnant's algorithm).

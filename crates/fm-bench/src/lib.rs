@@ -1484,3 +1484,116 @@ pub fn duplicates(library: &Path, home: &Path, rounds: usize) -> BenchResult<Dup
         max_ms: samples.last().copied().unwrap_or_default(),
     })
 }
+
+/// What comparing two copies of a duplicate set measured (E56.2).
+#[derive(Debug, Serialize)]
+pub struct CompareTimed {
+    /// The set the copies are from.
+    pub set: String,
+    /// Its level of sameness.
+    pub level: String,
+    /// The two files compared.
+    pub paths: [String; 2],
+    /// Their sizes in bytes, added.
+    pub bytes: u64,
+    /// The comparison read both files.
+    pub read: bool,
+    /// Timed comparisons.
+    pub samples: usize,
+    /// The first comparison (not budgeted, as every other first call).
+    pub first_ms: f64,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds: the budgeted number.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// Times `compare_copies` on the two copies of the bench index's duplicate
+/// sets that hold the most bytes: copies of other versions first, then of
+/// one version in files that differ, then identical files. Run it after
+/// [`duplicates`], which makes sure the index has sets.
+pub fn compare_copies(home: &Path, rounds: usize) -> BenchResult<CompareTimed> {
+    use fm_api::library::{CompareCopiesRequest, DuplicateLevel};
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let rank = |level: DuplicateLevel| match level {
+        DuplicateLevel::OtherVersion => 2,
+        DuplicateLevel::SameVersion => 1,
+        DuplicateLevel::Identical => 0,
+    };
+    /// The pair to time: its rank and bytes order the candidates.
+    struct Pick {
+        key: (u8, u64),
+        set: String,
+        level: DuplicateLevel,
+        copies: [(FaceId, String); 2],
+    }
+    let mut best: Option<Pick> = None;
+    let mut offset = 0;
+    loop {
+        let page = api.list_duplicate_sets(ListDuplicateSetsRequest {
+            page: Page { offset, limit: 500 },
+            ..Default::default()
+        })?;
+        for set in &page.items {
+            let mut copies: Vec<_> = set
+                .copies
+                .iter()
+                .filter_map(|c| c.face.map(|f| (f, c)))
+                .collect();
+            copies.sort_by_key(|(_, c)| std::cmp::Reverse(c.size));
+            if let [(fa, a), (fb, b), ..] = copies.as_slice() {
+                let key = (rank(set.level), u64::from(a.size) + u64::from(b.size));
+                if best.as_ref().is_none_or(|x| x.key < key) {
+                    best = Some(Pick {
+                        key,
+                        set: set.id.clone(),
+                        level: set.level,
+                        copies: [(*fa, a.path.clone()), (*fb, b.path.clone())],
+                    });
+                }
+            }
+        }
+        offset += u32::try_from(page.items.len()).unwrap_or(u32::MAX);
+        if page.items.is_empty() || offset >= page.total {
+            break;
+        }
+    }
+    let Pick {
+        key: (_, bytes),
+        set,
+        level,
+        copies: [(fa, pa), (fb, pb)],
+    } = best.ok_or("the bench index has no duplicate set with two fonts to compare")?;
+    let req = CompareCopiesRequest { a: fa, b: fb };
+    let begin = Instant::now();
+    let first = api.compare_copies(req.clone())?;
+    let first_ms = ms(begin.elapsed());
+    let mut samples = Vec::with_capacity(rounds);
+    for _ in 0..rounds {
+        let begin = Instant::now();
+        api.compare_copies(req.clone())?;
+        samples.push(ms(begin.elapsed()));
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(CompareTimed {
+        set,
+        level: format!("{level:?}"),
+        paths: [pa, pb],
+        bytes,
+        read: first.differences.is_some(),
+        samples: samples.len(),
+        first_ms,
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
+    })
+}

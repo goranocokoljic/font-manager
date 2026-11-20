@@ -151,6 +151,11 @@ pub struct ParsedFace {
     /// before this field fails to load, so the next scan reads the file again
     /// and fills it, and `face.metrics` with it.
     pub metrics: Metrics,
+    /// Glyphs in the font (`maxp.numGlyphs`); 0 for a face that could not be
+    /// read. No serde default: a `face.parsed` written before this field
+    /// (E56.2) fails to load, so the next scan reads the file again and
+    /// fills it.
+    pub glyph_count: u32,
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
@@ -194,6 +199,7 @@ impl ParsedFace {
             feature_names: BTreeMap::new(),
             locl_languages: Vec::new(),
             color: false,
+            glyph_count: 0,
             classification: None,
             metrics: Metrics {
                 units_per_em: 0,
@@ -526,7 +532,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
 
     match font.maxp() {
         Ok(maxp) if maxp.num_glyphs() == 0 => problems.push("The font has no glyphs.".to_owned()),
-        Ok(_) => {}
+        Ok(maxp) => face.glyph_count = u32::from(maxp.num_glyphs()),
         Err(ReadError::TableIsMissing(_)) if !has_record(font, b"maxp") => {
             problems.push("The font has no maxp table, so its glyph count is unknown.".to_owned());
         }

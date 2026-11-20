@@ -32,7 +32,7 @@ pub(super) fn to_sql(rows: &[FaceLanguage]) -> String {
 }
 
 /// The rows of [`to_sql`], by code; `None` for text it cannot have written.
-fn from_sql(text: &str) -> Option<Vec<FaceLanguage>> {
+pub(super) fn from_sql(text: &str) -> Option<Vec<FaceLanguage>> {
     let map: BTreeMap<String, [u32; 3]> = serde_json::from_str(text).ok()?;
     map.into_iter()
         .map(|(code, [covered, total, locl])| {

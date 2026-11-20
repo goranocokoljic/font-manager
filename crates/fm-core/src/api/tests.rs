@@ -8373,3 +8373,197 @@ fn catalog_sample_texts_judge_each_family_by_its_preview_file() {
         "what the file lacks, as the file says"
     );
 }
+
+#[test]
+fn duplicate_set_copies_carry_their_facts_and_two_copies_compare() {
+    use fm_api::library::{CompareCopiesRequest, DuplicateSetCopy};
+    use fm_api::organization::{
+        CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, TagFacesRequest,
+        UserMetaUpdate,
+    };
+    let lib = Lib::new("api-copy-facts");
+    let original = lib.root.join("asapsharp").join("AsapSharp[wdth,wght].ttf");
+    // An "older version": the same font cut down to ASCII.
+    let older = lib.root.join("older").join("AsapSharp.ttf");
+    std::fs::create_dir_all(older.parent().expect("folder")).expect("folder");
+    let sfnt =
+        crate::web_font::standalone(&std::fs::read(&original).expect("read"), 0).expect("sfnt");
+    let cut = crate::subset::cut(&sfnt, &crate::subset::Keep::from_ranges([(0x00, 0x7E)]))
+        .expect("subset");
+    std::fs::write(&older, crate::web_font::sfnt_bytes(&cut).expect("bytes")).expect("write");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let list = || {
+        lib.api
+            .list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .expect("sets")
+            .items
+            .into_iter()
+            .find(|s| s.copies.iter().any(|c| Path::new(&c.path) == original))
+            .expect("the set of the copied font")
+    };
+    let set = list();
+    assert_eq!(set.copies.len(), 2, "{set:?}");
+    let copy_at = |set: &DuplicateSet, path: &Path| -> DuplicateSetCopy {
+        set.copies
+            .iter()
+            .find(|c| Path::new(&c.path) == path)
+            .expect("copy")
+            .clone()
+    };
+    let full = copy_at(&set, &original).face.expect("face");
+    let cut_face = copy_at(&set, &older).face.expect("face");
+
+    lib.api
+        .update_user_meta(UserMetaUpdate {
+            faces: vec![full],
+            favorite: Some(true),
+            rating: Some(4),
+            notes: Some("For the poster".into()),
+        })
+        .expect("meta");
+    lib.api
+        .tag_faces(TagFacesRequest {
+            faces: vec![full],
+            tags: vec!["Display".into(), "brand".into()],
+            families: Vec::new(),
+        })
+        .expect("tags");
+    let collection = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Posters".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+            color: None,
+        })
+        .expect("collection");
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: collection.id,
+            faces: vec![full],
+            families: Vec::new(),
+        })
+        .expect("add");
+    lib.api
+        .create_set(CreateSetRequest {
+            name: "Client A".into(),
+            faces: vec![full],
+        })
+        .expect("set");
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces { faces: vec![full] },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::default(),
+        })
+        .expect("activate");
+    lib.api
+        .lock()
+        .tag_document(&[full], "Poster.indd")
+        .expect("document");
+
+    let set = list();
+    let facts = copy_at(&set, &original)
+        .facts
+        .expect("facts of the full copy");
+    assert!(
+        facts.modified.as_deref().is_some_and(|t| t.ends_with('Z')),
+        "{facts:?}"
+    );
+    assert!(facts.glyph_count.is_some_and(|n| n > 200), "{facts:?}");
+    assert!(facts.variable);
+    assert_eq!(facts.axes, ["wght", "wdth"], "in the font's order");
+    assert!(
+        facts.features.iter().any(|f| f == "kern"),
+        "{:?}",
+        facts.features
+    );
+    assert_eq!(facts.activation, Some(ActivationMode::Session));
+    assert_eq!(facts.activation_documents, ["Poster.indd"]);
+    assert!(facts.favorite);
+    assert_eq!(facts.rating, Some(4));
+    assert!(facts.has_notes);
+    assert_eq!(facts.tags, ["brand", "Display"]);
+    assert_eq!(facts.collections, ["Posters"]);
+    assert_eq!(facts.sets, ["Client A"]);
+    // Languages from the index's coverage (data/charsets).
+    let stored = lib.api.lock().face_languages(full).expect("coverage");
+    let complete: Vec<String> = stored
+        .iter()
+        .filter(|l| l.is_complete())
+        .map(|l| l.code.clone())
+        .collect();
+    assert!(!complete.is_empty());
+    assert_eq!(facts.languages_full, complete);
+    assert_eq!(
+        facts.languages_locl,
+        stored
+            .iter()
+            .filter(|l| l.has_locl)
+            .map(|l| l.code.clone())
+            .collect::<Vec<_>>()
+    );
+
+    let other = copy_at(&set, &older).facts.expect("facts of the cut copy");
+    assert!(!other.favorite && other.tags.is_empty() && other.activation.is_none());
+    assert!(other.glyph_count < facts.glyph_count);
+    assert!(other.languages_full.len() < facts.languages_full.len());
+
+    // The older copy compared with the full one: languages gained, glyphs added.
+    let c = lib
+        .api
+        .compare_copies(CompareCopiesRequest {
+            a: cut_face,
+            b: full,
+        })
+        .expect("compare");
+    assert_eq!(
+        (c.a.health.clone(), c.b.health.clone()),
+        (Health::Ok, Health::Ok)
+    );
+    let d = c.differences.as_ref().expect("both read");
+    assert!(
+        !d.languages_gained.is_empty() && d.languages_lost.is_empty(),
+        "{d:?}"
+    );
+    assert!(
+        d.glyphs_added.count > 0 && d.glyphs_removed.count == 0,
+        "{d:?}"
+    );
+    assert!(!c.summary.is_empty());
+
+    let err = lib
+        .api
+        .compare_copies(CompareCopiesRequest { a: full, b: full })
+        .expect_err("the same face");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    let err = lib
+        .api
+        .compare_copies(CompareCopiesRequest {
+            a: full,
+            b: FaceId(999_999),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+
+    // A copy whose file broke since the scan: that side is broken, no error.
+    std::fs::write(&older, b"\0\x01\0\0 cut off").expect("break the file");
+    let c = lib
+        .api
+        .compare_copies(CompareCopiesRequest {
+            a: full,
+            b: cut_face,
+        })
+        .expect("compare a broken side");
+    assert!(matches!(c.b.health, Health::Broken(_)), "{:?}", c.b.health);
+    assert!(c.differences.is_none());
+    assert!(c.summary[0].starts_with("The second copy"));
+}
