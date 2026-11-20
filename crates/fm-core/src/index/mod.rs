@@ -36,6 +36,7 @@ mod glyph_descriptors;
 mod glyph_traits;
 mod languages;
 mod license_inventory;
+mod metadata_merge;
 mod needed;
 mod problems;
 mod quick_collection;
@@ -67,7 +68,12 @@ pub use family_license::{DeclaredLicense, LicenseTarget};
 pub use files::{BATCH_SIZE, Persisted};
 pub use glyph_descriptors::{DescribedFace, DescriptorTodo};
 pub use glyph_traits::{MeasuredFace, StoredTrait, TraitTodo};
-pub(crate) use resolutions::StoredMove;
+#[cfg(test)]
+pub(crate) use metadata_merge::metadata_value_for_tests;
+pub use metadata_merge::{
+    FaceMerge, FaceMeta, MergeChoice, MergeConflict, MergeField, MergePlan, MergeValue,
+};
+pub(crate) use resolutions::{CopyFile, StoredMove};
 pub use schema::SCHEMA_VERSION;
 pub(crate) use search::glyph_similar::check_code_point;
 pub use sidecars::SidecarSync;

@@ -13,6 +13,9 @@
 //!   [`DuplicateResolver::undo_resolution`] moves it back, never over a
 //!   file that is at the old path again. A trashed copy is `gone` in the
 //!   index, so its ids, tags and ratings come back with it (ADR 0004).
+//! - **Metadata (E56.5).** Before the copies leave, the kept copy takes over
+//!   what the user put on them (`index/metadata_merge.rs`), in the
+//!   transaction of the log; undo takes back only what the merge added.
 //! - **Events.** Moved copies' faces are sent as removed, restored ones as
 //!   added, in one [`Event::LibraryChanged`].
 
@@ -27,7 +30,7 @@ use fm_platform::{Trash, TrashErrorKind, Trashed};
 
 use crate::activation::Emit;
 use crate::error::FmError;
-use crate::index::{Index, StoredMove};
+use crate::index::{CopyFile, Index, MergeChoice, MergePlan, StoredMove};
 
 /// Why a copy the app activated does not move (rule 3).
 const ACTIVE_COPY: &str = "This copy is active. Deactivate it first, then move it to the trash.";
@@ -80,8 +83,48 @@ impl DuplicateResolver {
         self.index.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// [`fm_api::LibraryService::keep_copy`].
+    /// [`fm_api::LibraryService::keep_copy`]: [`Self::keep_copy_with`]
+    /// with the default of every conflict, the kept copy's value (E56.5).
     pub fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {
+        self.keep_copy_with(req, &[])
+    }
+
+    /// What `req` would merge onto the kept copy (E56.5): what it takes
+    /// over, and every field where two copies differ. Reads only; the
+    /// request is checked as [`Self::keep_copy`] checks it.
+    pub fn merge_plan(&self, req: &KeepCopyRequest) -> ApiResult<MergePlan> {
+        let index = self.lock();
+        req.check(&index.duplicates()?)?;
+        let mut wanted: Vec<&str> = req.trash.iter().map(String::as_str).collect();
+        wanted.push(&req.keep);
+        let files = index.copy_files(&wanted, &self.system)?;
+        let kept = files
+            .get(&req.keep)
+            .map(|f| f.faces.clone())
+            .unwrap_or_default();
+        let leaving: Vec<FaceId> = req
+            .trash
+            .iter()
+            .filter_map(|p| files.get(p))
+            .flat_map(|f| f.faces.iter().copied())
+            .collect();
+        Ok(index.merge_plan(&kept, &leaving)?)
+    }
+
+    /// Keeps one copy and moves the others to the trash; before they leave,
+    /// the kept copy takes over their metadata (E56.5), with `choices`
+    /// taking the other value of a conflict of [`Self::merge_plan`]. Only
+    /// the copies that moved give their metadata; the merge, the gone flags
+    /// and the undo log are one transaction, so when nothing moves or the
+    /// log cannot be written the kept copy's metadata is as it was.
+    pub fn keep_copy_with(
+        &self,
+        req: KeepCopyRequest,
+        choices: &[MergeChoice],
+    ) -> ApiResult<Resolution> {
+        if !choices.is_empty() {
+            self.merge_plan(&req)?.choose(choices)?;
+        }
         let mut index = self.lock();
         req.check(&index.duplicates()?)?;
         let mut wanted: Vec<&str> = req.trash.iter().map(String::as_str).collect();
@@ -171,7 +214,14 @@ impl DuplicateResolver {
             .iter()
             .any(|m| m.row.status == TrashMoveStatus::Trashed);
         let (id, at) = if moved {
-            match index.insert_resolution(&req.keep, &moves) {
+            let merge = match moved_merge(&index, &files, &req.keep, &moves, choices) {
+                Ok(merge) => merge,
+                Err(e) => {
+                    self.put_back(&moves);
+                    return Err(e.into());
+                }
+            };
+            match index.insert_resolution(&req.keep, &moves, &merge) {
                 Ok((id, at)) => (Some(id), at),
                 Err(e) => {
                     // Without the log there is no undo: put every moved
@@ -296,5 +346,39 @@ impl DuplicateResolver {
     }
 }
 
+/// The merge of the copies of `moves` that moved, with the `choices`
+/// that still name one of its conflicts (a copy that did not move gives
+/// nothing, so its conflicts are gone).
+fn moved_merge(
+    index: &Index,
+    files: &std::collections::HashMap<String, CopyFile>,
+    keep: &str,
+    moves: &[StoredMove],
+    choices: &[MergeChoice],
+) -> crate::error::FmResult<MergePlan> {
+    let kept = files.get(keep).map(|f| f.faces.clone()).unwrap_or_default();
+    let leaving: Vec<FaceId> = moves
+        .iter()
+        .filter(|m| m.row.status == TrashMoveStatus::Trashed)
+        .filter_map(|m| files.get(&m.row.path))
+        .flat_map(|f| f.faces.iter().copied())
+        .collect();
+    let mut plan = index.merge_plan(&kept, &leaving)?;
+    let still: Vec<MergeChoice> = choices
+        .iter()
+        .filter(|c| {
+            plan.conflicts
+                .iter()
+                .any(|k| k.kept_face == c.kept_face && k.field == c.field && k.other_face == c.take)
+        })
+        .copied()
+        .collect();
+    plan.choose(&still)?;
+    Ok(plan)
+}
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod merge_tests;
