@@ -143,3 +143,34 @@ fn versions_compare_by_digit_runs_and_no_version_is_its_own_value() {
     assert_eq!(key(None), key(Some("   ")));
     assert_ne!(key(None), key(Some("1.0")));
 }
+
+#[test]
+fn digit_runs_past_u64_are_one_value_and_a_page_holds_at_most_500_sets() {
+    assert_eq!(
+        version_key(Some("1.99999999999999999999")),
+        version_key(Some("1.99999999999999999998"))
+    );
+    let files: Vec<SetFile> = (0..1002)
+        .map(|i| SetFile {
+            path: format!("/f/{i}.ttf"),
+            size: 1,
+            hash: format!("h{}", i / 2),
+            format: Some(FontFormat::Ttf),
+            source: SourceId(1),
+            in_library_folder: false,
+            system: false,
+            faces: Vec::new(),
+        })
+        .collect();
+    let page = list(
+        &files,
+        &ListDuplicateSetsRequest {
+            page: fm_api::common::Page {
+                offset: 0,
+                limit: 10_000,
+            },
+            ..Default::default()
+        },
+    );
+    assert_eq!((page.total, page.items.len()), (501, MAX_PAGE as usize));
+}

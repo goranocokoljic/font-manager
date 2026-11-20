@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import cases from '../../../../fixtures/duplicates/set-cases.json';
 import library from '../../../../fixtures/duplicates/mock-library.json';
 import { createMockClient } from './mock';
-import { duplicateSets, versionKey, type SetFile } from './mockDuplicates';
+import { duplicateSets, listDuplicateSets, versionKey, type SetFile } from './mockDuplicates';
 import type { DuplicateScope, DuplicateSet, FontFormat, Paged } from './types';
 
 /** The fields of a set the case file states. */
@@ -49,6 +49,22 @@ describe('MockApi duplicate sets (E56.1)', () => {
     expect(versionKey('Version 2.9')).not.toBe(versionKey('Version 2.10'));
     expect(versionKey(null)).toBe(versionKey('  '));
     expect(versionKey(null)).not.toBe(versionKey('1.0'));
+  });
+
+  it('caps digit runs past u64 as fm-core does, and a page at 500 sets', () => {
+    expect(versionKey('1.99999999999999999999')).toBe(versionKey('1.99999999999999999998'));
+    const files: SetFile[] = Array.from({ length: 1002 }, (_, i) => ({
+      path: `/f/${i}.ttf`,
+      size: 1,
+      hash: `h${Math.floor(i / 2)}`,
+      format: 'ttf',
+      source: 1,
+      inLibraryFolder: false,
+      system: false,
+      faces: [],
+    }));
+    const page = listDuplicateSets(files, { page: { offset: 0, limit: 10_000 } });
+    expect([page.total, page.items.length]).toEqual([501, 500]);
   });
 
   it('lists the sets the Rust mock lists for the same library', async () => {
