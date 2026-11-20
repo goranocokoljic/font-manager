@@ -37,10 +37,15 @@ fn with_no_language_the_default_policy_gives_the_keeper_of_choose_keeper_for_eve
     // first: the format rule, not the path, must put the TTF first.
     let copy = lib.root.join("copy").join("BebasNeue-Regular.ttf");
     let woff2 = lib.root.join("a-web").join("BebasNeue-Regular.woff2");
-    for p in [&copy, &woff2] {
+    // TrueType outlines under an .otf name, in a folder that sorts last: the
+    // index stores TrueType, the extension says OpenType CFF, and both
+    // listings must still rank it as choose_keeper does.
+    let misnamed = lib.root.join("z-misnamed").join("BebasNeue-Regular.otf");
+    for p in [&copy, &woff2, &misnamed] {
         std::fs::create_dir_all(p.parent().expect("folder")).expect("folder");
     }
     std::fs::copy(&ttf, &copy).expect("copy");
+    std::fs::copy(&ttf, &misnamed).expect("copy");
     let sfnt = crate::web_font::standalone(&std::fs::read(&ttf).expect("read"), 0).expect("sfnt");
     std::fs::write(
         &woff2,
@@ -94,10 +99,10 @@ fn with_no_language_the_default_policy_gives_the_keeper_of_choose_keeper_for_eve
         .iter()
         .find(|g| g.copies.iter().any(|c| Path::new(&c.path) == woff2))
         .expect("the Bebas group");
-    assert_ne!(
+    assert_eq!(
         Path::new(&bebas.copies[0].path),
-        woff2,
-        "TrueType before WOFF2"
+        misnamed,
+        "by its extension, before TrueType and WOFF2"
     );
 }
 

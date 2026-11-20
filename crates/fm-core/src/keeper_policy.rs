@@ -27,6 +27,7 @@ use fm_api::common::FontFormat;
 use fm_api::library::{
     CopyFacts, DuplicateGroup, DuplicateSet, KeeperOutcome, KeeperPolicy, KeeperPolicyPreview,
     KeeperReason, KeeperRecommendation, KeeperRule, KeptBecause, KeptCopy, RemovedCopy, VersionKey,
+    format_from_extension,
 };
 use fm_api::settings::MyLanguagesStatus;
 use fm_platform::paths::{Os, is_within};
@@ -43,7 +44,9 @@ pub struct Candidate {
     pub path: String,
     /// Version string (name ID 5) of the face the set is about.
     pub version: Option<String>,
-    /// The file format; `None` for data that is no font.
+    /// The format the file's extension names, as
+    /// [`DuplicateGroup::choose_keeper`] reads it, so the default policy
+    /// with no language set gives its keeper; `None` for another extension.
     pub format: Option<FontFormat>,
     /// The source is the library folder.
     pub in_library_folder: bool,
@@ -52,8 +55,18 @@ pub struct Candidate {
     /// What the index knows of the face; `None` reads as no languages, no
     /// glyph count, static, no metadata, not active.
     pub facts: Option<CopyFacts>,
-    /// The fonts (PostScript names) only this file holds.
-    pub fonts_only_here: Vec<String>,
+    /// The fonts (PostScript names) this file holds, each with every file
+    /// of the library that holds it, this one included.
+    pub holds: Vec<HeldFont>,
+}
+
+/// One font a file holds, with the files that hold it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HeldFont {
+    /// PostScript name.
+    pub name: String,
+    /// Every file that holds it, by path.
+    pub holders: Vec<String>,
 }
 
 /// The names of the language presets, for the sentences.
@@ -412,19 +425,12 @@ pub fn recommend(
     };
 
     // The kept copies, by index, with why: the keeper, the system copies,
-    // the files that alone hold a font, then the language guard.
+    // then the language guard, then the last copies of a font.
     let mut kept: Vec<(usize, KeptBecause)> = vec![(winner, KeptBecause::Policy)];
     kept.extend(
         (0..copies.len())
             .filter(|&i| copies[i].system)
             .map(|i| (i, KeptBecause::System)),
-    );
-    kept.extend(
-        ranked
-            .iter()
-            .copied()
-            .filter(|&i| i != winner && !copies[i].fonts_only_here.is_empty())
-            .map(|i| (i, KeptBecause::LastCopy)),
     );
     let cover: Vec<BTreeSet<String>> = copies
         .iter()
@@ -454,6 +460,29 @@ pub fn recommend(
         covered.extend(cover[i].iter().cloned());
         kept.push((i, KeptBecause::Languages));
         guarded = true;
+    }
+    // The last copy of a font: while the copies to remove hold a font no
+    // file outside them holds, keep the first of them the rules rank.
+    let mut lost_fonts: HashMap<usize, Vec<String>> = HashMap::new();
+    loop {
+        let removed: Vec<usize> = ranked
+            .iter()
+            .copied()
+            .filter(|i| !kept.iter().any(|&(k, _)| k == *i))
+            .collect();
+        let gone: HashSet<&str> = removed.iter().map(|&i| copies[i].path.as_str()).collect();
+        let found = removed.iter().find_map(|&i| {
+            let lost: Vec<String> = copies[i]
+                .holds
+                .iter()
+                .filter(|h| h.holders.iter().all(|p| gone.contains(p.as_str())))
+                .map(|h| h.name.clone())
+                .collect();
+            (!lost.is_empty()).then_some((i, lost))
+        });
+        let Some((i, lost)) = found else { break };
+        lost_fonts.insert(i, lost);
+        kept.push((i, KeptBecause::LastCopy));
     }
     let one_covers_all = !all.is_empty() && cover.iter().any(|c| c.is_superset(&all));
     let outcome = if guarded && !one_covers_all {
@@ -489,8 +518,8 @@ pub fn recommend(
                     "Kept: in a system font folder; the policy never removes it.".to_owned()
                 }
                 KeptBecause::LastCopy => format!(
-                    "Kept: its file is the only copy of {}.",
-                    words(c.fonts_only_here.clone())
+                    "Kept: its file is the last copy of {}.",
+                    words(lost_fonts.get(&i).cloned().unwrap_or_default())
                 ),
                 KeptBecause::Languages if only.is_empty() => {
                     "Kept: it covers languages of yours the copy the rules chose does not."
@@ -505,11 +534,7 @@ pub fn recommend(
                 path: c.path.clone(),
                 because,
                 languages_only_here: only,
-                fonts_only_here: if because == KeptBecause::LastCopy {
-                    c.fonts_only_here.clone()
-                } else {
-                    Vec::new()
-                },
+                fonts_only_here: lost_fonts.get(&i).cloned().unwrap_or_default(),
                 sentence,
             }
         })
@@ -533,49 +558,49 @@ pub fn recommend(
     }
 }
 
-/// For each file path, the fonts (PostScript names) no other file of
-/// `files` holds.
-pub fn fonts_only_here(files: &[SetFile]) -> HashMap<&str, Vec<String>> {
-    let mut holders: HashMap<&str, usize> = HashMap::new();
-    for file in files {
-        let names: HashSet<&str> = file
-            .faces
+/// For each file path, the fonts (PostScript names) it holds, each with
+/// every file of `files` that holds it.
+pub fn holdings(files: &[SetFile]) -> HashMap<&str, Vec<HeldFont>> {
+    let names_of = |file: &SetFile| -> BTreeSet<String> {
+        file.faces
             .iter()
-            .map(|f| f.name.as_str())
+            .map(|f| f.name.clone())
             .filter(|n| !n.is_empty())
-            .collect();
-        for name in names {
-            *holders.entry(name).or_default() += 1;
+            .collect()
+    };
+    let mut holders: HashMap<String, Vec<String>> = HashMap::new();
+    for file in files {
+        for name in names_of(file) {
+            holders.entry(name).or_default().push(file.path.clone());
         }
     }
     files
         .iter()
-        .filter_map(|file| {
-            let mut only: Vec<String> = file
-                .faces
-                .iter()
-                .map(|f| f.name.as_str())
-                .filter(|n| holders.get(n) == Some(&1))
-                .map(str::to_owned)
+        .map(|file| {
+            let held = names_of(file)
+                .into_iter()
+                .map(|name| HeldFont {
+                    holders: holders.get(&name).cloned().unwrap_or_default(),
+                    name,
+                })
                 .collect();
-            only.dedup();
-            (!only.is_empty()).then_some((file.path.as_str(), only))
+            (file.path.as_str(), held)
         })
         .collect()
 }
 
 /// The candidates of a duplicate set, from its copies and their facts.
-fn set_candidates(set: &DuplicateSet, only: &HashMap<&str, Vec<String>>) -> Vec<Candidate> {
+fn set_candidates(set: &DuplicateSet, held: &HashMap<&str, Vec<HeldFont>>) -> Vec<Candidate> {
     set.copies
         .iter()
         .map(|c| Candidate {
             path: c.path.clone(),
             version: c.version.clone(),
-            format: c.format,
+            format: format_from_extension(&c.path),
             in_library_folder: c.in_library_folder,
             system: c.system,
             facts: c.facts.clone(),
-            fonts_only_here: only.get(c.path.as_str()).cloned().unwrap_or_default(),
+            holds: held.get(c.path.as_str()).cloned().unwrap_or_default(),
         })
         .collect()
 }
@@ -589,9 +614,9 @@ pub fn apply_to_sets(
     my_languages: &[String],
     names: &LanguageNames,
 ) {
-    let only = fonts_only_here(files);
+    let held = holdings(files);
     for set in sets {
-        let candidates = set_candidates(set, &only);
+        let candidates = set_candidates(set, &held);
         set.recommendation = Some(recommend(&candidates, policy, my_languages, names));
     }
 }
@@ -609,7 +634,7 @@ pub fn apply_to_groups(
     names: &LanguageNames,
 ) {
     let by_path: HashMap<&str, &SetFile> = files.iter().map(|f| (f.path.as_str(), f)).collect();
-    let only = fonts_only_here(files);
+    let held = holdings(files);
     for group in groups {
         let candidates: Vec<Candidate> = group
             .copies
@@ -619,11 +644,11 @@ pub fn apply_to_groups(
                 Candidate {
                     path: c.path.clone(),
                     version: c.version.clone(),
-                    format: file.and_then(|f| f.format),
+                    format: format_from_extension(&c.path),
                     in_library_folder: c.in_library_folder,
                     system: file.is_some_and(|f| f.system),
                     facts: c.face.and_then(|f| facts.get(&f).cloned()),
-                    fonts_only_here: only.get(c.path.as_str()).cloned().unwrap_or_default(),
+                    holds: held.get(c.path.as_str()).cloned().unwrap_or_default(),
                 }
             })
             .collect();
@@ -661,11 +686,11 @@ pub fn preview(
     my_languages: &[String],
     names: &LanguageNames,
 ) -> KeeperPolicyPreview {
-    let only = fonts_only_here(files);
+    let held = holdings(files);
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     let (mut with_keeper, mut keep_both, mut changed) = (0, 0, 0);
     for set in sets {
-        let candidates = set_candidates(set, &only);
+        let candidates = set_candidates(set, &held);
         let new = recommend(&candidates, tried, my_languages, names);
         let old = recommend(&candidates, saved, my_languages, names);
         match new.outcome {

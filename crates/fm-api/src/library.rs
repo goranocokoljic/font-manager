@@ -352,8 +352,9 @@ fn natural(s: &str) -> Vec<NaturalPart> {
 }
 
 /// The format a path's extension names, without case: what
-/// [`DuplicateGroup::choose_keeper`] knows of a copy's format.
-fn format_from_extension(path: &str) -> Option<FontFormat> {
+/// [`DuplicateGroup::choose_keeper`] knows of a copy's format, and what the
+/// keeper policy's format rule ranks, so the two agree (E56.4).
+pub fn format_from_extension(path: &str) -> Option<FontFormat> {
     let ext = std::path::Path::new(path)
         .extension()?
         .to_str()?

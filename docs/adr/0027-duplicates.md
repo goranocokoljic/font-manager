@@ -126,7 +126,9 @@ still reads. **The default policy** is: covers my languages, newest
 version, format, the library folder, path. With no language set it is the
 E8.1 keeper rule with the format added: `DuplicateGroup::choose_keeper`
 ranks the format by the file's extension, because `DuplicateCopy` has no
-format and its type does not change.
+format and its type does not change; so the format rule ranks every copy by
+its extension too (an `.otf` with TrueType outlines ranks as OpenType CFF),
+and the two always agree.
 
 **The language guard is not a rule.** A rule can be moved down or taken out;
 the guard cannot, because losing the only copy of a language the user works
@@ -143,8 +145,10 @@ nothing (`my_languages::apply`) and says so.
 **What the policy never does.** It never applies to a copy in a system font
 folder: such a copy is not ranked and is always kept (rule 4); a set of
 system copies only is `AllSystem`. It never recommends removing the last
-copy of a font: the keeper is always kept, and a file that alone holds
-another font (a collection file) is kept too.
+copy of a font: the keeper is always kept, and while the copies to
+remove hold a font that no file outside them holds (two identical
+collections are the only files with one of their fonts), the first of them
+the rules rank is kept too.
 
 **Every recommendation carries its reason as data**: the rule that decided,
 the values it compared, the other copy, and one sentence ("Kept: covers

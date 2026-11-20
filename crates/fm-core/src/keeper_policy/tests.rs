@@ -425,7 +425,10 @@ fn system_copies_are_outside_the_policy_and_always_kept() {
 #[test]
 fn a_file_that_alone_holds_a_font_is_never_recommended_for_removal() {
     let mut ttc = copy("/z.ttc");
-    ttc.fonts_only_here = vec!["Inter-Bold".into()];
+    ttc.holds = vec![HeldFont {
+        name: "Inter-Bold".into(),
+        holders: vec!["/z.ttc".into()],
+    }];
     let rec = run(
         &[copy("/a.ttf"), ttc, copy("/m.ttf")],
         &KeeperPolicy::default(),
@@ -441,7 +444,7 @@ fn a_file_that_alone_holds_a_font_is_never_recommended_for_removal() {
     assert_eq!(rec.keep[1].fonts_only_here, ["Inter-Bold"]);
     assert_eq!(
         rec.keep[1].sentence,
-        "Kept: its file is the only copy of Inter-Bold."
+        "Kept: its file is the last copy of Inter-Bold."
     );
     assert_eq!(
         removed(&rec),
@@ -472,22 +475,143 @@ fn file(path: &str, names: &[&str]) -> SetFile {
 }
 
 #[test]
-fn fonts_only_here_names_the_faces_no_other_file_holds() {
+fn holdings_name_every_file_that_holds_each_font() {
     let files = [
         file("/a.ttc", &["Inter-Regular", "Inter-Bold"]),
         file("/b.ttf", &["Inter-Regular"]),
         file("/c.ttf", &[""]),
     ];
-    let only = fonts_only_here(&files);
+    let held = holdings(&files);
+    let of = |path: &str| -> Vec<(String, Vec<String>)> {
+        held.get(path)
+            .map(|h| {
+                h.iter()
+                    .map(|f| (f.name.clone(), f.holders.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
     assert_eq!(
-        only.get("/a.ttc").map(Vec::as_slice),
-        Some(&["Inter-Bold".to_owned()][..])
+        of("/a.ttc"),
+        [
+            ("Inter-Bold".to_owned(), vec!["/a.ttc".to_owned()]),
+            (
+                "Inter-Regular".to_owned(),
+                vec!["/a.ttc".to_owned(), "/b.ttf".to_owned()]
+            ),
+        ]
     );
-    assert!(!only.contains_key("/b.ttf"));
-    assert!(
-        !only.contains_key("/c.ttf"),
-        "a face without a name is no font"
+    assert!(of("/c.ttf").is_empty(), "a face without a name is no font");
+}
+
+#[test]
+fn when_every_holder_of_a_font_would_go_the_first_ranked_one_is_kept() {
+    // Two identical collections (Foo and Bar) and a Foo TTF: the TTF wins
+    // by format, and both collections are copies of Foo, but they are the
+    // only files with Bar, so one of them stays.
+    let files = [
+        file("/x/Fam.ttc", &["Foo", "Bar"]),
+        file("/y/Fam.ttc", &["Foo", "Bar"]),
+        file("/z/Foo.ttf", &["Foo"]),
+    ];
+    let mut groups = vec![DuplicateGroup {
+        kind: DuplicateKind::Near,
+        postscript_name: Some("Foo".into()),
+        copies: vec![
+            group_copy("/x/Fam.ttc", 1),
+            group_copy("/y/Fam.ttc", 2),
+            group_copy("/z/Foo.ttf", 3),
+        ],
+    }];
+    apply_to_groups(
+        &mut groups,
+        &files,
+        &HashMap::new(),
+        &KeeperPolicy::default(),
+        &[],
+        &LanguageNames::default(),
     );
+    let marks: Vec<(&str, bool)> = groups[0]
+        .copies
+        .iter()
+        .map(|c| (c.path.as_str(), c.keep))
+        .collect();
+    assert_eq!(
+        marks,
+        [
+            ("/z/Foo.ttf", true),
+            ("/x/Fam.ttc", true),
+            ("/y/Fam.ttc", false)
+        ]
+    );
+    let problems: Vec<String> = groups[0].problems().into_iter().map(|p| p.path).collect();
+    assert_eq!(problems, ["/y/Fam.ttc"]);
+
+    // A Bar file elsewhere in the library: no collection has to stay.
+    let more = [
+        file("/x/Fam.ttc", &["Foo", "Bar"]),
+        file("/y/Fam.ttc", &["Foo", "Bar"]),
+        file("/z/Foo.ttf", &["Foo"]),
+        file("/w/Bar.ttf", &["Bar"]),
+    ];
+    let held = holdings(&more);
+    let candidate = |path: &str| Candidate {
+        format: format_from_extension(path),
+        holds: held.get(path).cloned().unwrap_or_default(),
+        ..copy(path)
+    };
+    let rec = run(
+        &[
+            candidate("/x/Fam.ttc"),
+            candidate("/y/Fam.ttc"),
+            candidate("/z/Foo.ttf"),
+        ],
+        &KeeperPolicy::default(),
+        &[],
+    );
+    assert_eq!(removed(&rec), ["/x/Fam.ttc", "/y/Fam.ttc"]);
+}
+
+#[test]
+fn a_group_ranks_the_format_by_extension_as_choose_keeper_does() {
+    // An .otf with TrueType outlines: the index stores Ttf, the extension
+    // says OpenType CFF; both listings rank it as choose_keeper does.
+    let files = [
+        file("/b/Castoro.otf", &["X"]),
+        file("/a/Castoro.ttf", &["X"]),
+    ];
+    let copies = vec![
+        group_copy("/a/Castoro.ttf", 1),
+        group_copy("/b/Castoro.otf", 2),
+    ];
+    let mut expected = DuplicateGroup {
+        kind: DuplicateKind::Exact,
+        postscript_name: Some("X".into()),
+        copies,
+    };
+    let mut groups = vec![expected.clone()];
+    expected.choose_keeper();
+    apply_to_groups(
+        &mut groups,
+        &files,
+        &HashMap::new(),
+        &KeeperPolicy::default(),
+        &[],
+        &LanguageNames::default(),
+    );
+    assert_eq!(groups[0].copies[0].path, expected.copies[0].path);
+    assert_eq!(groups[0].copies[0].path, "/b/Castoro.otf");
+
+    let mut sets = [set_of(&[copy("/a/Castoro.ttf"), copy("/b/Castoro.otf")])];
+    apply_to_sets(
+        &mut sets,
+        &files,
+        &KeeperPolicy::default(),
+        &[],
+        &LanguageNames::default(),
+    );
+    let rec = sets[0].recommendation.as_ref().expect("recommendation");
+    assert_eq!(rec.keeper.as_deref(), Some("/b/Castoro.otf"));
 }
 
 fn group_copy(path: &str, face: u32) -> DuplicateCopy {
