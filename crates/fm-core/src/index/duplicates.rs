@@ -19,8 +19,9 @@ use fm_api::{FaceId, SourceId};
 use rusqlite::Row;
 use rusqlite::types::{Value, ValueRef};
 
-use super::files::path_from_sql;
+use super::files::{format_from_sql, path_from_sql};
 use super::{Index, db_error};
+use crate::duplicate_sets::{SetFace, SetFile};
 use crate::error::{FmError, FmResult};
 use crate::scanner::FileHash;
 
@@ -62,7 +63,67 @@ WHERE (name, coalesce(version, '')) IN (
     GROUP BY 1, 2 HAVING COUNT(DISTINCT hash) > 1)
 ORDER BY name, coalesce(version, ''), id, collection_index";
 
+/// The files the library shows that have been read, each with its faces in
+/// collection order (a file without faces once, with NULL face columns), for
+/// [`Index::duplicate_set_files`].
+const SET_FILES: &str = "
+SELECT font_file.id, font_file.path, font_file.size, font_file.hash, font_file.format,
+       font_file.source_id, source.kind, face.id, face.postscript_name,
+       nullif(trim(CASE WHEN json_valid(face.parsed)
+                        THEN json_extract(face.parsed, '$.version') END), '')
+FROM font_file
+JOIN source ON source.id = font_file.source_id
+LEFT JOIN face ON face.file_id = font_file.id
+WHERE font_file.gone = 0 AND source.paused = 0 AND font_file.hash IS NOT NULL
+ORDER BY font_file.id, face.collection_index";
+
 impl Index {
+    /// The files the library shows (not gone, source not paused, read), with
+    /// their faces, as [`crate::duplicate_sets::sets`] takes them (E56.1).
+    pub fn duplicate_set_files(&self) -> FmResult<Vec<SetFile>> {
+        let mut stmt = self.conn.prepare(SET_FILES).map_err(|e| db_error(&e))?;
+        let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
+        let mut out: Vec<SetFile> = Vec::new();
+        let mut last: Option<i64> = None;
+        while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
+            let get_err = |e: rusqlite::Error| db_error(&e);
+            let id: i64 = row.get(0).map_err(get_err)?;
+            if last != Some(id) {
+                last = Some(id);
+                let hash: Vec<u8> = row.get(3).map_err(get_err)?;
+                let hash = <[u8; 32]>::try_from(hash.as_slice())
+                    .map_err(|_| FmError::internal("a font file hash in the index is damaged"))?;
+                let size: i64 = row.get(2).map_err(get_err)?;
+                let format: String = row.get(4).map_err(get_err)?;
+                let kind: String = row.get(6).map_err(get_err)?;
+                out.push(SetFile {
+                    path: path_from_sql(row.get_ref(1).map_err(get_err)?)?
+                        .to_string_lossy()
+                        .into_owned(),
+                    size: u32::try_from(size).unwrap_or(u32::MAX),
+                    hash: FileHash::from(hash).to_hex(),
+                    format: format_from_sql(&format).unwrap_or(None),
+                    source: SourceId(row.get(5).map_err(get_err)?),
+                    in_library_folder: kind == "libraryFolder",
+                    system: kind == "system",
+                    faces: Vec::new(),
+                });
+            }
+            let face: Option<u32> = row.get(7).map_err(get_err)?;
+            if let (Some(face), Some(file)) = (face, out.last_mut()) {
+                file.faces.push(SetFace {
+                    face: FaceId(face),
+                    name: row
+                        .get::<_, Option<String>>(8)
+                        .map_err(get_err)?
+                        .unwrap_or_default(),
+                    version: row.get(9).map_err(get_err)?,
+                });
+            }
+        }
+        Ok(out)
+    }
+
     /// Exact and near duplicates among the files the library shows: near
     /// groups by PostScript name, then exact groups by hash; each group's
     /// recommended keeper first.

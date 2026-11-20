@@ -93,6 +93,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("get_face", "1".into()),
         ("list_problems", String::new()),
         ("list_duplicates", String::new()),
+        ("list_duplicate_sets", "{}".into()),
         (
             "keep_copy",
             r#"{"keep":"/a.ttf","trash":[],"dryRun":true}"#.into(),

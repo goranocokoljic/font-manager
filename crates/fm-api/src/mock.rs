@@ -44,13 +44,14 @@ use crate::layout::{
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
-    DuplicateKind, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary,
-    FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphBounds,
-    GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode,
-    KeepCopyRequest, LicenseInfo, LicensePermissions, LicensePermissionsSource, LicenseType,
-    ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
-    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
-    SidecarConflict, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    DuplicateKind, DuplicateScope, DuplicateSet, FaceDetail, FaceSummary, Family, FamilyActivation,
+    FamilySort, FamilySummary, FileDragSupport, FontMatch, FontMatches, FontNames,
+    FontSwitchPayload, GlyphBlock, GlyphBounds, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest,
+    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions,
+    LicensePermissionsSource, LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest,
+    OpenLicense, Platform, Problem, ProblemKind, Resolution, ResolveFontRequest,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
@@ -280,6 +281,8 @@ fn allowance(target: &Supports) -> usize {
         Supports::Text { .. } => NEAR_MISS,
     }
 }
+
+mod duplicate_sets;
 
 /// The largest page a list returns.
 const MAX_PAGE: u32 = 500;
@@ -700,6 +703,28 @@ impl MockApi {
         Ok(id)
     }
 
+    /// Adds another file of `face`'s font at `path`: a new face id in the
+    /// same source with the hash `hash` and, when given, the version
+    /// `version`, so the sample library has a duplicate set of any level
+    /// (E56.1). The TypeScript mock's `copies` option does the same.
+    pub fn add_file_of(
+        &self,
+        face: FaceId,
+        path: &str,
+        hash: &str,
+        version: Option<&str>,
+    ) -> ApiResult<FaceId> {
+        let id = self.add_copy(face, path)?;
+        let mut st = self.state();
+        if let Some(copy) = st.faces.iter_mut().find(|f| f.detail.face.id == id) {
+            copy.detail.hash = hash.to_owned();
+            if let Some(version) = version {
+                copy.detail.version = Some(version.to_owned());
+            }
+        }
+        Ok(id)
+    }
+
     /// Adds a copy of `face`'s file at `path`: the same hash under a new face
     /// id in the same source, so the sample library has an exact duplicate.
     pub fn add_copy(&self, face: FaceId, path: &str) -> ApiResult<FaceId> {
@@ -738,6 +763,8 @@ impl MockApi {
 
 /// Why a copy the app activated is not moved to the trash (rule 3).
 const ACTIVE_COPY: &str = "This copy is active. Deactivate it first, then move it to the trash.";
+/// Why a copy in a system font folder does not move, as fm-core says it (rule 4).
+const SYSTEM_COPY: &str = "This copy is in a system font folder. Font Fu never moves system fonts.";
 
 #[allow(clippy::too_many_arguments)]
 fn face(
@@ -2009,6 +2036,54 @@ impl LibraryService for MockApi {
         Ok(groups)
     }
 
+    fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
+        let st = self.state();
+        if let DuplicateScope::Source { source } = req.scope
+            && !st.sources.iter().any(|s| s.id == source)
+        {
+            return Err(ApiError::not_found(format!("Source {source}")));
+        }
+        let source = |id: SourceId| st.sources.iter().find(|s| s.id == id);
+        // One file per path, its faces in collection order, as fm-core reads them.
+        let mut faces: Vec<&MockFace> = st
+            .faces
+            .iter()
+            .filter(|f| source(f.source).is_some_and(|s| !s.paused))
+            .filter(|f| !st.trashed.contains(&f.detail.path))
+            .collect();
+        faces.sort_by_key(|f| f.detail.collection_index);
+        let mut files: Vec<duplicate_sets::SetFile> = Vec::new();
+        for f in faces {
+            let face = duplicate_sets::SetFace {
+                face: f.detail.face.id,
+                name: f.detail.face.postscript_name.clone(),
+                version: f
+                    .detail
+                    .version
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(str::to_owned),
+            };
+            if let Some(file) = files.iter_mut().find(|x| x.path == f.detail.path) {
+                file.faces.push(face);
+                continue;
+            }
+            let kind = source(f.source).map(|s| s.kind);
+            files.push(duplicate_sets::SetFile {
+                path: f.detail.path.clone(),
+                size: f.detail.file_size,
+                hash: f.detail.hash.clone(),
+                format: Some(f.detail.face.format),
+                source: f.source,
+                in_library_folder: kind == Some(SourceKind::LibraryFolder),
+                system: kind == Some(SourceKind::System),
+                faces: vec![face],
+            });
+        }
+        Ok(duplicate_sets::list(&files, &req))
+    }
+
     fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {
         req.check(&self.list_duplicates()?)?;
         let mut st = self.state();
@@ -2023,7 +2098,16 @@ impl LibraryService for MockApi {
         let mut removed = Vec::new();
         for path in &req.trash {
             let faces = faces_at(&st, path);
-            let (status, message) = if faces.iter().any(|f| st.active.contains_key(f)) {
+            let system = st.faces.iter().any(|f| {
+                f.detail.path == *path
+                    && st
+                        .sources
+                        .iter()
+                        .any(|s| s.id == f.source && s.kind == SourceKind::System)
+            });
+            let (status, message) = if system {
+                (TrashMoveStatus::Skipped, Some(SYSTEM_COPY.to_owned()))
+            } else if faces.iter().any(|f| st.active.contains_key(f)) {
                 (TrashMoveStatus::Skipped, Some(ACTIVE_COPY.to_owned()))
             } else if req.dry_run {
                 (TrashMoveStatus::Planned, None)

@@ -496,3 +496,19 @@ fn glyph_similar_needs_a_scanned_index() {
     let home = TempDir::new("glyph-similar-empty");
     assert!(glyph_similar(home.path(), 1).is_err());
 }
+
+#[test]
+fn the_duplicates_bench_copies_a_folder_into_the_home_and_lists_its_sets() {
+    let home = TempDir::new("duplicates");
+    let before = listing(&fixtures());
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let timed = duplicates(&fixtures(), home.path(), 2).expect("duplicates");
+    assert_eq!(timed.copied_folder, "derived");
+    assert!(timed.copied_files > 0, "{timed:?}");
+    assert!(timed.sets > 0, "the copied files are duplicates: {timed:?}");
+    assert_eq!(timed.samples, 2);
+    assert_eq!(listing(&fixtures()), before, "the library is only read");
+    // A second run reuses the copy.
+    let again = duplicates(&fixtures(), home.path(), 1).expect("again");
+    assert_eq!(again.sets, timed.sets);
+}

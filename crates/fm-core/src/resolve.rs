@@ -30,6 +30,8 @@ use crate::index::{Index, StoredMove};
 
 /// Why a copy the app activated does not move (rule 3).
 const ACTIVE_COPY: &str = "This copy is active. Deactivate it first, then move it to the trash.";
+/// Why a copy in a system font folder does not move (rule 4).
+const SYSTEM_COPY: &str = "This copy is in a system font folder. Font Fu never moves system fonts.";
 /// Why a copy that is no longer on disk does not move.
 const NOT_THERE: &str = "The file is not there any more.";
 
@@ -95,7 +97,9 @@ impl DuplicateResolver {
             let Some(file) = files.get(shown) else {
                 continue;
             };
-            let (status, message) = if file.active {
+            let (status, message) = if file.system {
+                (TrashMoveStatus::Skipped, Some(SYSTEM_COPY))
+            } else if file.active {
                 (TrashMoveStatus::Skipped, Some(ACTIVE_COPY))
             } else if fs::symlink_metadata(&file.path).is_err() {
                 (TrashMoveStatus::Skipped, Some(NOT_THERE))

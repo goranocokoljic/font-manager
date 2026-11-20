@@ -514,3 +514,34 @@ fn moved_copies_come_back_when_their_undo_record_cannot_be_written() {
     assert_eq!(fx.groups(), before);
     assert!(fx.events().is_empty());
 }
+
+#[test]
+fn a_copy_in_a_system_font_folder_is_never_moved() {
+    let fx = Fixture::new("system");
+    let system = fx.dir.path().join("system");
+    fs::create_dir_all(&system).expect("system");
+    let copy = system.join("a.ttf");
+    fs::write(&copy, CONTENT).expect("write");
+    {
+        let mut index = fx.index.lock().expect("index");
+        let source = index
+            .add_source(&system.to_string_lossy(), SourceKind::System)
+            .expect("source")
+            .id;
+        index
+            .persist_files(source, &[indexed(&copy, 1, "Family-Regular")])
+            .expect("persist");
+    }
+    let req = KeepCopyRequest {
+        keep: fx.shown("a.ttf"),
+        trash: vec![copy.to_string_lossy().into_owned(), fx.shown("b.ttf")],
+        dry_run: false,
+    };
+    let r = fx.resolver.keep_copy(req).expect("keep");
+    assert_eq!(
+        Fixture::statuses(&r),
+        [TrashMoveStatus::Skipped, TrashMoveStatus::Trashed]
+    );
+    assert_eq!(r.moves[0].message.as_deref(), Some(SYSTEM_COPY));
+    assert_eq!(fs::read(&copy).expect("still there"), CONTENT);
+}

@@ -1,0 +1,241 @@
+[
+  {
+    "name": "two copies of one file are an identical set",
+    "files": [
+      { "path": "/fonts/b/Inter.ttf", "hash": "aa", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Inter-Regular", "version": "Version 4.0" }] },
+      { "path": "/fonts/a/Inter.ttf", "hash": "aa", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "Inter-Regular", "version": "Version 4.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:aa", "level": "identical", "postscriptName": "Inter-Regular", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/Inter.ttf", "face": 2, "version": "Version 4.0", "system": false, "inScope": true, "identicalWith": ["/fonts/b/Inter.ttf"], "otherSets": [] },
+          { "path": "/fonts/b/Inter.ttf", "face": 1, "version": "Version 4.0", "system": false, "inScope": true, "identicalWith": ["/fonts/a/Inter.ttf"], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "the same version in files that differ, digit runs as numbers, in two formats",
+    "files": [
+      { "path": "/fonts/Lato.ttf", "hash": "b1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Lato-Regular", "version": "Version 1.000" }] },
+      { "path": "/fonts/Lato.otf", "hash": "b2", "format": "otf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "Lato-Regular", "version": " version 1.0 " }] }
+    ],
+    "sets": [
+      {
+        "id": "name:Lato-Regular", "level": "sameVersion", "postscriptName": "Lato-Regular", "formatsDiffer": true,
+        "copies": [
+          { "path": "/fonts/Lato.otf", "face": 2, "version": " version 1.0 ", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/Lato.ttf", "face": 1, "version": "Version 1.000", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "other versions, and a copy without a version is its own value",
+    "files": [
+      { "path": "/fonts/c/Roboto.ttf", "hash": "c3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "Roboto-Regular", "version": null }] },
+      { "path": "/fonts/a/Roboto.ttf", "hash": "c1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Roboto-Regular", "version": "Version 2.10" }] },
+      { "path": "/fonts/b/Roboto.ttf", "hash": "c2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "Roboto-Regular", "version": "Version 2.9" }] }
+    ],
+    "sets": [
+      {
+        "id": "name:Roboto-Regular", "level": "otherVersion", "postscriptName": "Roboto-Regular", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/Roboto.ttf", "face": 1, "version": "Version 2.10", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/b/Roboto.ttf", "face": 2, "version": "Version 2.9", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/c/Roboto.ttf", "face": 3, "version": null, "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "two copies without a version and one file that differs are the same version",
+    "files": [
+      { "path": "/fonts/a/Old.ttf", "hash": "d1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Old-Regular", "version": null }] },
+      { "path": "/fonts/b/Old.ttf", "hash": "d2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "Old-Regular", "version": "  " }] }
+    ],
+    "sets": [
+      {
+        "id": "name:Old-Regular", "level": "sameVersion", "postscriptName": "Old-Regular", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/Old.ttf", "face": 1, "version": null, "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/b/Old.ttf", "face": 2, "version": "  ", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "three versions of which two are the same file: one set, the two shown as identical inside it",
+    "files": [
+      { "path": "/fonts/a/Mono.ttf", "hash": "e1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Mono-Regular", "version": "1.0" }] },
+      { "path": "/fonts/b/Mono.ttf", "hash": "e1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "Mono-Regular", "version": "1.0" }] },
+      { "path": "/fonts/c/Mono.ttf", "hash": "e2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "Mono-Regular", "version": "2.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "name:Mono-Regular", "level": "otherVersion", "postscriptName": "Mono-Regular", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/Mono.ttf", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/b/Mono.ttf"], "otherSets": [] },
+          { "path": "/fonts/b/Mono.ttf", "face": 2, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/a/Mono.ttf"], "otherSets": [] },
+          { "path": "/fonts/c/Mono.ttf", "face": 3, "version": "2.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "a collection file is one copy in each set it takes part in, and says so",
+    "files": [
+      { "path": "/fonts/Family.ttc", "hash": "f0", "format": "ttc", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Fam-Regular", "version": "1.0" }, { "face": 2, "name": "Fam-Bold", "version": "1.0" }, { "face": 3, "name": "Fam-Regular", "version": "1.0" }] },
+      { "path": "/fonts/Fam-Regular.ttf", "hash": "f1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 4, "name": "Fam-Regular", "version": "1.0" }] },
+      { "path": "/fonts/Fam-Bold.otf", "hash": "f2", "format": "otf", "source": 1, "kind": "watched", "faces": [{ "face": 5, "name": "Fam-Bold", "version": "2.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "name:Fam-Bold", "level": "otherVersion", "postscriptName": "Fam-Bold", "formatsDiffer": true,
+        "copies": [
+          { "path": "/fonts/Fam-Bold.otf", "face": 5, "version": "2.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/Family.ttc", "face": 2, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": ["name:Fam-Regular"] }
+        ]
+      },
+      {
+        "id": "name:Fam-Regular", "level": "sameVersion", "postscriptName": "Fam-Regular", "formatsDiffer": true,
+        "copies": [
+          { "path": "/fonts/Fam-Regular.ttf", "face": 4, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/Family.ttc", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": ["name:Fam-Bold"] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "two copies of a collection whose second font has no other copy stay an identical set",
+    "files": [
+      { "path": "/fonts/a/Pair.ttc", "hash": "g0", "format": "ttc", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Pair-A", "version": "1.0" }, { "face": 2, "name": "Pair-B", "version": "1.0" }] },
+      { "path": "/fonts/b/Pair.ttc", "hash": "g0", "format": "ttc", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "Pair-A", "version": "1.0" }, { "face": 4, "name": "Pair-B", "version": "1.0" }] },
+      { "path": "/fonts/c/Pair-A.ttf", "hash": "g1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 5, "name": "Pair-A", "version": "1.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:g0", "level": "identical", "postscriptName": "Pair-A", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/Pair.ttc", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/b/Pair.ttc"], "otherSets": ["name:Pair-A"] },
+          { "path": "/fonts/b/Pair.ttc", "face": 3, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/a/Pair.ttc"], "otherSets": ["name:Pair-A"] }
+        ]
+      },
+      {
+        "id": "name:Pair-A", "level": "sameVersion", "postscriptName": "Pair-A", "formatsDiffer": true,
+        "copies": [
+          { "path": "/fonts/a/Pair.ttc", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/b/Pair.ttc"], "otherSets": ["identical:g0"] },
+          { "path": "/fonts/b/Pair.ttc", "face": 3, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/a/Pair.ttc"], "otherSets": ["identical:g0"] },
+          { "path": "/fonts/c/Pair-A.ttf", "face": 5, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "files without a font in them are an identical set without a name",
+    "files": [
+      { "path": "/fonts/a/broken.ttf", "hash": "h0", "format": null, "source": 1, "kind": "watched", "faces": [] },
+      { "path": "/fonts/b/broken.ttf", "hash": "h0", "format": null, "source": 1, "kind": "watched", "faces": [] },
+      { "path": "/fonts/c/single.ttf", "hash": "h1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Single", "version": "1.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:h0", "level": "identical", "postscriptName": null, "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/broken.ttf", "face": null, "version": null, "system": false, "inScope": true, "identicalWith": ["/fonts/b/broken.ttf"], "otherSets": [] },
+          { "path": "/fonts/b/broken.ttf", "face": null, "version": null, "system": false, "inScope": true, "identicalWith": ["/fonts/a/broken.ttf"], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "a system copy is listed and marked",
+    "files": [
+      { "path": "/System/Fonts/Arial.ttf", "hash": "i1", "format": "ttf", "source": 2, "kind": "system", "faces": [{ "face": 1, "name": "ArialMT", "version": "7.0" }] },
+      { "path": "/fonts/Arial.ttf", "hash": "i2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "ArialMT", "version": "5.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "name:ArialMT", "level": "otherVersion", "postscriptName": "ArialMT", "formatsDiffer": false,
+        "copies": [
+          { "path": "/System/Fonts/Arial.ttf", "face": 1, "version": "7.0", "system": true, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/Arial.ttf", "face": 2, "version": "5.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "a mixed library: every level, sets by PostScript name without case",
+    "files": [
+      { "path": "/fonts/zeta-1.ttf", "hash": "j1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "zeta", "version": "1.0" }] },
+      { "path": "/fonts/zeta-2.ttf", "hash": "j2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "zeta", "version": "2.0" }] },
+      { "path": "/fonts/Alpha.ttf", "hash": "j3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "Alpha", "version": "1.0" }] },
+      { "path": "/lib/Alpha.ttf", "hash": "j3", "format": "ttf", "source": 3, "kind": "libraryFolder", "faces": [{ "face": 4, "name": "Alpha", "version": "1.0" }] },
+      { "path": "/fonts/beta.otf", "hash": "j4", "format": "otf", "source": 1, "kind": "watched", "faces": [{ "face": 5, "name": "Beta", "version": "1.0" }] },
+      { "path": "/fonts/beta.ttf", "hash": "j5", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 6, "name": "Beta", "version": "1.0" }] },
+      { "path": "/fonts/alone.ttf", "hash": "j6", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 7, "name": "Alone", "version": "1.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:j3", "level": "identical", "postscriptName": "Alpha", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/Alpha.ttf", "face": 3, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/lib/Alpha.ttf"], "otherSets": [] },
+          { "path": "/lib/Alpha.ttf", "face": 4, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/Alpha.ttf"], "otherSets": [] }
+        ]
+      },
+      {
+        "id": "name:Beta", "level": "sameVersion", "postscriptName": "Beta", "formatsDiffer": true,
+        "copies": [
+          { "path": "/fonts/beta.otf", "face": 5, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/beta.ttf", "face": 6, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      },
+      {
+        "id": "name:zeta", "level": "otherVersion", "postscriptName": "zeta", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/zeta-1.ttf", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/zeta-2.ttf", "face": 2, "version": "2.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "a source scope lists the sets with a copy in it, with every copy",
+    "scope": { "kind": "source", "source": 2 },
+    "files": [
+      { "path": "/a/One.ttf", "hash": "k1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "One", "version": "1.0" }] },
+      { "path": "/b/One.ttf", "hash": "k1", "format": "ttf", "source": 2, "kind": "watched", "faces": [{ "face": 2, "name": "One", "version": "1.0" }] },
+      { "path": "/a/Two.ttf", "hash": "k2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "Two", "version": "1.0" }] },
+      { "path": "/a/x/Two.ttf", "hash": "k2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 4, "name": "Two", "version": "1.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:k1", "level": "identical", "postscriptName": "One", "formatsDiffer": false,
+        "copies": [
+          { "path": "/a/One.ttf", "face": 1, "version": "1.0", "system": false, "inScope": false, "identicalWith": ["/b/One.ttf"], "otherSets": [] },
+          { "path": "/b/One.ttf", "face": 2, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/a/One.ttf"], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "a folder scope takes its subfolders and not a folder whose name only starts the same",
+    "scope": { "kind": "folder", "path": "/fonts/sub" },
+    "files": [
+      { "path": "/fonts/sub/deep/One.ttf", "hash": "l1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "One", "version": "1.0" }] },
+      { "path": "/fonts/other/One.ttf", "hash": "l1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "One", "version": "1.0" }] },
+      { "path": "/fonts/subway/Two.ttf", "hash": "l2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "Two", "version": "1.0" }] },
+      { "path": "/fonts/other/Two.ttf", "hash": "l2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 4, "name": "Two", "version": "1.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:l1", "level": "identical", "postscriptName": "One", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/other/One.ttf", "face": 2, "version": "1.0", "system": false, "inScope": false, "identicalWith": ["/fonts/sub/deep/One.ttf"], "otherSets": [] },
+          { "path": "/fonts/sub/deep/One.ttf", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/other/One.ttf"], "otherSets": [] }
+        ]
+      }
+    ]
+  }
+]

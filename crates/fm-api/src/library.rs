@@ -944,6 +944,102 @@ impl DuplicateGroup {
     }
 }
 
+/// How much the copies of a duplicate set are the same (E56.1, ADR 0027).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum DuplicateLevel {
+    /// The same file (the same hash) at different paths.
+    Identical,
+    /// The same PostScript name and the same version in files that differ.
+    SameVersion,
+    /// The same PostScript name in files whose versions differ.
+    OtherVersion,
+}
+
+/// Which files a duplicate listing looks at.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum DuplicateScope {
+    /// Every file the library shows.
+    #[default]
+    Library,
+    /// The files of one source.
+    Source {
+        /// The source.
+        source: SourceId,
+    },
+    /// The files in one folder and its subfolders.
+    Folder {
+        /// Absolute folder path.
+        path: String,
+    },
+}
+
+/// One page of duplicate sets ([`LibraryService::list_duplicate_sets`]).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDuplicateSetsRequest {
+    /// The files to look at; the whole library by default. A set is listed
+    /// when one of its copies is in the scope, with all its copies.
+    #[serde(default)]
+    pub scope: DuplicateScope,
+    /// The window into the sets.
+    #[serde(default)]
+    pub page: Page,
+}
+
+/// One copy of a duplicate set: one file, for the face the set is about.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateSetCopy {
+    /// Absolute file path.
+    pub path: String,
+    /// File size in bytes.
+    pub size: u32,
+    /// blake3 hash of the file, hex; equal hashes are identical files.
+    pub hash: String,
+    /// The face the set is about (the first face for an identical set),
+    /// when the file parsed far enough to have one.
+    pub face: Option<FaceId>,
+    /// Version string (name ID 5) of that face.
+    pub version: Option<String>,
+    /// The file format, when the file is a font.
+    pub format: Option<FontFormat>,
+    /// The source the file was found in.
+    pub source: SourceId,
+    /// The source is the library folder.
+    pub in_library_folder: bool,
+    /// The file is in a system font folder: it is listed, and it can never
+    /// be chosen for removal (CLAUDE.md rule 4).
+    pub system: bool,
+    /// The file is in the scope of the request.
+    pub in_scope: bool,
+    /// The other copies of this set that are the same file (the same hash).
+    pub identical_with: Vec<String>,
+    /// The ids of the other sets this file takes part in (a collection file
+    /// with several faces): a plan must not trash it for one set while
+    /// another keeps it.
+    pub other_sets: Vec<String>,
+}
+
+/// Files that hold the same font, at one [`DuplicateLevel`] (E56.1). The
+/// set chooses no keeper and calls no copy older or newer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateSet {
+    /// Stable id: `identical:<hash>` or `name:<PostScript name>`.
+    pub id: String,
+    /// How much the copies are the same.
+    pub level: DuplicateLevel,
+    /// The PostScript name the copies share (for an identical set, the first
+    /// face's), when there is one.
+    pub postscript_name: Option<String>,
+    /// The copies are not all of one file format.
+    pub formats_differ: bool,
+    /// The copies, two or more, by path.
+    pub copies: Vec<DuplicateSetCopy>,
+}
+
 /// "Keep this one": keep one copy of a duplicate font and move the other
 /// copies to the OS trash (E8.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -1427,10 +1523,18 @@ pub trait LibraryService {
     /// and version in files that differ) among the files the library shows,
     /// in groups, each with its recommended keeper first.
     fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>>;
+    /// One page of duplicate sets (E56.1, ADR 0027) among the files the
+    /// library shows: identical files, the same version in files that
+    /// differ, and other versions of one PostScript name; a file is listed
+    /// once per font it duplicates. Sets by PostScript name, copies by path.
+    /// Computed on each call, never at start. A `source` scope that does not
+    /// exist is `NotFound`.
+    fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>>;
     /// "Keep this one" (E8.3): moves the other copies to the OS trash, never
     /// deleting them, and records the action for undo. With `dry_run`, only
     /// says what would move. A copy that cannot move (the app activated it,
-    /// its drive has no trash) is `Skipped` and stays where it is.
+    /// it is in a system font folder, its drive has no trash) is `Skipped`
+    /// and stays where it is.
     /// `InvalidRequest` when a copy is not a duplicate of `keep`;
     /// `NotFound` when the copy to keep is not there.
     fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution>;

@@ -25,10 +25,11 @@ use fm_api::layout::{
     LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, FaceDetail, Family,
-    FamilySummary, FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles,
-    GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest, Problem, Resolution,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, DuplicateSet,
+    FaceDetail, Family, FamilySummary, FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest,
+    GlyphStyles, GlyphsRequest, KeepCopyRequest, LibraryService, ListDuplicateSetsRequest,
+    ListFamiliesRequest, Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -934,6 +935,16 @@ async fn list_duplicates(state: State<'_, AppState>) -> ApiResult<Vec<DuplicateG
     call(&state, |api| api.list_duplicates()).await
 }
 
+/// One page of duplicate sets (E56.1): identical files, the same version,
+/// another version.
+#[tauri::command]
+async fn list_duplicate_sets(
+    state: State<'_, AppState>,
+    req: ListDuplicateSetsRequest,
+) -> ApiResult<Paged<DuplicateSet>> {
+    call(&state, move |api| api.list_duplicate_sets(req)).await
+}
+
 /// "Keep this one": moves the other copies to the OS trash, or with
 /// `dryRun` only says what would move.
 #[tauri::command]
@@ -1719,6 +1730,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             check_document_fonts,
             list_problems,
             list_duplicates,
+            list_duplicate_sets,
             keep_copy,
             list_resolutions,
             undo_resolution,

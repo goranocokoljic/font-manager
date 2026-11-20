@@ -58,12 +58,12 @@ use fm_api::layout::{
     SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, FaceDetail, Family,
-    FamilySummary, FileDragSupport, FontMatches, FontSwitchPayload, GlyphDetail, GlyphPage,
-    GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
-    ListFamiliesRequest, Platform, Problem, Resolution, ResolveFontRequest,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
-    SourceKind,
+    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, DuplicateScope,
+    DuplicateSet, FaceDetail, Family, FamilySummary, FileDragSupport, FontMatches,
+    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
+    ImportMode, KeepCopyRequest, LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest,
+    Platform, Problem, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, DropCounts,
@@ -1020,6 +1020,18 @@ impl LibraryService for CoreApi {
 
     fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
         Ok(self.lock().duplicates()?)
+    }
+
+    fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
+        let index = self.lock();
+        if let DuplicateScope::Source { source } = req.scope
+            && !index.sources()?.iter().any(|s| s.id == source)
+        {
+            return Err(ApiError::not_found(format!("Source {source}")));
+        }
+        let files = index.duplicate_set_files()?;
+        drop(index);
+        Ok(crate::duplicate_sets::list(&files, &req))
     }
 
     fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {

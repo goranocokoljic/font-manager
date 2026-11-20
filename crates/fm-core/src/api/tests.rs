@@ -12,8 +12,8 @@ use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, P
 use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
 use fm_api::layout::{LayoutFont, LayoutSurface};
 use fm_api::library::{
-    FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest, LicenseType,
-    OpenLicense, ProblemKind, TrashMoveStatus,
+    DuplicateLevel, FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest,
+    LicenseType, OpenLicense, ProblemKind, TrashMoveStatus,
 };
 use fm_api::search::{
     Filters, MergeFoundriesRequest, SearchRequest, Supports, TraitFilter, UnmergeFoundryRequest,
@@ -1219,6 +1219,70 @@ fn problems_list_the_truncated_file_and_duplicates_answer() {
         "{problems:?}"
     );
     lib.api.list_duplicates().expect("duplicates");
+}
+
+#[test]
+fn duplicate_sets_list_a_copied_font_by_folder_and_page_and_refuse_an_unknown_source() {
+    let lib = Lib::new("api-duplicate-sets");
+    let original = lib.root.join("bebasneue").join("BebasNeue-Regular.ttf");
+    let copy = lib.root.join("copy").join("BebasNeue-Regular.ttf");
+    std::fs::create_dir_all(copy.parent().expect("folder")).expect("folder");
+    std::fs::copy(&original, &copy).expect("copy");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let folder = lib
+        .api
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            scope: DuplicateScope::Folder {
+                path: copy.parent().expect("folder").display().to_string(),
+            },
+            ..Default::default()
+        })
+        .expect("sets");
+    assert_eq!(folder.total, 1, "{folder:?}");
+    let set = &folder.items[0];
+    assert_eq!(set.level, DuplicateLevel::Identical);
+    let in_scope: Vec<&str> = set
+        .copies
+        .iter()
+        .filter(|c| c.in_scope)
+        .map(|c| c.path.as_str())
+        .collect();
+    assert_eq!(in_scope, [copy.display().to_string()]);
+    assert!(set.copies.iter().all(|c| !c.system));
+
+    let all = lib
+        .api
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .expect("all");
+    assert!(all.total >= 1);
+    let none = lib
+        .api
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            page: Page {
+                offset: all.total,
+                limit: 10,
+            },
+            ..Default::default()
+        })
+        .expect("past the end");
+    assert_eq!((none.items.len(), none.total), (0, all.total));
+    let err = lib
+        .api
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            scope: DuplicateScope::Source {
+                source: SourceId(9999),
+            },
+            ..Default::default()
+        })
+        .expect_err("unknown source");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
 
 #[test]

@@ -22,11 +22,12 @@ use fm_api::layout::{
     LayoutPreset, LayoutRef, LayoutSurface, RestoreLayoutRequest, RevertLayoutRequest,
     SaveLayoutRequest,
 };
+use fm_api::library::LibraryService;
 use fm_api::library::{
-    AddSourceRequest, DragFilesRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary,
-    GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicensePermissionsSource,
-    LicenseType, ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest,
-    TrashMoveStatus,
+    AddSourceRequest, DragFilesRequest, DuplicateLevel, DuplicateScope, FamilyOrder, FamilySort,
+    FamilySortKey, FamilySummary, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest,
+    LicensePermissionsSource, LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest,
+    OpenLicense, ScanRequest, SetSourcePausedRequest, TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -4263,4 +4264,119 @@ fn the_setup_status_follows_the_mock_state_and_answers() {
         managed.setup_status().expect("status").open,
         vec![SetupStep::Catalogs]
     );
+}
+
+/// `fixtures/duplicates/mock-library.json`: the copies both mocks add to the
+/// sample library, and the sets both list (E56.1). The TypeScript mock's
+/// test reads the same file.
+#[derive(serde::Deserialize, serde::Serialize)]
+struct MockDuplicateLibrary {
+    copies: Vec<MockLibraryCopy>,
+    sets: serde_json::Value,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct MockLibraryCopy {
+    face: u32,
+    path: String,
+    hash: Option<String>,
+    version: Option<String>,
+}
+
+const MOCK_LIBRARY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../fixtures/duplicates/mock-library.json"
+);
+
+#[allow(clippy::unwrap_used)] // test setup: a failure fails the test
+fn with_duplicate_files() -> (MockApi, MockDuplicateLibrary) {
+    let lib: MockDuplicateLibrary =
+        serde_json::from_str(&std::fs::read_to_string(MOCK_LIBRARY).unwrap()).unwrap();
+    let mock = MockApi::new();
+    for c in &lib.copies {
+        match &c.hash {
+            None => mock.add_copy(FaceId(c.face), &c.path).unwrap(),
+            Some(hash) => mock
+                .add_file_of(FaceId(c.face), &c.path, hash, c.version.as_deref())
+                .unwrap(),
+        };
+    }
+    (mock, lib)
+}
+
+#[test]
+fn the_sample_library_has_no_duplicate_sets() {
+    let page = api()
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap();
+    assert_eq!((page.items.len(), page.total), (0, 0));
+}
+
+#[test]
+fn the_mock_lists_the_duplicate_sets_the_typescript_mock_lists() {
+    let (mock, mut lib) = with_duplicate_files();
+    let mut got = serde_json::to_value(
+        mock.list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .unwrap(),
+    )
+    .unwrap();
+    // The face ids of the added files are each mock's own counter.
+    let added: Vec<&str> = lib.copies.iter().map(|c| c.path.as_str()).collect();
+    for set in got["items"].as_array_mut().unwrap() {
+        for copy in set["copies"].as_array_mut().unwrap() {
+            if added.contains(&copy["path"].as_str().unwrap()) {
+                copy["face"] = serde_json::Value::Null;
+            }
+        }
+    }
+    if std::env::var_os("FM_BLESS").is_some() {
+        lib.sets = got;
+        let text = serde_json::to_string_pretty(&lib).unwrap();
+        std::fs::write(MOCK_LIBRARY, text + "\n").unwrap();
+        return;
+    }
+    assert_eq!(got, lib.sets);
+}
+
+#[test]
+fn duplicate_sets_page_scope_and_refuse_an_unknown_source() {
+    let (mock, _) = with_duplicate_files();
+    let all = mock
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap();
+    assert_eq!(all.total, 2);
+    let second = mock
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            page: Page {
+                offset: 1,
+                limit: 1,
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!((second.total, second.items.len()), (2, 1));
+    assert_eq!(second.items[0], all.items[1]);
+    let folder = mock
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            scope: DuplicateScope::Folder {
+                path: "/Users/demo/Fonts/Older".into(),
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(folder.total, 1);
+    assert_eq!(folder.items[0].level, DuplicateLevel::OtherVersion);
+    assert_eq!(
+        folder.items[0].copies.iter().filter(|c| c.in_scope).count(),
+        1
+    );
+    let err = mock
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            scope: DuplicateScope::Source {
+                source: SourceId(999),
+            },
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
 }

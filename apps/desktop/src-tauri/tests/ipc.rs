@@ -646,6 +646,31 @@ fn the_problems_view_answers_in_camel_case() {
 }
 
 #[test]
+fn duplicate_sets_round_trip_with_a_scope_and_a_page() {
+    let mock = MockApi::new();
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";
+    mock.add_copy(FaceId(3), copy).unwrap();
+    let (_app, webview) = app_on(setup(mock_builder(), Arc::new(mock))).unwrap();
+    let call = |args: serde_json::Value| -> serde_json::Value {
+        send(&webview, "list_duplicate_sets", args)
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let page = call(serde_json::json!({ "req": {} }));
+    assert_eq!(page["total"], 1);
+    assert_eq!(page["items"][0]["level"], "identical");
+    assert_eq!(page["items"][0]["copies"][0]["path"], copy);
+    let scoped = call(serde_json::json!({
+        "req": { "scope": { "kind": "folder", "path": "/Users/demo/Fonts" }, "page": { "offset": 0, "limit": 1 } }
+    }));
+    assert_eq!(scoped["total"], 1);
+    assert_eq!(scoped["items"][0]["copies"][0]["inScope"], false);
+    assert_eq!(scoped["items"][0]["copies"][1]["inScope"], true);
+}
+
+#[test]
 fn keep_this_one_round_trips_dry_run_keep_history_and_undo() {
     let mock = MockApi::new();
     let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";

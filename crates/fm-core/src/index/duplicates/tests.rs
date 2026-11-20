@@ -386,3 +386,159 @@ fn a_non_utf8_path_is_listed() {
     assert!(paths.contains(&odd.to_string_lossy().as_ref()), "{paths:?}");
     assert!(paths.contains(&"/fonts/b.ttf"));
 }
+
+// --- E56.1: duplicate sets over the index ---------------------------------
+
+use fm_api::library::{DuplicateLevel, DuplicateScope};
+
+/// Each set as `level id: path, path`, in the order of the listing.
+fn set_summary(index: &Index, scope: &DuplicateScope) -> Vec<String> {
+    let files = index.duplicate_set_files().expect("set files");
+    crate::duplicate_sets::sets(&files, scope)
+        .iter()
+        .map(|s| {
+            let paths: Vec<&str> = s.copies.iter().map(|c| c.path.as_str()).collect();
+            format!("{:?} {}: {}", s.level, s.id, paths.join(", "))
+        })
+        .collect()
+}
+
+#[test]
+fn sets_count_only_the_files_the_library_shows() {
+    let mut index = index();
+    let mut gone = file("/fonts/gone.ttf", 1, "A", Some("1"));
+    gone.gone = true;
+    add(
+        &mut index,
+        "/fonts",
+        SourceKind::Watched,
+        &[
+            file("/fonts/a.ttf", 1, "A", Some("1")),
+            gone,
+            file("/fonts/b.ttf", 2, "B", Some("1")),
+            file("/fonts/unread.ttf", 3, "B", Some("2")),
+            file("/fonts/c.ttf", 4, "C", Some("1")),
+        ],
+    );
+    let paused = add(
+        &mut index,
+        "/paused",
+        SourceKind::Watched,
+        &[file("/paused/c.ttf", 5, "C", Some("2"))],
+    );
+    index.set_source_paused(paused, true).expect("pause");
+    index
+        .conn
+        .execute(
+            "UPDATE font_file SET hash = NULL WHERE path = '/fonts/unread.ttf'",
+            [],
+        )
+        .expect("update");
+    let library = DuplicateScope::Library;
+    assert!(
+        set_summary(&index, &library).is_empty(),
+        "{:?}",
+        set_summary(&index, &library)
+    );
+
+    index.set_source_paused(paused, false).expect("resume");
+    assert_eq!(
+        set_summary(&index, &library),
+        ["OtherVersion name:C: /fonts/c.ttf, /paused/c.ttf"]
+    );
+}
+
+#[test]
+fn every_level_comes_from_the_index_and_list_duplicates_keeps_its_groups() {
+    let mut index = index();
+    let mut otf = file("/fonts/Lato.otf", 3, "Lato-Regular", Some("Version 1.0"));
+    otf.parsed.format = Some(FontFormat::Otf);
+    add(
+        &mut index,
+        "/fonts",
+        SourceKind::Watched,
+        &[
+            file("/fonts/a/Inter.ttf", 1, "Inter-Regular", Some("4.0")),
+            file("/fonts/b/Inter.ttf", 1, "Inter-Regular", Some("4.0")),
+            file("/fonts/Lato.ttf", 2, "Lato-Regular", Some("Version 1.000")),
+            otf,
+            file("/fonts/a/Mono.ttf", 4, "Mono", Some("1.0")),
+            file("/fonts/b/Mono.ttf", 4, "Mono", Some("1.0")),
+            file("/fonts/c/Mono.ttf", 5, "Mono", Some("2.0")),
+        ],
+    );
+    let before = summary(&index);
+    let files = index.duplicate_set_files().expect("set files");
+    let sets = crate::duplicate_sets::sets(&files, &DuplicateScope::Library);
+    let levels: Vec<(DuplicateLevel, bool)> =
+        sets.iter().map(|s| (s.level, s.formats_differ)).collect();
+    assert_eq!(
+        levels,
+        [
+            (DuplicateLevel::Identical, false),
+            (DuplicateLevel::SameVersion, true),
+            (DuplicateLevel::OtherVersion, false),
+        ]
+    );
+    let mono = &sets[2];
+    assert_eq!(mono.copies.len(), 3, "one set for the three copies");
+    assert_eq!(mono.copies[0].identical_with, ["/fonts/b/Mono.ttf"]);
+    assert!(mono.copies[2].identical_with.is_empty());
+    assert_eq!(mono.copies[0].format, Some(FontFormat::Ttf));
+    // The old listing is not changed by the new one: it compares versions as
+    // text (so not Lato's 1.0 and 1.000), and Mono's versions differ, so it
+    // only knows Mono's identical pair.
+    assert_eq!(summary(&index), before);
+    assert_eq!(
+        before,
+        [
+            "Exact Inter-Regular: /fonts/a/Inter.ttf, /fonts/b/Inter.ttf",
+            "Exact Mono: /fonts/a/Mono.ttf, /fonts/b/Mono.ttf",
+        ]
+    );
+}
+
+#[test]
+fn a_system_copy_is_marked_and_a_collection_says_which_other_sets_hold_it() {
+    let mut index = index();
+    let mut ttc = file("/fonts/Family.ttc", 1, "Fam-Regular", Some("1.0"));
+    let mut bold = ttc.parsed.faces[0].clone();
+    bold.index = 1;
+    bold.postscript_name = Some("Fam-Bold".into());
+    ttc.parsed.faces.push(bold);
+    ttc.parsed.format = Some(FontFormat::Ttc);
+    add(
+        &mut index,
+        "/fonts",
+        SourceKind::Watched,
+        &[ttc, file("/fonts/Fam-Bold.ttf", 2, "Fam-Bold", Some("2.0"))],
+    );
+    add(
+        &mut index,
+        "/System/Fonts",
+        SourceKind::System,
+        &[file("/System/Fonts/Fam.ttf", 3, "Fam-Regular", Some("1.0"))],
+    );
+    let files = index.duplicate_set_files().expect("set files");
+    let sets = crate::duplicate_sets::sets(&files, &DuplicateScope::Library);
+    let ids: Vec<&str> = sets.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(ids, ["name:Fam-Bold", "name:Fam-Regular"]);
+    let ttc_in = |i: usize| {
+        sets[i]
+            .copies
+            .iter()
+            .find(|c| c.path == "/fonts/Family.ttc")
+            .expect("ttc")
+            .clone()
+    };
+    assert_eq!(ttc_in(0).other_sets, ["name:Fam-Regular"]);
+    assert_eq!(ttc_in(1).other_sets, ["name:Fam-Bold"]);
+    assert_ne!(ttc_in(0).face, ttc_in(1).face, "one face per set");
+    let system = sets[1]
+        .copies
+        .iter()
+        .find(|c| c.path.starts_with("/System"))
+        .expect("system copy");
+    assert!(system.system);
+    assert!(sets[1].copies.iter().filter(|c| c.system).count() == 1);
+}
