@@ -208,7 +208,7 @@ impl CoreApi {
     pub fn open(paths: &AppPaths, index: Index, activator: Arc<dyn FontActivator>) -> Self {
         let settings = SettingsStore::new(paths).with_system_autostart();
         let limit = settings
-            .get_settings()
+            .read()
             .map(|s| cache::limit_from_mb(s.cache_limit_mb))
             .unwrap_or_else(|_| cache::limit_from_mb(Settings::default().cache_limit_mb));
         let previews = PreviewCache::open(&cache::cache_dir(paths), limit)
@@ -283,7 +283,7 @@ impl CoreApi {
     /// The facts the setup status is decided from: the sources in the index,
     /// the catalogs' on/off file, `config.json`. No network, no scan.
     fn setup_facts(&self) -> ApiResult<crate::setup::SetupFacts> {
-        let settings = self.settings.get_settings()?;
+        let settings = self.settings.read()?;
         let has_font_folder = self
             .lock()
             .sources()?
@@ -479,7 +479,7 @@ impl CoreApi {
     /// left registered and, with "reactivate on launch" on, activates the
     /// last session's fonts again.
     pub fn start(&self) -> FmResult<Vec<ActivationOutcome>> {
-        let settings = self.settings.get_settings()?;
+        let settings = self.settings.read()?;
         self.activation
             .start(settings.reactivate_on_launch, settings.on_conflict)
     }
@@ -865,7 +865,7 @@ fn not_available(what: &str) -> ApiError {
 impl LibraryService for CoreApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
         // The defaults (on) when the settings cannot be read, as the close handler does.
-        let keep_in_tray = self.get_settings().map_or(true, |s| s.keep_in_tray);
+        let keep_in_tray = self.settings.read().map_or(true, |s| s.keep_in_tray);
         let mut platform_notes = crate::lifecycle::platform_notes(
             Os::current(),
             lock(&self.tray).as_ref(),
@@ -2153,6 +2153,15 @@ impl CatalogService for CoreApi {
         let catalogs = self.catalogs()?;
         let downloads = self.lock().catalog_downloads()?;
         Ok(catalogs.check_updates(&downloads, !req.cached_only)?)
+    }
+}
+
+impl CoreApi {
+    /// The settings for the shell's own use, without taking the one report
+    /// of dropped language ids that [`SettingsService::get_settings`]
+    /// answers ([`SettingsStore::read`], E56.3).
+    pub fn read_settings(&self) -> ApiResult<Settings> {
+        self.settings.read()
     }
 }
 

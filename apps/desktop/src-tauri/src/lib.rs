@@ -191,11 +191,14 @@ impl AppState {
     }
 
     /// The settings now, read synchronously (the close handler); the
-    /// defaults when they cannot be read.
+    /// defaults when they cannot be read. Over the real library the read
+    /// leaves the one report of dropped language ids to the UI's
+    /// `get_settings` (E56.3).
     pub fn current_settings(&self) -> Settings {
-        let read = match &self.settings {
-            Some(store) => store.get_settings(),
-            None => self.api.get_settings(),
+        let read = match (&self.core, &self.settings) {
+            (Some(core), _) => core.read_settings(),
+            (None, Some(store)) => store.get_settings(),
+            (None, None) => self.api.get_settings(),
         };
         read.unwrap_or_else(|e| {
             tracing::warn!(error = %e, "settings not read; using the defaults");

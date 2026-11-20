@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3)
 
 ## Context
 
@@ -95,6 +95,18 @@ OS: almost four times the measured number, because the time grows with the
 files and CI disks are slower, and under the fifth of a second in which
 opening two copies side by side still reads as immediate. The first call is
 not budgeted, as with every other measurement.
+
+**The languages you work in (E56.3).** The settings hold `myLanguages`:
+ids of `list_languages` presets, in the user's order, none by default. They
+are stored in `config.json` and set through `update_settings`, which refuses
+an id without a preset and keeps a repeated id once. An id the file names but
+this version has no preset for (a newer version's file, a removed preset, a
+hand edit) is dropped on read: that read answers it in `droppedLanguages` and
+saves the list without it, so it is reported once; `droppedLanguages` is never
+stored. Every rule and guard of this epic that names "my languages" goes
+through `fm_core::my_languages::apply`: with the list empty it does nothing,
+and its answer carries `MyLanguagesStatus::NotSet`, so the UI can offer to
+set them.
 
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FmClient } from './client';
-import { createMockClient, mockPermissions, mockWebUse } from './mock';
+import { MOCK_SETTINGS_KEY, createMockClient, mockPermissions, mockWebUse } from './mock';
 import type {
   CollectionId,
   ExportLayoutPngRequest,
@@ -51,6 +51,37 @@ describe('MockApi themes (E47.1)', () => {
       client.updateSettings({ themeId: 'no-such-theme', density: 'compact' }),
     ).rejects.toMatchObject({ code: 'invalidRequest' });
     expect(await client.getSettings()).toEqual(moss);
+  });
+});
+
+describe('MockApi my languages (E56.3)', () => {
+  it('starts empty, keeps listed presets once and refuses an unknown id', async () => {
+    const client = createMockClient();
+    expect((await client.getSettings()).myLanguages).toEqual([]);
+    const codes = (await client.listLanguages()).map((p) => p.code);
+    const set = await client.updateSettings({ myLanguages: [codes[1]!, codes[0]!, codes[1]!] });
+    expect(set.myLanguages).toEqual([codes[1], codes[0]]);
+    expect(set.droppedLanguages).toEqual([]);
+    await expect(
+      client.updateSettings({ myLanguages: ['no-such-language'], density: 'compact' }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+    expect(await client.getSettings()).toEqual(set);
+    expect((await client.updateSettings({ myLanguages: [] })).myLanguages).toEqual([]);
+  });
+
+  it('drops a saved id without a preset on read and reports it once', async () => {
+    const saved = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => saved.get(k) ?? null,
+      setItem: (k: string, v: string) => void saved.set(k, v),
+    };
+    storage.setItem(MOCK_SETTINGS_KEY, JSON.stringify({ myLanguages: ['de', 'xx-Gone'] }));
+    const client = createMockClient({ settingsStorage: storage });
+    const first = await client.getSettings();
+    expect(first.myLanguages).toEqual(['de']);
+    expect(first.droppedLanguages).toEqual(['xx-Gone']);
+    expect(JSON.parse(saved.get(MOCK_SETTINGS_KEY)!).myLanguages).toEqual(['de']);
+    expect((await client.getSettings()).droppedLanguages).toEqual([]);
   });
 });
 

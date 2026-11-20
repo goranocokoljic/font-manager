@@ -19,7 +19,7 @@ use fm_api::catalog::{
 };
 use fm_api::library::{Source, SourceKind};
 use fm_api::settings::{Settings, SettingsUpdate};
-use fm_api::{ApiError, ApiResult, ErrorCode, FaceId, SettingsService};
+use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
 use fm_platform::Os;
 use fm_platform::paths::{is_within, resolve_links, system_font_folders};
 
@@ -111,7 +111,7 @@ impl CoreApi {
 
     /// [`fm_api::CatalogService::install_family`].
     pub(super) fn install(&self, req: InstallFamilyRequest) -> ApiResult<InstallFamilyResponse> {
-        let settings = self.settings.get_settings()?;
+        let settings = self.settings.read()?;
         let placed = self.place_family(&req, &settings, None)?;
         let outcomes = self.activate_inactive(&placed.faces, &settings)?;
         Ok(InstallFamilyResponse {

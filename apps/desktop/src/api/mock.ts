@@ -657,6 +657,10 @@ export const defaultSettings: FullSettings = {
   fetchMissingFonts: false,
   // The theme of a new install (E47.1, `DEFAULT_THEME_ID` in fm-api).
   themeId: 'paper',
+  // No language set until the user picks the ones they work in (E56.3).
+  myLanguages: [],
+  // An answer of one read, never saved.
+  droppedLanguages: [],
 };
 
 /** A token set of `data/themes` as the API answers it. */
@@ -2886,6 +2890,22 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     options.settingsStorage,
   );
+  /** The language presets `listLanguages` answers for this library. */
+  const languagePresets = () =>
+    options.library === 'wall' ? [...mockLanguages, WALL_VIETNAMESE] : mockLanguages;
+  /**
+   * fm-core's settings store (E56.3): drops the language ids without a preset, saves the
+   * list without them and returns them, so each is reported once.
+   */
+  const dropUnknownLanguages = (): string[] => {
+    const presets = new Set(languagePresets().map((p) => p.code));
+    const dropped = settings.myLanguages.filter((id) => !presets.has(id));
+    if (dropped.length > 0) {
+      settings = { ...settings, myLanguages: settings.myLanguages.filter((id) => presets.has(id)) };
+      options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
+    }
+    return dropped;
+  };
   /** The setup steps answered or skipped; kept with the mock, never in browser storage. */
   let setupAnswers: Partial<Record<SetupStep, SetupAnswer>> = {};
   const emit = (event: Event) => handlers.forEach((h) => h(event));
@@ -4983,13 +5003,22 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         '/Users/demo/Documents/Damaged poster.psd',
       ][pick]!;
     },
-    getSettings: async () => ({ ...settings }),
+    // fm-core's settings store (E56.3): a language id without a preset is dropped on read
+    // and reported once.
+    getSettings: async () => {
+      const droppedLanguages = dropUnknownLanguages();
+      return { ...settings, droppedLanguages };
+    },
     listThemes: async () => structuredClone(MOCK_THEMES),
     // The same ranges as `Settings::apply` in fm-api.
     updateSettings: async (req) => {
       // The same refusal as `unknown_theme` in fm-api.
       if (req.themeId != null && !MOCK_THEMES.some((t) => t.id === req.themeId))
         throw invalid('This theme does not exist.');
+      // The same refusal as `unknown_language` in fm-api (E56.3).
+      const presets = new Set(languagePresets().map((p) => p.code));
+      if (req.myLanguages?.some((id) => !presets.has(id)))
+        throw invalid('This language is not in the list of languages.');
       const mb = req.cacheLimitMb;
       if (mb != null && (mb < 64 || mb > 16384))
         throw invalid('The cache size must be between 64 and 16384 MB.');
@@ -5025,6 +5054,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: `Font Fu cannot install updates when you quit here. ${managedReason}`,
           detail: null,
         };
+      const dropped = dropUnknownLanguages();
       const next = { ...settings };
       // The same rule as `Settings::apply`: a path with a root, or empty to forget it.
       const folder = req.downloadFolder?.trim();
@@ -5045,6 +5075,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       for (const [k, v] of Object.entries(req))
         if (v != null && k !== 'updateLevel') Object.assign(next, { [k]: v });
       if (req.downloadFolder != null) next.downloadFolder = folder || null;
+      // `Settings::apply`: each id kept once, where it first stands.
+      if (req.myLanguages != null) next.myLanguages = [...new Set(req.myLanguages)];
+      next.droppedLanguages = [];
       // `UpdateLevel::settings` in fm-api: the level sets the two switches and wins.
       if (req.updateLevel != null) {
         const [check, onQuit] = MOCK_LEVEL_SETTINGS[req.updateLevel];
@@ -5055,7 +5088,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       settings = next;
       if (turnedOn) automaticCheckTurnedOn();
       options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
-      return { ...settings };
+      return { ...settings, droppedLanguages: dropped };
     },
     getAppFolders: async () => ({ ...mockFolders }),
     setupStatus: async () => ({

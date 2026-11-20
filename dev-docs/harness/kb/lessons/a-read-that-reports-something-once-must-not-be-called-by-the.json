@@ -1,0 +1,21 @@
+{
+  "id": "a-read-that-reports-something-once-must-not-be-called-by-the",
+  "title": "A read that reports something once must not be called by the core's own code",
+  "category": "correctness",
+  "rule": "When an API read has a one-time effect (it reports a change once, then saves the state so the next read is clean), give fm-core's own callers and the shell's internal reads (CoreApi::open, start, the watcher, setup, app_info, the Tauri AppState::current_settings) a separate read that changes and reports nothing, and keep the reporting read for the API path only. Grep every caller of the reading method in fm-core and src-tauri before shipping. Test through CoreApi::open and the internal start-up calls, then assert the first API read still carries the report.",
+  "rationale": "E56.3 (#663): SettingsStore::get_settings dropped unknown language ids, saved the file and reported them once in droppedLanguages; CoreApi::open called it at start for cache_limit_mb and discarded the answer, so the UI never saw the report. The tests used a bare SettingsStore and passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    663
+  ],
+  "file_globs": [
+    "crates/fm-core/src/settings.rs",
+    "crates/fm-core/src/api.rs",
+    "crates/fm-core/src/api/**/*.rs",
+    "apps/desktop/src-tauri/src/lib.rs"
+  ],
+  "first_seen": "2026-11-20T19:14:02.898Z",
+  "last_seen": "2026-11-20T19:14:02.898Z"
+}
