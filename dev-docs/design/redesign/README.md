@@ -12,7 +12,7 @@ Boards 1, 2 and 3 have several states. Each state is a Tweak, so an export is re
 3. **Share › Export** the board as PNG at 2× and save it under the file name in the table.
 4. Put the files in this folder; fill in the export date at the bottom.
 
-Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak; boards 9–11 have one, three and one. Board 12 (Preview options) is 1120 px wide, so its exports are 2240 px; its two popover files are the popover alone, cropped (848 px).
+Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak; boards 9–11 have one, three and one. Board 12 (Preview options) is 1120 px wide, so its exports are 2240 px; its two popover files are the popover alone, cropped (848 px). Board 14 (Duplicates) has nine states, set by its state tweak; its second board, the ways in, has one state and is 1280 px wide, so its export is 2560 px.
 
 ## The files
 
@@ -63,9 +63,19 @@ Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare
 | `13-setup-from-settings.png` | 13 | reopened from Settings, both catalogs on, "Another folder" | the step names as links, the close button, the chosen folder with "Change…", both catalogs in the tree | E55.4, E55.5 |
 | `13-setup-folders-dark.png` | 13 | theme = Dark, step = Font folders, three folders | the folders step in the dark theme | E55.4 |
 | `13-setup-catalogs-cloud-dark.png` | 13 | theme = Dark, step = Online catalogs, a cloud folder chosen | the note under the select when the font folder syncs with a cloud service | E55.5 |
+| `14-duplicates-overview.png` | 14 · Duplicates | state = Overview | the module with its navigation; identical copies as one decision, the levels to decide, the top folder pairs | E56.10, E56.11 |
+| `14-duplicates-folders.png` | 14 | state = Folders | folder pairs with their share, "Keep this side", a system folder that can only be kept | E56.12 |
+| `14-duplicates-sets.png` | 14 | state = Sets | the queue and one set: three copies, the recommended one with its reason, missing glyphs as tofu, an active copy that stays | E56.11 |
+| `14-duplicates-compare.png` | 14 | state = Compare | two copies side by side in a Serbian (Cyrillic) sample; the differences from languages to format | E56.13 |
+| `14-duplicates-plan.png` | 14 | state = Plan | totals, what goes to the trash by folder, what stays and why, the metadata that moves, a rating conflict | E56.15 |
+| `14-duplicates-applying.png` | 14 | state = Applying | a running cleanup: progress, the current file, Cancel, skipped so far | E56.15 |
+| `14-duplicates-history.png` | 14 | state = History | sessions with "Undo all", single files, a file that cannot come back | E56.15 |
+| `14-duplicates-hidden.png` | 14 | state = Hidden | hidden copies with "Show again"; remembered decisions with "Take back" | E56.15 |
+| `14-duplicates-rules.png` | 14 | state = Rules | the languages, the guard above the list, the rules in order, the preview before Save | E56.14 |
+| `14-duplicates-entry.png` | 14 · Duplicates: the ways in | — | the sidebar row, the notice after a scan, the "copies" mark on a family, the command palette (the accent rings mark what is new and are not drawn in the app) | E56.15 |
 
 A UI story is reviewed against its image, not against the previous screenshot. The boards show
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17; board 13: 2026-11-18).
+Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17; board 13: 2026-11-18; board 14: 2026-11-20).

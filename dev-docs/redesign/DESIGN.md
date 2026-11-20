@@ -125,6 +125,43 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   skipped. Folder and catalog rows are the Sources cards; switches, the select and the radio
   list are the app's own controls. Reopened from Settings it shows every step, the step names
   become links and a close button appears.
+- **Duplicates (board 14, E56):** a full view of its own, like Studio, never a section of
+  Problems: duplicates are housekeeping, not faults. Its count is always the neutral count
+  style, never the red dot, and the Problems total does not include it. Layout as in Settings:
+  a 232 px navigation on `--fm-surface` with "Library" to go back, then Overview, Folders,
+  Sets, Plan, History and Hidden copies with their counts; at its foot the languages the user
+  works in and the link to the rules. Ways in: a "Duplicates" row in the sidebar's Sources
+  group (hidden while there are none), one notice after a scan that finds copies (the app's
+  notice, once per scan, never opening the module by itself), a quiet "N copies" mark beside a
+  family's style count plus one line under Info > Files, and two command palette entries.
+  **Overview** leads with the one decision that is safe in bulk (identical copies, primary
+  button "Review the plan"), then the levels still to decide, then the top folder pairs.
+  **Folders** shows pairs of folders with the share as a hairline bar and "Keep this side" on
+  each side; a side that may not be removed (a system folder, a source root, the library
+  folder) says why and can only be kept. **Sets** is a queue: the list on the left (320 px),
+  one set on the right, one card per copy. A copy card shows a specimen in the copy's own
+  face, in a sample of the user's languages; a glyph the copy lacks is the accent tofu marker
+  (E43.4), never a fallback. Under it: version, format, year, glyph count, the path in the
+  mono face, the user's languages each with a check or "missing", and what the user put on
+  that copy. The recommended copy carries the accent ring and a "Keep" badge, and its reason
+  is one sentence ("covers Serbian (Cyrillic); the other copies do not"). The other copies get
+  a `UiSegmentedControl` with the three outcomes, in these words: the trash of this system
+  ("Recycle Bin" on Windows), Hide, Keep. A copy that cannot move (active, in a system folder)
+  says why in place of the control. For the whole set: "Keep all" and "Not duplicates"
+  (quiet), and one primary action, "Add to plan and go on". Nothing the language guard
+  protects is ever preselected for removal. **Compare** puts two copies side by side with the
+  differences in this order: languages, localized forms, glyphs (shown as glyphs), features,
+  metrics (with "text may reflow"), format. **Plan** is the only place files move from: totals,
+  what goes to the trash by folder, what stays and why, the metadata that moves to the kept
+  copies, and each conflict as a two-way choice; its primary button names the number of files
+  and the trash. **Applying** shows progress, the current file and Cancel. **History** lists
+  cleanups as sessions with "Undo all" and per-file undo; **Hidden copies** lists hidden files
+  ("Show again") and remembered decisions ("Take back"). **Rules** shows the languages as
+  chips, the language guard as a fixed line above the list (always on, not a row), the rules
+  in order with a drag handle and a switch, "Path, A to Z" fixed last, and a preview of how
+  many recommendations change before Save. The module uses no control the rest of the app
+  does not have, and no colour but the accent; a caution (metrics changed, a file that cannot
+  come back) is `--fm-warning` only where a file is at risk.
 - **Letters (match by letters, board 8, E49):** the letters in the preview field are the
   controls: a letter that has traits carries a hairline underline, a letter with a value
   chosen carries an accent underline, and the field's right edge says what to do ("click an
