@@ -324,7 +324,7 @@ enum SortValue {
 }
 
 /// A piece of a natural-order key: a run of digits by value, or other text.
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum NaturalPart {
     Number(u64),
     Text(String),
@@ -349,6 +349,26 @@ fn natural(s: &str) -> Vec<NaturalPart> {
         rest = tail;
     }
     parts
+}
+
+/// The format a path's extension names, without case: what
+/// [`DuplicateGroup::choose_keeper`] knows of a copy's format.
+fn format_from_extension(path: &str) -> Option<FontFormat> {
+    let ext = std::path::Path::new(path)
+        .extension()?
+        .to_str()?
+        .to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "ttf" => FontFormat::Ttf,
+        "otf" => FontFormat::Otf,
+        "ttc" => FontFormat::Ttc,
+        "otc" => FontFormat::Otc,
+        "woff" => FontFormat::Woff,
+        "woff2" => FontFormat::Woff2,
+        "pfb" | "pfa" => FontFormat::Type1,
+        "dfont" => FontFormat::Dfont,
+        _ => return None,
+    })
 }
 
 fn format_name(f: FontFormat) -> &'static str {
@@ -871,21 +891,21 @@ pub struct DuplicateGroup {
 }
 
 impl DuplicateGroup {
-    /// Orders the copies keeper first and marks the keeper: the newest
-    /// version (digit runs compared as numbers, no version last), then a copy
-    /// in the library folder, then the path A to Z. Every implementation of
-    /// [`LibraryService::list_duplicates`] uses this, so the rule is one.
+    /// Orders the copies keeper first and marks the keeper by the default
+    /// [`KeeperPolicy`] with no language set (E56.4): the newest version
+    /// (digit runs compared as numbers, no version last), then the format
+    /// in the default order (by the file's extension), then a copy in the
+    /// library folder, then the path A to Z. A service with an index
+    /// applies the saved policy and the language guard instead, which gives
+    /// this keeper while no language is set and the policy is the default.
     pub fn choose_keeper(&mut self) {
+        let policy = KeeperPolicy::default();
         self.copies.sort_by_cached_key(|c| {
-            let version = c
-                .version
-                .as_deref()
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-                .map(natural);
+            let version = VersionKey::of(c.version.as_deref());
             (
                 version.is_none(),
                 std::cmp::Reverse(version),
+                policy.format_rank(format_from_extension(&c.path)),
                 !c.in_library_folder,
                 c.path.clone(),
             )
@@ -895,10 +915,11 @@ impl DuplicateGroup {
         }
     }
 
-    /// The Problems entries of the group: one per copy that is not the
-    /// keeper, with the keeper as `other`. Exact groups are `DuplicateFile`,
-    /// near groups `DuplicateFace`. Every implementation of
-    /// [`LibraryService::list_problems`] uses this, so the rule is one.
+    /// The Problems entries of the group: one per copy not marked `keep`
+    /// (a copy the language guard protects, or a system copy, is marked
+    /// `keep` too and is no entry), with the keeper as `other`. Exact groups
+    /// are `DuplicateFile`, near groups `DuplicateFace`. Every implementation
+    /// of [`LibraryService::list_problems`] uses this, so the rule is one.
     pub fn problems(&self) -> Vec<Problem> {
         let Some(keeper) = self
             .copies
@@ -910,7 +931,7 @@ impl DuplicateGroup {
         };
         self.copies
             .iter()
-            .filter(|c| !std::ptr::eq(*c, keeper))
+            .filter(|c| !c.keep && !std::ptr::eq(*c, keeper))
             .map(|copy| {
                 let (kind, message) = match self.kind {
                     DuplicateKind::Exact => (
@@ -1158,7 +1179,8 @@ pub struct CopyComparison {
 }
 
 /// Files that hold the same font, at one [`DuplicateLevel`] (E56.1). The
-/// set chooses no keeper and calls no copy older or newer.
+/// set itself calls no copy older or newer; which copy to keep is the keeper
+/// policy's answer, [`Self::recommendation`] (E56.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateSet {
@@ -1173,6 +1195,325 @@ pub struct DuplicateSet {
     pub formats_differ: bool,
     /// The copies, two or more, by path.
     pub copies: Vec<DuplicateSetCopy>,
+    /// What the saved keeper policy and the language guard recommend for
+    /// this set (E56.4); `None` from a service without an index to read the
+    /// copies' facts from (the mocks).
+    #[serde(default)]
+    pub recommendation: Option<KeeperRecommendation>,
+}
+
+/// One rule of the keeper policy (E56.4, ADR 0027). A copy that wins a rule
+/// wins the set; a tie goes to the next rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum KeeperRule {
+    /// Covers more of my languages in full.
+    MyLanguages,
+    /// Has `locl` forms for more of my languages.
+    MyLanguagesLocl,
+    /// The newest version (digit runs as numbers; no version last).
+    NewestVersion,
+    /// The format that stands first in [`KeeperPolicy::format_order`].
+    Format,
+    /// A variable font over a static one.
+    Variable,
+    /// The most glyphs.
+    MostGlyphs,
+    /// In the folder that stands first in [`KeeperPolicy::preferred_folders`].
+    PreferredFolder,
+    /// In the library folder.
+    LibraryFolder,
+    /// Carries more kinds of the user's metadata (favorite, rating, tags,
+    /// notes, collections, sets).
+    UserMetadata,
+    /// Active, or asked for by an open document.
+    ActiveOrRequested,
+    /// The path A to Z. Always the last rule, so the answer never depends
+    /// on chance.
+    Path,
+}
+
+/// The keeper policy (E56.4, ADR 0027): an ordered list of rules, stored in
+/// `config.json` as [`crate::settings::Settings::keeper_policy`]. Values a
+/// newer version wrote and this one does not know are dropped on read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeeperPolicy {
+    /// The rules, most important first; [`KeeperRule::Path`] always ends the
+    /// list ([`Self::normalized`]).
+    #[serde(
+        default = "KeeperPolicy::default_rules",
+        deserialize_with = "known_values"
+    )]
+    #[specta(type = Vec<KeeperRule>)]
+    pub rules: Vec<KeeperRule>,
+    /// The order of formats for [`KeeperRule::Format`], best first; a format
+    /// not listed ranks after every listed one.
+    #[serde(
+        default = "KeeperPolicy::default_format_order",
+        deserialize_with = "known_values"
+    )]
+    #[specta(type = Vec<FontFormat>)]
+    pub format_order: Vec<FontFormat>,
+    /// The folders for [`KeeperRule::PreferredFolder`], best first, as
+    /// absolute paths.
+    #[serde(default)]
+    pub preferred_folders: Vec<String>,
+}
+
+impl Default for KeeperPolicy {
+    /// Covers my languages, newest version, format, the library folder,
+    /// path; formats OpenType CFF, TrueType, WOFF2, WOFF, Type 1.
+    fn default() -> Self {
+        Self {
+            rules: Self::default_rules(),
+            format_order: Self::default_format_order(),
+            preferred_folders: Vec::new(),
+        }
+    }
+}
+
+impl KeeperPolicy {
+    fn default_rules() -> Vec<KeeperRule> {
+        vec![
+            KeeperRule::MyLanguages,
+            KeeperRule::NewestVersion,
+            KeeperRule::Format,
+            KeeperRule::LibraryFolder,
+            KeeperRule::Path,
+        ]
+    }
+
+    fn default_format_order() -> Vec<FontFormat> {
+        vec![
+            FontFormat::Otf,
+            FontFormat::Ttf,
+            FontFormat::Woff2,
+            FontFormat::Woff,
+            FontFormat::Type1,
+        ]
+    }
+
+    /// This policy as every rule reads it: each rule, format and folder once
+    /// where it first stands, blank folders left out, and
+    /// [`KeeperRule::Path`] moved to the end. Every implementation stores and
+    /// applies the normalized policy, so the rule is one.
+    pub fn normalized(&self) -> Self {
+        let mut rules: Vec<KeeperRule> = Vec::with_capacity(self.rules.len() + 1);
+        for &rule in &self.rules {
+            if rule != KeeperRule::Path && !rules.contains(&rule) {
+                rules.push(rule);
+            }
+        }
+        rules.push(KeeperRule::Path);
+        let mut format_order: Vec<FontFormat> = Vec::with_capacity(self.format_order.len());
+        for &f in &self.format_order {
+            if !format_order.contains(&f) {
+                format_order.push(f);
+            }
+        }
+        let mut preferred_folders: Vec<String> = Vec::new();
+        for folder in &self.preferred_folders {
+            let folder = folder.trim();
+            if !folder.is_empty() && !preferred_folders.iter().any(|f| f == folder) {
+                preferred_folders.push(folder.to_owned());
+            }
+        }
+        Self {
+            rules,
+            format_order,
+            preferred_folders,
+        }
+    }
+
+    /// Where `format` stands in [`Self::format_order`]: 0 is best; a format
+    /// not listed (and no format) is `format_order.len()`.
+    pub fn format_rank(&self, format: Option<FontFormat>) -> usize {
+        format
+            .and_then(|f| self.format_order.iter().position(|&o| o == f))
+            .unwrap_or(self.format_order.len())
+    }
+
+    /// `InvalidRequest` when a preferred folder is not an absolute path.
+    pub fn check(&self) -> ApiResult<()> {
+        if let Some(folder) = self
+            .preferred_folders
+            .iter()
+            .map(|f| f.trim())
+            .find(|f| !f.is_empty() && !std::path::Path::new(f).has_root())
+        {
+            return Err(
+                ApiError::invalid("Choose each preferred folder with its full path.")
+                    .with_detail(format!("preferredFolders {folder:?}")),
+            );
+        }
+        Ok(())
+    }
+}
+
+/// A list of values, each one this version does not know dropped (a file
+/// from a newer version), so the rest of the file still reads.
+fn known_values<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Maybe<T> {
+        Known(T),
+        Other(serde::de::IgnoredAny),
+    }
+    let items: Vec<Maybe<T>> = Vec::deserialize(d)?;
+    Ok(items
+        .into_iter()
+        .filter_map(|m| match m {
+            Maybe::Known(t) => Some(t),
+            Maybe::Other(_) => None,
+        })
+        .collect())
+}
+
+/// The ordering key of a version string for [`KeeperRule::NewestVersion`]
+/// and [`DuplicateGroup::choose_keeper`]: trimmed, digit runs as numbers,
+/// other text without case; `None` for no version. A greater key is newer.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VersionKey(Vec<NaturalPart>);
+
+impl VersionKey {
+    /// The key of `version`, or `None` when it is missing or blank.
+    pub fn of(version: Option<&str>) -> Option<Self> {
+        version
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(|v| Self(natural(v)))
+    }
+}
+
+/// What the keeper policy answers for a set (E56.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum KeeperOutcome {
+    /// One copy is the keeper; the others are recommended for removal
+    /// unless something protects them ([`KeptCopy::because`]).
+    Keeper,
+    /// No copy covers every one of my languages the others cover: keep the
+    /// copies that together cover them, each with the languages it alone has.
+    KeepBoth,
+    /// Every copy is in a system font folder: the policy does not apply.
+    AllSystem,
+}
+
+/// Why a copy is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum KeptBecause {
+    /// The policy's rules chose it.
+    Policy,
+    /// The language guard: it covers one of my languages in full that the
+    /// other kept copies do not.
+    Languages,
+    /// It is in a system font folder; the policy never applies to it.
+    System,
+    /// Its file holds a font no other file holds (a collection file).
+    LastCopy,
+}
+
+/// The rule that decided between two copies and the values it compared.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeeperReason {
+    /// The rule.
+    pub rule: KeeperRule,
+    /// The kept copy's value(s): language preset ids, a version, a format,
+    /// a glyph count, a folder, the kinds of metadata, a path.
+    pub kept: Vec<String>,
+    /// The other copy's value(s), of the same kind.
+    pub other: Vec<String>,
+    /// The other copy.
+    pub other_path: String,
+    /// The reason in one sentence, the same in the UI, the CLI and MCP:
+    /// "Kept: covers Serbian Cyrillic, the other copy does not."
+    pub sentence: String,
+}
+
+/// One copy the recommendation keeps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeptCopy {
+    /// Absolute file path.
+    pub path: String,
+    /// Why.
+    pub because: KeptBecause,
+    /// My languages (preset ids) it covers in full that no other kept copy
+    /// covers.
+    pub languages_only_here: Vec<String>,
+    /// For [`KeptBecause::LastCopy`]: the fonts (PostScript names) only its
+    /// file holds.
+    pub fonts_only_here: Vec<String>,
+    /// Why, in one sentence.
+    pub sentence: String,
+}
+
+/// One copy the recommendation would remove, with the rule it lost by
+/// against the keeper.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RemovedCopy {
+    /// Absolute file path.
+    pub path: String,
+    /// The rule that put the keeper before it.
+    pub reason: KeeperReason,
+}
+
+/// What the keeper policy and the language guard recommend for one set
+/// (E56.4). Every copy of the set is in exactly one of `keep` and `remove`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeeperRecommendation {
+    /// Keeper, keep both, or every copy a system copy.
+    pub outcome: KeeperOutcome,
+    /// The copy the rules put first; `None` when every copy is a system copy.
+    pub keeper: Option<String>,
+    /// Why the keeper stands before the next copy the rules rank; `None`
+    /// when no other copy is ranked.
+    pub reason: Option<KeeperReason>,
+    /// The copies kept, the keeper first.
+    pub keep: Vec<KeptCopy>,
+    /// The copies recommended for removal.
+    pub remove: Vec<RemovedCopy>,
+    /// Whether my languages were set; `NotSet` means the language rules and
+    /// the guard did nothing.
+    pub my_languages: crate::settings::MyLanguagesStatus,
+}
+
+/// Preview a keeper policy without saving it
+/// ([`LibraryService::preview_keeper_policy`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewKeeperPolicyRequest {
+    /// The sets to look at, as [`ListDuplicateSetsRequest::scope`].
+    #[serde(default)]
+    pub scope: DuplicateScope,
+    /// The policy to try.
+    pub policy: KeeperPolicy,
+}
+
+/// What a keeper policy would do over a scope, against the saved one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeeperPolicyPreview {
+    /// The duplicate sets in the scope.
+    pub sets: u32,
+    /// Sets that get one keeper ([`KeeperOutcome::Keeper`]).
+    pub with_keeper: u32,
+    /// Sets answered "keep both" ([`KeeperOutcome::KeepBoth`]).
+    pub keep_both: u32,
+    /// Sets whose recommendation (the keeper, or the copies kept) differs
+    /// from the saved policy's.
+    pub changed: u32,
+    /// Whether my languages were set.
+    pub my_languages: crate::settings::MyLanguagesStatus,
 }
 
 /// "Keep this one": keep one copy of a duplicate font and move the other
@@ -1656,7 +1997,9 @@ pub trait LibraryService {
     fn list_problems(&self) -> ApiResult<Vec<Problem>>;
     /// Exact duplicates (same hash) and near duplicates (same PostScript name
     /// and version in files that differ) among the files the library shows,
-    /// in groups, each with its recommended keeper first.
+    /// in groups, each with its recommended keeper first. The keeper comes
+    /// from the saved keeper policy and the language guard (E56.4): copies
+    /// the guard protects and system copies are marked `keep` as well.
     fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>>;
     /// One page of duplicate sets (E56.1, ADR 0027) among the files the
     /// library shows: identical files, the same version in files that
@@ -1671,6 +2014,15 @@ pub trait LibraryService {
     /// `NotFound` when a face is not in the library; `InvalidRequest` when
     /// `a` and `b` are the same face.
     fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison>;
+    /// What a keeper policy would do over a scope, without saving it
+    /// (E56.4): how many sets get a keeper, how many are "keep both", and how
+    /// many recommendations change against the saved policy. A `source`
+    /// scope that does not exist is `NotFound`; a preferred folder that is
+    /// not absolute is `InvalidRequest`.
+    fn preview_keeper_policy(
+        &self,
+        req: PreviewKeeperPolicyRequest,
+    ) -> ApiResult<KeeperPolicyPreview>;
     /// "Keep this one" (E8.3): moves the other copies to the OS trash, never
     /// deleting them, and records the action for undo. With `dry_run`, only
     /// says what would move. A copy that cannot move (the app activated it,
@@ -1846,6 +2198,97 @@ mod tests {
             copy("/a.ttf", Some("1.0"), false),
         ]);
         assert_eq!(order, ["/y.ttf", "/a.ttf", "/z.ttf"]);
+    }
+
+    #[test]
+    fn on_equal_versions_the_format_comes_before_the_library_folder() {
+        let order = keeper_order(vec![
+            copy("/lib/a.woff2", Some("1.0"), true),
+            copy("/z.TTF", Some("1.0"), false),
+            copy("/b.otf", Some("1.0"), false),
+            copy("/c.dat", Some("1.0"), true),
+        ]);
+        assert_eq!(order, ["/b.otf", "/z.TTF", "/lib/a.woff2", "/c.dat"]);
+    }
+
+    #[test]
+    fn a_policy_is_normalized_path_last_and_each_value_once() {
+        let policy = KeeperPolicy {
+            rules: vec![
+                KeeperRule::Path,
+                KeeperRule::Format,
+                KeeperRule::Format,
+                KeeperRule::Variable,
+            ],
+            format_order: vec![FontFormat::Ttf, FontFormat::Ttf, FontFormat::Otf],
+            preferred_folders: vec![" /a ".into(), "".into(), "/a".into(), "/b".into()],
+        }
+        .normalized();
+        assert_eq!(
+            policy.rules,
+            [KeeperRule::Format, KeeperRule::Variable, KeeperRule::Path]
+        );
+        assert_eq!(policy.format_order, [FontFormat::Ttf, FontFormat::Otf]);
+        assert_eq!(policy.preferred_folders, ["/a", "/b"]);
+        assert_eq!(policy.format_rank(Some(FontFormat::Otf)), 1);
+        assert_eq!(policy.format_rank(Some(FontFormat::Woff)), 2);
+        assert_eq!(policy.format_rank(None), 2);
+    }
+
+    #[test]
+    fn a_stored_policy_drops_the_values_this_version_does_not_know() {
+        let policy: KeeperPolicy = serde_json::from_value(serde_json::json!({
+            "rules": ["newestVersion", "aRuleFromLater", "path"],
+            "formatOrder": ["woff2", "svg", "ttf"],
+        }))
+        .expect("reads");
+        assert_eq!(policy.rules, [KeeperRule::NewestVersion, KeeperRule::Path]);
+        assert_eq!(policy.format_order, [FontFormat::Woff2, FontFormat::Ttf]);
+        assert!(policy.preferred_folders.is_empty());
+        let empty: KeeperPolicy = serde_json::from_value(serde_json::json!({})).expect("reads");
+        assert_eq!(empty, KeeperPolicy::default());
+        assert_eq!(
+            KeeperPolicy::default().rules,
+            [
+                KeeperRule::MyLanguages,
+                KeeperRule::NewestVersion,
+                KeeperRule::Format,
+                KeeperRule::LibraryFolder,
+                KeeperRule::Path
+            ]
+        );
+    }
+
+    #[test]
+    fn a_relative_preferred_folder_is_refused() {
+        let policy = KeeperPolicy {
+            preferred_folders: vec!["fonts".into()],
+            ..KeeperPolicy::default()
+        };
+        assert_eq!(
+            policy.check().expect_err("relative").code,
+            ErrorCode::InvalidRequest
+        );
+        assert!(KeeperPolicy::default().check().is_ok());
+    }
+
+    #[test]
+    fn every_copy_marked_keep_is_no_problem() {
+        let mut group = DuplicateGroup {
+            kind: DuplicateKind::Near,
+            postscript_name: Some("Inter-Regular".into()),
+            copies: vec![
+                copy("/a.ttf", Some("1.0"), false),
+                copy("/b.ttf", Some("1.0"), false),
+                copy("/c.ttf", Some("1.0"), false),
+            ],
+        };
+        group.copies[0].keep = true;
+        group.copies[1].keep = true;
+        let problems: Vec<String> = group.problems().into_iter().map(|p| p.path).collect();
+        assert_eq!(problems, ["/c.ttf"]);
+        group.copies[2].keep = true;
+        assert!(group.problems().is_empty());
     }
 
     #[test]

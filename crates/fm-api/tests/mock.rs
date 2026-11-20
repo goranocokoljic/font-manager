@@ -4442,3 +4442,41 @@ fn the_mock_compares_two_faces_by_characters_features_and_axes() {
         .unwrap_err();
     assert_eq!(gone.code, ErrorCode::NotFound);
 }
+
+#[test]
+fn the_mock_previews_a_keeper_policy_without_saving_it() {
+    use fm_api::library::{KeeperPolicy, KeeperRule, PreviewKeeperPolicyRequest};
+    use fm_api::settings::{MyLanguagesStatus, SettingsService};
+    let (mock, _) = with_duplicate_files();
+    let tried = KeeperPolicy {
+        rules: vec![KeeperRule::Path],
+        ..KeeperPolicy::default()
+    };
+    let preview = mock
+        .preview_keeper_policy(PreviewKeeperPolicyRequest {
+            scope: DuplicateScope::Library,
+            policy: tried,
+        })
+        .unwrap();
+    assert_eq!(preview.sets, 2);
+    assert_eq!(
+        (preview.with_keeper, preview.keep_both, preview.changed),
+        (2, 0, 0)
+    );
+    assert_eq!(preview.my_languages, MyLanguagesStatus::NotSet);
+    assert_eq!(
+        mock.get_settings().unwrap().keeper_policy,
+        KeeperPolicy::default(),
+        "a preview saves nothing"
+    );
+    let err = mock
+        .preview_keeper_policy(PreviewKeeperPolicyRequest {
+            scope: DuplicateScope::Library,
+            policy: KeeperPolicy {
+                preferred_folders: vec!["fonts".into()],
+                ..KeeperPolicy::default()
+            },
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+}

@@ -361,9 +361,11 @@ fn a_collection_with_the_name_twice_is_one_copy() {
             file("/fonts/Family.ttf", 2, "Family-Regular", Some("1.0")),
         ],
     );
+    // The keeper rule ranks the format (E56.4): a collection is not in the
+    // default order, so the TTF comes first.
     assert_eq!(
         summary(&index),
-        ["Near Family-Regular: /fonts/Family.ttc, /fonts/Family.ttf"]
+        ["Near Family-Regular: /fonts/Family.ttf, /fonts/Family.ttc"]
     );
 }
 

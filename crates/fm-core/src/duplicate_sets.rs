@@ -312,6 +312,7 @@ fn build(
         postscript_name: draft.name.clone(),
         formats_differ: formats.len() > 1,
         copies,
+        recommendation: None,
     }
 }
 

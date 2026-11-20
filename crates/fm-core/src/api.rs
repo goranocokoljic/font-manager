@@ -61,10 +61,10 @@ use fm_api::library::{
     AddSourceRequest, AppInfo, CompareCopiesRequest, CopyComparison, DragFiles, DragFilesRequest,
     DuplicateGroup, DuplicateScope, DuplicateSet, FaceDetail, Family, FamilySummary,
     FileDragSupport, FontMatches, FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest,
-    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
-    ListDuplicateSetsRequest, ListFamiliesRequest, Platform, Problem, Resolution,
-    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
-    SidecarConflict, Source, SourceKind,
+    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, KeeperPolicyPreview, LibraryService,
+    ListDuplicateSetsRequest, ListFamiliesRequest, Platform, PreviewKeeperPolicyRequest, Problem,
+    Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, DropCounts,
@@ -1013,14 +1013,22 @@ impl LibraryService for CoreApi {
     }
 
     /// The index's problems, then the activation conflicts the OS reports.
+    /// The duplicate entries follow the saved keeper policy and the guard,
+    /// as `list_duplicates` does (E56.4).
     fn list_problems(&self) -> ApiResult<Vec<Problem>> {
-        let mut problems = self.lock().problems()?;
+        let settings = self.settings.read()?;
+        let mut problems = {
+            let index = self.lock();
+            let groups = policy_groups(&index, &settings)?;
+            index.problems_with(&groups)?
+        };
         problems.extend(self.activation.problems()?);
         Ok(problems)
     }
 
     fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
-        Ok(self.lock().duplicates()?)
+        let settings = self.settings.read()?;
+        policy_groups(&self.lock(), &settings)
     }
 
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
@@ -1044,7 +1052,51 @@ impl LibraryService for CoreApi {
         for copy in page.items.iter_mut().flat_map(|s| s.copies.iter_mut()) {
             copy.facts = copy.face.and_then(|f| facts.get(&f).cloned());
         }
+        let settings = self.settings.read()?;
+        let names = crate::keeper_policy::LanguageNames::load(&settings.my_languages)?;
+        crate::keeper_policy::apply_to_sets(
+            &mut page.items,
+            &files,
+            &settings.keeper_policy,
+            &settings.my_languages,
+            &names,
+        );
         Ok(page)
+    }
+
+    fn preview_keeper_policy(
+        &self,
+        req: PreviewKeeperPolicyRequest,
+    ) -> ApiResult<KeeperPolicyPreview> {
+        req.policy.check()?;
+        let settings = self.settings.read()?;
+        let (tried, saved) = (&req.policy, &settings.keeper_policy);
+        let langs = &settings.my_languages;
+        let index = self.lock();
+        if let DuplicateScope::Source { source } = req.scope
+            && !index.sources()?.iter().any(|s| s.id == source)
+        {
+            return Err(ApiError::not_found(format!("Source {source}")));
+        }
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        let mut sets = crate::duplicate_sets::sets(&files, &req.scope);
+        if crate::keeper_policy::needs_facts(tried, langs)
+            || crate::keeper_policy::needs_facts(saved, langs)
+        {
+            let faces: Vec<FaceId> = sets
+                .iter()
+                .flat_map(|s| s.copies.iter().filter_map(|c| c.face))
+                .collect();
+            let facts = index.copy_facts(&faces)?;
+            for copy in sets.iter_mut().flat_map(|s| s.copies.iter_mut()) {
+                copy.facts = copy.face.and_then(|f| facts.get(&f).cloned());
+            }
+        }
+        drop(index);
+        let names = crate::keeper_policy::LanguageNames::load(langs)?;
+        Ok(crate::keeper_policy::preview(
+            &sets, &files, tried, saved, langs, &names,
+        ))
     }
 
     fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison> {
@@ -2287,6 +2339,32 @@ impl EventSource for CoreApi {
 
 mod fetch_missing;
 mod install;
+
+/// The duplicate groups of `index` with their keepers from the saved keeper
+/// policy and the language guard (E56.4), so `list_duplicates`,
+/// `list_problems` and `fm doctor` recommend the same copies as the
+/// Duplicates module.
+fn policy_groups(index: &Index, settings: &Settings) -> ApiResult<Vec<DuplicateGroup>> {
+    let mut groups = index.duplicates()?;
+    if groups.is_empty() {
+        return Ok(groups);
+    }
+    let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+    let (policy, langs) = (&settings.keeper_policy, &settings.my_languages);
+    let facts = if crate::keeper_policy::needs_facts(policy, langs) {
+        let faces: Vec<FaceId> = groups
+            .iter()
+            .flat_map(|g| g.copies.iter().filter_map(|c| c.face))
+            .collect();
+        index.copy_facts(&faces)?
+    } else {
+        std::collections::HashMap::new()
+    };
+    let names = crate::keeper_policy::LanguageNames::load(langs)?;
+    crate::keeper_policy::apply_to_groups(&mut groups, &files, &facts, policy, langs, &names);
+    Ok(groups)
+}
+
 #[cfg(test)]
 mod tests;
 mod watch;

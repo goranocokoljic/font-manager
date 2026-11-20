@@ -72,7 +72,8 @@
         "formatsDiffer": false,
         "id": "name:Inter-Regular",
         "level": "otherVersion",
-        "postscriptName": "Inter-Regular"
+        "postscriptName": "Inter-Regular",
+        "recommendation": null
       },
       {
         "copies": [
@@ -114,7 +115,8 @@
         "formatsDiffer": false,
         "id": "identical:0000000000000000000000000000000000000000000000000000000000000006",
         "level": "identical",
-        "postscriptName": "JetBrainsMono-Regular"
+        "postscriptName": "JetBrainsMono-Regular",
+        "recommendation": null
       }
     ],
     "total": 2

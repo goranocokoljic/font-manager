@@ -57,6 +57,8 @@ import type {
   DuplicateSet,
   CompareCopiesRequest,
   CopyComparison,
+  KeeperPolicyPreview,
+  PreviewKeeperPolicyRequest,
   Event,
   FaceDetail,
   FaceId,
@@ -369,6 +371,8 @@ export interface FmClient {
   listDuplicateSets(req: ListDuplicateSetsRequest): Promise<Paged<DuplicateSet>>;
   /** What differs between two copies of a duplicate set, read from their files (E56.2). */
   compareCopies(req: CompareCopiesRequest): Promise<CopyComparison>;
+  /** What a keeper policy would do over a scope, without saving it (E56.4). */
+  previewKeeperPolicy(req: PreviewKeeperPolicyRequest): Promise<KeeperPolicyPreview>;
   /** "Keep this one": moves the other copies to the OS trash; `dryRun` only plans. */
   keepCopy(req: KeepCopyRequest): Promise<Resolution>;
   /** The "Keep this one" actions, newest first (the Problems history). */
@@ -576,6 +580,7 @@ export const tauriClient: FmClient = {
   listDuplicates: () => invoke<DuplicateGroup[]>('list_duplicates'),
   listDuplicateSets: (req) => invoke<Paged<DuplicateSet>>('list_duplicate_sets', { req }),
   compareCopies: (req) => invoke<CopyComparison>('compare_copies', { req }),
+  previewKeeperPolicy: (req) => invoke<KeeperPolicyPreview>('preview_keeper_policy', { req }),
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),

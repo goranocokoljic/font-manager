@@ -19,12 +19,13 @@ import {
   wallProblems,
   type WallLibrary,
 } from './mockWall';
-import { listDuplicateSets, type SetFile } from './mockDuplicates';
+import { duplicateSets, listDuplicateSets, type SetFile } from './mockDuplicates';
 import {
   API_VERSION,
   type ActivationMode,
   type ActivationOutcome,
   type ApiError,
+  type KeeperPolicy,
   type FoundryInfo,
   type AppFolders,
   type AppInfo,
@@ -661,6 +662,12 @@ export const defaultSettings: FullSettings = {
   myLanguages: [],
   // An answer of one read, never saved.
   droppedLanguages: [],
+  // `KeeperPolicy::default()` in fm-api (E56.4).
+  keeperPolicy: {
+    rules: ['myLanguages', 'newestVersion', 'format', 'libraryFolder', 'path'],
+    formatOrder: ['otf', 'ttf', 'woff2', 'woff', 'type1'],
+    preferredFolders: [],
+  },
 };
 
 /** A token set of `data/themes` as the API answers it. */
@@ -1155,6 +1162,26 @@ export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewByte
 const UNKNOWN_FOUNDRY = 'Unknown foundry';
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
+
+/** `KeeperPolicy::check` in fm-api: a preferred folder without a root. */
+const relativeFolder = (policy: KeeperPolicy): boolean =>
+  (policy.preferredFolders ?? []).some(
+    (f) => f.trim() !== '' && !/^([\\/]|[A-Za-z]:[\\/])/.test(f.trim()),
+  );
+
+/** `KeeperPolicy::normalized` in fm-api: each value once, the path rule last. */
+const normalizedPolicy = (policy: KeeperPolicy): Required<KeeperPolicy> => ({
+  rules: [
+    ...new Set(
+      (policy.rules ?? defaultSettings.keeperPolicy.rules ?? []).filter((r) => r !== 'path'),
+    ),
+    'path',
+  ],
+  formatOrder: [...new Set(policy.formatOrder ?? defaultSettings.keeperPolicy.formatOrder ?? [])],
+  preferredFolders: [
+    ...new Set((policy.preferredFolders ?? []).map((f) => f.trim()).filter((f) => f !== '')),
+  ],
+});
 const checkCollectionColor = (color: string | null | undefined): void => {
   if (color != null && !(COLLECTION_COLORS as readonly string[]).includes(color))
     throw invalid('Pick one of the eight collection colours.');
@@ -4787,6 +4814,27 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       return structuredClone(listDuplicateSets(setFiles(), req));
     },
+    // As the Rust mock: without the facts of an index, every set with a copy
+    // outside the system folders gets a keeper and nothing changes (E56.4).
+    previewKeeperPolicy: async (req) => {
+      const scope = req.scope ?? { kind: 'library' as const };
+      if (scope.kind === 'source' && !sources.some((s) => s.id === scope.source))
+        throw {
+          code: 'notFound' as const,
+          message: `Source ${scope.source} was not found.`,
+          detail: null,
+        };
+      if (relativeFolder(req.policy))
+        throw invalid('Choose each preferred folder with its full path.');
+      const sets = duplicateSets(setFiles(), scope);
+      return {
+        sets: sets.length,
+        withKeeper: sets.filter((s) => s.copies.some((c) => !c.system)).length,
+        keepBoth: 0,
+        changed: 0,
+        myLanguages: settings.myLanguages.length ? 'set' : 'notSet',
+      };
+    },
     compareCopies: async (req) => {
       if (req.a === req.b) throw invalid('Choose two different copies to compare.');
       const a = find(req.a);
@@ -5054,6 +5102,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: `Font Fu cannot install updates when you quit here. ${managedReason}`,
           detail: null,
         };
+      if (req.keeperPolicy != null && relativeFolder(req.keeperPolicy))
+        throw invalid('Choose each preferred folder with its full path.');
       const dropped = dropUnknownLanguages();
       const next = { ...settings };
       // The same rule as `Settings::apply`: a path with a root, or empty to forget it.
@@ -5077,6 +5127,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (req.downloadFolder != null) next.downloadFolder = folder || null;
       // `Settings::apply`: each id kept once, where it first stands.
       if (req.myLanguages != null) next.myLanguages = [...new Set(req.myLanguages)];
+      if (req.keeperPolicy != null) next.keeperPolicy = normalizedPolicy(req.keeperPolicy);
       next.droppedLanguages = [];
       // `UpdateLevel::settings` in fm-api: the level sets the two switches and wins.
       if (req.updateLevel != null) {

@@ -161,6 +161,8 @@ export const duplicateSets = (files: SetFile[], scope: DuplicateScope): Duplicat
         postscriptName: d.name,
         formatsDiffer: new Set(copies.map((c) => c.format)).size > 1,
         copies,
+        // The keeper policy needs the facts of fm-core's index (E56.4).
+        recommendation: null,
       };
     });
   const key = (s: DuplicateSet) => s.postscriptName;

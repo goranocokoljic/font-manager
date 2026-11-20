@@ -60,7 +60,14 @@ Font Fu does not change any file when it lists a problem.
 ### Resolve duplicates
 
 Under **Resolve duplicates**, each duplicate font shows all its copies. The copy
-marked **Recommended** is the newest version, or the copy in your library folder.
+marked **Recommended** is chosen by your keeper policy. By default, it is the copy
+that covers more of your languages, then the newest version, then the better
+format (OpenType CFF, TrueType, WOFF2, WOFF, Type 1), then the copy in your
+library folder.
+
+Font Fu never recommends to remove a copy that is the only one that covers one of
+your languages. It never recommends to remove a copy in a system font folder, or
+the last copy of a font. Such a copy is not listed as a problem.
 
 1. Select **Keep this one** next to the copy you want to keep.
 2. Font Fu shows the copies that will move to the trash. Nothing has moved yet.

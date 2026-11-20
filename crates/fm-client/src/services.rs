@@ -56,6 +56,7 @@ service!(LibraryService {
     list_duplicates() -> Vec<DuplicateGroup>;
     list_duplicate_sets(req: ListDuplicateSetsRequest) -> Paged<DuplicateSet>;
     compare_copies(req: CompareCopiesRequest) -> CopyComparison;
+    preview_keeper_policy(req: PreviewKeeperPolicyRequest) -> KeeperPolicyPreview;
     keep_copy(req: KeepCopyRequest) -> Resolution;
     list_resolutions() -> Vec<Resolution>;
     undo_resolution(resolution: ResolutionId) -> Resolution;

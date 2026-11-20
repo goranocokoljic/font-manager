@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::activation::{ActivationMode, ConflictPolicy, Target};
+use crate::library::KeeperPolicy;
 use crate::setup::{AnswerSetupStepRequest, SetupStatus};
 use crate::{ApiError, ApiResult, ErrorCode};
 
@@ -134,6 +135,11 @@ pub struct Settings {
     /// once. Empty in every other answer.
     #[serde(default)]
     pub dropped_languages: Vec<String>,
+    /// The keeper policy of the Duplicates module (E56.4): the ordered rules
+    /// that choose the copy of a duplicate set to keep. The default policy
+    /// until the user changes it. Stored in `config.json`.
+    #[serde(default)]
+    pub keeper_policy: KeeperPolicy,
 }
 
 /// Whether the user has set the languages they work in (E56.3). An answer of
@@ -180,6 +186,7 @@ impl Default for Settings {
             theme_id: DEFAULT_THEME_ID.to_owned(),
             my_languages: Vec::new(),
             dropped_languages: Vec::new(),
+            keeper_policy: KeeperPolicy::default(),
         }
     }
 }
@@ -250,6 +257,11 @@ pub struct SettingsUpdate {
     /// stands.
     #[serde(default)]
     pub my_languages: Option<Vec<String>>,
+    /// The keeper policy, replacing the saved one; it is stored normalized
+    /// ([`KeeperPolicy::normalized`]). A preferred folder that is not an
+    /// absolute path is refused and nothing changes.
+    #[serde(default)]
+    pub keeper_policy: Option<KeeperPolicy>,
 }
 
 impl Settings {
@@ -286,6 +298,9 @@ impl Settings {
                 ErrorCode::Unsupported,
                 "Start at login is not available on this system.",
             ));
+        }
+        if let Some(policy) = &update.keeper_policy {
+            policy.check()?;
         }
         let (check_updates_automatically, install_updates_on_quit) = match update.update_level {
             Some(level) => level.settings(),
@@ -328,6 +343,10 @@ impl Settings {
                 None => self.my_languages.clone(),
             },
             dropped_languages: Vec::new(),
+            keeper_policy: match &update.keeper_policy {
+                Some(policy) => policy.normalized(),
+                None => self.keeper_policy.clone(),
+            },
         })
     }
 }
@@ -653,6 +672,39 @@ mod tests {
         assert!(s.keep_in_tray);
         assert_eq!(s.start_at_login, None);
         assert!(!s.check_updates_automatically);
+    }
+
+    #[test]
+    fn the_keeper_policy_is_the_default_until_an_update_replaces_it_normalized() {
+        use crate::library::{KeeperPolicy, KeeperRule};
+        let old: Settings = serde_json::from_str("{}").expect("old file");
+        assert_eq!(old.keeper_policy, KeeperPolicy::default());
+        let next = old
+            .apply(&SettingsUpdate {
+                keeper_policy: Some(KeeperPolicy {
+                    rules: vec![KeeperRule::Path, KeeperRule::MostGlyphs],
+                    ..KeeperPolicy::default()
+                }),
+                ..Default::default()
+            })
+            .expect("apply");
+        assert_eq!(
+            next.keeper_policy.rules,
+            [KeeperRule::MostGlyphs, KeeperRule::Path]
+        );
+        let kept = next.apply(&SettingsUpdate::default()).expect("apply");
+        assert_eq!(kept.keeper_policy, next.keeper_policy);
+        let refused = next.apply(&SettingsUpdate {
+            keeper_policy: Some(KeeperPolicy {
+                preferred_folders: vec!["relative".into()],
+                ..KeeperPolicy::default()
+            }),
+            ..Default::default()
+        });
+        assert_eq!(
+            refused.expect_err("relative folder").code,
+            ErrorCode::InvalidRequest
+        );
     }
 
     #[test]

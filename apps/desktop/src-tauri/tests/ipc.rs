@@ -671,6 +671,27 @@ fn duplicate_sets_round_trip_with_a_scope_and_a_page() {
 }
 
 #[test]
+fn a_keeper_policy_preview_round_trips() {
+    let mock = MockApi::new();
+    mock.add_copy(FaceId(3), "/Users/demo/Downloads/SourceSerif4-Regular.otf")
+        .unwrap();
+    let (_app, webview) = app_on(setup(mock_builder(), Arc::new(mock))).unwrap();
+    let preview: serde_json::Value = send(
+        &webview,
+        "preview_keeper_policy",
+        serde_json::json!({ "req": { "policy": { "rules": ["path"] } } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(preview["sets"], 1);
+    assert_eq!(preview["withKeeper"], 1);
+    assert_eq!(preview["keepBoth"], 0);
+    assert_eq!(preview["myLanguages"], "notSet");
+}
+
+#[test]
 fn keep_this_one_round_trips_dry_run_keep_history_and_undo() {
     let mock = MockApi::new();
     let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";

@@ -48,11 +48,11 @@ use crate::library::{
     DuplicateSet, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary,
     FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphBounds,
     GlyphChange, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
-    ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions, LicensePermissionsSource,
-    LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest, OpenLicense, Platform, Problem,
-    ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
-    SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
-    TrashMoveStatus, WebUse,
+    ImportMode, KeepCopyRequest, KeeperPolicyPreview, LicenseInfo, LicensePermissions,
+    LicensePermissionsSource, LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest,
+    OpenLicense, Platform, PreviewKeeperPolicyRequest, Problem, ProblemKind, Resolution,
+    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
+    SidecarConflict, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
@@ -1690,6 +1690,61 @@ fn mock_glyph_matches(g: &GlyphInfo, query: &str) -> bool {
 /// Why the mock cannot drag files out: it has no window of its own.
 pub const MOCK_NO_FILE_DRAG: &str = "Dragging font files out needs the desktop app.";
 
+impl MockApi {
+    /// The files a duplicate listing over `scope` looks at, as fm-core
+    /// reads them; a `source` scope that does not exist is `NotFound`.
+    fn duplicate_set_files(
+        &self,
+        scope: &DuplicateScope,
+    ) -> ApiResult<Vec<duplicate_sets::SetFile>> {
+        let st = self.state();
+        if let DuplicateScope::Source { source } = *scope
+            && !st.sources.iter().any(|s| s.id == source)
+        {
+            return Err(ApiError::not_found(format!("Source {source}")));
+        }
+        let source = |id: SourceId| st.sources.iter().find(|s| s.id == id);
+        // One file per path, its faces in collection order, as fm-core reads them.
+        let mut faces: Vec<&MockFace> = st
+            .faces
+            .iter()
+            .filter(|f| source(f.source).is_some_and(|s| !s.paused))
+            .filter(|f| !st.trashed.contains(&f.detail.path))
+            .collect();
+        faces.sort_by_key(|f| f.detail.collection_index);
+        let mut files: Vec<duplicate_sets::SetFile> = Vec::new();
+        for f in faces {
+            let face = duplicate_sets::SetFace {
+                face: f.detail.face.id,
+                name: f.detail.face.postscript_name.clone(),
+                version: f
+                    .detail
+                    .version
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(str::to_owned),
+            };
+            if let Some(file) = files.iter_mut().find(|x| x.path == f.detail.path) {
+                file.faces.push(face);
+                continue;
+            }
+            let kind = source(f.source).map(|s| s.kind);
+            files.push(duplicate_sets::SetFile {
+                path: f.detail.path.clone(),
+                size: f.detail.file_size,
+                hash: f.detail.hash.clone(),
+                format: Some(f.detail.face.format),
+                source: f.source,
+                in_library_folder: kind == Some(SourceKind::LibraryFolder),
+                system: kind == Some(SourceKind::System),
+                faces: vec![face],
+            });
+        }
+        Ok(files)
+    }
+}
+
 impl LibraryService for MockApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
         Ok(AppInfo {
@@ -2050,51 +2105,35 @@ impl LibraryService for MockApi {
     }
 
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
-        let st = self.state();
-        if let DuplicateScope::Source { source } = req.scope
-            && !st.sources.iter().any(|s| s.id == source)
-        {
-            return Err(ApiError::not_found(format!("Source {source}")));
-        }
-        let source = |id: SourceId| st.sources.iter().find(|s| s.id == id);
-        // One file per path, its faces in collection order, as fm-core reads them.
-        let mut faces: Vec<&MockFace> = st
-            .faces
-            .iter()
-            .filter(|f| source(f.source).is_some_and(|s| !s.paused))
-            .filter(|f| !st.trashed.contains(&f.detail.path))
-            .collect();
-        faces.sort_by_key(|f| f.detail.collection_index);
-        let mut files: Vec<duplicate_sets::SetFile> = Vec::new();
-        for f in faces {
-            let face = duplicate_sets::SetFace {
-                face: f.detail.face.id,
-                name: f.detail.face.postscript_name.clone(),
-                version: f
-                    .detail
-                    .version
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|v| !v.is_empty())
-                    .map(str::to_owned),
-            };
-            if let Some(file) = files.iter_mut().find(|x| x.path == f.detail.path) {
-                file.faces.push(face);
-                continue;
-            }
-            let kind = source(f.source).map(|s| s.kind);
-            files.push(duplicate_sets::SetFile {
-                path: f.detail.path.clone(),
-                size: f.detail.file_size,
-                hash: f.detail.hash.clone(),
-                format: Some(f.detail.face.format),
-                source: f.source,
-                in_library_folder: kind == Some(SourceKind::LibraryFolder),
-                system: kind == Some(SourceKind::System),
-                faces: vec![face],
-            });
-        }
+        let files = self.duplicate_set_files(&req.scope)?;
         Ok(duplicate_sets::list(&files, &req))
+    }
+
+    /// The mock has no facts of the copies (no index), so it answers as the
+    /// policy does with none: every set with a copy outside the system
+    /// folders gets a keeper, none is "keep both", and no recommendation
+    /// changes. fm-core answers from the index.
+    fn preview_keeper_policy(
+        &self,
+        req: PreviewKeeperPolicyRequest,
+    ) -> ApiResult<KeeperPolicyPreview> {
+        req.policy.check()?;
+        let files = self.duplicate_set_files(&req.scope)?;
+        let sets = duplicate_sets::sets(&files, &req.scope);
+        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+        Ok(KeeperPolicyPreview {
+            sets: count(sets.len()),
+            with_keeper: count(
+                sets.iter()
+                    .filter(|s| s.copies.iter().any(|c| !c.system))
+                    .count(),
+            ),
+            keep_both: 0,
+            changed: 0,
+            my_languages: crate::settings::MyLanguagesStatus::of(
+                &self.state().settings.my_languages,
+            ),
+        })
     }
 
     fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison> {
