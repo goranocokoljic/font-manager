@@ -1079,6 +1079,86 @@ export type DuplicateLayoutRequest = {
 	name?: string | null,
 };
 
+/**  How much the copies of a duplicate set are the same (E56.1, ADR 0027). */
+export type DuplicateLevel = 
+/**  The same file (the same hash) at different paths. */
+"identical" | 
+/**  The same PostScript name and the same version in files that differ. */
+"sameVersion" | 
+/**  The same PostScript name in files whose versions differ. */
+"otherVersion";
+
+/**  Which files a duplicate listing looks at. */
+export type DuplicateScope = 
+/**  Every file the library shows. */
+{ kind: "library" } | 
+/**  The files of one source. */
+{ kind: "source"; 
+/**  The source. */
+source: SourceId } | 
+/**  The files in one folder and its subfolders. */
+{ kind: "folder"; 
+/**  Absolute folder path. */
+path: string };
+
+/**
+ *  Files that hold the same font, at one [`DuplicateLevel`] (E56.1). The
+ *  set chooses no keeper and calls no copy older or newer.
+ */
+export type DuplicateSet = {
+	/**  Stable id: `identical:<hash>` or `name:<PostScript name>`. */
+	id: string,
+	/**  How much the copies are the same. */
+	level: DuplicateLevel,
+	/**
+	 *  The PostScript name the copies share (for an identical set, the first
+	 *  face's), when there is one.
+	 */
+	postscriptName: string | null,
+	/**  The copies are not all of one file format. */
+	formatsDiffer: boolean,
+	/**  The copies, two or more, by path. */
+	copies: DuplicateSetCopy[],
+};
+
+/**  One copy of a duplicate set: one file, for the face the set is about. */
+export type DuplicateSetCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  File size in bytes. */
+	size: number,
+	/**  blake3 hash of the file, hex; equal hashes are identical files. */
+	hash: string,
+	/**
+	 *  The face the set is about (the first face for an identical set),
+	 *  when the file parsed far enough to have one.
+	 */
+	face: FaceId | null,
+	/**  Version string (name ID 5) of that face. */
+	version: string | null,
+	/**  The file format, when the file is a font. */
+	format: FontFormat | null,
+	/**  The source the file was found in. */
+	source: SourceId,
+	/**  The source is the library folder. */
+	inLibraryFolder: boolean,
+	/**
+	 *  The file is in a system font folder: it is listed, and it can never
+	 *  be chosen for removal (CLAUDE.md rule 4).
+	 */
+	system: boolean,
+	/**  The file is in the scope of the request. */
+	inScope: boolean,
+	/**  The other copies of this set that are the same file (the same hash). */
+	identicalWith: string[],
+	/**
+	 *  The ids of the other sets this file takes part in (a collection file
+	 *  with several faces): a plan must not trash it for one set while
+	 *  another keeps it.
+	 */
+	otherSets: string[],
+};
+
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
 /**  Installable: no restriction. */
@@ -2656,6 +2736,17 @@ export type ListCatalogFamiliesRequest = {
 	 */
 	query?: string,
 	/**  The window; `limit` is capped at 500. */
+	page?: Page,
+};
+
+/**  One page of duplicate sets ([`LibraryService::list_duplicate_sets`]). */
+export type ListDuplicateSetsRequest = {
+	/**
+	 *  The files to look at; the whole library by default. A set is listed
+	 *  when one of its copies is in the scope, with all its copies.
+	 */
+	scope?: DuplicateScope,
+	/**  The window into the sets. */
 	page?: Page,
 };
 

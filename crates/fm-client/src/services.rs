@@ -54,6 +54,7 @@ service!(LibraryService {
     get_face(face: FaceId) -> FaceDetail;
     list_problems() -> Vec<Problem>;
     list_duplicates() -> Vec<DuplicateGroup>;
+    list_duplicate_sets(req: ListDuplicateSetsRequest) -> Paged<DuplicateSet>;
     keep_copy(req: KeepCopyRequest) -> Resolution;
     list_resolutions() -> Vec<Resolution>;
     undo_resolution(resolution: ResolutionId) -> Resolution;

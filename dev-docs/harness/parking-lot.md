@@ -551,3 +551,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E55.10 #649] apps/desktop/src/stores/updates.ts:110 — fm-api has no settings-changed event, so an update level changed through the CLI, MCP or endpoint while Settings → About is open stays stale until the view mounts again.
 - [E55.10 #649] apps/desktop/src/views/SettingsView.vue:136 — `choose()` for the other settings radios ignores a failed save, so those radios can show an unsaved value.
 - [E55.10 #649] apps/desktop/src/stores/setup.ts:199 — the setup step toggles only `checkUpdatesAutomatically`; a leftover `installUpdatesOnQuit=true` brings back the install-on-quit level when setup turns the check on again.
+
+## 2026-11-20
+
+- [E56.1 #661] crates/fm-core/src/api.rs:924 — `add_source` makes every folder `Watched` and never refuses an OS font folder, so no `system` source exists in a real index and the Sources "System fonts" card never shows outside the mock.
+- [E56.1 #661] apps/desktop/src/api/mock.ts:1515 — `compareNatural` compares digit runs with `Number` (loses precision past 2^53), unlike the Rust u64 rule and the new `versionKey`.
+- [E56.1 #661] crates/fm-core/src/index/duplicates.rs:66 — SQLite `trim()` strips only spaces, so a shown `version` can keep a tab or newline the mocks strip (the version key is the same).
+- [E56.1 #661] apps/desktop/src/api/mock.ts:4770 — the TS mock's `keepCopy` never skips an active or a system copy, unlike fm-core and the Rust mock; unreachable with today's mock data.

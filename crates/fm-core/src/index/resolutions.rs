@@ -26,6 +26,8 @@ pub(crate) struct CopyFile {
     pub faces: Vec<FaceId>,
     /// The app activated one of its faces.
     pub active: bool,
+    /// It is in a system font folder (CLAUDE.md rule 4).
+    pub system: bool,
 }
 
 /// One copy of a stored action: the API row plus what undo needs.
@@ -50,11 +52,19 @@ SELECT EXISTS (SELECT 1 FROM activation JOIN face ON face.id = activation.face_i
 impl Index {
     /// The library files (not gone) shown as `paths` (the lossy display form
     /// [`Index::duplicates`] uses), by display path. A path no file has is
-    /// missing from the map.
-    pub(crate) fn copy_files(&self, paths: &[&str]) -> FmResult<HashMap<String, CopyFile>> {
+    /// missing from the map. A file is a system copy when its source is the
+    /// system fonts or its path is in one of `system`.
+    pub(crate) fn copy_files(
+        &self,
+        paths: &[&str],
+        system: &[PathBuf],
+    ) -> FmResult<HashMap<String, CopyFile>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, path FROM font_file WHERE gone = 0")
+            .prepare(
+                "SELECT font_file.id, font_file.path, source.kind = 'system' FROM font_file
+                 JOIN source ON source.id = font_file.source_id WHERE font_file.gone = 0",
+            )
             .map_err(|e| db_error(&e))?;
         let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
         let mut found = Vec::new();
@@ -62,11 +72,18 @@ impl Index {
             let path = path_from_sql(row.get_ref(1).map_err(|e| db_error(&e))?)?;
             let shown = path.to_string_lossy().into_owned();
             if paths.contains(&shown.as_str()) {
-                found.push((row.get::<_, i64>(0).map_err(|e| db_error(&e))?, path, shown));
+                let system: bool = row.get::<_, bool>(2).map_err(|e| db_error(&e))?
+                    || crate::duplicate_sets::in_system_folder(&path, system);
+                found.push((
+                    row.get::<_, i64>(0).map_err(|e| db_error(&e))?,
+                    path,
+                    shown,
+                    system,
+                ));
             }
         }
         let mut out = HashMap::new();
-        for (id, path, shown) in found {
+        for (id, path, shown, system) in found {
             let faces = self
                 .conn
                 .prepare_cached(FILE_FACES)
@@ -85,6 +102,7 @@ impl Index {
                     path,
                     faces,
                     active,
+                    system,
                 },
             );
         }

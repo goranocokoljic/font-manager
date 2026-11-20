@@ -21,7 +21,9 @@ export const SCHEMA = 1;
  * glyph_geometry: E49.3, the geometry of the 15 trait glyphs of one face under 2 ms;
  * trait_pass: E49.4, the glyph trait pass over a 10k library under 60 s, scaled like first_scan;
  * trait_search: E49.5, a search by glyph traits with filters and an order under 50 ms;
- * similar_glyph: E49.8, 20 faces ranked by one glyph's distance from cached descriptors under 150 ms).
+ * similar_glyph: E49.8, 20 faces ranked by one glyph's distance from cached descriptors under 150 ms;
+ * duplicate_sets: E56.1, one page of list_duplicate_sets over the reference library with one
+ * of its folders copied beside it, under 500 ms (ADR 0027)).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
@@ -44,6 +46,7 @@ export const BUDGETS = {
   trait_pass: { unit: 'ms', target: 60000 },
   trait_search: { unit: 'ms', target: 50 },
   similar_glyph: { unit: 'ms', target: 150 },
+  duplicate_sets: { unit: 'ms', target: 500 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];

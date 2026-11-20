@@ -19,6 +19,7 @@ import {
   wallProblems,
   type WallLibrary,
 } from './mockWall';
+import { listDuplicateSets, type SetFile } from './mockDuplicates';
 import {
   API_VERSION,
   type ActivationMode,
@@ -1176,6 +1177,11 @@ export interface MockOptions {
   extraProblems?: Problem[];
   /** Duplicate groups (files the mock has no face for), keeper first. */
   duplicates?: DuplicateGroup[];
+  /**
+   * Other files of a sample face's font (E56.1), as the Rust mock's `add_copy` (no
+   * `hash`: the same file) and `add_file_of` (another hash, and a version when given).
+   */
+  copies?: { face: FaceId; path: string; hash: string | null; version: string | null }[];
   /** Sidecar conflicts waiting for the user (none by default); each is a Problems entry too. */
   sidecarConflicts?: SidecarConflict[];
   /** Project sets (none by default). */
@@ -2993,6 +2999,47 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     const favorite = options.favoriteFaces?.includes(f.face.id) ?? false;
     return tags || favorite ? { ...f, tags: [...(tags ?? f.tags)], favorite } : f;
   });
+  for (const c of options.copies ?? []) {
+    const of = faces.find((f) => f.face.id === c.face);
+    if (!of) continue;
+    const copy = structuredClone(of);
+    copy.face.id = ++nextId;
+    copy.path = c.path;
+    if (c.hash != null) copy.hash = c.hash;
+    if (c.version != null) copy.version = c.version;
+    faces.push(copy);
+  }
+  // The files the library shows, as fm-core reads them for the duplicate sets: one
+  // per path, its faces in collection order. Every sample face is in source 1.
+  const setFiles = (): SetFile[] => {
+    const home = sources.find((s) => s.id === 1);
+    if (!home || home.paused) return [];
+    const out: SetFile[] = [];
+    const shown = faces
+      .filter((f) => !trashed.has(f.path))
+      .sort((a, b) => a.collectionIndex - b.collectionIndex);
+    for (const f of shown) {
+      const face = {
+        face: f.face.id,
+        name: f.face.postscriptName,
+        version: f.version?.trim() || null,
+      };
+      const file = out.find((x) => x.path === f.path);
+      if (file) file.faces.push(face);
+      else
+        out.push({
+          path: f.path,
+          size: f.fileSize,
+          hash: f.hash,
+          format: f.face.format,
+          source: home.id,
+          inLibraryFolder: home.kind === 'libraryFolder',
+          system: home.kind === 'system',
+          faces: [face],
+        });
+    }
+    return out;
+  };
   // The wall's watched folder holds its own faces.
   const wallFolder = sources.find((s) => s.kind === 'watched');
   if (options.library === 'wall' && wallFolder) wallFolder.faceCount = faces.length;
@@ -4710,6 +4757,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       })),
     ],
     listDuplicates: async () => duplicates(),
+    listDuplicateSets: async (req) => {
+      const scope = req.scope;
+      if (scope?.kind === 'source' && !sources.some((s) => s.id === scope.source))
+        throw {
+          code: 'notFound' as const,
+          message: `Source ${scope.source} was not found.`,
+          detail: null,
+        };
+      return structuredClone(listDuplicateSets(setFiles(), req));
+    },
     keepCopy: async (req) => {
       // The rule of `KeepCopyRequest::check`: only a copy listed with the keeper moves.
       const groups = duplicates().filter((g) => g.copies.some((c) => c.path === req.keep));

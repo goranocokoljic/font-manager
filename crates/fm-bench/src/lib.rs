@@ -22,7 +22,8 @@ use fm_api::common::{Classification, Page};
 use fm_api::ids::FaceId;
 use fm_api::layout::{ExportLayoutPngRequest, LayoutFont, LayoutService, LayoutSurface};
 use fm_api::library::{
-    FamilyOrder, FamilySortKey, LibraryService, ListFamiliesRequest, SourceKind,
+    FamilyOrder, FamilySortKey, LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest,
+    SourceKind,
 };
 use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
@@ -1382,3 +1383,104 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests;
+
+/// What the duplicate-set listing measured (E56.1).
+#[derive(Debug, Serialize)]
+pub struct DuplicatesTimed {
+    /// The library folder copied beside the library.
+    pub copied_folder: String,
+    /// Font files in the copy.
+    pub copied_files: usize,
+    /// Sets in the whole library.
+    pub sets: u32,
+    /// Timed listings.
+    pub samples: usize,
+    /// The first listing (not budgeted, as every other first call).
+    pub first_ms: f64,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds: the budgeted number.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// The library's first subfolder by name: the one [`duplicates`] copies.
+pub fn first_subfolder(library: &Path) -> BenchResult<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(library)?
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .map(|e| e.path())
+        .collect();
+    dirs.sort();
+    dirs.into_iter()
+        .next()
+        .ok_or_else(|| format!("{} has no subfolder to copy", library.display()).into())
+}
+
+fn copy_tree(from: &Path, to: &Path) -> BenchResult<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)?.flatten() {
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Copies the library's first subfolder into `<home>/duplicates` (once),
+/// indexes the copy as a second watched folder, then times one page of
+/// `list_duplicate_sets` over the whole library `rounds` times after one
+/// untimed listing. Run it after the other measurements: the copy adds files
+/// to the bench index.
+pub fn duplicates(library: &Path, home: &Path, rounds: usize) -> BenchResult<DuplicatesTimed> {
+    let paths = home_paths(home);
+    let mut index = startup::open_index(&paths)?.index;
+    let folder = first_subfolder(library)?;
+    let name = folder
+        .file_name()
+        .ok_or("the copied folder has no name")?
+        .to_owned();
+    let copy = home.join("duplicates").join(&name);
+    if !copy.exists() {
+        copy_tree(&folder, &copy)?;
+    }
+    let wanted = copy.to_string_lossy().into_owned();
+    let source = match index.sources()?.into_iter().find(|s| s.path == wanted) {
+        Some(s) => s.id,
+        None => index.add_source(&wanted, SourceKind::Watched)?.id,
+    };
+    let files = index.load_files()?;
+    let scanned = rescan(&mut index, source, &copy, files)?;
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let req = ListDuplicateSetsRequest::default();
+    let begin = Instant::now();
+    let first = api.list_duplicate_sets(req.clone())?;
+    let first_ms = ms(begin.elapsed());
+    let mut samples = Vec::with_capacity(rounds);
+    for _ in 0..rounds {
+        let begin = Instant::now();
+        api.list_duplicate_sets(req.clone())?;
+        samples.push(ms(begin.elapsed()));
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(DuplicatesTimed {
+        copied_folder: name.to_string_lossy().into_owned(),
+        copied_files: scanned.added + scanned.changed + scanned.unchanged,
+        sets: first.total,
+        samples: samples.len(),
+        first_ms,
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
+    })
+}

@@ -1,0 +1,117 @@
+{
+  "copies": [
+    {
+      "face": 6,
+      "path": "/Users/demo/Downloads/JetBrainsMono-Regular.ttf",
+      "hash": null,
+      "version": null
+    },
+    {
+      "face": 1,
+      "path": "/Users/demo/Fonts/Old/Inter-Regular.ttf",
+      "hash": "1f00d",
+      "version": null
+    },
+    {
+      "face": 1,
+      "path": "/Users/demo/Fonts/Older/Inter-Regular.ttf",
+      "hash": "2beef",
+      "version": "Version 0.9"
+    }
+  ],
+  "sets": {
+    "items": [
+      {
+        "copies": [
+          {
+            "face": 1,
+            "format": "ttf",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000001",
+            "identicalWith": [],
+            "inLibraryFolder": false,
+            "inScope": true,
+            "otherSets": [],
+            "path": "/Users/demo/Fonts/Inter/Inter[wght].ttf",
+            "size": 121000,
+            "source": 1,
+            "system": false,
+            "version": "Version 1.000"
+          },
+          {
+            "face": null,
+            "format": "ttf",
+            "hash": "1f00d",
+            "identicalWith": [],
+            "inLibraryFolder": false,
+            "inScope": true,
+            "otherSets": [],
+            "path": "/Users/demo/Fonts/Old/Inter-Regular.ttf",
+            "size": 121000,
+            "source": 1,
+            "system": false,
+            "version": "Version 1.000"
+          },
+          {
+            "face": null,
+            "format": "ttf",
+            "hash": "2beef",
+            "identicalWith": [],
+            "inLibraryFolder": false,
+            "inScope": true,
+            "otherSets": [],
+            "path": "/Users/demo/Fonts/Older/Inter-Regular.ttf",
+            "size": 121000,
+            "source": 1,
+            "system": false,
+            "version": "Version 0.9"
+          }
+        ],
+        "formatsDiffer": false,
+        "id": "name:Inter-Regular",
+        "level": "otherVersion",
+        "postscriptName": "Inter-Regular"
+      },
+      {
+        "copies": [
+          {
+            "face": null,
+            "format": "ttf",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000006",
+            "identicalWith": [
+              "/Users/demo/Fonts/JetBrainsMono-Regular.ttf"
+            ],
+            "inLibraryFolder": false,
+            "inScope": true,
+            "otherSets": [],
+            "path": "/Users/demo/Downloads/JetBrainsMono-Regular.ttf",
+            "size": 126000,
+            "source": 1,
+            "system": false,
+            "version": "Version 1.000"
+          },
+          {
+            "face": 6,
+            "format": "ttf",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000006",
+            "identicalWith": [
+              "/Users/demo/Downloads/JetBrainsMono-Regular.ttf"
+            ],
+            "inLibraryFolder": false,
+            "inScope": true,
+            "otherSets": [],
+            "path": "/Users/demo/Fonts/JetBrainsMono-Regular.ttf",
+            "size": 126000,
+            "source": 1,
+            "system": false,
+            "version": "Version 1.000"
+          }
+        ],
+        "formatsDiffer": false,
+        "id": "identical:0000000000000000000000000000000000000000000000000000000000000006",
+        "level": "identical",
+        "postscriptName": "JetBrainsMono-Regular"
+      }
+    ],
+    "total": 2
+  }
+}

@@ -54,6 +54,7 @@ import type {
   DocumentFontsCheck,
   DocumentFontsRequest,
   DuplicateGroup,
+  DuplicateSet,
   Event,
   FaceDetail,
   FaceId,
@@ -86,6 +87,7 @@ import type {
   LayoutEntry,
   LayoutRef,
   LayoutVersion,
+  ListDuplicateSetsRequest,
   ListFamiliesRequest,
   RestoreLayoutRequest,
   ExportLayoutPngRequest,
@@ -361,6 +363,8 @@ export interface FmClient {
   listProblems(): Promise<Problem[]>;
   /** Duplicate groups, each with its recommended keeper first. */
   listDuplicates(): Promise<DuplicateGroup[]>;
+  /** One page of duplicate sets: identical files, the same version, another version (E56.1). */
+  listDuplicateSets(req: ListDuplicateSetsRequest): Promise<Paged<DuplicateSet>>;
   /** "Keep this one": moves the other copies to the OS trash; `dryRun` only plans. */
   keepCopy(req: KeepCopyRequest): Promise<Resolution>;
   /** The "Keep this one" actions, newest first (the Problems history). */
@@ -566,6 +570,7 @@ export const tauriClient: FmClient = {
   checkDocumentFonts: (req) => invoke<DocumentFontsCheck>('check_document_fonts', { req }),
   listProblems: () => invoke<Problem[]>('list_problems'),
   listDuplicates: () => invoke<DuplicateGroup[]>('list_duplicates'),
+  listDuplicateSets: (req) => invoke<Paged<DuplicateSet>>('list_duplicate_sets', { req }),
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
