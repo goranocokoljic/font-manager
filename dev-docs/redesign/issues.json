@@ -1816,6 +1816,296 @@
           ]
         }
       ]
+    },
+    {
+      "id": "E56",
+      "title": "Duplicates — a module for cleaning up a large collection without losing anything",
+      "phase": 3,
+      "track": "core",
+      "milestone": "Launch",
+      "depends": [
+        "E51",
+        "E54"
+      ],
+      "labels": [
+        "launch"
+      ],
+      "summary": "Today duplicates are one section of the Problems view, reached from Settings › Sources. Detection (E8.1, crates/fm-core/src/index/duplicates.rs) knows two cases: the same file at two paths, and the same PostScript name with the same version in files that differ. Resolution (E8.3) is 'Keep this one', one group at a time, with a fixed keeper rule: newest version, then the library folder, then the path. Three things are missing for a collection that grew over twenty years. (1) Two versions of one font are not found at all, because a group needs the same version; this is the most common case in an old collection. (2) Favorite, rating, notes, tags, collections and sets are stored per face (user_meta, face_tag, collection_face, set_face), so they stay on the copy that goes to the trash and the kept copy has none of them. (3) Thousands of groups cannot be decided one by one. The other font managers do not solve this either: Typeface groups by PostScript name and selects by format, location or folder; MainType ranks by version, variable, dates, glyph and character counts and file size; FontBase shows duplicates only on a family's page; Connect Fonts and FontAgent offer a search; RightFont skips a known PostScript name at import. None shows what differs between two copies, none carries the user's metadata to the kept copy, none works on whole folders, and none knows which languages a copy supports. This epic builds the module on what is there: the index, the hashes, the language coverage with its `locl` flag (crates/fm-core/src/coverage.rs), the OS trash (ADR 0009) and the undo log (resolution, resolution_move). The core decides everything: the levels of sameness, what differs between copies, the keeper policy with the user's languages, the merge of metadata, the overlap of folders, the plan of a cleanup and its undo. The app, the CLI and MCP show and apply it. Nothing is ever removed without the user's confirmation, removal means the OS trash, and a copy can also be hidden without touching its file (rule 2).",
+      "stories": [
+        {
+          "id": "E56.1",
+          "title": "Levels of sameness: identical files, the same version, another version",
+          "size": "L",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "fm-api gains an additive request that lists duplicate sets; the types `DuplicateGroup`, `DuplicateCopy` and `KeepCopyRequest` do not change, and `list_duplicates` lists the groups it lists today (which copy it marks as keeper is E56.4's subject)",
+            "a set has one of three levels: `identical` (the same hash at different paths); `sameVersion` (the same PostScript name and the same version in files that differ, a set that also says whether its copies differ in format); `otherVersion` (the same PostScript name in files whose versions differ)",
+            "a file is listed once per font it duplicates: an identical set whose files all sit in one set of another level is not listed again, and a set with three versions of which two are the same file shows those two as identical inside it",
+            "versions are compared as today (digit runs as numbers); a copy without a version is its own value and is never called older or newer than another",
+            "a collection file (.ttc) with several faces is one copy per set it takes part in; a file that takes part in several sets says so, so that a plan never trashes it for one set while another set keeps it",
+            "only the files the library shows count (not gone, source not paused, read), as today; system font folders are listed and can never be chosen for removal (rule 4), and the answer marks such copies",
+            "the request takes a scope: the whole library, one source, or one folder with its subfolders; and it pages, so the UI never holds every set",
+            "the listing does not run at start and cold start stays under 1 s; scripts/bench.sh gains a number for the listing on the reference library with one of its folders copied beside it, the PR records it, and the ADR of this epic sets the budget from that number",
+            "MockApi and the TypeScript mock give the same sets for the same library; a test for each level, for the .ttc case and for a set of mixed levels",
+            "a new ADR, 'Duplicates', records the levels, why two versions are now a duplicate set, what is out of scope (fonts that only look alike), and the date (Goran, 20 Nov 2026)"
+          ]
+        },
+        {
+          "id": "E56.2",
+          "title": "What differs between the copies",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E56.1"
+          ],
+          "criteria": [
+            "each copy of a set carries the facts a decision needs: path, source, format, version, file size, modified date, number of glyphs, whether it is variable and its axes, its OpenType features, whether the app activated it, whether a document asked for it (activation_document), and whether the user put a favorite, a rating, tags, notes, a collection or a set on it",
+            "each copy carries its languages from the index's coverage (the presets in data/charsets): which it covers in full, and for which it has `locl` forms; nothing is computed in the adapter or the UI",
+            "an additive request compares two copies of a set and answers in words a user reads: languages gained and lost, glyphs added and removed (the counts and the first of each), features added and removed, axes added and removed, and whether the vertical metrics, the units per em or the advance widths of shared glyphs changed",
+            "when the metrics or advance widths changed the answer says that text set in the other copy may reflow; when nothing but the container differs (the same outlines and tables in OTF and TTF or WOFF) it says so",
+            "the comparison reads the two files on demand and parses with fontations; a file that does not parse gives `Health::Broken` for that copy and a comparison that says which side could not be read, never a panic",
+            "a comparison of two faces of the reference library answers within the budget the ADR sets; the PR records the number",
+            "tests on fixtures/fonts: two versions where the newer adds a language, two where the newer loses glyphs, two with changed metrics, and one pair that differs only in format"
+          ]
+        },
+        {
+          "id": "E56.3",
+          "title": "The languages you work in",
+          "size": "S",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "the settings gain the languages the user works in: a list of preset ids from `list_languages`, empty by default, added with `#[serde(default)]`; an id that no longer exists is dropped on read and reported once",
+            "fm-api sets and reads the list; it is stored in config.json, never in localStorage",
+            "with the list empty every rule and guard of this epic that names 'my languages' does nothing, and the answer says that no language is set, so the UI can offer to set them",
+            "MockApi and the TypeScript mock follow; `pnpm gen:types` only adds lines"
+          ]
+        },
+        {
+          "id": "E56.4",
+          "title": "Keeper policy: an ordered list of rules, with the language guard",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E56.1",
+            "E56.2",
+            "E56.3"
+          ],
+          "criteria": [
+            "the policy is an ordered list of rules stored in config.json through fm-api; a copy that wins a rule wins the set, a tie goes to the next rule, and the last rule is always the path A to Z so that the answer never depends on chance",
+            "the rules: covers more of my languages; has `locl` forms for more of my languages; newest version; format in an order the user sets (default OpenType CFF, TrueType, WOFF2, WOFF, Type 1); variable over static; most glyphs; in a folder the user prefers (an ordered list of folders); in the library folder; carries the user's metadata; active or asked for by a document",
+            "the default policy is: covers my languages, newest version, format, the library folder, path; with no language set it gives, for every set that `list_duplicates` also lists, the keeper that `choose_keeper` gives (a test over the fixtures)",
+            "the language guard is not a rule and cannot be turned off by the order: when a copy is the only one of its set that covers one of my languages in full, it is never recommended for removal; a set in which no copy covers everything the others cover is answered as 'keep both' with the languages each side alone has",
+            "every recommendation carries its reason as data (the rule that decided and the values compared), so the UI, the CLI and MCP say the same sentence: 'kept: covers Serbian Cyrillic, the other copy does not'",
+            "an additive request previews a policy without saving it: for a scope, how many sets get a keeper, how many are 'keep both', and how many recommendations change against the saved policy",
+            "the policy never applies to a copy in a system font folder, and never recommends removing the last copy of a font",
+            "`list_duplicates`, `fm doctor` and `list_problems` take their keeper from the saved policy and the guard (Goran, 20 Nov 2026), so the Problems view, the CLI and the module never recommend different copies of one set; no type changes: the keeper is still first and marked `keep`, and in a set answered 'keep both' every protected copy is marked `keep` and is no Problems entry; `choose_keeper` stays as the rule of the default policy with no language set",
+            "the ADR records the policy, its default, the guard and why it is not a rule, and that the keeper of the existing requests follows the policy from this version on"
+          ]
+        },
+        {
+          "id": "E56.5",
+          "title": "Nothing you made is lost: the kept copy takes over the metadata",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E56.1"
+          ],
+          "criteria": [
+            "a test first shows today's behaviour: after `keep_copy`, a favorite, a rating, a tag, a note, a collection and a set put on the trashed copy are not on the kept copy; the PR records the result, and if the test shows they already move, this story shrinks to the cases below that fail",
+            "before a copy leaves the library (trash or hide), the faces of the kept copy take over what the user put on the matching faces of that copy; faces match by PostScript name, so a .ttc and loose files match face by face",
+            "tags, manual collections and sets are joined; favorite is on when any copy has it; rating, license and notes keep the kept copy's value when it has one and take the other's when it has none",
+            "where both copies have different ratings, licenses or notes, nothing is guessed: the plan lists the difference as a conflict with both values, the kept copy's value is the default, and the user can take the other one before applying; notes of the other copy are never dropped silently",
+            "the merge, the move and the undo log are one transaction: when the move fails, the kept copy's metadata is as it was",
+            "undo puts both sides back exactly: the restored copy has its metadata again and the kept copy has what it had before, also when the user changed the kept copy in between (what the user changed after the cleanup stays; only what the merge added is taken away)",
+            "the sidecars of both sources are written through the existing sidecar path (E7.3), so another machine that syncs the folder sees the merge and not a conflict",
+            "the merge runs for every resolution, `keep_copy` included (Goran, 20 Nov 2026): what an existing request does changes, no type changes, and the ADR records it",
+            "tests: each field alone, a conflict on each single-value field, a .ttc against loose files, undo after a later change, and a failed move"
+          ]
+        },
+        {
+          "id": "E56.6",
+          "title": "Folders that hold the same fonts",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E56.1"
+          ],
+          "criteria": [
+            "an additive request lists pairs of folders that share copies: for folder A against folder B, how many of A's font files have a copy in B at each level, how many files A has in all, and the size of the shared files",
+            "a folder all of whose font files have an identical copy in the other folder is marked 'contained'; when every subfolder of a folder is contained in the matching part of the other tree, the pair is reported once at the highest such folder, not once per subfolder",
+            "pairs are ordered by the size that removing the smaller side would free; a pair below a threshold of shared files (set in the ADR, default five) is not listed; the request pages",
+            "the answer names for each pair what is only in A and only in B (counts, and the files through a second request), so the user sees what would be lost by treating the folders as the same; files that are not fonts are counted and never touched",
+            "a folder pair is a scope for the plan (E56.7): 'keep B's copies' plans the removal of A's files that have an identical copy in B and nothing else; copies of another level in the pair are planned only when the user asks for it and then go through the policy and the guard",
+            "a source root, a system font folder and the library folder can be the kept side and never the removed side as a whole",
+            "tests: a copied folder, a copied tree with one changed file, two folders that share a third of their files, and a folder contained in two others"
+          ]
+        },
+        {
+          "id": "E56.7",
+          "title": "Plan, apply, undo: a cleanup as one session",
+          "size": "L",
+          "track": "core",
+          "depends": [
+            "E56.4",
+            "E56.5",
+            "E56.6"
+          ],
+          "criteria": [
+            "an additive request plans a cleanup for a scope (the library, a source, a folder, a folder pair, or a list of sets) and a choice (the policy, or a keeper the user picked per set); it touches nothing and answers, per file, what would happen and why: move to the trash, hide, stays",
+            "the plan lists what it will not do and the reason: a copy the app activated (rule 3), the only copy that covers one of my languages, a set answered 'keep both', a copy in a system font folder, a file that takes part in another set that keeps it, a file that is not there any more",
+            "for an identical set the plan offers to move the activation to the kept copy (deactivate the one, activate the other, both the app's own registrations); for every other level an active copy stays, as today",
+            "the plan carries the metadata conflicts of E56.5 and the space it frees; a plan can be saved as JSON and applied later, and applying checks every file again against its hash, so a file that changed since the plan is skipped and reported",
+            "applying a plan creates one session with a name and a date; files go to the OS trash through `fm_platform::Trash` (ADR 0009), never `remove_file`; progress is sent through the typed `Event` enum (a new variant; nothing existing changes) and the apply can be cancelled between files, leaving a session of what was done",
+            "sessions are listed with what they did and can be undone whole or file by file; undo follows ADR 0009 (never over a file that is at the old path again; an emptied trash is reported per file) and puts the metadata back as E56.5 says",
+            "the resolutions of `keep_copy` appear as sessions of one set, so there is one history; the existing resolution tables are extended, not replaced, and an index from an earlier version opens with its resolutions listed",
+            "a plan for a thousand files on the reference library applies within the budget the ADR sets, and the library change is one `Event::LibraryChanged` per batch, not one per file",
+            "tests: a plan that mixes all outcomes, a file changed between plan and apply, cancel in the middle, undo of a whole session, undo after the trash was emptied"
+          ]
+        },
+        {
+          "id": "E56.8",
+          "title": "Two outcomes that touch no file: hide a copy, and 'these are not duplicates'",
+          "size": "M",
+          "track": "core",
+          "depends": [
+            "E56.7"
+          ],
+          "criteria": [
+            "a copy can be hidden: its file stays where it is, its faces leave the library, search and activation lists, and it stays hidden across scans and restarts; a hidden copy is known by its path and hash, so a different file at that path is shown again",
+            "hidden copies are listed through fm-api and can be shown again one by one or by session; a hidden copy that the app activated is refused with the same message as a move",
+            "hiding carries the metadata to the kept copy exactly as a move does (E56.5), and showing again undoes that as an undo does",
+            "a set can be answered 'not duplicates' or 'keep both': the decision is remembered for exactly these files (their hashes), the set is no longer listed or counted, and it comes back when a file of it changes or a new copy joins it",
+            "remembered decisions are listed and can be taken back; they are stored in the index and written to the sidecar of the family, so a synced folder carries them to another machine",
+            "a rebuilt index reads hidden copies and decisions back from the sidecars; a test for each: hide, show again, a changed file at a hidden path, a new copy joining a 'keep both' set, and a rebuild"
+          ]
+        },
+        {
+          "id": "E56.9",
+          "title": "The same in the CLI and MCP",
+          "size": "M",
+          "track": "core",
+          "depends": [
+            "E56.7",
+            "E56.8"
+          ],
+          "criteria": [
+            "`fm duplicates list` (scope, level, `--json`), `fm duplicates folders`, `fm duplicates compare <a> <b>`, `fm duplicates plan` (scope, `--out plan.json`), `fm duplicates apply <plan.json>`, `fm duplicates sessions` and `fm duplicates undo <session>` are thin over fm-api: no rule is written in fm-cli",
+            "`apply` without `--yes` prints the plan's summary (files to the trash, hidden, skipped with reasons, space freed) and asks; it never deletes for good and has no flag that does",
+            "the human output says the reason of each recommendation in the sentence the API carries; `--json` is the API's answer unchanged",
+            "fm-mcp gains tools to list sets, list folder pairs, compare two copies and plan a cleanup; it has no tool that applies one (Goran, 20 Nov 2026: not for now), and the plan's answer says where the user applies it",
+            "`fm doctor` keeps the shape of its output, its keepers follow the policy (E56.4), and it gains one line that names `fm duplicates` when sets exist",
+            "tests against the binary for each subcommand on the fixtures; docs/user gains 'Cleaning up duplicates' with the CLI and what each level means"
+          ]
+        },
+        {
+          "id": "E56.10",
+          "title": "Board: the Duplicates module",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "DESIGN.md gets a 'Duplicates (board 14, E56)' section: the module is a full view of its own with a 232 px navigation as in Settings (Overview, Folders, Sets, Plan, History, Hidden copies; the languages the user works in at its foot, with the link to the rules); where it is opened from (the 'Duplicates' row in the sidebar's Sources group, the notice after a scan, the 'copies' mark on a family, the command palette) and why it is not part of Problems: duplicates are housekeeping, not faults, so their count is neutral and never the red dot",
+            "the same section records: the three outcomes and their words (the trash of this system, Hide, Keep), 'Keep all' and 'Not duplicates' for a whole set; the recommended copy carries the accent ring and a 'Keep' badge and its reason is one sentence under it; a missing glyph in a specimen is the accent tofu marker (E43.4), never a fallback; nothing the guard protects is preselected for removal; the module uses no control the rest of the app does not have",
+            "dev-docs/design/redesign/ gains the exports of board 14 at 2×, one per state of `Duplicates.dc.html` (`14-duplicates-overview.png`, `-folders`, `-sets`, `-compare`, `-plan`, `-applying`, `-history`, `-hidden`, `-rules`) and `14-duplicates-entry.png`, with the README table and the export date updated; the dark theme follows DESIGN.md's rules, as for boards 1 to 11",
+            "before the export the owner confirms the four states and the entry sheet that were a first pass (Applying, History, Hidden, Rules, the ways in), and the UI stories are checked against the board once more"
+          ]
+        },
+        {
+          "id": "E56.11",
+          "title": "The module: overview and the queue of sets",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E56.4",
+            "E56.7",
+            "E56.10"
+          ],
+          "criteria": [
+            "the module is a full view of its own (route `/duplicates`, like Studio) with the 232 px navigation of board 14: 'Library' to go back, then Overview, Folders, Sets, Plan, History and Hidden copies with their counts, and at its foot the languages the user works in with the link to the rules; the overview shows how many fonts have more than one copy, the extra files and the space a cleanup would free, and, while no language is set, one line that offers to set them",
+            "identical sets are offered as one decision ('1,240 identical copies in 3 folders') that opens the plan; the other levels are a queue the user works through",
+            "the queue is virtualized and pages through the API; it filters by level, source, folder, format, 'has a recommendation' and 'keep both', and sorts by name, size freed and number of copies",
+            "a set shows its copies with the recommended keeper, the reason as the API gives it, and each copy's version, format, folder and languages; the user can pick another keeper, choose hide, or answer 'keep both' or 'not duplicates'; the queue then moves on",
+            "every decision is collected into the plan and nothing moves until the plan is applied; the collected plan survives leaving the module and a restart (through fm-api, not localStorage)",
+            "the queue is keyboard-complete: next and previous set, choose a copy, each outcome, open the comparison; focus is never lost when a set leaves the queue",
+            "the component computes nothing about fonts; strings in en and de; the a11y and contrast specs pass; it matches the board within the tolerance REVIEW.md sets and moves per MOTION.md; a Playwright spec on the mock covers the overview, a decision of each kind and the filters"
+          ]
+        },
+        {
+          "id": "E56.12",
+          "title": "The folders view",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E56.6",
+            "E56.11"
+          ],
+          "criteria": [
+            "the view lists the folder pairs of E56.6, largest saving first, each with both paths, 'contained' or the share, and the size",
+            "a pair opens to what both have, what only one side has, and the copies that are not identical; 'Keep this side' adds the pair to the plan and says in one line exactly what that covers: the identical copies of the other side, nothing else",
+            "a side the API does not allow to be removed (a source root, a system font folder, the library folder) shows why and offers only to be kept",
+            "paths are shown in full on demand and can be opened in the file manager through the existing command; the list is virtualized",
+            "strings in en and de; keyboard-complete; a Playwright spec on the mock covers a contained pair, a partial pair and a refused side"
+          ]
+        },
+        {
+          "id": "E56.13",
+          "title": "Comparing two copies",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E56.2",
+            "E56.11"
+          ],
+          "criteria": [
+            "from a set the user opens two copies side by side: a specimen of each in the user's sample text, rendered by the webview through the asset protocol like the rest of the app, and the differences as the API states them",
+            "languages come first: what each copy covers of my languages, what one gains or loses against the other, and where only one has `locl` forms; the sample text can be switched to a language's sample so the difference is seen, not only named",
+            "glyphs added and removed are shown as glyphs, features and axes as lists, and changed metrics with the line that text may reflow",
+            "'Keep this one', hide, 'keep both' and 'not duplicates' are offered here as in the queue and act on the same plan",
+            "a copy that could not be read shows the API's message in its half; strings in en and de; keyboard-complete; a Playwright spec on the mock covers a language difference, a metrics change and a format-only pair"
+          ]
+        },
+        {
+          "id": "E56.14",
+          "title": "Your languages and the keeper policy",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E56.3",
+            "E56.4",
+            "E56.11"
+          ],
+          "criteria": [
+            "the module offers 'Languages I work in': a picker over the presets of `list_languages`, with search, that saves through fm-api",
+            "the policy editor shows the rules in order; they are reordered by drag and by keyboard, turned on and off, and the rules with values (format order, preferred folders) open their own short lists",
+            "the language guard is shown above the rules as always on, with one line on what it protects; it is not a row that can be moved or turned off",
+            "while the user edits, the preview of E56.4 says how many sets get a keeper, how many are 'keep both' and how many recommendations change; nothing is saved until Save, and 'Back to the default' restores the default policy",
+            "strings in en and de; a Playwright spec on the mock covers setting a language, reordering by keyboard and the preview"
+          ]
+        },
+        {
+          "id": "E56.15",
+          "title": "The plan, the sessions, and the ways into the module",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E56.7",
+            "E56.8",
+            "E56.11"
+          ],
+          "criteria": [
+            "before anything moves the plan is shown: files to the trash, files hidden, files that stay with the reason for each group of them, the metadata conflicts with both values and a choice, and the space freed; Apply names the number of files and the trash of this system",
+            "while a plan is applied the module shows progress from the events and a Cancel that stops between files; when it ends it says what was done and offers Undo",
+            "'History' lists the sessions with their date, what they did and Undo for the whole session or single files; a file that cannot come back (the trash was emptied, the path is taken) says so on its row",
+            "'Hidden copies' and 'Remembered decisions' list what E56.8 stores and take each back",
+            "the ways in, as on board 14's entry sheet: a 'Duplicates' row in the sidebar's Sources group with the number of fonts that have copies, in the neutral count style and never with the dot Problems uses, hidden while there are none; after a scan that finds copies, one notice in the app's notice style ('<folder> added · N fonts', how many are copies, Review, dismiss), once per scan, that never opens the module by itself; on a wall card and on the family page a quiet 'N copies' mark beside the style count that opens that font's set, and under Info › Files one line with 'Decide which to keep'; in the command palette 'Find duplicates' and 'Show the copies of <family>'",
+            "the Problems view keeps broken files, legacy formats and conflicts and shows one line with the number of duplicate sets that opens the module; its total and its dot no longer count duplicates; Settings › Sources links to the module instead of the Problems view; the old route `#/problems?kind=duplicates` opens the module",
+            "the UI subscribes to the events and does not poll; strings in en and de; the a11y and contrast specs pass; a Playwright spec on the mock covers a plan with a conflict, apply and cancel, undo of a session, and the three ways in"
+          ]
+        }
+      ]
     }
   ]
 }
