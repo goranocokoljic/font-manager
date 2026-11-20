@@ -559,3 +559,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E56.1 #661] crates/fm-core/src/index/duplicates.rs:66 — SQLite `trim()` strips only spaces, so a shown `version` can keep a tab or newline the mocks strip (the version key is the same).
 - [E56.1 #661] apps/desktop/src/api/mock.ts:4770 — the TS mock's `keepCopy` never skips an active or a system copy, unlike fm-core and the Rust mock; unreachable with today's mock data.
 - [E56.3 #663] crates/fm-core/src/config.rs:44 — `Config` has no catch-all for keys it does not model, so every `save` drops keys a newer version wrote; `get_settings` now also saves when it drops an unknown language id.
+- [E56.4 #664] apps/desktop/src/stores/problems.ts:197 — "Keep this one" in the Problems view sends every other copy of the group to the trash plan, without reading the keep marks of copies the language guard protects.
+- [E56.4 #664] crates/fm-core/src/index/problems.rs:46 — `Index::problems()` still uses the choose_keeper groups and has no caller outside tests; a second keeper path that can drift from `list_problems`.

@@ -1,0 +1,18 @@
+{
+  "id": "a-protection-that-must-never-remove-the-last-copy-is-decided",
+  "title": "A protection that must never remove the last copy is decided per recommendation, not by counting the whole library",
+  "category": "data-integrity",
+  "rule": "When a recommendation may not remove the last copy of something (a font held by collection files, a file several sets share), do not mark it by counting holders over the whole library ('only one file holds it'). Decide it after ranking, per recommendation: while the copies this recommendation would remove hold an item that no file outside them holds, keep the best-ranked of them, and repeat. Test it with two identical holders that are both in the removal set plus one copy that wins, and assert one holder stays.",
+  "rationale": "E56.4 (#664): fonts_only_here counted two identical .ttc files as two holders of a font, so neither was protected and the Foo set recommended removing both, the only copies of Bar (criterion 7).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    664
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**"
+  ],
+  "first_seen": "2026-11-20T21:41:27.169Z",
+  "last_seen": "2026-11-20T21:41:27.169Z"
+}
