@@ -334,3 +334,103 @@ fn head_ignores_the_checksum_and_the_woff2_transform_flag_only() {
     a[18] = 1; // units per em
     assert_ne!(head_key(&a), head_key(&b));
 }
+
+/// The variable fixture, for axis changes.
+const VARIABLE: &str = "google-repo/asapsharp/AsapSharp[wdth,wght].ttf";
+
+fn u16_at(data: &[u8], at: usize) -> usize {
+    usize::from(u16::from_be_bytes([data[at], data[at + 1]]))
+}
+
+#[test]
+fn features_added_and_removed_are_named_both_ways() {
+    // The copy renames one feature of GPOS that no other feature record
+    // carries: the original tag is removed, `zzzz` is added.
+    let dir = TempDir::new("copy-diff-features");
+    let mut sfnt = source(FONT);
+    let parsed = |sfnt: &Sfnt| {
+        let bytes = web_font::sfnt_bytes(sfnt).unwrap();
+        parser::parse(&bytes).faces.remove(0).features
+    };
+    let before = parsed(&sfnt);
+    let gpos = table(&mut sfnt, b"GPOS");
+    let list = u16_at(gpos, 6);
+    let count = u16_at(gpos, list);
+    let tag_at = |i: usize| list + 2 + i * 6;
+    let tags: Vec<[u8; 4]> = (0..count)
+        .map(|i| gpos[tag_at(i)..tag_at(i) + 4].try_into().unwrap())
+        .collect();
+    let (i, renamed) = tags
+        .iter()
+        .enumerate()
+        .find(|(_, t)| tags.iter().filter(|x| x == t).count() == 1)
+        .map(|(i, t)| (i, String::from_utf8(t.to_vec()).unwrap()))
+        .expect("a feature tag GPOS lists once");
+    gpos[tag_at(i)..tag_at(i) + 4].copy_from_slice(b"zzzz");
+    let still_there = parsed(&sfnt).contains(&renamed);
+    assert!(before.contains(&renamed));
+    let path = write_sfnt(&dir, "features.ttf", &sfnt);
+
+    let c = compare(&target(1, &fixture(FONT), 0), &target(2, &path, 0));
+    let d = diff(&c);
+    assert_eq!(d.features_added, ["zzzz"]);
+    if still_there {
+        // GSUB has the tag too: nothing of it is removed.
+        assert!(d.features_removed.is_empty(), "{:?}", d.features_removed);
+    } else {
+        assert_eq!(d.features_removed, std::slice::from_ref(&renamed));
+        assert!(
+            c.summary.contains(&format!(
+                "OpenType features only the first copy has: {renamed}."
+            )),
+            "{:?}",
+            c.summary
+        );
+    }
+    assert!(
+        c.summary
+            .contains(&"OpenType features only the second copy has: zzzz.".to_owned()),
+        "{:?}",
+        c.summary
+    );
+    assert!(d.axes_added.is_empty() && d.axes_removed.is_empty());
+
+    // The other way round, added and removed swap.
+    let back = compare(&target(2, &path, 0), &target(1, &fixture(FONT), 0));
+    assert_eq!(diff(&back).features_removed, ["zzzz"]);
+    assert_eq!(diff(&back).features_added, d.features_removed);
+}
+
+#[test]
+fn axes_added_and_removed_are_named_both_ways() {
+    // The copy renames the first axis in `fvar`.
+    let dir = TempDir::new("copy-diff-axes");
+    let mut sfnt = source(VARIABLE);
+    let fvar = table(&mut sfnt, b"fvar");
+    let axes = u16_at(fvar, 4);
+    let first = String::from_utf8(fvar[axes..axes + 4].to_vec()).unwrap();
+    fvar[axes..axes + 4].copy_from_slice(b"TEST");
+    let path = write_sfnt(&dir, "axes.ttf", &sfnt);
+
+    let c = compare(&target(1, &fixture(VARIABLE), 0), &target(2, &path, 0));
+    let d = diff(&c);
+    assert_eq!(first, "wght");
+    assert_eq!(d.axes_added, ["TEST"]);
+    assert_eq!(d.axes_removed, ["wght"]);
+    assert!(d.features_added.is_empty() && d.features_removed.is_empty());
+    assert!(
+        c.summary
+            .contains(&"Variation axes only the second copy has: TEST.".to_owned()),
+        "{:?}",
+        c.summary
+    );
+    assert!(
+        c.summary
+            .contains(&"Variation axes only the first copy has: wght.".to_owned()),
+        "{:?}",
+        c.summary
+    );
+    let back = compare(&target(2, &path, 0), &target(1, &fixture(VARIABLE), 0));
+    assert_eq!(diff(&back).axes_added, ["wght"]);
+    assert_eq!(diff(&back).axes_removed, ["TEST"]);
+}
