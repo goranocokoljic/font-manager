@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 
 /// The JSON key of `Settings::start_at_login`, left out of the file.
 const START_AT_LOGIN_KEY: &str = "startAtLogin";
+/// The JSON key of `Settings::dropped_languages`, an answer of one read,
+/// left out of the file.
+const DROPPED_LANGUAGES_KEY: &str = "droppedLanguages";
 
 /// The app's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,9 +113,11 @@ impl Config {
             ApiError::new(ErrorCode::Internal, failed).with_detail(e.to_string())
         };
         let mut value = serde_json::to_value(self).map_err(internal)?;
-        // The login state is the OS's login entry (ADR 0011), never stored.
+        // The login state is the OS's login entry (ADR 0011), never stored;
+        // the dropped language ids are reported by one read, never stored.
         if let Some(map) = value.as_object_mut() {
             map.remove(START_AT_LOGIN_KEY);
+            map.remove(DROPPED_LANGUAGES_KEY);
         }
         let json = serde_json::to_string_pretty(&value).map_err(internal)?;
         let tmp = path.with_extension("json.tmp");

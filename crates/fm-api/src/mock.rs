@@ -84,7 +84,7 @@ use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
     McpClient, McpConfirmationAnswer, McpGrant, McpGrantUpdate, McpSnippet, McpStatus, McpToolCall,
     McpUpdate, Settings, SettingsUpdate, ThemeDefinition, ThemeTokens, download_folder_is_chosen,
-    unknown_theme,
+    unknown_language, unknown_theme,
 };
 use crate::setup::{AnswerSetupStepRequest, SetupAnswer, SetupStatus, SetupStep};
 use crate::workflows::{
@@ -502,6 +502,18 @@ fn css_unicode_range(value: &str) -> Option<(u32, u32)> {
         (one, one)
     };
     (first <= last && last <= 0x10_FFFF).then_some((first, last))
+}
+
+/// Drops from `settings` the language ids the mock has no preset for and
+/// returns them, as fm-core's settings store does on read (E56.3).
+fn mock_drop_unknown_languages(settings: &mut Settings) -> Vec<String> {
+    let (kept, dropped) = settings
+        .my_languages
+        .iter()
+        .cloned()
+        .partition(|id| LANGUAGES.iter().any(|(code, ..)| code == id));
+    settings.my_languages = kept;
+    dropped
 }
 
 /// (code, name, script, characters the language needs)
@@ -5262,8 +5274,15 @@ fn mock_theme(file: &str) -> ApiResult<ThemeDefinition> {
 }
 
 impl SettingsService for MockApi {
+    /// fm-core's settings store (E56.3): a language id without a preset is
+    /// dropped on read and reported once.
     fn get_settings(&self) -> ApiResult<Settings> {
-        Ok(self.state().settings.clone())
+        let mut st = self.state();
+        let dropped = mock_drop_unknown_languages(&mut st.settings);
+        Ok(Settings {
+            dropped_languages: dropped,
+            ..st.settings.clone()
+        })
     }
 
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
@@ -5272,7 +5291,17 @@ impl SettingsService for MockApi {
         {
             return Err(unknown_theme(id));
         }
+        // The same refusal as fm-core's settings store (E56.3).
+        if let Some(id) = req
+            .my_languages
+            .iter()
+            .flatten()
+            .find(|id| !LANGUAGES.iter().any(|(code, ..)| code == id))
+        {
+            return Err(unknown_language(id));
+        }
         let mut st = self.state();
+        let dropped = mock_drop_unknown_languages(&mut st.settings);
         // fm-core's `check_download_folder` (E55.5): a download folder inside
         // a system font folder is refused before it is saved.
         if let Some(folder) = req.download_folder.as_deref().map(str::trim)
@@ -5296,7 +5325,10 @@ impl SettingsService for MockApi {
         };
         crate::update::check_settings_update(&req, Some(&support))?;
         st.settings = st.settings.apply(&req)?;
-        Ok(st.settings.clone())
+        Ok(Settings {
+            dropped_languages: dropped,
+            ..st.settings.clone()
+        })
     }
 
     fn app_folders(&self) -> ApiResult<AppFolders> {

@@ -121,6 +121,43 @@ pub struct Settings {
     /// struct's defaults; so does a request while the file names a theme this
     /// version does not ship.
     pub theme_id: String,
+    /// The languages the user works in (E56.3): ids of
+    /// [`crate::SearchService::list_languages`] presets, in the user's order,
+    /// none by default. The Duplicates module's rules and guards that name
+    /// "my languages" read them and do nothing while the list is empty
+    /// ([`MyLanguagesStatus::NotSet`]). Stored in `config.json`.
+    #[serde(default)]
+    pub my_languages: Vec<String>,
+    /// The ids of [`Self::my_languages`] that the file named but this
+    /// version has no preset for, dropped on this read. Never stored: the
+    /// read that drops them saves the list without them, so each is reported
+    /// once. Empty in every other answer.
+    #[serde(default)]
+    pub dropped_languages: Vec<String>,
+}
+
+/// Whether the user has set the languages they work in (E56.3). An answer of
+/// a rule or guard that names "my languages" carries it, so the UI can offer
+/// to set them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum MyLanguagesStatus {
+    /// No language is set: every rule and guard that names "my languages"
+    /// did nothing.
+    NotSet,
+    /// At least one language is set and the rules and guards used them.
+    Set,
+}
+
+impl MyLanguagesStatus {
+    /// The status of this list of preset ids.
+    pub fn of(ids: &[String]) -> Self {
+        if ids.is_empty() {
+            Self::NotSet
+        } else {
+            Self::Set
+        }
+    }
 }
 
 impl Default for Settings {
@@ -141,6 +178,8 @@ impl Default for Settings {
             download_folder: None,
             fetch_missing_fonts: false,
             theme_id: DEFAULT_THEME_ID.to_owned(),
+            my_languages: Vec::new(),
+            dropped_languages: Vec::new(),
         }
     }
 }
@@ -204,6 +243,13 @@ pub struct SettingsUpdate {
     /// any other id is refused and nothing changes.
     #[serde(default)]
     pub theme_id: Option<String>,
+    /// The languages the user works in: preset ids of
+    /// [`crate::SearchService::list_languages`], replacing the list; an empty
+    /// list clears it. An id without a preset is refused and nothing changes
+    /// ([`unknown_language`]); an id given twice is kept once, where it first
+    /// stands.
+    #[serde(default)]
+    pub my_languages: Option<Vec<String>>,
 }
 
 impl Settings {
@@ -277,8 +323,32 @@ impl Settings {
                 .theme_id
                 .clone()
                 .unwrap_or_else(|| self.theme_id.clone()),
+            my_languages: match &update.my_languages {
+                Some(ids) => without_repeats(ids),
+                None => self.my_languages.clone(),
+            },
+            dropped_languages: Vec::new(),
         })
     }
+}
+
+/// `ids` with each id kept once, where it first stands.
+fn without_repeats(ids: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::with_capacity(ids.len());
+    for id in ids {
+        if !kept.contains(id) {
+            kept.push(id.clone());
+        }
+    }
+    kept
+}
+
+/// The refusal of a language id that [`crate::SearchService::list_languages`]
+/// does not have, in [`SettingsUpdate::my_languages`]. Implementations of
+/// [`SettingsService::update_settings`] use it, so the answer is one.
+pub fn unknown_language(id: &str) -> ApiError {
+    ApiError::invalid("This language is not in the list of languages.")
+        .with_detail(format!("myLanguages {id:?}"))
 }
 
 /// One token set of a theme: a color for each `--fm-*` token of the same
@@ -583,6 +653,49 @@ mod tests {
         assert!(s.keep_in_tray);
         assert_eq!(s.start_at_login, None);
         assert!(!s.check_updates_automatically);
+    }
+
+    #[test]
+    fn my_languages_are_empty_for_old_config_files_and_an_update_replaces_them() {
+        // A config.json written before E56.3 has no language set.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert!(old.my_languages.is_empty());
+        assert_eq!(
+            MyLanguagesStatus::of(&old.my_languages),
+            MyLanguagesStatus::NotSet
+        );
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["myLanguages"], serde_json::json!([]));
+        let set: SettingsUpdate =
+            serde_json::from_str(r#"{"myLanguages":["sr-Cyrl","de","sr-Cyrl"]}"#).expect("update");
+        let next = old.apply(&set).expect("valid");
+        // Kept once, where it first stands.
+        assert_eq!(next.my_languages, ["sr-Cyrl", "de"]);
+        assert_eq!(
+            MyLanguagesStatus::of(&next.my_languages),
+            MyLanguagesStatus::Set
+        );
+        let kept = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert_eq!(kept.my_languages, ["sr-Cyrl", "de"]);
+        let cleared = kept
+            .apply(&SettingsUpdate {
+                my_languages: Some(Vec::new()),
+                ..SettingsUpdate::default()
+            })
+            .expect("valid");
+        assert!(cleared.my_languages.is_empty());
+        // The dropped ids are an answer of one read, never carried on.
+        let stale = Settings {
+            dropped_languages: vec!["xx".into()],
+            ..Settings::default()
+        };
+        assert!(
+            stale
+                .apply(&SettingsUpdate::default())
+                .expect("valid")
+                .dropped_languages
+                .is_empty()
+        );
     }
 
     #[test]

@@ -3856,6 +3856,21 @@ export type Settings = {
 	 *  version does not ship.
 	 */
 	themeId?: string,
+	/**
+	 *  The languages the user works in (E56.3): ids of
+	 *  [`crate::SearchService::list_languages`] presets, in the user's order,
+	 *  none by default. The Duplicates module's rules and guards that name
+	 *  "my languages" read them and do nothing while the list is empty
+	 *  ([`MyLanguagesStatus::NotSet`]). Stored in `config.json`.
+	 */
+	myLanguages?: string[],
+	/**
+	 *  The ids of [`Self::my_languages`] that the file named but this
+	 *  version has no preset for, dropped on this read. Never stored: the
+	 *  read that drops them saves the list without them, so each is reported
+	 *  once. Empty in every other answer.
+	 */
+	droppedLanguages?: string[],
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -3909,6 +3924,14 @@ export type SettingsUpdate = {
 	 *  any other id is refused and nothing changes.
 	 */
 	themeId?: string | null,
+	/**
+	 *  The languages the user works in: preset ids of
+	 *  [`crate::SearchService::list_languages`], replacing the list; an empty
+	 *  list clears it. An id without a preset is refused and nothing changes
+	 *  ([`unknown_language`]); an id given twice is kept once, where it first
+	 *  stands.
+	 */
+	myLanguages?: string[] | null,
 };
 
 /**  How the user closed a setup step. */

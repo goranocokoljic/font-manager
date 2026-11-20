@@ -13,14 +13,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use fm_api::settings::{
     AppFolders, DEFAULT_THEME_ID, Settings, SettingsUpdate, ThemeDefinition,
-    download_folder_is_chosen, unknown_theme,
+    download_folder_is_chosen, unknown_language, unknown_theme,
 };
 use fm_api::setup::{SetupAnswer, SetupStep};
 use fm_api::{ApiError, ApiResult, ErrorCode, SettingsService};
 use fm_platform::{AppPaths, Autostart};
 
 use crate::config::Config;
-use crate::themes;
+use crate::{my_languages, themes};
 
 /// Reads and writes the settings in the config file.
 #[derive(Debug)]
@@ -186,17 +186,47 @@ fn with_known_theme(settings: Settings) -> ApiResult<Settings> {
     })
 }
 
+impl SettingsStore {
+    /// Drops from `config` the language ids this version has no preset for
+    /// and returns them; the caller saves the file when any was dropped, so
+    /// each is reported once (E56.3).
+    fn drop_unknown_languages(config: &mut Config) -> ApiResult<Vec<String>> {
+        let (kept, dropped) = my_languages::split_known(&config.settings.my_languages)?;
+        if !dropped.is_empty() {
+            tracing::info!(
+                ?dropped,
+                "languages without a preset dropped from the settings"
+            );
+            config.settings.my_languages = kept;
+        }
+        Ok(dropped)
+    }
+}
+
 impl SettingsService for SettingsStore {
     fn get_settings(&self) -> ApiResult<Settings> {
+        let mut config = Config::load(&self.file)?;
+        let mut dropped = Self::drop_unknown_languages(&mut config)?;
+        if !dropped.is_empty() {
+            // Read again under the lock, so a concurrent update is not lost.
+            let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+            config = Config::load(&self.file)?;
+            dropped = Self::drop_unknown_languages(&mut config)?;
+            if !dropped.is_empty() {
+                config.save(&self.file)?;
+            }
+        }
         with_known_theme(Settings {
             start_at_login: self.start_at_login(),
-            ..Config::load(&self.file)?.settings
+            dropped_languages: dropped,
+            ..config.settings
         })
     }
 
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut config = Config::load(&self.file)?;
+        let dropped = Self::drop_unknown_languages(&mut config)?;
         let current = Settings {
             start_at_login: self.start_at_login(),
             ..config.settings
@@ -206,6 +236,12 @@ impl SettingsService for SettingsStore {
             && !themes::is_known(id)?
         {
             return Err(unknown_theme(id));
+        }
+        if let Some(ids) = &req.my_languages {
+            let (_, unknown) = my_languages::split_known(ids)?;
+            if let Some(id) = unknown.first() {
+                return Err(unknown_language(id));
+            }
         }
         let next = current.apply(&req)?;
         if let Some(on) = req.start_at_login
@@ -220,6 +256,7 @@ impl SettingsService for SettingsStore {
         config.save(&self.file)?;
         with_known_theme(Settings {
             start_at_login: self.start_at_login(),
+            dropped_languages: dropped,
             ..config.settings
         })
     }
@@ -411,6 +448,103 @@ mod tests {
         assert_eq!(
             next_start.get_settings().expect("settings").theme_id,
             "moss"
+        );
+    }
+
+    #[test]
+    fn my_languages_are_saved_in_the_file_and_read_by_the_next_start() {
+        let dir = TempDir::new("settings-my-languages");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        let empty = store.get_settings().expect("read");
+        assert!(empty.my_languages.is_empty(), "none by default");
+        assert!(empty.dropped_languages.is_empty());
+        store
+            .update_settings(SettingsUpdate {
+                my_languages: Some(vec!["sr-Cyrl".into(), "de".into(), "de".into()]),
+                ..SettingsUpdate::default()
+            })
+            .expect("updated");
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(paths.config_file()).expect("file"))
+                .expect("json");
+        assert_eq!(json["myLanguages"], serde_json::json!(["sr-Cyrl", "de"]));
+        assert!(json.get("droppedLanguages").is_none(), "never stored");
+        let next = SettingsStore::new(&paths);
+        assert_eq!(
+            next.get_settings().expect("read").my_languages,
+            ["sr-Cyrl", "de"]
+        );
+    }
+
+    #[test]
+    fn an_unknown_language_id_is_refused_and_nothing_changes() {
+        let dir = TempDir::new("settings-my-languages-unknown");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        for id in ["no-such-language", "", "DE"] {
+            let e = store
+                .update_settings(SettingsUpdate {
+                    my_languages: Some(vec!["de".into(), id.into()]),
+                    density: Some(Density::Compact),
+                    ..SettingsUpdate::default()
+                })
+                .expect_err("unknown");
+            assert_eq!(e.code, ErrorCode::InvalidRequest, "{id:?}");
+        }
+        let settings = store.get_settings().expect("settings");
+        assert!(settings.my_languages.is_empty());
+        assert_eq!(settings.density, Density::Comfortable);
+        assert!(!paths.config_file().exists(), "nothing written");
+    }
+
+    #[test]
+    fn a_language_without_a_preset_is_dropped_on_read_and_reported_once() {
+        let dir = TempDir::new("settings-my-languages-gone");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        let file = paths.config_file();
+        fs::write(
+            &file,
+            r#"{"myLanguages":["de","xx-Gone","fr"],"themeId":"moss","telemetry":true}"#,
+        )
+        .expect("write");
+        let store = SettingsStore::new(&paths);
+        let first = store.get_settings().expect("read");
+        assert_eq!(first.my_languages, ["de", "fr"]);
+        assert_eq!(first.dropped_languages, ["xx-Gone"]);
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&file).expect("read")).expect("json");
+        assert_eq!(json["myLanguages"], serde_json::json!(["de", "fr"]));
+        assert_eq!(json["themeId"], "moss", "the other keys are kept");
+        assert_eq!(json["telemetry"], true);
+        let second = store.get_settings().expect("read");
+        assert_eq!(second.my_languages, ["de", "fr"]);
+        assert!(second.dropped_languages.is_empty(), "reported once");
+    }
+
+    #[test]
+    fn an_update_reports_the_languages_it_dropped_from_the_file() {
+        let dir = TempDir::new("settings-my-languages-gone-update");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        let file = paths.config_file();
+        fs::write(&file, r#"{"myLanguages":["xx-Gone","de"]}"#).expect("write");
+        let store = SettingsStore::new(&paths);
+        let updated = store
+            .update_settings(SettingsUpdate {
+                density: Some(Density::Compact),
+                ..SettingsUpdate::default()
+            })
+            .expect("updated");
+        assert_eq!(updated.my_languages, ["de"]);
+        assert_eq!(updated.dropped_languages, ["xx-Gone"]);
+        assert!(
+            store
+                .get_settings()
+                .expect("read")
+                .dropped_languages
+                .is_empty()
         );
     }
 

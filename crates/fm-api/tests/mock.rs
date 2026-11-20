@@ -1751,6 +1751,38 @@ fn the_theme_id_is_one_of_the_listed_themes_and_an_unknown_one_changes_nothing()
 }
 
 #[test]
+fn my_languages_are_listed_presets_and_an_unknown_one_changes_nothing() {
+    use fm_api::settings::SettingsUpdate;
+    let api = api();
+    assert!(api.get_settings().unwrap().my_languages.is_empty());
+    let codes: Vec<String> = api
+        .list_languages()
+        .unwrap()
+        .into_iter()
+        .map(|p| p.code)
+        .collect();
+    let next = api
+        .update_settings(SettingsUpdate {
+            my_languages: Some(vec![codes[1].clone(), codes[0].clone(), codes[1].clone()]),
+            ..SettingsUpdate::default()
+        })
+        .unwrap();
+    assert_eq!(next.my_languages, [codes[1].clone(), codes[0].clone()]);
+    assert!(next.dropped_languages.is_empty());
+    assert_eq!(api.get_settings().unwrap(), next);
+
+    let err = api
+        .update_settings(SettingsUpdate {
+            my_languages: Some(vec![codes[2].clone(), "no-such-language".into()]),
+            cache_limit_mb: Some(128),
+            ..SettingsUpdate::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert_eq!(api.get_settings().unwrap(), next, "nothing is half-applied");
+}
+
+#[test]
 fn family_rows_carry_the_detail_list_columns() {
     let api = api();
     api.tag_faces(TagFacesRequest {

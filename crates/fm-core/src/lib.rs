@@ -44,6 +44,7 @@ pub mod lifecycle;
 pub mod logging;
 pub mod mcp;
 pub mod metrics;
+pub mod my_languages;
 mod needed;
 pub mod pairing;
 pub mod palettes;
