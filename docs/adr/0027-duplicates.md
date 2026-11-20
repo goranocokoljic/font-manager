@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2)
 
 ## Context
 
@@ -67,6 +67,34 @@ nearly all of it reading the files and faces from the index. The budget is
 **500 ms** on every OS: twice the measured number, for slower CI machines, and
 under the half second in which a user opening the module still reads it as
 immediate.
+
+**What differs between two copies (E56.2).** Each copy of a listed set
+carries the facts a decision needs (`facts`): the file's time, the glyph
+count, the axes and features, the activation and the documents that asked
+for it, the user's favorite, rating, notes, tags, collections and sets, and
+its language coverage from the index (presets covered in full, presets with
+`locl`). They are read for the copies of the returned page only, so the
+listing budget stays the one above. `compare_copies` takes two faces and
+reads both files on demand: languages gained and lost, glyphs added and
+removed (a glyph is known by the character it maps, else by its glyph name,
+because glyph ids change between versions), features and axes added and
+removed, and the vertical metrics, units per em and advance widths compared
+per em; a change in the metrics or the widths says text may reflow. When
+every table holds the same data (the outlines compared glyph by glyph when a
+WOFF2 stores `glyf` differently; `head` without its checksum and transform
+flag; `DSIG` and `loca` left out) only the container differs, and the answer
+says so. A file that cannot be read is `Health::Broken` for its side and the
+comparison names that side; it is never an error.
+
+**Comparison budget.** `scripts/bench.sh` times `compare_copies` on the two
+copies of a set in the bench index that hold the most bytes, other versions
+first (`copy_comparison`). On 20 Nov 2026 on Windows that was Google Sans
+Italic, the variable font against its static instance (7.1 MB together): the
+p95 was 39 ms, the first, cold call 648 ms. The budget is **150 ms** on every
+OS: almost four times the measured number, because the time grows with the
+files and CI disks are slower, and under the fifth of a second in which
+opening two copies side by side still reads as immediate. The first call is
+not budgeted, as with every other measurement.
 
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files

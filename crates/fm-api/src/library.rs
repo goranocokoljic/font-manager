@@ -1020,6 +1020,141 @@ pub struct DuplicateSetCopy {
     /// with several faces): a plan must not trash it for one set while
     /// another keeps it.
     pub other_sets: Vec<String>,
+    /// What a user weighs when choosing between the copies (E56.2), from
+    /// the index; `None` when the copy has no face (data that is no font)
+    /// or the service has no index to read them from (the mocks).
+    #[serde(default)]
+    pub facts: Option<CopyFacts>,
+}
+
+/// The facts of one copy of a duplicate set that a decision needs (E56.2),
+/// as the index holds them for the copy's face and file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyFacts {
+    /// When the file was last modified, when the scan read its time.
+    pub modified: Option<Timestamp>,
+    /// Glyphs in the font (`maxp`); `None` until a scan by this version
+    /// reads the file again.
+    pub glyph_count: Option<u32>,
+    /// The face is a variable font.
+    pub variable: bool,
+    /// Its variation axes, by tag (`wght`), in the font's order.
+    pub axes: Vec<String>,
+    /// Its OpenType feature tags (GSUB and GPOS), sorted.
+    pub features: Vec<String>,
+    /// How the app activated it, when it did.
+    pub activation: Option<ActivationMode>,
+    /// The open documents that asked for it (`activation_document`), the
+    /// last to ask first.
+    pub activation_documents: Vec<String>,
+    /// The user marked it a favorite.
+    pub favorite: bool,
+    /// The user's rating, 1 to 5.
+    pub rating: Option<u8>,
+    /// The user's tags on it, by name.
+    pub tags: Vec<String>,
+    /// The user wrote notes on it.
+    pub has_notes: bool,
+    /// The collections it is in, by name.
+    pub collections: Vec<String>,
+    /// The project sets it is in, by name.
+    pub sets: Vec<String>,
+    /// The language presets (`data/charsets` codes) it covers in full, from
+    /// the index's coverage.
+    pub languages_full: Vec<String>,
+    /// The language presets it has `locl` forms for.
+    pub languages_locl: Vec<String>,
+}
+
+/// Compare two copies of a duplicate set ([`LibraryService::compare_copies`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CompareCopiesRequest {
+    /// The first copy's face ([`DuplicateSetCopy::face`]).
+    pub a: FaceId,
+    /// The second copy's face; the differences read from `a` to `b`.
+    pub b: FaceId,
+}
+
+/// One side of a [`CopyComparison`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ComparedCopy {
+    /// The face.
+    pub face: FaceId,
+    /// Absolute file path.
+    pub path: String,
+    /// The file format read now, when the file is a font.
+    pub format: Option<FontFormat>,
+    /// Whether the file could be read now: `Broken` with the reason when it
+    /// could not (gone, cut off, malformed).
+    pub health: Health,
+}
+
+/// Glyphs one copy has and the other does not.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphChange {
+    /// How many.
+    pub count: u32,
+    /// The first of them (at most 10), in Unicode order, then by glyph
+    /// name: `ä (U+00E4)` for a character, the glyph name otherwise.
+    pub first: Vec<String>,
+}
+
+/// What differs from one copy to the other (E56.2). Glyphs are matched by
+/// the character they map, else by glyph name; metrics and advance widths
+/// are compared per em.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDifferences {
+    /// Language presets the second copy covers in full and the first does not.
+    pub languages_gained: Vec<String>,
+    /// Language presets the first copy covers in full and the second does not.
+    pub languages_lost: Vec<String>,
+    /// Glyphs the second copy has and the first does not.
+    pub glyphs_added: GlyphChange,
+    /// Glyphs the first copy has and the second does not.
+    pub glyphs_removed: GlyphChange,
+    /// OpenType features only the second copy has.
+    pub features_added: Vec<String>,
+    /// OpenType features only the first copy has.
+    pub features_removed: Vec<String>,
+    /// Variation axes only the second copy has.
+    pub axes_added: Vec<String>,
+    /// Variation axes only the first copy has.
+    pub axes_removed: Vec<String>,
+    /// The vertical metrics (`hhea`, `OS/2` typographic and Windows) differ.
+    pub vertical_metrics_changed: bool,
+    /// The units per em differ.
+    pub units_per_em_changed: bool,
+    /// Glyphs both copies have whose advance width differs.
+    pub advance_widths_changed: u32,
+    /// Text set in one copy may reflow in the other: the vertical metrics
+    /// or advance widths changed.
+    pub may_reflow: bool,
+    /// Nothing but the container differs: the same tables and outlines, in
+    /// another format (TTF or OTF and WOFF or WOFF2, a collection member).
+    pub container_only: bool,
+    /// The font tables whose data differs, by tag; empty when
+    /// `container_only` or the files are the same.
+    pub tables_changed: Vec<String>,
+}
+
+/// Two copies of a duplicate set side by side (E56.2): read from their files
+/// on demand.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyComparison {
+    /// The first copy.
+    pub a: ComparedCopy,
+    /// The second copy.
+    pub b: ComparedCopy,
+    /// What differs; `None` when a side could not be read (its `health`).
+    pub differences: Option<CopyDifferences>,
+    /// The answer in sentences a user reads, most important first.
+    pub summary: Vec<String>,
 }
 
 /// Files that hold the same font, at one [`DuplicateLevel`] (E56.1). The
@@ -1530,6 +1665,12 @@ pub trait LibraryService {
     /// Computed on each call, never at start. A `source` scope that does not
     /// exist is `NotFound`.
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>>;
+    /// What differs between two copies of a duplicate set (E56.2): reads
+    /// both files on demand. A file that cannot be read gives
+    /// `Health::Broken` for its side and no differences, never an error.
+    /// `NotFound` when a face is not in the library; `InvalidRequest` when
+    /// `a` and `b` are the same face.
+    fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison>;
     /// "Keep this one" (E8.3): moves the other copies to the OS trash, never
     /// deleting them, and records the action for undo. With `dry_run`, only
     /// says what would move. A copy that cannot move (the app activated it,

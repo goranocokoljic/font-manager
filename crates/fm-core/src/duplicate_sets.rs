@@ -301,6 +301,7 @@ fn build(
                     .map(|&(other, _)| files[other].path.clone())
                     .collect(),
                 other_sets,
+                facts: None,
             }
         })
         .collect();

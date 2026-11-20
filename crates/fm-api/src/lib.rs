@@ -160,6 +160,8 @@ pub fn types() -> specta::Types {
         library::ListDuplicateSetsRequest,
         common::Paged<library::DuplicateSet>,
         library::DuplicateSet,
+        library::CompareCopiesRequest,
+        library::CopyComparison,
         library::KeepCopyRequest,
         library::Resolution,
         library::SidecarConflict,

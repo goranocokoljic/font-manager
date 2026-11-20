@@ -4380,3 +4380,33 @@ fn duplicate_sets_page_scope_and_refuse_an_unknown_source() {
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
 }
+
+#[test]
+fn the_mock_compares_two_faces_by_characters_features_and_axes() {
+    use fm_api::library::CompareCopiesRequest;
+    let mock = api();
+    let c = mock
+        .compare_copies(CompareCopiesRequest {
+            a: FaceId(1),
+            b: FaceId(2),
+        })
+        .unwrap();
+    assert_eq!((c.a.face, c.b.face), (FaceId(1), FaceId(2)));
+    assert_eq!(c.a.health, fm_api::common::Health::Ok);
+    assert!(c.differences.is_some());
+    assert_eq!(c.summary.len(), 1);
+    let same = mock
+        .compare_copies(CompareCopiesRequest {
+            a: FaceId(1),
+            b: FaceId(1),
+        })
+        .unwrap_err();
+    assert_eq!(same.code, ErrorCode::InvalidRequest);
+    let gone = mock
+        .compare_copies(CompareCopiesRequest {
+            a: FaceId(1),
+            b: FaceId(999_999),
+        })
+        .unwrap_err();
+    assert_eq!(gone.code, ErrorCode::NotFound);
+}

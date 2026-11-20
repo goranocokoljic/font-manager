@@ -1,0 +1,19 @@
+{
+  "id": "every-field-of-a-difference-result-needs-a-test-with-a-non-e",
+  "title": "Every field of a difference result needs a test with a non-empty difference, both ways",
+  "category": "testing",
+  "rule": "When a function compares two things and returns added/removed (gained/lost) lists or changed flags, give each field a test pair where that field is non-empty, assert its exact value, and run the same pair the other way round so added and removed swap. A test of identical inputs only proves the fields are empty, which an always-empty or swapped implementation also passes. Derive the pair from a fixture (rename one tag, drop one record) when the corpus has no natural pair.",
+  "rationale": "E56.2 (#662): compare_copies set features_added/removed and axes_added/removed, but the only test that read them compared a file with itself, so emptying or swapping them left every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    662
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs",
+    "crates/fm-api/src/**/*.rs"
+  ],
+  "first_seen": "2026-11-20T16:50:52.297Z",
+  "last_seen": "2026-11-20T16:50:52.297Z"
+}

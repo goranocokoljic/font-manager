@@ -151,6 +151,8 @@ export const duplicateSets = (files: SetFile[], scope: DuplicateScope): Duplicat
             .filter((o) => o.file !== m.file && files[o.file]!.hash === file.hash)
             .map((o) => files[o.file]!.path),
           otherSets: (setsOf.get(m.file) ?? []).filter((id) => id !== d.id).sort(byString),
+          // The facts come from fm-core's index; the sample has none (E56.2).
+          facts: null,
         };
       });
       return {

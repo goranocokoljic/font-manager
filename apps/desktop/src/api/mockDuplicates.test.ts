@@ -93,4 +93,23 @@ describe('MockApi duplicate sets (E56.1)', () => {
       client.listDuplicateSets({ scope: { kind: 'source', source: 999 } }),
     ).rejects.toMatchObject({ code: 'notFound' });
   });
+
+  it('compares two faces and refuses the same face twice or an unknown one', async () => {
+    const client = createMockClient();
+    const families = await client.listFamilies({});
+    const [one, two] = families.items.map((f) => f.id);
+    const a = (await client.getFamily(one!)).faces[0]!.id;
+    const b = (await client.getFamily(two!)).faces[0]!.id;
+    const c = await client.compareCopies({ a, b });
+    expect([c.a.face, c.b.face]).toEqual([a, b]);
+    expect(c.a.health).toEqual({ kind: 'ok' });
+    expect(c.differences).not.toBeNull();
+    expect(c.summary).toHaveLength(1);
+    await expect(client.compareCopies({ a, b: a })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    await expect(client.compareCopies({ a, b: 999_999 })).rejects.toMatchObject({
+      code: 'notFound',
+    });
+  });
 });

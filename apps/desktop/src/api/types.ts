@@ -604,6 +604,14 @@ export type ColumnRange = {
 	max: number,
 };
 
+/**  Compare two copies of a duplicate set ([`LibraryService::compare_copies`]). */
+export type CompareCopiesRequest = {
+	/**  The first copy's face ([`DuplicateSetCopy::face`]). */
+	a: FaceId,
+	/**  The second copy's face; the differences read from `a` to `b`. */
+	b: FaceId,
+};
+
 /**  How the Compare sheet shows its faces. */
 export type CompareMode = 
 /**  One column per face. */
@@ -629,6 +637,21 @@ export type ComparePreviewRequest = {
 	foreground?: string | null,
 	/**  Background color, CSS hex; transparent when absent. */
 	background?: string | null,
+};
+
+/**  One side of a [`CopyComparison`]. */
+export type ComparedCopy = {
+	/**  The face. */
+	face: FaceId,
+	/**  Absolute file path. */
+	path: string,
+	/**  The file format read now, when the file is a font. */
+	format: FontFormat | null,
+	/**
+	 *  Whether the file could be read now: `Broken` with the reason when it
+	 *  could not (gone, cut off, malformed).
+	 */
+	health: Health,
 };
 
 /**  A saved comparison, ready to reopen. */
@@ -711,6 +734,112 @@ path: string } |
 { kind: "active"; 
 /**  That face. */
 face: FaceId };
+
+/**
+ *  Two copies of a duplicate set side by side (E56.2): read from their files
+ *  on demand.
+ */
+export type CopyComparison = {
+	/**  The first copy. */
+	a: ComparedCopy,
+	/**  The second copy. */
+	b: ComparedCopy,
+	/**  What differs; `None` when a side could not be read (its `health`). */
+	differences: CopyDifferences | null,
+	/**  The answer in sentences a user reads, most important first. */
+	summary: string[],
+};
+
+/**
+ *  What differs from one copy to the other (E56.2). Glyphs are matched by
+ *  the character they map, else by glyph name; metrics and advance widths
+ *  are compared per em.
+ */
+export type CopyDifferences = {
+	/**  Language presets the second copy covers in full and the first does not. */
+	languagesGained: string[],
+	/**  Language presets the first copy covers in full and the second does not. */
+	languagesLost: string[],
+	/**  Glyphs the second copy has and the first does not. */
+	glyphsAdded: GlyphChange,
+	/**  Glyphs the first copy has and the second does not. */
+	glyphsRemoved: GlyphChange,
+	/**  OpenType features only the second copy has. */
+	featuresAdded: string[],
+	/**  OpenType features only the first copy has. */
+	featuresRemoved: string[],
+	/**  Variation axes only the second copy has. */
+	axesAdded: string[],
+	/**  Variation axes only the first copy has. */
+	axesRemoved: string[],
+	/**  The vertical metrics (`hhea`, `OS/2` typographic and Windows) differ. */
+	verticalMetricsChanged: boolean,
+	/**  The units per em differ. */
+	unitsPerEmChanged: boolean,
+	/**  Glyphs both copies have whose advance width differs. */
+	advanceWidthsChanged: number,
+	/**
+	 *  Text set in one copy may reflow in the other: the vertical metrics
+	 *  or advance widths changed.
+	 */
+	mayReflow: boolean,
+	/**
+	 *  Nothing but the container differs: the same tables and outlines, in
+	 *  another format (TTF or OTF and WOFF or WOFF2, a collection member).
+	 */
+	containerOnly: boolean,
+	/**
+	 *  The font tables whose data differs, by tag; empty when
+	 *  `container_only` or the files are the same.
+	 */
+	tablesChanged: string[],
+};
+
+/**
+ *  The facts of one copy of a duplicate set that a decision needs (E56.2),
+ *  as the index holds them for the copy's face and file.
+ */
+export type CopyFacts = {
+	/**  When the file was last modified, when the scan read its time. */
+	modified: string | null,
+	/**
+	 *  Glyphs in the font (`maxp`); `None` until a scan by this version
+	 *  reads the file again.
+	 */
+	glyphCount: number | null,
+	/**  The face is a variable font. */
+	variable: boolean,
+	/**  Its variation axes, by tag (`wght`), in the font's order. */
+	axes: string[],
+	/**  Its OpenType feature tags (GSUB and GPOS), sorted. */
+	features: string[],
+	/**  How the app activated it, when it did. */
+	activation: ActivationMode | null,
+	/**
+	 *  The open documents that asked for it (`activation_document`), the
+	 *  last to ask first.
+	 */
+	activationDocuments: string[],
+	/**  The user marked it a favorite. */
+	favorite: boolean,
+	/**  The user's rating, 1 to 5. */
+	rating: number | null,
+	/**  The user's tags on it, by name. */
+	tags: string[],
+	/**  The user wrote notes on it. */
+	hasNotes: boolean,
+	/**  The collections it is in, by name. */
+	collections: string[],
+	/**  The project sets it is in, by name. */
+	sets: string[],
+	/**
+	 *  The language presets (`data/charsets` codes) it covers in full, from
+	 *  the index's coverage.
+	 */
+	languagesFull: string[],
+	/**  The language presets it has `locl` forms for. */
+	languagesLocl: string[],
+};
 
 /**  The answer to a coverage request. */
 export type CoverageReport = {
@@ -1157,6 +1286,12 @@ export type DuplicateSetCopy = {
 	 *  another keeps it.
 	 */
 	otherSets: string[],
+	/**
+	 *  What a user weighs when choosing between the copies (E56.2), from
+	 *  the index; `None` when the copy has no face (data that is no font)
+	 *  or the service has no index to read them from (the mocks).
+	 */
+	facts?: CopyFacts | null,
 };
 
 /**  Embedding permissions from `OS/2.fsType`. */
@@ -2063,6 +2198,17 @@ export type GlyphBounds = {
 	xMax: number,
 	/**  Top edge. */
 	yMax: number,
+};
+
+/**  Glyphs one copy has and the other does not. */
+export type GlyphChange = {
+	/**  How many. */
+	count: number,
+	/**
+	 *  The first of them (at most 10), in Unicode order, then by glyph
+	 *  name: `ä (U+00E4)` for a character, the glyph name otherwise.
+	 */
+	first: string[],
 };
 
 /**  The detail of one mapped character of a face. */

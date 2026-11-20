@@ -58,12 +58,13 @@ use fm_api::layout::{
     SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateGroup, DuplicateScope,
-    DuplicateSet, FaceDetail, Family, FamilySummary, FileDragSupport, FontMatches,
-    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
-    ImportMode, KeepCopyRequest, LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest,
-    Platform, Problem, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
-    SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
+    AddSourceRequest, AppInfo, CompareCopiesRequest, CopyComparison, DragFiles, DragFilesRequest,
+    DuplicateGroup, DuplicateScope, DuplicateSet, FaceDetail, Family, FamilySummary,
+    FileDragSupport, FontMatches, FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest,
+    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
+    ListDuplicateSetsRequest, ListFamiliesRequest, Platform, Problem, Resolution,
+    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
+    SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, DropCounts,
@@ -1030,8 +1031,36 @@ impl LibraryService for CoreApi {
             return Err(ApiError::not_found(format!("Source {source}")));
         }
         let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        let mut page = crate::duplicate_sets::list(&files, &req);
+        // The facts of the copies on this page only (E56.2): the listing
+        // budget (ADR 0027) is spent on the sets, not on every copy.
+        let faces: Vec<FaceId> = page
+            .items
+            .iter()
+            .flat_map(|s| s.copies.iter().filter_map(|c| c.face))
+            .collect();
+        let facts = index.copy_facts(&faces)?;
         drop(index);
-        Ok(crate::duplicate_sets::list(&files, &req))
+        for copy in page.items.iter_mut().flat_map(|s| s.copies.iter_mut()) {
+            copy.facts = copy.face.and_then(|f| facts.get(&f).cloned());
+        }
+        Ok(page)
+    }
+
+    fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison> {
+        if req.a == req.b {
+            return Err(ApiError::invalid("Choose two different copies to compare."));
+        }
+        let target = |face: FaceId| -> ApiResult<crate::copy_diff::Target> {
+            let file = self.lock().face_file(face)?;
+            Ok(crate::copy_diff::Target {
+                face,
+                path: file.path,
+                collection_index: file.collection_index,
+            })
+        };
+        let (a, b) = (target(req.a)?, target(req.b)?);
+        Ok(crate::copy_diff::compare(&a, &b))
     }
 
     fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {

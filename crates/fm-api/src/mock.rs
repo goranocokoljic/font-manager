@@ -43,15 +43,16 @@ use crate::layout::{
     SavedLayout, StudioContext, TextBlock,
 };
 use crate::library::{
-    AddSourceRequest, AppInfo, DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup,
-    DuplicateKind, DuplicateScope, DuplicateSet, FaceDetail, FaceSummary, Family, FamilyActivation,
-    FamilySort, FamilySummary, FileDragSupport, FontMatch, FontMatches, FontNames,
-    FontSwitchPayload, GlyphBlock, GlyphBounds, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest,
-    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions,
-    LicensePermissionsSource, LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest,
-    OpenLicense, Platform, Problem, ProblemKind, Resolution, ResolveFontRequest,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
-    SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    AddSourceRequest, AppInfo, CompareCopiesRequest, ComparedCopy, CopyComparison, CopyDifferences,
+    DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup, DuplicateKind, DuplicateScope,
+    DuplicateSet, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary,
+    FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphBounds,
+    GlyphChange, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
+    ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions, LicensePermissionsSource,
+    LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest, OpenLicense, Platform, Problem,
+    ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
+    TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
@@ -2082,6 +2083,66 @@ impl LibraryService for MockApi {
             });
         }
         Ok(duplicate_sets::list(&files, &req))
+    }
+
+    fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison> {
+        if req.a == req.b {
+            return Err(ApiError::invalid("Choose two different copies to compare."));
+        }
+        let st = self.state();
+        let face = |id: FaceId| {
+            st.faces
+                .iter()
+                .find(|f| f.detail.face.id == id)
+                .ok_or_else(|| ApiError::not_found(format!("Face {id}")))
+        };
+        let (a, b) = (face(req.a)?, face(req.b)?);
+        // The sample has no files: only what it knows of each face is
+        // compared (characters, features, axes), the rest is the same.
+        let side = |f: &MockFace| ComparedCopy {
+            face: f.detail.face.id,
+            path: f.detail.path.clone(),
+            format: Some(f.detail.face.format),
+            health: Health::Ok,
+        };
+        let only = |x: &MockFace, y: &MockFace| -> Vec<char> {
+            x.chars.difference(&y.chars).copied().collect()
+        };
+        let glyphs = |chars: Vec<char>| GlyphChange {
+            count: u32::try_from(chars.len()).unwrap_or(u32::MAX),
+            first: chars
+                .iter()
+                .take(10)
+                .map(|c| format!("{c} (U+{:04X})", u32::from(*c)))
+                .collect(),
+        };
+        let tags = |x: &MockFace, y: &MockFace, of: fn(&FaceDetail) -> Vec<String>| {
+            let theirs = of(&y.detail);
+            of(&x.detail)
+                .into_iter()
+                .filter(|t| !theirs.contains(t))
+                .collect::<Vec<_>>()
+        };
+        let features = |d: &FaceDetail| d.features.iter().map(|f| f.tag.clone()).collect();
+        let axes = |d: &FaceDetail| d.axes.iter().map(|x| x.tag.clone()).collect();
+        let differences = CopyDifferences {
+            glyphs_added: glyphs(only(b, a)),
+            glyphs_removed: glyphs(only(a, b)),
+            features_added: tags(b, a, features),
+            features_removed: tags(a, b, features),
+            axes_added: tags(b, a, axes),
+            axes_removed: tags(a, b, axes),
+            ..CopyDifferences::default()
+        };
+        Ok(CopyComparison {
+            a: side(a),
+            b: side(b),
+            differences: Some(differences),
+            summary: vec![
+                "The sample library has no font files: only characters, features and axes are compared."
+                    .to_owned(),
+            ],
+        })
     }
 
     fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {

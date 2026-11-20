@@ -31,6 +31,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0024](0024-exact-language-filter.md) | The `supports` filter: exact for a language, a near miss for pasted text | Accepted |
 | [0025](0025-text-field-menu-and-clipboard-read.md) | The text fields' own menu, and a native clipboard read for Paste | Accepted |
 | [0026](0026-first-run-setup.md) | First-run setup: at first launch, the steps and when each is open, answers in `config.json` | Accepted |
-| [0027](0027-duplicates.md) | Duplicates: three levels of sameness, two versions are a set, scope and pages, the budget | Accepted |
+| [0027](0027-duplicates.md) | Duplicates: three levels of sameness, two versions are a set, scope and pages, what differs between two copies, the budgets | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

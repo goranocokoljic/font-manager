@@ -12,10 +12,10 @@
 //! only once they are read (`hash` set). Each group's keeper is chosen by
 //! [`DuplicateGroup::choose_keeper`], the one rule of the contract.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use fm_api::library::{DuplicateCopy, DuplicateGroup, DuplicateKind};
+use fm_api::library::{CopyFacts, DuplicateCopy, DuplicateGroup, DuplicateKind};
 use fm_api::{FaceId, SourceId};
 use rusqlite::Row;
 use rusqlite::types::{Value, ValueRef};
@@ -78,7 +78,97 @@ LEFT JOIN face ON face.file_id = font_file.id
 WHERE font_file.gone = 0 AND source.paused = 0 AND font_file.hash IS NOT NULL
 ORDER BY font_file.id, face.collection_index";
 
+/// What [`Index::copy_facts`] reads of one face, its file and its user data.
+const COPY_FACTS: &str = "
+SELECT font_file.mtime,
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.glyphCount') END,
+       face.is_variable, face.axes, face.features, activation.mode,
+       coalesce(user_meta.favorite, 0), user_meta.rating,
+       coalesce(trim(user_meta.notes), '') <> '', face.languages
+FROM face
+JOIN font_file ON font_file.id = face.file_id
+LEFT JOIN activation ON activation.face_id = face.id
+LEFT JOIN user_meta ON user_meta.face_id = face.id
+WHERE face.id = ?1";
+
+/// The names a face carries, one query per kind, each sorted.
+const FACE_TAGS: &str = "SELECT tag.name FROM face_tag JOIN tag ON tag.id = face_tag.tag_id
+WHERE face_tag.face_id = ?1 ORDER BY tag.name COLLATE NOCASE, tag.name";
+const FACE_COLLECTIONS: &str = "SELECT collection.name FROM collection_face
+JOIN collection ON collection.id = collection_face.collection_id
+WHERE collection_face.face_id = ?1 ORDER BY collection.name COLLATE NOCASE, collection.id";
+const FACE_SETS: &str = "SELECT project_set.name FROM set_face
+JOIN project_set ON project_set.id = set_face.set_id
+WHERE set_face.face_id = ?1 ORDER BY project_set.name COLLATE NOCASE, project_set.id";
+const FACE_DOCUMENTS: &str =
+    "SELECT document FROM activation_document WHERE face_id = ?1 ORDER BY seq DESC, document";
+
+/// The tags of a stored JSON list: strings as they are, objects by `tag`
+/// (`face.axes` holds axes, `face.features` tags).
+fn tags_from_json(text: &str) -> Vec<String> {
+    let Ok(serde_json::Value::Array(items)) = serde_json::from_str(text) else {
+        return Vec::new();
+    };
+    items
+        .into_iter()
+        .filter_map(|v| match v {
+            serde_json::Value::String(s) => Some(s),
+            serde_json::Value::Object(mut o) => match o.remove("tag") {
+                Some(serde_json::Value::String(s)) => Some(s),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
 impl Index {
+    /// The facts a decision between the copies of a duplicate set needs
+    /// (E56.2), for each of `faces` the index holds: its file's time, its
+    /// glyphs, axes and features, its activation, the user's data on it, and
+    /// its language coverage (complete presets, and presets with `locl`).
+    /// A face not in the index is left out.
+    pub fn copy_facts(&self, faces: &[FaceId]) -> FmResult<HashMap<FaceId, CopyFacts>> {
+        let mut out = HashMap::with_capacity(faces.len());
+        {
+            let mut main = self
+                .conn
+                .prepare_cached(COPY_FACTS)
+                .map_err(|e| db_error(&e))?;
+            for &face in faces {
+                if out.contains_key(&face) {
+                    continue;
+                }
+                let mut rows = main.query([face.0]).map_err(|e| db_error(&e))?;
+                let Some(row) = rows.next().map_err(|e| db_error(&e))? else {
+                    continue;
+                };
+                out.insert(face, facts_from_row(row)?);
+            }
+        }
+        for (query, field) in [
+            (FACE_TAGS, Names::Tags),
+            (FACE_COLLECTIONS, Names::Collections),
+            (FACE_SETS, Names::Sets),
+            (FACE_DOCUMENTS, Names::Documents),
+        ] {
+            let mut stmt = self.conn.prepare_cached(query).map_err(|e| db_error(&e))?;
+            for (face, facts) in &mut out {
+                let names = stmt
+                    .query_map([face.0], |row| row.get::<_, String>(0))
+                    .and_then(Iterator::collect::<Result<Vec<_>, _>>)
+                    .map_err(|e| db_error(&e))?;
+                *match field {
+                    Names::Tags => &mut facts.tags,
+                    Names::Collections => &mut facts.collections,
+                    Names::Sets => &mut facts.sets,
+                    Names::Documents => &mut facts.activation_documents,
+                } = names;
+            }
+        }
+        Ok(out)
+    }
+
     /// The files the library shows (not gone, source not paused, read), with
     /// their faces, as [`crate::duplicate_sets::sets`] takes them (E56.1). A
     /// file is a system copy when its source is the system fonts or its path
@@ -248,6 +338,64 @@ fn group(kind: DuplicateKind, rows: Vec<Copy>) -> DuplicateGroup {
     };
     group.choose_keeper();
     group
+}
+
+/// Which names [`Index::copy_facts`] reads in one pass.
+#[derive(Clone, Copy)]
+enum Names {
+    Tags,
+    Collections,
+    Sets,
+    Documents,
+}
+
+/// The facts of one [`COPY_FACTS`] row; the name lists are filled after.
+fn facts_from_row(row: &Row<'_>) -> FmResult<CopyFacts> {
+    let get_err = |e: rusqlite::Error| db_error(&e);
+    let mtime: Option<i64> = row.get(0).map_err(get_err)?;
+    let glyphs: Option<i64> = row.get(1).map_err(get_err)?;
+    let axes: String = row.get(3).map_err(get_err)?;
+    let features: String = row.get(4).map_err(get_err)?;
+    let mode: Option<String> = row.get(5).map_err(get_err)?;
+    let rating: Option<i64> = row.get(7).map_err(get_err)?;
+    let languages: Option<String> = row.get(9).map_err(get_err)?;
+    let languages = languages
+        .as_deref()
+        .and_then(super::languages::from_sql)
+        .unwrap_or_default();
+    let mut features = tags_from_json(&features);
+    features.sort();
+    features.dedup();
+    Ok(CopyFacts {
+        modified: mtime
+            .filter(|n| *n >= 0)
+            .map(|n| crate::catalog::rfc3339(n.unsigned_abs() / 1_000_000_000)),
+        glyph_count: glyphs.and_then(|n| u32::try_from(n).ok()),
+        variable: row.get(2).map_err(get_err)?,
+        axes: tags_from_json(&axes),
+        features,
+        activation: mode
+            .as_deref()
+            .map(super::activation::mode_from_sql)
+            .transpose()?,
+        activation_documents: Vec::new(),
+        favorite: row.get(6).map_err(get_err)?,
+        rating: rating.and_then(|r| u8::try_from(r).ok()),
+        tags: Vec::new(),
+        has_notes: row.get(8).map_err(get_err)?,
+        collections: Vec::new(),
+        sets: Vec::new(),
+        languages_full: languages
+            .iter()
+            .filter(|l| l.is_complete())
+            .map(|l| l.code.clone())
+            .collect(),
+        languages_locl: languages
+            .iter()
+            .filter(|l| l.has_locl)
+            .map(|l| l.code.clone())
+            .collect(),
+    })
 }
 
 #[cfg(test)]
