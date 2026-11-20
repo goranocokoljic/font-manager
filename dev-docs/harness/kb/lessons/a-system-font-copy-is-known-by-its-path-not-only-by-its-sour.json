@@ -1,0 +1,19 @@
+{
+  "id": "a-system-font-copy-is-known-by-its-path-not-only-by-its-sour",
+  "title": "A system font copy is known by its path, not only by its source kind",
+  "category": "user-files",
+  "rule": "When code must protect or mark files in the system font folders (rule 4: never move, trash or write them), decide per file by path: the file is inside one of fm_platform::paths::system_font_folders() (plus their resolved links), compared with is_within(Os::current(), ...), OR its source is SourceKind::System. Never rely on the source kind alone: no production code creates a System source, and a user can add an OS font folder (~/Library/Fonts, ~/.local/share/fonts, %LOCALAPPDATA%/Microsoft/Windows/Fonts) as an ordinary watched folder. Test it with a copy under a Watched source whose folder is passed in as an OS font folder.",
+  "rationale": "E56.1 (#661): keep_copy and the duplicate sets' `system` mark checked only `source.kind = 'system'`, which a real index never holds, so a font in a watched OS font folder could be trashed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    661
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs",
+    "crates/fm-api/src/**/*.rs"
+  ],
+  "first_seen": "2026-11-20T13:25:39.300Z",
+  "last_seen": "2026-11-20T13:25:39.300Z"
+}
