@@ -17,6 +17,7 @@
 //!   added, in one [`Event::LibraryChanged`].
 
 use std::fs;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::event::Event;
@@ -40,6 +41,8 @@ pub struct DuplicateResolver {
     index: Arc<Mutex<Index>>,
     trash: Arc<dyn Trash>,
     emit: Emit,
+    /// The OS font folders: a copy in one never moves (rule 4).
+    system: Vec<PathBuf>,
 }
 
 impl std::fmt::Debug for DuplicateResolver {
@@ -60,7 +63,15 @@ impl DuplicateResolver {
             index,
             trash,
             emit: Arc::new(emit),
+            system: crate::duplicate_sets::system_folders(),
         }
+    }
+
+    /// The same resolver with `folders` as the OS font folders (tests).
+    #[must_use]
+    pub fn with_system_folders(mut self, folders: Vec<PathBuf>) -> Self {
+        self.system = crate::duplicate_sets::with_links(folders);
+        self
     }
 
     fn lock(&self) -> MutexGuard<'_, Index> {
@@ -75,7 +86,7 @@ impl DuplicateResolver {
         req.check(&index.duplicates()?)?;
         let mut wanted: Vec<&str> = req.trash.iter().map(String::as_str).collect();
         wanted.push(&req.keep);
-        let files = index.copy_files(&wanted)?;
+        let files = index.copy_files(&wanted, &self.system)?;
         let kept_there = files
             .get(&req.keep)
             .is_some_and(|f| fs::symlink_metadata(&f.path).is_ok());
@@ -265,7 +276,7 @@ impl DuplicateResolver {
             .filter(|m| m.row.status == TrashMoveStatus::Restored && m.trashed.is_some())
             .map(|m| m.row.path.as_str())
             .collect();
-        match index.copy_files(&back) {
+        match index.copy_files(&back, &self.system) {
             Ok(files) => added.extend(files.values().flat_map(|f| f.faces.iter().copied())),
             Err(e) => tracing::warn!(error = %e, "reading the restored faces failed"),
         }

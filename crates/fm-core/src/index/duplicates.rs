@@ -13,6 +13,7 @@
 //! [`DuplicateGroup::choose_keeper`], the one rule of the contract.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use fm_api::library::{DuplicateCopy, DuplicateGroup, DuplicateKind};
 use fm_api::{FaceId, SourceId};
@@ -21,7 +22,7 @@ use rusqlite::types::{Value, ValueRef};
 
 use super::files::{format_from_sql, path_from_sql};
 use super::{Index, db_error};
-use crate::duplicate_sets::{SetFace, SetFile};
+use crate::duplicate_sets::{SetFace, SetFile, in_system_folder};
 use crate::error::{FmError, FmResult};
 use crate::scanner::FileHash;
 
@@ -79,8 +80,10 @@ ORDER BY font_file.id, face.collection_index";
 
 impl Index {
     /// The files the library shows (not gone, source not paused, read), with
-    /// their faces, as [`crate::duplicate_sets::sets`] takes them (E56.1).
-    pub fn duplicate_set_files(&self) -> FmResult<Vec<SetFile>> {
+    /// their faces, as [`crate::duplicate_sets::sets`] takes them (E56.1). A
+    /// file is a system copy when its source is the system fonts or its path
+    /// is in one of `system` ([`crate::duplicate_sets::system_folders`]).
+    pub fn duplicate_set_files(&self, system: &[PathBuf]) -> FmResult<Vec<SetFile>> {
         let mut stmt = self.conn.prepare(SET_FILES).map_err(|e| db_error(&e))?;
         let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
         let mut out: Vec<SetFile> = Vec::new();
@@ -96,16 +99,15 @@ impl Index {
                 let size: i64 = row.get(2).map_err(get_err)?;
                 let format: String = row.get(4).map_err(get_err)?;
                 let kind: String = row.get(6).map_err(get_err)?;
+                let path = path_from_sql(row.get_ref(1).map_err(get_err)?)?;
                 out.push(SetFile {
-                    path: path_from_sql(row.get_ref(1).map_err(get_err)?)?
-                        .to_string_lossy()
-                        .into_owned(),
+                    system: kind == "system" || in_system_folder(&path, system),
+                    path: path.to_string_lossy().into_owned(),
                     size: u32::try_from(size).unwrap_or(u32::MAX),
                     hash: FileHash::from(hash).to_hex(),
                     format: format_from_sql(&format).unwrap_or(None),
                     source: SourceId(row.get(5).map_err(get_err)?),
                     in_library_folder: kind == "libraryFolder",
-                    system: kind == "system",
                     faces: Vec::new(),
                 });
             }

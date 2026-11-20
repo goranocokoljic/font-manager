@@ -393,7 +393,7 @@ use fm_api::library::{DuplicateLevel, DuplicateScope};
 
 /// Each set as `level id: path, path`, in the order of the listing.
 fn set_summary(index: &Index, scope: &DuplicateScope) -> Vec<String> {
-    let files = index.duplicate_set_files().expect("set files");
+    let files = index.duplicate_set_files(&[]).expect("set files");
     crate::duplicate_sets::sets(&files, scope)
         .iter()
         .map(|s| {
@@ -468,7 +468,7 @@ fn every_level_comes_from_the_index_and_list_duplicates_keeps_its_groups() {
         ],
     );
     let before = summary(&index);
-    let files = index.duplicate_set_files().expect("set files");
+    let files = index.duplicate_set_files(&[]).expect("set files");
     let sets = crate::duplicate_sets::sets(&files, &DuplicateScope::Library);
     let levels: Vec<(DuplicateLevel, bool)> =
         sets.iter().map(|s| (s.level, s.formats_differ)).collect();
@@ -519,7 +519,7 @@ fn a_system_copy_is_marked_and_a_collection_says_which_other_sets_hold_it() {
         SourceKind::System,
         &[file("/System/Fonts/Fam.ttf", 3, "Fam-Regular", Some("1.0"))],
     );
-    let files = index.duplicate_set_files().expect("set files");
+    let files = index.duplicate_set_files(&[]).expect("set files");
     let sets = crate::duplicate_sets::sets(&files, &DuplicateScope::Library);
     let ids: Vec<&str> = sets.iter().map(|s| s.id.as_str()).collect();
     assert_eq!(ids, ["name:Fam-Bold", "name:Fam-Regular"]);
@@ -541,4 +541,59 @@ fn a_system_copy_is_marked_and_a_collection_says_which_other_sets_hold_it() {
         .expect("system copy");
     assert!(system.system);
     assert!(sets[1].copies.iter().filter(|c| c.system).count() == 1);
+}
+
+#[test]
+fn a_copy_in_an_os_font_folder_the_user_watches_is_a_system_copy() {
+    let mut index = index();
+    add(
+        &mut index,
+        "/fonts",
+        SourceKind::Watched,
+        &[file("/fonts/Fam.ttf", 1, "Fam-Regular", Some("1.0"))],
+    );
+    // The user added the per-user OS font folder as an ordinary folder.
+    add(
+        &mut index,
+        "/home/me/.local/share/fonts",
+        SourceKind::Watched,
+        &[file(
+            "/home/me/.local/share/fonts/Fam.ttf",
+            2,
+            "Fam-Regular",
+            Some("2.0"),
+        )],
+    );
+    let os_folders = [PathBuf::from("/home/me/.local/share/fonts")];
+    let files = index.duplicate_set_files(&os_folders).expect("set files");
+    let sets = crate::duplicate_sets::sets(&files, &DuplicateScope::Library);
+    let marks: Vec<(&str, bool)> = sets[0]
+        .copies
+        .iter()
+        .map(|c| (c.path.as_str(), c.system))
+        .collect();
+    assert_eq!(
+        marks,
+        [
+            ("/fonts/Fam.ttf", false),
+            ("/home/me/.local/share/fonts/Fam.ttf", true),
+        ]
+    );
+    // Without the OS folders only the source kind marks a copy.
+    let files = index.duplicate_set_files(&[]).expect("set files");
+    assert!(files.iter().all(|f| !f.system));
+}
+
+#[test]
+fn the_system_folders_hold_every_folder_the_os_reads_fonts_from() {
+    let folders = crate::duplicate_sets::system_folders();
+    for dir in fm_platform::paths::system_font_folders() {
+        assert!(folders.contains(&dir), "{dir:?} in {folders:?}");
+        let inside = dir.join("Font.ttf");
+        assert!(crate::duplicate_sets::in_system_folder(&inside, &folders));
+    }
+    assert!(!crate::duplicate_sets::in_system_folder(
+        &PathBuf::from("/nowhere/else/Font.ttf"),
+        &folders
+    ));
 }

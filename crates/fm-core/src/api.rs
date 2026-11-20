@@ -1029,7 +1029,7 @@ impl LibraryService for CoreApi {
         {
             return Err(ApiError::not_found(format!("Source {source}")));
         }
-        let files = index.duplicate_set_files()?;
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
         drop(index);
         Ok(crate::duplicate_sets::list(&files, &req))
     }

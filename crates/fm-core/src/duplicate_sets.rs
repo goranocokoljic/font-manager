@@ -20,7 +20,7 @@
 //! copies of it; `fixtures/duplicates/set-cases.json` runs against all three.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use fm_api::common::FontFormat;
 use fm_api::common::Paged;
@@ -28,6 +28,7 @@ use fm_api::library::{
     DuplicateLevel, DuplicateScope, DuplicateSet, DuplicateSetCopy, ListDuplicateSetsRequest,
 };
 use fm_api::{FaceId, SourceId};
+use fm_platform::paths::{Os, is_within, resolve_links, system_font_folders};
 
 /// One file the library shows, with its faces in collection order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +89,35 @@ fn version_key(version: Option<&str>) -> Option<Vec<Part>> {
         rest = tail;
     }
     Some(parts)
+}
+
+/// The folders the OS reads fonts from on this computer, each also through
+/// its links: a copy inside one is a system copy even when the user watches
+/// that folder as a library folder (rule 4). Copies in a system source are
+/// marked by their source as well.
+pub fn system_folders() -> Vec<PathBuf> {
+    with_links(system_font_folders())
+}
+
+/// `folders` and, where it differs, each folder with its links resolved.
+pub fn with_links(folders: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut out = Vec::with_capacity(folders.len() * 2);
+    for dir in folders {
+        let real = resolve_links(&dir);
+        if real != dir {
+            out.push(real);
+        }
+        out.push(dir);
+    }
+    out
+}
+
+/// Whether `path` is in one of `folders` ([`system_folders`]), compared as
+/// the OS compares paths (without case on Windows and macOS).
+pub fn in_system_folder(path: &Path, folders: &[PathBuf]) -> bool {
+    folders
+        .iter()
+        .any(|dir| is_within(Os::current(), path, dir))
 }
 
 /// The most sets one page holds.
