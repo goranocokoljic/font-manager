@@ -2408,7 +2408,7 @@
       }
     },
     "set": {
-      "region": "Set {name}",
+      "region": "Duplicate set {name}",
       "copies": {
         "one": "{count} copy",
         "other": "{count} copies"
@@ -2456,7 +2456,7 @@
       "addKey": "Enter"
     },
     "compare": {
-      "title": "{a} and {b}",
+      "title": "Compare {a} with {b}",
       "close": "Close the comparison",
       "same": "The copies hold the same data."
     },
