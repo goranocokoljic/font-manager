@@ -790,6 +790,29 @@ impl Index {
             settle(&tx, first.id, Field::FamilyLicense, &merged_license.license)?;
         }
 
+        // The hidden copies and the answered sets (E56.8) merge as sets;
+        // what another machine (or this one before a rebuild) wrote is
+        // applied here, so the file holds what the index holds.
+        let duplicates = if family.is_empty() {
+            None
+        } else {
+            let ids: Vec<u32> = family.iter().map(|f| f.id).collect();
+            let local = local_duplicates(&tx, &src.root, &ids)?;
+            let disk_dups = disk
+                .as_ref()
+                .map_or(base.duplicates.as_ref(), |d| d.duplicates.as_ref())
+                .cloned()
+                .unwrap_or_default();
+            let ancestor = file_descends.then_some(base.duplicates.as_ref()).flatten();
+            let merged = sidecar::merge_duplicates(ancestor, &local, &disk_dups);
+            let at = now_text(&tx)?;
+            let written = apply_duplicates(&tx, &src.root, &local, merged, &at)?;
+            if written != local {
+                out.families_changed += 1;
+            }
+            Some(written).filter(|d| !d.is_empty())
+        };
+
         // The sidecar of a family here is written with what the index holds
         // now, plus the entries of faces this machine has not indexed.
         let new_base = if let Some(first) = family.first().filter(|_| original.is_none()) {
@@ -880,6 +903,7 @@ impl Index {
                         .cloned(),
                 );
             }
+            next.duplicates = duplicates.clone();
             next.normalize();
             let mut revs = absorbed.revs(None, FILE_SCOPE);
             revs.extend(lineage(
@@ -893,7 +917,8 @@ impl Index {
             );
             tx.commit().map_err(|e| db_error(&e))?;
             let mut stamp = disk_stamp;
-            let nothing = next.faces.is_empty() && next.family_meta.is_none();
+            let nothing =
+                next.faces.is_empty() && next.family_meta.is_none() && next.duplicates.is_none();
             if disk.as_ref() != Some(&next) && !(disk.is_none() && nothing) {
                 match write_file(src, name, &next) {
                     Ok(written) => stamp = Some(written),
@@ -946,6 +971,7 @@ impl Index {
         // not taken for a removal, and notes it kept are not taken for new.
         if !family_here {
             content.family_meta = base.family_meta.clone();
+            content.duplicates = base.duplicates.clone();
         }
         self.store_base(src.id, name, &content, stamp.as_deref())?;
         Ok(out)
@@ -1654,6 +1680,134 @@ fn api_field(field: Field) -> SidecarField {
 fn indexed_only(mut sidecar: Sidecar, faces: &SourceFaces) -> Sidecar {
     sidecar.faces.retain(|e| faces.get(&e.key()).is_some());
     sidecar
+}
+
+/// Now, as an RFC 3339 UTC timestamp.
+fn now_text(conn: &rusqlite::Connection) -> FmResult<String> {
+    conn.query_row("SELECT strftime('%Y-%m-%dT%H:%M:%SZ', 'now')", [], |r| {
+        r.get(0)
+    })
+    .map_err(|e| db_error(&e))
+}
+
+/// The duplicates entries this machine holds for the faces `faces` of a
+/// family in the source at `root` (E56.8): the hidden copies among their
+/// files, and the decisions that name one of their files' hashes.
+fn local_duplicates(
+    conn: &rusqlite::Connection,
+    root: &Path,
+    faces: &[u32],
+) -> FmResult<sidecar::Duplicates> {
+    let mut files = conn
+        .prepare_cached(
+            "SELECT font_file.path, lower(hex(font_file.hash)),
+                    (SELECT lower(hex(hidden_copy.hash)) FROM hidden_copy
+                     WHERE hidden_copy.path = font_file.path)
+             FROM face JOIN font_file ON font_file.id = face.file_id WHERE face.id = ?1",
+        )
+        .map_err(|e| db_error(&e))?;
+    let mut hidden = BTreeSet::new();
+    let mut hashes = BTreeSet::new();
+    for face in faces {
+        let mut rows = files.query([face]).map_err(|e| db_error(&e))?;
+        while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
+            let path = path_from_sql(row.get_ref(0).map_err(|e| db_error(&e))?)?;
+            let hash: Option<String> = row.get(1).map_err(|e| db_error(&e))?;
+            let hidden_hash: Option<String> = row.get(2).map_err(|e| db_error(&e))?;
+            hashes.extend(hash);
+            if let (Some(file), Some(hash)) = (relative(root, &path), hidden_hash) {
+                hidden.insert(sidecar::HiddenEntry { file, hash });
+            }
+        }
+    }
+    let decisions = super::hidden::decisions(conn)?
+        .into_iter()
+        .filter(|d| d.hashes.iter().any(|h| hashes.contains(h)))
+        .map(|d| sidecar::DecisionEntry {
+            set: d.set,
+            answer: super::hidden::answer_to_sql(d.answer).to_owned(),
+            hashes: d.hashes,
+        })
+        .collect();
+    let mut out = sidecar::Duplicates {
+        hidden: hidden.into_iter().collect(),
+        decisions,
+    };
+    out.normalize();
+    Ok(out)
+}
+
+/// Writes `merged` over `local` (both of one family in the source at
+/// `root`): hides the copies and remembers the decisions `merged` adds,
+/// shows the copies and forgets the decisions it drops. A hidden entry for
+/// a path the index holds another file at (another hash) is dropped: that
+/// file is shown. Returns what the sidecar holds then.
+fn apply_duplicates(
+    conn: &rusqlite::Connection,
+    root: &Path,
+    local: &sidecar::Duplicates,
+    mut merged: sidecar::Duplicates,
+    at: &str,
+) -> FmResult<sidecar::Duplicates> {
+    let path_of = |file: &str| -> PathBuf {
+        file.split('/')
+            .fold(root.to_path_buf(), |p, part| p.join(part))
+    };
+    let mut indexed_hash = conn
+        .prepare_cached(
+            "SELECT lower(hex(hash)) FROM font_file WHERE path = ?1 AND hash IS NOT NULL",
+        )
+        .map_err(|e| db_error(&e))?;
+    let mut keep = Vec::new();
+    for h in std::mem::take(&mut merged.hidden) {
+        let path = path_of(&h.file);
+        let other: Option<String> = indexed_hash
+            .query_row([super::files::path_to_sql(&path)], |r| r.get(0))
+            .optional()
+            .map_err(|e| db_error(&e))?;
+        if other.is_some_and(|o| o != h.hash) {
+            continue;
+        }
+        if !local.hidden.contains(&h) {
+            super::hidden::hide(conn, &path, &h.hash, at, None)?;
+        }
+        keep.push(h);
+    }
+    merged.hidden = keep;
+    for h in &local.hidden {
+        if !merged.hidden.contains(h) {
+            super::hidden::show(conn, &path_of(&h.file))?;
+        }
+    }
+    let keys = |d: &sidecar::Duplicates| -> BTreeSet<(String, Vec<String>)> {
+        d.decisions
+            .iter()
+            .map(sidecar::DecisionEntry::key)
+            .collect()
+    };
+    let merged_keys = keys(&merged);
+    merged
+        .decisions
+        .retain(|d| super::hidden::answer_from_sql(&d.answer).is_some());
+    for d in &merged.decisions {
+        let local_answer = local
+            .decisions
+            .iter()
+            .find(|l| l.key() == d.key())
+            .map(|l| l.answer.as_str());
+        if local_answer != Some(d.answer.as_str())
+            && let Some(answer) = super::hidden::answer_from_sql(&d.answer)
+        {
+            super::hidden::decide(conn, &d.set, &d.hashes, answer, at)?;
+        }
+    }
+    for d in &local.decisions {
+        if !merged_keys.contains(&d.key()) {
+            super::hidden::forget(conn, &d.set, &d.hashes)?;
+        }
+    }
+    merged.normalize();
+    Ok(merged)
 }
 
 /// `path` relative to `root`, with `/` separators; `None` outside `root` or

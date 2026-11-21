@@ -115,6 +115,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("cancel_cleanup", "1".into()),
         ("list_cleanup_sessions", String::new()),
         ("undo_cleanup_session", r#"{"session":1}"#.into()),
+        ("list_hidden_copies", String::new()),
+        ("show_hidden_copies", r#"{"paths":["/nope.ttf"]}"#.into()),
+        ("decide_duplicate_set", r#"{"set":"name:Nope","answer":"keepBoth"}"#.into()),
+        ("list_duplicate_decisions", String::new()),
+        ("take_back_duplicate_decision", r#"{"decision":999}"#.into()),
         ("list_sidecar_conflicts", String::new()),
         (
             "resolve_sidecar_conflict",

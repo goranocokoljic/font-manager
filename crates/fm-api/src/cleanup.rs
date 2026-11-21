@@ -20,7 +20,7 @@ use crate::activation::ActivationMode;
 use crate::common::Timestamp;
 use crate::library::{DuplicateLevel, TrashMoveStatus};
 use crate::settings::MyLanguagesStatus;
-use crate::{ApiError, ApiResult, FaceId, ResolutionId, SourceId};
+use crate::{ApiError, ApiResult, DecisionId, FaceId, ResolutionId, SourceId};
 
 /// The version of the [`CleanupPlan`] format this build writes and reads.
 pub const CLEANUP_PLAN_VERSION: u32 = 1;
@@ -362,10 +362,14 @@ pub struct SessionFile {
     pub kept: String,
     /// Its size in bytes, when known.
     pub size: Option<u32>,
-    /// What happened to it.
+    /// What happened to it. For a hidden file (`removed_as: hide`),
+    /// `trashed` means it is hidden and `restored` that it is shown again.
     pub status: TrashMoveStatus,
     /// Why it was skipped or failed, in one sentence.
     pub message: Option<String>,
+    /// How it left the library: the trash, or hidden (E56.8).
+    #[serde(default)]
+    pub removed_as: RemoveAs,
 }
 
 /// A cleanup session: one applied plan, or one "Keep this one" action.
@@ -394,10 +398,15 @@ pub struct CleanupSession {
     pub frees: u32,
     /// Its files, in the order they were done.
     pub files: Vec<SessionFile>,
+    /// The files that are hidden now (E56.8): they stay where they are and
+    /// free nothing.
+    #[serde(default)]
+    pub hidden: u32,
 }
 
 /// Undo a session whole or some of its files
-/// ([`crate::LibraryService::undo_cleanup_session`]).
+/// ([`crate::LibraryService::undo_cleanup_session`]). A hidden file is
+/// shown again; its merge is taken back as a trashed file's is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UndoCleanupRequest {
@@ -406,6 +415,103 @@ pub struct UndoCleanupRequest {
     /// The files to put back; every file of the session when empty.
     #[serde(default)]
     pub paths: Vec<String>,
+}
+
+/// A copy hidden from the library (E56.8): its file stays where it is, its
+/// faces leave the library, search and activation lists. It is known by its
+/// path and hash: another file at that path is shown again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HiddenCopy {
+    /// Absolute file path.
+    pub path: String,
+    /// blake3 hash of the file that was hidden, hex.
+    pub hash: String,
+    /// When it was hidden here, or read from a sidecar.
+    pub at: Timestamp,
+    /// The session that hid it; `None` when it came from a sidecar (another
+    /// machine, a rebuilt index).
+    pub session: Option<ResolutionId>,
+    /// The set it left, when known.
+    pub set: Option<String>,
+    /// The copy kept for it, when known.
+    pub kept: Option<String>,
+    /// Its family, for display; `None` when the index holds no face of it.
+    pub family: Option<String>,
+    /// The file at the path is the one that was hidden: it is out of the
+    /// library now. False when no such file is indexed (yet).
+    pub in_effect: bool,
+}
+
+/// Show hidden copies again, one by one
+/// ([`crate::LibraryService::show_hidden_copies`]). A whole session is
+/// shown again by [`crate::LibraryService::undo_cleanup_session`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ShowHiddenRequest {
+    /// The hidden copies' paths.
+    pub paths: Vec<String>,
+}
+
+/// The answer to a set that is not to be cleaned up (E56.8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum DuplicateAnswer {
+    /// The files are not duplicates of each other.
+    NotDuplicates,
+    /// They are, and the user keeps every copy.
+    KeepBoth,
+}
+
+/// Answer a duplicate set ([`crate::LibraryService::decide_duplicate_set`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DecideSetRequest {
+    /// The set id ([`crate::library::DuplicateSet::id`]).
+    pub set: String,
+    /// The answer.
+    pub answer: DuplicateAnswer,
+}
+
+/// A remembered answer to a duplicate set (E56.8). It holds for exactly
+/// the files it names, by hash: when one of them changes or another copy
+/// joins the set, the set is listed again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateDecision {
+    /// The decision, to take it back.
+    pub id: DecisionId,
+    /// The set id.
+    pub set: String,
+    /// The answer.
+    pub answer: DuplicateAnswer,
+    /// The blake3 hash of each copy of the set when it was answered, hex,
+    /// sorted; identical copies repeat theirs.
+    pub hashes: Vec<String>,
+    /// The library files that have one of those hashes now, sorted.
+    pub files: Vec<String>,
+    /// When it was answered.
+    pub at: Timestamp,
+    /// The set no longer has exactly these files (one changed, another
+    /// copy joined): it is listed again.
+    pub outdated: bool,
+}
+
+/// Take a decision back ([`crate::LibraryService::take_back_duplicate_decision`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TakeBackDecisionRequest {
+    /// The decision.
+    pub decision: DecisionId,
+}
+
+/// The key a decision is remembered by: the set id and the hash of each of
+/// its copies, sorted. Identical copies repeat their hash, so a new
+/// identical copy changes the key as a changed file does.
+pub fn decision_key(set: &str, hashes: &[String]) -> String {
+    let mut h: Vec<&str> = hashes.iter().map(String::as_str).collect();
+    h.sort_unstable();
+    format!("{set}|{}", h.join(","))
 }
 
 #[cfg(test)]

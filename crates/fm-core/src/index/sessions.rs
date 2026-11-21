@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use fm_api::cleanup::{CleanupSession, SessionFile, SessionKind};
+use fm_api::cleanup::{CleanupSession, RemoveAs, SessionFile, SessionKind};
 use fm_api::library::{TrashMove, TrashMoveStatus};
 use fm_api::{FaceId, ResolutionId};
 use rusqlite::{OptionalExtension, params};
@@ -32,6 +32,8 @@ pub(crate) struct SessionMove {
     pub kept: Option<String>,
     /// Its size in bytes, when known.
     pub size: Option<u32>,
+    /// It was hidden, not trashed (E56.8): `Trashed` means hidden.
+    pub hidden: bool,
 }
 
 /// The head row of a session.
@@ -159,8 +161,8 @@ impl Index {
                 tx.prepare_cached(
                     "INSERT INTO resolution_move
                          (resolution_id, position, path, display, status, message, location, info,
-                          set_id, kept, size)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                          set_id, kept, size, hidden)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 )
                 .and_then(|mut st| {
                     st.execute(params![
@@ -175,6 +177,7 @@ impl Index {
                         m.set,
                         m.kept,
                         m.size,
+                        m.hidden,
                     ])
                 })
                 .map_err(|e| db_error(&e))?;
@@ -236,7 +239,8 @@ impl Index {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT position, path, display, status, message, location, info, set_id, kept, size
+                "SELECT position, path, display, status, message, location, info, set_id, kept, size,
+                        hidden
                  FROM resolution_move WHERE resolution_id = ?1 ORDER BY position",
             )
             .map_err(|e| db_error(&e))?;
@@ -267,6 +271,7 @@ impl Index {
                 set: row.get(7).map_err(|e| db_error(&e))?,
                 kept: row.get(8).map_err(|e| db_error(&e))?,
                 size: row.get(9).map_err(|e| db_error(&e))?,
+                hidden: row.get(10).map_err(|e| db_error(&e))?,
             });
         }
         Ok(out)
@@ -299,7 +304,13 @@ impl Index {
             )
             .map_err(|e| db_error(&e))?;
             if s.row.status == TrashMoveStatus::Restored {
-                set_gone(&tx, &s.path, false)?;
+                if m.hidden {
+                    // Shown again: the row goes first, so the trigger does
+                    // not hide the file again.
+                    super::hidden::show(&tx, &s.path)?;
+                } else {
+                    set_gone(&tx, &s.path, false)?;
+                }
             }
         }
         tx.execute(
@@ -317,7 +328,10 @@ impl Index {
             touched.extend(metadata_merge::take_back(&tx, i64::from(id.0))?);
         }
         tx.commit().map_err(|e| db_error(&e))?;
-        if !touched.is_empty() {
+        let shown = moves
+            .iter()
+            .any(|m| m.hidden && m.stored.row.status == TrashMoveStatus::Restored);
+        if !touched.is_empty() || shown {
             self.mirror_sidecars();
         }
         Ok(touched)
@@ -345,12 +359,24 @@ pub(crate) fn session(head: &SessionHead, moves: &[SessionMove], running: bool) 
             size: m.size,
             status: m.stored.row.status,
             message: m.stored.row.message.clone(),
+            removed_as: if m.hidden {
+                RemoveAs::Hide
+            } else {
+                RemoveAs::Trash
+            },
         })
         .collect();
+    let out = |f: &&SessionFile| f.status == TrashMoveStatus::Trashed;
     let trashed: Vec<&SessionFile> = files
         .iter()
-        .filter(|f| f.status == TrashMoveStatus::Trashed)
+        .filter(out)
+        .filter(|f| f.removed_as == RemoveAs::Trash)
         .collect();
+    let hidden = files
+        .iter()
+        .filter(out)
+        .filter(|f| f.removed_as == RemoveAs::Hide)
+        .count();
     let sets: std::collections::BTreeSet<&str> = files
         .iter()
         .map(|f| f.set.as_deref().unwrap_or(f.kept.as_str()))
@@ -373,6 +399,7 @@ pub(crate) fn session(head: &SessionHead, moves: &[SessionMove], running: bool) 
         trashed: u32::try_from(trashed.len()).unwrap_or(u32::MAX),
         frees,
         files,
+        hidden: u32::try_from(hidden).unwrap_or(u32::MAX),
     }
 }
 

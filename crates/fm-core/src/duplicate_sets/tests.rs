@@ -9,6 +9,9 @@ struct Case {
     name: String,
     #[serde(default)]
     scope: DuplicateScope,
+    /// Keys of the sets answered "not duplicates" or "keep both" (E56.8).
+    #[serde(default)]
+    decided: HashSet<String>,
     files: Vec<CaseFile>,
     sets: Value,
 }
@@ -89,7 +92,7 @@ fn every_case_of_the_case_file_gives_its_sets() {
     let cases = cases();
     assert!(cases.len() >= 10);
     for case in &cases {
-        let got = summary(&sets(&files(case), &case.scope));
+        let got = summary(&sets_with(&files(case), &case.scope, &case.decided));
         assert_eq!(got, case.sets, "{}", case.name);
     }
 }

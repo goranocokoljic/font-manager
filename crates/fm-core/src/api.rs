@@ -1040,7 +1040,8 @@ impl LibraryService for CoreApi {
             return Err(ApiError::not_found(format!("Source {source}")));
         }
         let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
-        let mut page = crate::duplicate_sets::list(&files, &req);
+        let decided = index.decided_keys()?;
+        let mut page = crate::duplicate_sets::list_with(&files, &req, &decided);
         // The facts of the copies on this page only (E56.2): the listing
         // budget (ADR 0027) is spent on the sets, not on every copy.
         let faces: Vec<FaceId> = page
@@ -1080,7 +1081,8 @@ impl LibraryService for CoreApi {
             return Err(ApiError::not_found(format!("Source {source}")));
         }
         let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
-        let mut sets = crate::duplicate_sets::sets(&files, &req.scope);
+        let decided = index.decided_keys()?;
+        let mut sets = crate::duplicate_sets::sets_with(&files, &req.scope, &decided);
         if crate::keeper_policy::needs_facts(tried, langs)
             || crate::keeper_policy::needs_facts(saved, langs)
         {
@@ -1192,6 +1194,35 @@ impl LibraryService for CoreApi {
         req: fm_api::cleanup::UndoCleanupRequest,
     ) -> ApiResult<fm_api::cleanup::CleanupSession> {
         self.cleanup_undo(req)
+    }
+
+    fn list_hidden_copies(&self) -> ApiResult<Vec<fm_api::cleanup::HiddenCopy>> {
+        self.hidden_list()
+    }
+
+    fn show_hidden_copies(
+        &self,
+        req: fm_api::cleanup::ShowHiddenRequest,
+    ) -> ApiResult<Vec<fm_api::cleanup::HiddenCopy>> {
+        self.hidden_show(req)
+    }
+
+    fn decide_duplicate_set(
+        &self,
+        req: fm_api::cleanup::DecideSetRequest,
+    ) -> ApiResult<fm_api::cleanup::DuplicateDecision> {
+        self.decision_make(req)
+    }
+
+    fn list_duplicate_decisions(&self) -> ApiResult<Vec<fm_api::cleanup::DuplicateDecision>> {
+        self.decision_list()
+    }
+
+    fn take_back_duplicate_decision(
+        &self,
+        req: fm_api::cleanup::TakeBackDecisionRequest,
+    ) -> ApiResult<()> {
+        self.decision_take_back(req)
     }
 
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {
@@ -2433,6 +2464,21 @@ pub(crate) fn folder_roots(index: &Index) -> ApiResult<Vec<crate::folder_pairs::
 /// Duplicates module.
 fn policy_groups(index: &Index, settings: &Settings) -> ApiResult<Vec<DuplicateGroup>> {
     let mut groups = index.duplicates()?;
+    // A group whose files are exactly those of a set the user answered "not
+    // duplicates" or "keep both" (E56.8) is not a problem any more.
+    let answered: std::collections::HashSet<Vec<String>> = index
+        .duplicate_decisions()?
+        .into_iter()
+        .map(|d| d.hashes)
+        .collect();
+    if !answered.is_empty() {
+        groups.retain(|g| {
+            // One hash per copy, sorted, as a decision stores them.
+            let mut hashes: Vec<String> = g.copies.iter().map(|c| c.hash.clone()).collect();
+            hashes.sort();
+            !answered.contains(&hashes)
+        });
+    }
     if groups.is_empty() {
         return Ok(groups);
     }

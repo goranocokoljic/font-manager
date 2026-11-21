@@ -33,7 +33,8 @@ use crate::error::FmError;
 use crate::index::{CopyFile, Index, MergeChoice, MergePlan, StoredMove};
 
 /// Why a copy the app activated does not move (rule 3).
-const ACTIVE_COPY: &str = "This copy is active. Deactivate it first, then move it to the trash.";
+pub(crate) const ACTIVE_COPY: &str =
+    "This copy is active. Deactivate it first, then move it to the trash.";
 /// Why a copy in a system font folder does not move (rule 4).
 const SYSTEM_COPY: &str = "This copy is in a system font folder. Font Fu never moves system fonts.";
 /// Why a copy that is no longer on disk does not move.

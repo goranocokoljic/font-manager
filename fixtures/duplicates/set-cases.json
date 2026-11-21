@@ -237,5 +237,42 @@
         ]
       }
     ]
+  },
+  {
+    "name": "a set answered for exactly its files is left out, and the other set of its collection no longer names it",
+    "decided": ["name:Fam-Bold|f0,f2"],
+    "files": [
+      { "path": "/fonts/Family.ttc", "hash": "f0", "format": "ttc", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "Fam-Regular", "version": "1.0" }, { "face": 2, "name": "Fam-Bold", "version": "1.0" }] },
+      { "path": "/fonts/Fam-Regular.ttf", "hash": "f1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 4, "name": "Fam-Regular", "version": "1.0" }] },
+      { "path": "/fonts/Fam-Bold.otf", "hash": "f2", "format": "otf", "source": 1, "kind": "watched", "faces": [{ "face": 5, "name": "Fam-Bold", "version": "2.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "name:Fam-Regular", "level": "sameVersion", "postscriptName": "Fam-Regular", "formatsDiffer": true,
+        "copies": [
+          { "path": "/fonts/Fam-Regular.ttf", "face": 4, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] },
+          { "path": "/fonts/Family.ttc", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": [], "otherSets": [] }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "an answer for two copies does not hold once a third identical copy joins",
+    "decided": ["identical:m1|m1,m1"],
+    "files": [
+      { "path": "/fonts/a/One.ttf", "hash": "m1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 1, "name": "One", "version": "1.0" }] },
+      { "path": "/fonts/b/One.ttf", "hash": "m1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 2, "name": "One", "version": "1.0" }] },
+      { "path": "/fonts/c/One.ttf", "hash": "m1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{ "face": 3, "name": "One", "version": "1.0" }] }
+    ],
+    "sets": [
+      {
+        "id": "identical:m1", "level": "identical", "postscriptName": "One", "formatsDiffer": false,
+        "copies": [
+          { "path": "/fonts/a/One.ttf", "face": 1, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/b/One.ttf", "/fonts/c/One.ttf"], "otherSets": [] },
+          { "path": "/fonts/b/One.ttf", "face": 2, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/a/One.ttf", "/fonts/c/One.ttf"], "otherSets": [] },
+          { "path": "/fonts/c/One.ttf", "face": 3, "version": "1.0", "system": false, "inScope": true, "identicalWith": ["/fonts/a/One.ttf", "/fonts/b/One.ttf"], "otherSets": [] }
+        ]
+      }
+    ]
   }
 ]

@@ -68,6 +68,11 @@ service!(LibraryService {
     cancel_cleanup(job: JobId) -> ();
     list_cleanup_sessions() -> Vec<CleanupSession>;
     undo_cleanup_session(req: UndoCleanupRequest) -> CleanupSession;
+    list_hidden_copies() -> Vec<HiddenCopy>;
+    show_hidden_copies(req: ShowHiddenRequest) -> Vec<HiddenCopy>;
+    decide_duplicate_set(req: DecideSetRequest) -> DuplicateDecision;
+    list_duplicate_decisions() -> Vec<DuplicateDecision>;
+    take_back_duplicate_decision(req: TakeBackDecisionRequest) -> ();
     list_sidecar_conflicts() -> Vec<SidecarConflict>;
     resolve_sidecar_conflict(req: ResolveSidecarConflictRequest) -> ();
     list_glyphs(req: GlyphsRequest) -> GlyphPage;

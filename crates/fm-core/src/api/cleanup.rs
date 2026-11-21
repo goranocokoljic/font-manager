@@ -10,10 +10,12 @@ use fm_api::activation::{
 };
 use fm_api::cleanup::{
     ApplyCleanupRequest, CLEANUP_PLAN_VERSION, CleanupAction, CleanupPlan, CleanupScope,
-    CleanupSession, MetadataConflict, MetadataField, MetadataValue, PlanCleanupRequest,
+    CleanupSession, DecideSetRequest, DuplicateDecision, HiddenCopy, MetadataConflict,
+    MetadataField, MetadataValue, PlanCleanupRequest, ShowHiddenRequest, TakeBackDecisionRequest,
     UndoCleanupRequest,
 };
 use fm_api::event::Event;
+use fm_api::library::DuplicateScope;
 use fm_api::{ActivationService, ApiError, ApiResult, FaceId, JobId};
 
 use super::{CoreApi, folder_roots, lock};
@@ -100,6 +102,7 @@ impl CoreApi {
             HashMap::new()
         };
         let active = index.active_files()?;
+        let decided = index.decided_answers()?;
         let names = crate::keeper_policy::LanguageNames::load(langs)?;
         let exists = |p: &str| std::fs::symlink_metadata(p).is_ok();
         let ctx = crate::cleanup::PlanContext {
@@ -111,6 +114,7 @@ impl CoreApi {
             my_languages: langs,
             names: &names,
             exists: &exists,
+            decided: &decided,
         };
         let planned = crate::cleanup::plan(&ctx, &req)?;
         // The metadata conflicts of each set's leaving copies (E56.5).
@@ -223,5 +227,62 @@ impl CoreApi {
         let session = self.resolver()?.undo_session(&req)?;
         *lock(&self.files) = None;
         Ok(session)
+    }
+
+    pub(super) fn hidden_list(&self) -> ApiResult<Vec<HiddenCopy>> {
+        self.resolver()?.hidden_copies()
+    }
+
+    pub(super) fn hidden_show(&self, req: ShowHiddenRequest) -> ApiResult<Vec<HiddenCopy>> {
+        let shown = self.resolver()?.show_hidden(&req)?;
+        // The next scan reads the shown files' state from the index again.
+        *lock(&self.files) = None;
+        Ok(shown)
+    }
+
+    pub(super) fn decision_make(&self, req: DecideSetRequest) -> ApiResult<DuplicateDecision> {
+        let mut index = self.lock();
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        let decided = index.decided_keys()?;
+        let sets = crate::duplicate_sets::sets_with(&files, &DuplicateScope::Library, &decided);
+        let set = sets
+            .iter()
+            .find(|s| s.id == req.set)
+            .ok_or_else(|| ApiError::not_found(format!("Duplicate set {}", req.set)))?;
+        // One hash per copy: a new identical copy changes the answer's key.
+        let mut hashes: Vec<String> = set.copies.iter().map(|c| c.hash.clone()).collect();
+        hashes.sort();
+        let id = index.decide_set(&set.id, &hashes, req.answer)?;
+        let made = index
+            .duplicate_decisions()?
+            .into_iter()
+            .find(|d| d.id == id)
+            .ok_or_else(|| ApiError::not_found(format!("Decision {id}")))?;
+        Ok(made)
+    }
+
+    pub(super) fn decision_list(&self) -> ApiResult<Vec<DuplicateDecision>> {
+        let index = self.lock();
+        let mut out = index.duplicate_decisions()?;
+        if out.is_empty() {
+            return Ok(out);
+        }
+        // A decision whose set no longer has exactly its files is outdated:
+        // the set is listed again.
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        drop(index);
+        let current: std::collections::HashSet<String> =
+            crate::duplicate_sets::sets(&files, &DuplicateScope::Library)
+                .iter()
+                .map(crate::duplicate_sets::set_key)
+                .collect();
+        for d in &mut out {
+            d.outdated = !current.contains(&fm_api::cleanup::decision_key(&d.set, &d.hashes));
+        }
+        Ok(out)
+    }
+
+    pub(super) fn decision_take_back(&self, req: TakeBackDecisionRequest) -> ApiResult<()> {
+        Ok(self.lock().take_back_decision(req.decision)?)
     }
 }

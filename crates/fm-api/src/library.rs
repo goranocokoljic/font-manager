@@ -2220,6 +2220,31 @@ pub trait LibraryService {
         &self,
         req: crate::cleanup::UndoCleanupRequest,
     ) -> ApiResult<crate::cleanup::CleanupSession>;
+    /// The copies hidden from the library (E56.8), by path; a cleanup
+    /// planned with `removeAs: hide` hides them.
+    fn list_hidden_copies(&self) -> ApiResult<Vec<crate::cleanup::HiddenCopy>>;
+    /// Shows hidden copies again, one by one: a copy a session hid is
+    /// undone in that session (its merge is taken back as an undo does).
+    /// Answers the copies shown. A path that is not hidden is
+    /// `InvalidRequest`.
+    fn show_hidden_copies(
+        &self,
+        req: crate::cleanup::ShowHiddenRequest,
+    ) -> ApiResult<Vec<crate::cleanup::HiddenCopy>>;
+    /// Answers a duplicate set "not duplicates" or "keep both" (E56.8): it
+    /// is remembered for exactly its files (their hashes) and the set is no
+    /// longer listed or counted. A set that is not listed is `NotFound`.
+    fn decide_duplicate_set(
+        &self,
+        req: crate::cleanup::DecideSetRequest,
+    ) -> ApiResult<crate::cleanup::DuplicateDecision>;
+    /// The remembered answers, newest first.
+    fn list_duplicate_decisions(&self) -> ApiResult<Vec<crate::cleanup::DuplicateDecision>>;
+    /// Takes an answer back: its set is listed again.
+    fn take_back_duplicate_decision(
+        &self,
+        req: crate::cleanup::TakeBackDecisionRequest,
+    ) -> ApiResult<()>;
     /// The sidecar conflicts that wait for the user (E28.1): fields this
     /// machine and another set to different values, oldest first.
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>>;

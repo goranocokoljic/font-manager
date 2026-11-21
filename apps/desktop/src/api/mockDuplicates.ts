@@ -71,7 +71,11 @@ const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * Every duplicate set among `files` with a copy in `scope`, sets by PostScript name
  * (case-insensitive, then exact, then id), copies by path.
  */
-export const duplicateSets = (files: SetFile[], scope: DuplicateScope): DuplicateSet[] => {
+export const duplicateSets = (
+  files: SetFile[],
+  scope: DuplicateScope,
+  decided: ReadonlySet<string> = new Set(),
+): DuplicateSet[] => {
   const byName = new Map<string, { file: number; face: number }[]>();
   files.forEach((file, fi) => {
     const seen = new Set<string>();
@@ -124,10 +128,20 @@ export const duplicateSets = (files: SetFile[], scope: DuplicateScope): Duplicat
       })),
     });
   }
+  // A set answered "not duplicates" or "keep both" for exactly its files (E56.8).
+  const listed = drafts.filter(
+    (d) =>
+      !decided.has(
+        decisionKey(
+          d.id,
+          d.members.map((m) => files[m.file]!.hash),
+        ),
+      ),
+  );
   const setsOf = new Map<number, string[]>();
-  for (const d of drafts)
+  for (const d of listed)
     for (const m of d.members) setsOf.set(m.file, [...(setsOf.get(m.file) ?? []), d.id]);
-  const out = drafts
+  const out = listed
     .filter((d) => d.members.some((m) => inScope(files[m.file]!, scope)))
     .map((d): DuplicateSet => {
       const members = d.members
@@ -178,12 +192,27 @@ export const duplicateSets = (files: SetFile[], scope: DuplicateScope): Duplicat
   });
 };
 
-/** The page `req` asks for of the sets among `files`. */
+/**
+ * The key a decision about a set is remembered by: its id and one hash per copy, sorted,
+ * as `fm_api::cleanup::decision_key` makes it.
+ */
+export const decisionKey = (set: string, hashes: string[]): string =>
+  `${set}|${hashes.slice().sort(byString).join(',')}`;
+
+/** The key a decision about `set` is remembered by. */
+export const setKey = (set: DuplicateSet): string =>
+  decisionKey(
+    set.id,
+    set.copies.map((c) => c.hash),
+  );
+
+/** The page `req` asks for of the sets among `files`, without the sets in `decided`. */
 export const listDuplicateSets = (
   files: SetFile[],
   req: ListDuplicateSetsRequest,
+  decided: ReadonlySet<string> = new Set(),
 ): Paged<DuplicateSet> => {
-  const all = duplicateSets(files, req.scope ?? { kind: 'library' });
+  const all = duplicateSets(files, req.scope ?? { kind: 'library' }, decided);
   const offset = req.page?.offset ?? 0;
   const limit = Math.min(req.page?.limit ?? 100, MAX_PAGE);
   return { items: all.slice(offset, offset + limit), total: all.length };

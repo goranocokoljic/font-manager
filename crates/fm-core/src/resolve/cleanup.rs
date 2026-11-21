@@ -29,8 +29,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use fm_api::activation::ActivationMode;
 use fm_api::cleanup::{
-    ApplyCleanupRequest, CleanupAction, CleanupFile, CleanupSession, MetadataChoice, MetadataField,
-    UndoCleanupRequest,
+    ApplyCleanupRequest, CleanupAction, CleanupFile, CleanupSession, HiddenCopy, MetadataChoice,
+    MetadataField, ShowHiddenRequest, UndoCleanupRequest,
 };
 use fm_api::event::Event;
 use fm_api::library::{TrashMove, TrashMoveStatus};
@@ -56,6 +56,8 @@ const CHANGED: &str = "The file changed since the plan was made, so it was not m
 const KEPT_GONE: &str = "The copy to keep is not there any more, so this copy was not moved.";
 /// Why a file that left the library stays.
 const NOT_IN_LIBRARY: &str = "The file is no longer in the library.";
+/// Why a copy that could not be hidden stays.
+const HIDE_FAILED: &str = "The copy could not be hidden, so it stays in the library.";
 
 /// Moves the activation of a leaving copy to the kept copy: deactivate the
 /// `leaving` faces, activate the `kept` faces in `mode`. Both are the
@@ -126,21 +128,10 @@ impl DuplicateResolver {
         Ok(())
     }
 
-    /// Checks a request before its job starts: the plan's format, no hidden
-    /// copy (E56.8), and every choice names a conflict of the plan.
+    /// Checks a request before its job starts: the plan's format, and every
+    /// choice names a conflict of the plan.
     pub fn check_cleanup(&self, req: &ApplyCleanupRequest) -> ApiResult<()> {
         req.plan.check()?;
-        if req
-            .plan
-            .files
-            .iter()
-            .any(|f| f.action == CleanupAction::Hide)
-        {
-            return Err(ApiError::new(
-                ErrorCode::Unsupported,
-                "Hiding a copy is not available yet. Plan the cleanup with the trash.",
-            ));
-        }
         for c in &req.choices {
             if !req
                 .plan
@@ -271,7 +262,7 @@ impl DuplicateResolver {
                     cancelled = true;
                     break;
                 }
-                let m = self.apply_file(f, &files, move_activation, position);
+                let m = self.apply_file(f, &files, move_activation, position, session);
                 position += 1;
                 done += 1;
                 self.progress(job, Some(session), done, total, Some(f.path.clone()), None);
@@ -295,6 +286,10 @@ impl DuplicateResolver {
                 }
             };
             pending_files += moves.len();
+            // A hidden copy marked its faces for their sidecar.
+            merged |= moves
+                .iter()
+                .any(|m| m.hidden && m.stored.row.status == TrashMoveStatus::Trashed);
             let gone: Vec<FaceId> = moves
                 .iter()
                 .filter(|m| m.stored.row.status == TrashMoveStatus::Trashed)
@@ -362,6 +357,21 @@ impl DuplicateResolver {
             .flat_map(|(_, moves, _)| moves.iter().map(|m| m.stored.clone()))
             .collect();
         self.put_back(&stored);
+        // A hidden copy is shown again: without the log it has no undo.
+        let hidden: Vec<&SessionMove> = pending
+            .iter()
+            .flat_map(|(_, moves, _)| moves.iter())
+            .filter(|m| m.hidden && m.stored.row.status == TrashMoveStatus::Trashed)
+            .collect();
+        if !hidden.is_empty() {
+            let mut index = self.lock();
+            for m in hidden {
+                if let Err(e) = index.unhide_copy(&m.stored.path) {
+                    tracing::error!(path = %m.stored.path.display(), error = %e, "a hidden copy could not be logged or shown again");
+                }
+            }
+            index.mirror_session_sidecars();
+        }
         if let Err(e) = self.lock().finish_session(session, true) {
             tracing::warn!(error = %e, "ending a failed cleanup session");
         }
@@ -376,7 +386,9 @@ impl DuplicateResolver {
         files: &HashMap<String, CopyFile>,
         move_activation: &MoveActivation<'_>,
         position: u32,
+        session: ResolutionId,
     ) -> SessionMove {
+        let hide = f.action == CleanupAction::Hide;
         let mut m = SessionMove {
             stored: StoredMove {
                 position,
@@ -391,6 +403,7 @@ impl DuplicateResolver {
             set: Some(f.set.clone()),
             kept: f.kept.clone(),
             size: Some(f.size),
+            hidden: hide,
         };
         let skip = |m: &mut SessionMove, why: &str| m.stored.row.message = Some(why.to_owned());
         let Some(file) = files.get(&f.path) else {
@@ -434,6 +447,19 @@ impl DuplicateResolver {
                     skip(&mut m, ACTIVE_COPY);
                     return m;
                 }
+            }
+            if hide {
+                // The file stays where it is (rule 2); it leaves the library
+                // under the same lock the activation was read under.
+                match index.hide_copy(&file.path, &f.hash, session, &f.set, f.kept.as_deref()) {
+                    Ok(true) => m.stored.row.status = TrashMoveStatus::Trashed,
+                    Ok(false) => skip(&mut m, CHANGED),
+                    Err(e) => {
+                        tracing::warn!(path = %file.path.display(), error = %e, "hiding a copy failed");
+                        skip(&mut m, HIDE_FAILED);
+                    }
+                }
+                return m;
             }
             let trashed = self.trash.trash(&file.path);
             drop(index);
@@ -566,6 +592,16 @@ impl DuplicateResolver {
                 s.row.status,
                 TrashMoveStatus::Trashed | TrashMoveStatus::Failed
             );
+            // A hidden copy never left its folder: it is shown again
+            // (`update_session` drops its row and clears its gone flag).
+            if m.hidden {
+                if waiting {
+                    s.row.status = TrashMoveStatus::Restored;
+                    s.row.message = None;
+                    back.push(s.row.path.clone());
+                }
+                continue;
+            }
             let Some((location, info)) = s.trashed.clone().filter(|_| waiting) else {
                 continue;
             };
@@ -587,9 +623,13 @@ impl DuplicateResolver {
                 }
             }
         }
-        let is_back = |m: &SessionMove| {
-            m.stored.trashed.is_none() || m.stored.row.status == TrashMoveStatus::Restored
+        // A file left the library when it went to the trash or was hidden.
+        let moved = |m: &SessionMove| {
+            m.stored.trashed.is_some()
+                || (m.hidden && m.stored.row.status != TrashMoveStatus::Skipped)
         };
+        let is_back =
+            |m: &SessionMove| !moved(m) || m.stored.row.status == TrashMoveStatus::Restored;
         let sets: BTreeSet<&str> = moves.iter().filter_map(|m| m.set.as_deref()).collect();
         let sets_back: Vec<String> = sets
             .into_iter()
@@ -598,8 +638,7 @@ impl DuplicateResolver {
                     .iter()
                     .filter(|m| m.set.as_deref() == Some(*set))
                     .collect();
-                of_set.iter().all(|m| is_back(m))
-                    && of_set.iter().any(|m| m.stored.trashed.is_some())
+                of_set.iter().all(|m| is_back(m)) && of_set.iter().any(|m| moved(m))
             })
             .map(str::to_owned)
             .collect();
@@ -629,6 +668,89 @@ impl DuplicateResolver {
             });
         }
         Ok(session)
+    }
+}
+
+impl DuplicateResolver {
+    /// [`fm_api::LibraryService::list_hidden_copies`].
+    pub fn hidden_copies(&self) -> ApiResult<Vec<HiddenCopy>> {
+        Ok(self.lock().hidden_copies()?)
+    }
+
+    /// [`fm_api::LibraryService::show_hidden_copies`]: a copy a session hid
+    /// is undone in that session, so its merge is taken back as an undo
+    /// does; one read from a sidecar is shown at once. Answers the copies
+    /// shown.
+    pub fn show_hidden(&self, req: &ShowHiddenRequest) -> ApiResult<Vec<HiddenCopy>> {
+        let all = self.hidden_copies()?;
+        let mut shown = Vec::new();
+        for p in &req.paths {
+            let copy = all
+                .iter()
+                .find(|h| h.path == *p)
+                .ok_or_else(|| ApiError::invalid(format!("{p} is not a hidden copy.")))?;
+            shown.push(copy.clone());
+        }
+        let mut sessionless: Vec<std::path::PathBuf> = Vec::new();
+        for copy in &shown {
+            // A crash between the hide and its session log leaves a session
+            // that does not name the copy: it is shown here, not undone.
+            if copy
+                .session
+                .is_some_and(|s| self.running.sessions().contains(&s))
+            {
+                return Err(ApiError::new(
+                    ErrorCode::Busy,
+                    "This cleanup is still being applied. Cancel it or wait, then show the copy.",
+                ));
+            }
+            let logged = match copy.session {
+                Some(session) => self
+                    .lock()
+                    .session_moves(session)?
+                    .iter()
+                    .any(|m| m.hidden && m.stored.row.path == copy.path),
+                None => false,
+            };
+            if let (Some(session), true) = (copy.session, logged) {
+                self.undo_session(&UndoCleanupRequest {
+                    session,
+                    paths: vec![copy.path.clone()],
+                })?;
+            }
+            // Not in a session, or the session no longer names it: shown
+            // here.
+            if let Some(h) = self.lock().hidden_at(&copy.path)? {
+                sessionless.push(h.path);
+            }
+        }
+        if !sessionless.is_empty() {
+            let mut index = self.lock();
+            for path in &sessionless {
+                index.show_hidden(path)?;
+            }
+            let refs: Vec<String> = sessionless
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            let refs: Vec<&str> = refs.iter().map(String::as_str).collect();
+            let added: Vec<FaceId> = index
+                .copy_files(&refs, &self.system)?
+                .values()
+                .flat_map(|f| f.faces.iter().copied())
+                .collect();
+            drop(index);
+            if !added.is_empty() {
+                (self.emit)(Event::LibraryChanged {
+                    from_watcher: false,
+                    source: None,
+                    added,
+                    removed: Vec::new(),
+                    updated: Vec::new(),
+                });
+            }
+        }
+        Ok(shown)
     }
 }
 
