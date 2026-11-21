@@ -103,6 +103,24 @@ impl Index {
         Ok(out)
     }
 
+    /// Whether the app activated one of `faces` now (the apply checks this
+    /// again under the lock just before a file goes to the trash).
+    pub(crate) fn any_face_active(&self, faces: &[FaceId]) -> FmResult<bool> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT EXISTS (SELECT 1 FROM activation WHERE face_id = ?1)")
+            .map_err(|e| db_error(&e))?;
+        for face in faces {
+            let active: bool = stmt
+                .query_row([face.0], |r| r.get(0))
+                .map_err(|e| db_error(&e))?;
+            if active {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Starts a cleanup session named `name`: its head row, `running`.
     /// Returns its id and time.
     pub(crate) fn start_session(&mut self, name: &str) -> FmResult<(ResolutionId, String)> {
@@ -122,13 +140,15 @@ impl Index {
     /// Writes the files of the sets of session `id` in `sets` (each with
     /// its moves and its merge), marks every `Trashed` file gone, and writes
     /// each merge onto the kept copy with its log tagged with the set, in
-    /// one transaction: either all of it is written or none. Then writes the
-    /// sidecars of the faces the merges touched.
+    /// one transaction: either all of it is written or none. Returns whether
+    /// a merge was written: the caller then writes the sidecars with
+    /// [`Index::mirror_session_sidecars`], once for many sets (the index is
+    /// the truth; the sidecars mirror it).
     pub(crate) fn write_session_sets(
         &mut self,
         id: ResolutionId,
         sets: &[(&str, Vec<SessionMove>, MergePlan)],
-    ) -> FmResult<()> {
+    ) -> FmResult<bool> {
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         let mut merged = false;
         for (set, moves, merge) in sets {
@@ -169,10 +189,12 @@ impl Index {
             }
         }
         tx.commit().map_err(|e| db_error(&e))?;
-        if merged {
-            self.mirror_sidecars();
-        }
-        Ok(())
+        Ok(merged)
+    }
+
+    /// Writes the sidecars of the metadata the merges of a session changed.
+    pub(crate) fn mirror_session_sidecars(&mut self) {
+        self.mirror_sidecars();
     }
 
     /// Ends session `id`: `done`, or `cancelled`.

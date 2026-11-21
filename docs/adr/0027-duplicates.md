@@ -281,12 +281,16 @@ thread; progress is `Event::CleanupProgress` (one new variant: `done` of
 `cancel_cleanup` stopped it). Cancel stops between two files; the session
 holds what was done. Files go to the OS trash through `fm_platform::Trash`
 (ADR 0009). The session is written first; then the sets are done in
-order, and every **100 files** (`BATCH`, whole sets) their moves, gone
-flags and merges are one transaction followed by one
-`Event::LibraryChanged`, not one per file. A batch whose log cannot be
-written is put back from the trash before the error is reported, so no
-file is in the trash without undo. A session left `running` by a crash
-reads as cancelled.
+order. Each set's moves, gone flags and merge are one transaction as soon
+as the set is done, so a quit or a crash in the middle leaves at most the
+files of one set without a log, as "Keep this one" does. Every **100
+files** (`BATCH`, whole sets) the sidecars are written once and one
+`Event::LibraryChanged` is sent, not one per file. A set whose log cannot
+be written is put back from the trash before the error is reported. A
+session left `running` by a crash reads as cancelled. Just before a file
+goes to the trash, its activation is read again, and the move happens
+under the same index lock, so a copy activated while the apply runs stays
+(rule 3).
 
 **Sessions extend the resolution log** (schema V28): `resolution` gains
 `name`, `kind` (`keepCopy`, `cleanup`) and `state`; `resolution_move`

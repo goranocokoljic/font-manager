@@ -456,6 +456,111 @@ fn an_active_identical_copy_can_hand_its_activation_to_the_kept_copy() {
 }
 
 #[test]
+fn each_set_is_logged_at_once_and_a_copy_activated_meanwhile_stays() {
+    let dir = TempDir::new("api-cleanup-race-trash");
+    let (lib, made) = library(
+        "api-cleanup-race",
+        1,
+        Arc::new(MockTrash::new(dir.path().join("trash"))),
+    );
+    let row = |plan: &CleanupPlan, p: &Path| {
+        plan.files
+            .iter()
+            .find(|f| Path::new(&f.path) == p)
+            .expect("row")
+            .clone()
+    };
+    let first = row(&zcopy_plan(&lib), &made[0]).faces[0];
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces { faces: vec![first] },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::KeepExisting,
+        })
+        .expect("activate");
+    let mut plan = lib
+        .api
+        .plan_cleanup(fm_api::cleanup::PlanCleanupRequest {
+            scope: CleanupScope::Folder {
+                path: lib.root.join("zcopy").display().to_string(),
+            },
+            move_activations: true,
+            ..Default::default()
+        })
+        .expect("plan");
+    // The order of the sets: `made[2]`'s, then the one with the activation
+    // move, then `made[1]`'s.
+    let early = row(&plan, &made[2]).set;
+    let moving = row(&plan, &made[0]).set;
+    plan.files
+        .sort_by_key(|f| (f.set != early, f.set != moving));
+    let late = row(&plan, &made[1]);
+    assert_eq!(late.action, CleanupAction::Trash, "{late:#?}");
+    let late = late.faces[0];
+
+    let resolver = lib.api.resolver().expect("resolver");
+    let job = fm_api::JobId(9000);
+    resolver.register_cleanup(job);
+    // The activation move is a point where the apply is between two files.
+    // There the first set is in the log already (a quit now loses no undo),
+    // and the user activates a copy that has not had its turn yet; the
+    // moving copy's activation does not move.
+    let logged = Mutex::new(Vec::new());
+    let mover = |_: &[FaceId], _: &[FaceId], _: ActivationMode| -> Result<(), String> {
+        let sessions = lib.api.list_cleanup_sessions().map_err(|e| e.message)?;
+        lock(&logged).extend(sessions.into_iter().flat_map(|s| s.files));
+        lib.api
+            .activate(ActivateRequest {
+                target: Target::Faces { faces: vec![late] },
+                mode: ActivationMode::Session,
+                on_conflict: ConflictPolicy::KeepExisting,
+            })
+            .map(|_| ())
+            .map_err(|e| e.message)
+    };
+    let applied = resolver
+        .apply_cleanup(
+            job,
+            &ApplyCleanupRequest {
+                plan,
+                name: None,
+                choices: Vec::new(),
+            },
+            &mover,
+        )
+        .expect("apply");
+    let s = lib
+        .api
+        .list_cleanup_sessions()
+        .expect("sessions")
+        .into_iter()
+        .find(|s| s.id == applied.session)
+        .expect("listed");
+    assert_eq!(status(&s, &made[0]), TrashMoveStatus::Skipped, "{s:#?}");
+    assert_eq!(status(&s, &made[1]), TrashMoveStatus::Skipped, "{s:#?}");
+    assert_eq!(status(&s, &made[2]), TrashMoveStatus::Trashed, "{s:#?}");
+    assert!(made[0].is_file() && made[1].is_file());
+    let logged = lock(&logged).clone();
+    assert!(
+        logged
+            .iter()
+            .any(|f| Path::new(&f.path) == made[2] && f.status == TrashMoveStatus::Trashed),
+        "the first set was logged before the apply went on: {logged:#?}"
+    );
+    let active: Vec<FaceId> = lib
+        .api
+        .list_active()
+        .expect("active")
+        .into_iter()
+        .map(|a| a.face)
+        .collect();
+    assert!(
+        active.contains(&first) && active.contains(&late),
+        "{active:?}"
+    );
+}
+
+#[test]
 fn the_library_change_is_one_event_per_batch_not_per_file() {
     let dir = TempDir::new("api-cleanup-batch-trash");
     let (lib, made) = library(

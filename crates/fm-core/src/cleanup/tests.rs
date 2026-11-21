@@ -344,3 +344,89 @@ fn a_collection_file_takes_the_keeper_of_its_other_set_as_also_kept() {
     assert_eq!(g.kept.as_deref(), Some("/lib/a/G1.ttf"));
     assert_eq!(g.also_kept, vec!["/lib/a/G2.ttf".to_owned()]);
 }
+
+#[test]
+fn a_folder_pair_removes_only_the_copies_on_the_side_to_remove() {
+    let w = World::new();
+    let p = w
+        .plan(&PlanCleanupRequest {
+            scope: CleanupScope::FolderPair {
+                keep: "/lib/a".into(),
+                remove: "/lib/z".into(),
+                other_levels: false,
+            },
+            ..PlanCleanupRequest::default()
+        })
+        .expect("plan");
+    // `A`: the copy on the side to remove goes, the copy kept for it stays.
+    assert_eq!(outcome(&p, "/lib/z/A.ttf"), (CleanupAction::Trash, None));
+    assert_eq!(
+        row(&p, "/lib/z/A.ttf").kept.as_deref(),
+        Some("/lib/a/A.ttf")
+    );
+    assert_eq!(
+        outcome(&p, "/lib/a/A.ttf"),
+        (CleanupAction::Stays, Some(StayReason::Keeper))
+    );
+    // Nothing on the side to keep ever leaves.
+    assert!(
+        p.files
+            .iter()
+            .filter(|f| f.path.starts_with("/lib/a/"))
+            .all(|f| f.action == CleanupAction::Stays),
+        "{:#?}",
+        p.files
+    );
+    // `B`: active, its activation is offered, not moved.
+    assert_eq!(
+        outcome(&p, "/lib/z/B.ttf"),
+        (CleanupAction::Stays, Some(StayReason::Active))
+    );
+    assert!(
+        row(&p, "/lib/z/B.ttf")
+            .activation
+            .as_ref()
+            .is_some_and(|a| !a.planned)
+    );
+    // `C`: another version, and the pair compares identical copies only.
+    assert_eq!(
+        outcome(&p, "/lib/z/C.ttf"),
+        (CleanupAction::Stays, Some(StayReason::OtherLevel))
+    );
+    // `D`: its other copy is a system one, not on the side to keep.
+    assert_eq!(
+        outcome(&p, "/lib/z/D.ttf"),
+        (CleanupAction::Stays, Some(StayReason::OnlyHere))
+    );
+    // `H`: not on disk any more.
+    assert_eq!(
+        outcome(&p, "/lib/z/H.ttf"),
+        (CleanupAction::Stays, Some(StayReason::NotThere))
+    );
+}
+
+#[test]
+fn a_source_scope_plans_the_sets_with_a_copy_in_that_source() {
+    let mut w = World::new();
+    for f in &mut w.files {
+        if f.path == "/lib/z/A.ttf" {
+            f.source = SourceId(2);
+        }
+    }
+    let p = w
+        .plan(&PlanCleanupRequest {
+            scope: CleanupScope::Source {
+                source: SourceId(2),
+            },
+            ..PlanCleanupRequest::default()
+        })
+        .expect("plan");
+    assert_eq!(p.sets, 1, "{:#?}", p.files);
+    assert_eq!(outcome(&p, "/lib/z/A.ttf"), (CleanupAction::Trash, None));
+    assert_eq!(row(&p, "/lib/a/A.ttf").action, CleanupAction::Stays);
+    assert!(
+        p.files.iter().all(|f| f.path.ends_with("/A.ttf")),
+        "{:#?}",
+        p.files
+    );
+}

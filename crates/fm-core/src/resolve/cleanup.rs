@@ -2,19 +2,21 @@
 //!
 //! - **One session.** The session's head row is written first; then the
 //!   plan is applied set by set, and each set's files, gone flags and
-//!   metadata merge are one transaction (as "Keep this one" writes them).
-//!   A set whose log cannot be written is put back from the trash before
+//!   metadata merge are one transaction as soon as the set is done (as
+//!   "Keep this one" writes them), so a quit or a crash loses no undo of
+//!   an earlier set. A set whose log cannot be written is put back from the trash before
 //!   the error is reported, so no file is ever in the trash without undo.
 //! - **Checks again.** Every file is checked when its turn comes: still in
 //!   the library and on disk, not a system copy (rule 4), the plan's hash
 //!   (a file that changed is skipped and reported), not active unless the
 //!   plan moves its activation (rule 3), and its set's kept copy still
-//!   there.
+//!   there. The activation is read again just before the move, and the
+//!   move is done under the same index lock.
 //! - **Cancel** stops between two files; the set being done is written, the
 //!   session is `cancelled` and holds what was done.
 //! - **Events.** Progress is [`Event::CleanupProgress`]; the faces that left
 //!   are sent as removed in one [`Event::LibraryChanged`] per [`BATCH`]
-//!   files, not one per file.
+//!   files, not one per file; the sidecars are written once per batch.
 //! - **Undo** follows ADR 0009: a file goes back only to a free path; one
 //!   that cannot (the path is taken, the trash was emptied) is `Failed`
 //!   with why, and calling again retries it. A set's merge is taken back
@@ -58,8 +60,8 @@ const NOT_IN_LIBRARY: &str = "The file is no longer in the library.";
 /// Moves the activation of a leaving copy to the kept copy: deactivate the
 /// `leaving` faces, activate the `kept` faces in `mode`. Both are the
 /// app's own registrations. An error says why, in one sentence.
-pub type MoveActivation =
-    dyn Fn(&[FaceId], &[FaceId], ActivationMode) -> Result<(), String> + Send + Sync;
+pub type MoveActivation<'a> =
+    dyn Fn(&[FaceId], &[FaceId], ActivationMode) -> Result<(), String> + Send + Sync + 'a;
 
 /// The cleanups being applied, by job.
 #[derive(Debug, Clone, Default)]
@@ -161,7 +163,7 @@ impl DuplicateResolver {
         &self,
         job: JobId,
         req: &ApplyCleanupRequest,
-        move_activation: &MoveActivation,
+        move_activation: &MoveActivation<'_>,
     ) -> ApiResult<Applied> {
         let result = self.apply_inner(job, req, move_activation);
         self.running.lock().remove(&job);
@@ -200,7 +202,7 @@ impl DuplicateResolver {
         &self,
         job: JobId,
         req: &ApplyCleanupRequest,
-        move_activation: &MoveActivation,
+        move_activation: &MoveActivation<'_>,
     ) -> ApiResult<Applied> {
         self.check_cleanup(req)?;
         let cancel = self
@@ -250,9 +252,11 @@ impl DuplicateResolver {
 
         let mut position: u32 = 0;
         let mut done: u32 = 0;
-        // The sets done since the last write: written in one transaction,
-        // then sent as one library change, every [`BATCH`] files.
-        let mut pending: Vec<(&str, Vec<SessionMove>, MergePlan)> = Vec::new();
+        // Each set is logged as soon as it is done, so a quit or a crash
+        // never leaves a moved file without undo; the faces that left are
+        // sent as one library change every [`BATCH`] files.
+        let mut removed: Vec<FaceId> = Vec::new();
+        let mut merged = false;
         let mut pending_files = 0usize;
         let mut cancelled = false;
         for set in order {
@@ -285,60 +289,58 @@ impl DuplicateResolver {
             let merge = match merge {
                 Ok(merge) => merge,
                 Err(e) => {
-                    pending.push((set, moves, MergePlan::default()));
-                    return Err(self.abort(job, session, &pending, done, total, e));
+                    let set = [(set, moves, MergePlan::default())];
+                    self.end_batch(&mut removed, &mut merged);
+                    return Err(self.abort(job, session, &set, done, total, e));
                 }
             };
             pending_files += moves.len();
-            pending.push((set, moves, merge));
-            if pending_files >= BATCH || cancelled {
-                if let Err(e) = self.write_batch(session, &pending, &files) {
-                    return Err(self.abort(job, session, &pending, done, total, e));
+            let gone: Vec<FaceId> = moves
+                .iter()
+                .filter(|m| m.stored.row.status == TrashMoveStatus::Trashed)
+                .filter_map(|m| files.get(&m.stored.row.path))
+                .flat_map(|f| f.faces.iter().copied())
+                .collect();
+            let set = [(set, moves, merge)];
+            match self.lock().write_session_sets(session, &set) {
+                Ok(m) => merged |= m,
+                Err(e) => {
+                    self.end_batch(&mut removed, &mut merged);
+                    return Err(self.abort(job, session, &set, done, total, e.into()));
                 }
-                pending.clear();
+            }
+            removed.extend(gone);
+            if pending_files >= BATCH {
+                self.end_batch(&mut removed, &mut merged);
                 pending_files = 0;
             }
             if cancelled {
                 break;
             }
         }
-        if let Err(e) = self.write_batch(session, &pending, &files) {
-            return Err(self.abort(job, session, &pending, done, total, e));
-        }
+        self.end_batch(&mut removed, &mut merged);
         self.lock().finish_session(session, cancelled)?;
         self.finish(job, session, done, total, cancelled);
         Ok(Applied { session, cancelled })
     }
 
-    /// Writes the sets of `pending` in one transaction, then sends the faces
-    /// of their moved files as removed in one [`Event::LibraryChanged`].
-    fn write_batch(
-        &self,
-        session: ResolutionId,
-        pending: &[(&str, Vec<SessionMove>, MergePlan)],
-        files: &HashMap<String, CopyFile>,
-    ) -> ApiResult<()> {
-        if pending.is_empty() {
-            return Ok(());
+    /// Ends a batch of logged sets: writes the sidecars once when a merge
+    /// changed metadata, then sends the faces in `removed` (their files went
+    /// to the trash) in one [`Event::LibraryChanged`], and empties it.
+    fn end_batch(&self, removed: &mut Vec<FaceId>, merged: &mut bool) {
+        if std::mem::take(merged) {
+            self.lock().mirror_session_sidecars();
         }
-        self.lock().write_session_sets(session, pending)?;
-        let removed: Vec<FaceId> = pending
-            .iter()
-            .flat_map(|(_, moves, _)| moves)
-            .filter(|m| m.stored.row.status == TrashMoveStatus::Trashed)
-            .filter_map(|m| files.get(&m.stored.row.path))
-            .flat_map(|f| f.faces.iter().copied())
-            .collect();
-        if !removed.is_empty() {
-            (self.emit)(Event::LibraryChanged {
-                from_watcher: false,
-                source: None,
-                added: Vec::new(),
-                removed,
-                updated: Vec::new(),
-            });
+        if removed.is_empty() {
+            return;
         }
-        Ok(())
+        (self.emit)(Event::LibraryChanged {
+            from_watcher: false,
+            source: None,
+            added: Vec::new(),
+            removed: std::mem::take(removed),
+            updated: Vec::new(),
+        });
     }
 
     /// After the log of `pending` could not be written: puts every moved
@@ -370,7 +372,7 @@ impl DuplicateResolver {
         &self,
         f: &CleanupFile,
         files: &HashMap<String, CopyFile>,
-        move_activation: &MoveActivation,
+        move_activation: &MoveActivation<'_>,
         position: u32,
     ) -> SessionMove {
         let mut m = SessionMove {
@@ -408,23 +410,32 @@ impl DuplicateResolver {
         } else if !same_hash(&file.path, &f.hash) {
             skip(&mut m, CHANGED);
         } else {
-            if file.active {
+            // Activation can change while a long apply runs: the state is
+            // read again now, and the file goes to the trash under the same
+            // lock, so the app never trashes a copy it has registered.
+            let mut index = self.lock();
+            if self.active_now(&index, file) {
                 let planned = f.activation.as_ref().filter(|a| a.planned);
                 let kept = f.kept.as_ref().and_then(|k| files.get(k));
-                match (planned, kept) {
-                    (Some(a), Some(kept)) => {
-                        if let Err(why) = move_activation(&file.faces, &kept.faces, a.mode) {
-                            skip(&mut m, &why);
-                            return m;
-                        }
-                    }
-                    _ => {
-                        skip(&mut m, ACTIVE_COPY);
-                        return m;
-                    }
+                let (Some(a), Some(kept)) = (planned, kept) else {
+                    skip(&mut m, ACTIVE_COPY);
+                    return m;
+                };
+                // Activation takes the lock itself.
+                drop(index);
+                if let Err(why) = move_activation(&file.faces, &kept.faces, a.mode) {
+                    skip(&mut m, &why);
+                    return m;
+                }
+                index = self.lock();
+                if self.active_now(&index, file) {
+                    skip(&mut m, ACTIVE_COPY);
+                    return m;
                 }
             }
-            match self.trash.trash(&file.path) {
+            let trashed = self.trash.trash(&file.path);
+            drop(index);
+            match trashed {
                 Ok(item) => {
                     m.stored.row.status = TrashMoveStatus::Trashed;
                     m.stored.trashed = Some((item.location, item.info));
@@ -441,6 +452,15 @@ impl DuplicateResolver {
             }
         }
         m
+    }
+
+    /// Whether the app has one of `file`'s faces activated now. A failed
+    /// read counts as active: the file then stays.
+    fn active_now(&self, index: &crate::index::Index, file: &CopyFile) -> bool {
+        index.any_face_active(&file.faces).unwrap_or_else(|e| {
+            tracing::warn!(path = %file.path.display(), error = %e, "reading the activation of a copy failed");
+            true
+        })
     }
 
     /// The merge of one set's moved copies onto the copies kept for them,
