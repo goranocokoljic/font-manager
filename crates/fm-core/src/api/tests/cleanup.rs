@@ -818,6 +818,68 @@ fn a_hidden_copy_leaves_the_library_and_shows_again_with_its_merge_taken_back() 
     assert_eq!(sets_total(&lib), 3);
 }
 
+/// E56.8: a crash between a hide and its session log leaves a hidden copy
+/// its session does not name; it is still shown again, and the library
+/// hears of it.
+#[test]
+fn a_hidden_copy_its_session_does_not_name_is_shown_again() {
+    let dir = TempDir::new("api-cleanup-hide-unlogged-trash");
+    let (lib, made) = library(
+        "api-cleanup-hide-unlogged",
+        1,
+        Arc::new(MockTrash::new(dir.path().join("trash"))),
+    );
+    let (_, events) = apply(
+        &lib,
+        ApplyCleanupRequest {
+            plan: hide_plan(&lib),
+            name: None,
+            choices: Vec::new(),
+        },
+    );
+    let s = session(&lib, &events);
+    let path = made[0].display().to_string();
+    let hidden = lib.api.list_hidden_copies().expect("hidden");
+    let copy = hidden.iter().find(|h| h.path == path).expect("hidden");
+    assert_eq!(copy.session, Some(s.id));
+    {
+        // As a crash before the set's log was written leaves it.
+        let conn =
+            rusqlite::Connection::open(lib.paths.data.join(INDEX_FILE)).expect("open the index");
+        conn.execute("DELETE FROM resolution_move WHERE path = ?1", [&path])
+            .expect("drop the log row");
+    }
+    let events = lib.api.subscribe();
+    let shown = lib
+        .api
+        .show_hidden_copies(fm_api::cleanup::ShowHiddenRequest {
+            paths: vec![path.clone()],
+        })
+        .expect("shown although the session does not name it");
+    assert_eq!(shown.len(), 1);
+    assert!(
+        lib.api
+            .list_hidden_copies()
+            .expect("hidden")
+            .iter()
+            .all(|h| h.path != path)
+    );
+    assert!(
+        found(&lib, "bebas").iter().any(|f| {
+            lib.api
+                .get_face(*f)
+                .is_ok_and(|face| Path::new(&face.path) == made[0])
+        }),
+        "the copy is in search again"
+    );
+    assert!(
+        events
+            .try_iter()
+            .any(|e| matches!(e, Event::LibraryChanged { added, .. } if !added.is_empty())),
+        "the library hears of it"
+    );
+}
+
 /// E56.8: a copy activated after the plan is refused with the message of a
 /// move (rule 3), and a different file at a hidden path is shown again.
 #[test]

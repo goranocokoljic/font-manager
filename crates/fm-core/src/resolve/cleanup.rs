@@ -693,7 +693,26 @@ impl DuplicateResolver {
         }
         let mut sessionless: Vec<std::path::PathBuf> = Vec::new();
         for copy in &shown {
-            if let Some(session) = copy.session {
+            // A crash between the hide and its session log leaves a session
+            // that does not name the copy: it is shown here, not undone.
+            if copy
+                .session
+                .is_some_and(|s| self.running.sessions().contains(&s))
+            {
+                return Err(ApiError::new(
+                    ErrorCode::Busy,
+                    "This cleanup is still being applied. Cancel it or wait, then show the copy.",
+                ));
+            }
+            let logged = match copy.session {
+                Some(session) => self
+                    .lock()
+                    .session_moves(session)?
+                    .iter()
+                    .any(|m| m.hidden && m.stored.row.path == copy.path),
+                None => false,
+            };
+            if let (Some(session), true) = (copy.session, logged) {
                 self.undo_session(&UndoCleanupRequest {
                     session,
                     paths: vec![copy.path.clone()],
