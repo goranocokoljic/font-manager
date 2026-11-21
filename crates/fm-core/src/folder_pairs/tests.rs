@@ -185,6 +185,7 @@ fn two_folders_that_share_a_third_list_what_only_each_has() {
             b: p("/lib/q"),
             side: Some(PairSide::B),
             only_here: true,
+            levels: None,
             page: Page::default(),
         },
     )
@@ -202,6 +203,7 @@ fn two_folders_that_share_a_third_list_what_only_each_has() {
             b: p("/lib/q"),
             side: None,
             only_here: false,
+            levels: None,
             page: Page::default(),
         },
     )
@@ -472,6 +474,7 @@ fn the_same_folder_twice_is_refused() {
             b: p("/lib/p"),
             side: None,
             only_here: false,
+            levels: None,
             page: Page::default(),
         },
     )

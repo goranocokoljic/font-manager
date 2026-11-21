@@ -5,6 +5,8 @@
 // what a cleanup would do with each copy and why (`planCleanup` on the one set), and
 // the stored draft (`getCleanupDraft` / `updateCleanupDraft`). The store keeps which
 // set is in view and which outcome the user picked for each copy, and nothing else.
+// The Folders view (E56.12) pages through `listFolderPairs`, opens a pair to the files
+// `listFolderPairFiles` names, and puts "Keep this side" into the same draft.
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { useClient } from '../api/client';
@@ -19,12 +21,54 @@ import type {
   DuplicateSet,
   DuplicateSetSort,
   DuplicatesOverview,
+  DraftPair,
   FolderPair,
+  FolderPairFile,
+  FolderPairSide,
   FontFormat,
   LanguagePreset,
+  PairSide,
   RecommendationFilter,
   SetDecision,
 } from '../api/types';
+
+/** The folder pairs one request asks for. */
+export const PAIR_PAGE = 100;
+
+/** The files of an open pair one request asks for. */
+export const PAIR_FILES_PAGE = 100;
+
+/**
+ * The lists an open pair shows: what both folders have (identical copies), the copies
+ * that are not identical, and what only one side has. `both` and `differ` list side
+ * `a`'s files, each with its copy on side `b`, so no file is listed twice.
+ */
+export type PairGroup = 'both' | 'differ' | 'onlyA' | 'onlyB';
+export const PAIR_GROUPS: PairGroup[] = ['both', 'differ', 'onlyA', 'onlyB'];
+
+const GROUP_REQUEST: Record<
+  PairGroup,
+  { side: PairSide; onlyHere?: boolean; levels?: DuplicateLevel[] }
+> = {
+  both: { side: 'a', levels: ['identical'] },
+  differ: { side: 'a', levels: ['sameVersion', 'otherVersion'] },
+  onlyA: { side: 'a', onlyHere: true },
+  onlyB: { side: 'b', onlyHere: true },
+};
+
+/** The font files of a side that have a copy on the other side, at any level. */
+export const sharedFiles = (side: FolderPairSide) =>
+  side.shared.identical + side.shared.sameVersion + side.shared.otherVersion;
+
+/**
+ * The share of a pair, 0–1: the larger of both sides' shares of their font files that
+ * have a copy on the other side (the API's counts).
+ */
+export const pairShare = (pair: FolderPair) =>
+  Math.max(
+    pair.a.fontFiles ? sharedFiles(pair.a) / pair.a.fontFiles : 0,
+    pair.b.fontFiles ? sharedFiles(pair.b) / pair.b.fontFiles : 0,
+  );
 
 /** The sets one request asks for. */
 export const QUEUE_PAGE = 100;
@@ -50,7 +94,7 @@ export interface QueueFilter {
 /** The level chips of the queue. */
 export type QueueChip = 'all' | DuplicateLevel | 'keepBoth';
 
-const emptyDraft = (): CleanupDraft => ({ identical: false, decisions: [] });
+const emptyDraft = (): CleanupDraft => ({ identical: false, decisions: [], pairs: [] });
 
 export const useDuplicatesStore = defineStore('duplicates', () => {
   const overview = ref<DuplicatesOverview | null>(null);
@@ -82,6 +126,14 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
   const comparison = ref<CopyComparison | null>(null);
   /** Bumped on every queue reload, so a late page or plan of an older queue is dropped. */
   let generation = 0;
+
+  // The Folders view (E56.12).
+  /** Loaded pages of folder pairs by page number. */
+  const pairPages = shallowRef(new Map<number, FolderPair[]>());
+  /** The pair that is open, and its files by list. */
+  const openPair = ref<FolderPair | null>(null);
+  const pairFiles = ref<Partial<Record<PairGroup, { items: FolderPairFile[]; total: number }>>>({});
+  let pairGeneration = 0;
 
   const client = () => useClient();
 
@@ -325,12 +377,101 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     if (result && current.value?.id === set.id) comparison.value = result;
   }
 
-  /** The number of sets the draft holds: the decisions and, when in, the identical sets. */
+  /**
+   * What the draft holds: the decisions, the identical sets when in, and the folder
+   * pairs.
+   */
   const planned = computed(
     () =>
       (draft.value.decisions?.length ?? 0) +
-      (draft.value.identical ? (overview.value?.identical.sets ?? 0) : 0),
+      (draft.value.identical ? (overview.value?.identical.sets ?? 0) : 0) +
+      (draft.value.pairs?.length ?? 0),
   );
+
+  /** The page of pairs holding position `index`, loaded when it is not yet. */
+  async function ensurePair(index: number): Promise<void> {
+    const n = Math.floor(index / PAIR_PAGE);
+    if (pairPages.value.has(n)) return;
+    const asked = pairGeneration;
+    const page = await guard(() =>
+      client().listFolderPairs({ page: { offset: n * PAIR_PAGE, limit: PAIR_PAGE } }),
+    );
+    if (!page || asked !== pairGeneration) return;
+    pairTotal.value = page.total;
+    const next = new Map(pairPages.value);
+    next.set(n, page.items);
+    pairPages.value = next;
+  }
+
+  /** The pair at `index` when its page is loaded. */
+  function pairAt(index: number): FolderPair | undefined {
+    return pairPages.value.get(Math.floor(index / PAIR_PAGE))?.[index % PAIR_PAGE];
+  }
+
+  /** Loads the pairs again from the API, the first page first. */
+  async function reloadPairs(): Promise<void> {
+    pairGeneration += 1;
+    pairPages.value = new Map();
+    await ensurePair(0);
+  }
+
+  async function loadPairFiles(group: PairGroup, offset: number): Promise<void> {
+    const pair = openPair.value;
+    if (!pair) return;
+    const page = await guard(() =>
+      client().listFolderPairFiles({
+        a: pair.a.path,
+        b: pair.b.path,
+        ...GROUP_REQUEST[group],
+        page: { offset, limit: PAIR_FILES_PAGE },
+      }),
+    );
+    if (!page || openPair.value !== pair) return;
+    const before = offset > 0 ? (pairFiles.value[group]?.items ?? []) : [];
+    pairFiles.value = {
+      ...pairFiles.value,
+      [group]: { items: [...before, ...page.items], total: page.total },
+    };
+  }
+
+  /** Opens `pair` (or closes the open one): its files, list by list. */
+  async function showPair(pair: FolderPair | null): Promise<void> {
+    openPair.value = pair;
+    pairFiles.value = {};
+    if (pair) await Promise.all(PAIR_GROUPS.map((g) => loadPairFiles(g, 0)));
+  }
+
+  /** The next page of one list of the open pair. */
+  async function morePairFiles(group: PairGroup): Promise<void> {
+    await loadPairFiles(group, pairFiles.value[group]?.items.length ?? 0);
+  }
+
+  /** The draft's decision about `pair`, when it has one. */
+  const draftPair = (pair: FolderPair): DraftPair | undefined =>
+    draft.value.pairs?.find(
+      (p) =>
+        (p.keep === pair.a.path && p.remove === pair.b.path) ||
+        (p.keep === pair.b.path && p.remove === pair.a.path),
+    );
+
+  /**
+   * "Keep this side": keeps `side`'s copies and plans the removal of the other side's
+   * identical copies, nothing else. The API refuses a protected side to remove.
+   */
+  async function keepSide(pair: FolderPair, side: PairSide): Promise<boolean> {
+    const [keep, remove] = side === 'a' ? [pair.a, pair.b] : [pair.b, pair.a];
+    return change({ kind: 'keepSide', keep: keep.path, remove: remove.path });
+  }
+
+  /** Takes back the draft's decision about the folders `a` and `b`. */
+  async function takeBackPair(a: string, b: string): Promise<boolean> {
+    return change({ kind: 'takeBackPair', a, b });
+  }
+
+  /** Shows one side of `pair` in the file manager. */
+  async function showPairFolder(pair: FolderPair, side: PairSide): Promise<void> {
+    await guard(() => client().showPairFolder(pair.a.path, pair.b.path, side));
+  }
 
   return {
     overview,
@@ -352,6 +493,18 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     keeper,
     reason,
     planned,
+    pairPages,
+    openPair,
+    pairFiles,
+    ensurePair,
+    pairAt,
+    reloadPairs,
+    showPair,
+    morePairFiles,
+    draftPair,
+    keepSide,
+    takeBackPair,
+    showPairFolder,
     load,
     ensure,
     at,

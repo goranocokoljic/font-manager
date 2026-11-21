@@ -9,7 +9,10 @@ import type {
   DuplicateLevel,
   DuplicateSet,
   DuplicatesOverview,
+  DraftPair,
+  FolderPair,
   LevelSummary,
+  ProtectedFolder,
   SetDecision,
 } from './types';
 
@@ -83,17 +86,32 @@ const check = (decision: SetDecision, set: DuplicateSet): ApiError | null => {
   return kept ? null : invalid('Keep at least one copy of the font.');
 };
 
+/** What a protected folder is, as `ProtectedFolder::describe`. */
+const DESCRIBE: Record<ProtectedFolder, string> = {
+  sourceRoot: 'a folder you added to the library',
+  systemFolder: 'a system font folder',
+  libraryFolder: 'the library folder',
+};
+
+/** Whether `p` is about the folders `a` and `b`, either way round, as `DraftPair::is_pair`. */
+const isPair = (p: DraftPair, a: string, b: string) =>
+  (p.keep === a && p.remove === b) || (p.keep === b && p.remove === a);
+
 /**
  * `draft` changed by `update`, as `CleanupDraft::apply`; `setOf` finds a set of the
- * library by id. Throws the API's error when the change is refused.
+ * library by id, `pairOf` the folder pair of two folders. Throws the API's error when
+ * the change is refused.
  */
 export const applyDraftUpdate = (
   draft: CleanupDraft,
   update: CleanupDraftUpdate,
   now: string,
   setOf: (id: string) => DuplicateSet | undefined,
+  pairOf: (a: string, b: string) => FolderPair | undefined = () => undefined,
 ): CleanupDraft => {
   const decisions = draft.decisions ?? [];
+  const pairs = draft.pairs ?? [];
+  const identical = draft.identical ?? false;
   switch (update.kind) {
     case 'decide': {
       const set = setOf(update.set);
@@ -106,7 +124,8 @@ export const applyDraftUpdate = (
       const error = check(update.decision, set);
       if (error) throw error;
       return {
-        identical: draft.identical ?? false,
+        identical,
+        pairs,
         decisions: [
           ...decisions.filter((d) => d.set !== set.id),
           {
@@ -120,13 +139,48 @@ export const applyDraftUpdate = (
       };
     }
     case 'takeBack':
-      return {
-        identical: draft.identical ?? false,
-        decisions: decisions.filter((d) => d.set !== update.set),
-      };
+      return { identical, pairs, decisions: decisions.filter((d) => d.set !== update.set) };
     case 'identical':
-      return { identical: update.include, decisions };
+      return { identical: update.include, decisions, pairs };
+    case 'keepSide': {
+      const { keep, remove } = update;
+      if (keep === remove) throw invalid('Choose two different folders.');
+      const pair = pairOf(keep, remove);
+      if (!pair)
+        throw {
+          code: 'notFound',
+          message: `${keep} and ${remove} do not hold the same fonts any more.`,
+          detail: null,
+        } satisfies ApiError;
+      const removed = pair.a.path === remove ? pair.a : pair.b.path === remove ? pair.b : undefined;
+      if (!removed)
+        throw {
+          code: 'notFound',
+          message: `${remove} is not a side of this folder pair.`,
+          detail: null,
+        } satisfies ApiError;
+      if (removed.protected)
+        throw invalid(
+          `${remove} is ${DESCRIBE[removed.protected]}: it can be the side that is kept, never the side that is removed.`,
+        );
+      return {
+        identical,
+        decisions,
+        pairs: [
+          ...pairs.filter((p) => !isPair(p, keep, remove)),
+          {
+            keep,
+            remove,
+            identical: removed.shared.identical,
+            identicalSize: removed.identicalSize,
+            at: now,
+          },
+        ],
+      };
+    }
+    case 'takeBackPair':
+      return { identical, decisions, pairs: pairs.filter((p) => !isPair(p, update.a, update.b)) };
     case 'clear':
-      return { identical: false, decisions: [] };
+      return { identical: false, decisions: [], pairs: [] };
   }
 };

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cleanup::{CleanupAction, CleanupPlan, CleanupScope, StayReason};
 use crate::common::Timestamp;
-use crate::library::{DuplicateLevel, DuplicateScope, DuplicateSet};
+use crate::library::{DuplicateLevel, DuplicateScope, DuplicateSet, FolderPair};
 use crate::settings::MyLanguagesStatus;
 use crate::{ApiError, ApiResult};
 
@@ -242,6 +242,37 @@ pub struct CleanupDraft {
     /// The decisions, in the order they were made; one per set.
     #[serde(default)]
     pub decisions: Vec<DraftDecision>,
+    /// The folder pairs decided with "Keep this side" (E56.12), in the
+    /// order they were added; one per pair of folders.
+    #[serde(default)]
+    pub pairs: Vec<DraftPair>,
+}
+
+/// A folder pair in the draft (E56.12): keep `keep`'s copies and plan the
+/// removal of `remove`'s font files that have an identical copy there, and
+/// nothing else ([`crate::cleanup::CleanupScope::FolderPair`] without
+/// `other_levels`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftPair {
+    /// The folder whose copies stay, absolute.
+    pub keep: String,
+    /// The folder whose identical copies are planned for removal, absolute.
+    pub remove: String,
+    /// The font files of `remove` with an identical copy in `keep` when the
+    /// pair was added: what the decision covers.
+    pub identical: u32,
+    /// Their size in bytes (saturating).
+    pub identical_size: u32,
+    /// When it was added.
+    pub at: Timestamp,
+}
+
+impl DraftPair {
+    /// Whether this decision is about the folders `a` and `b`, either way round.
+    pub fn is_pair(&self, a: &str, b: &str) -> bool {
+        (self.keep == a && self.remove == b) || (self.keep == b && self.remove == a)
+    }
 }
 
 impl CleanupDraft {
@@ -251,13 +282,16 @@ impl CleanupDraft {
     }
 
     /// Applies `update`; `set_of` finds a set of the library by id (`None`
-    /// when it is not a duplicate set any more). Every implementation of
-    /// [`crate::LibraryService::update_cleanup_draft`] uses this.
+    /// when it is not a duplicate set any more), `pair_of` the folder pair of
+    /// two folders (`None` when they are no listed pair). Every
+    /// implementation of [`crate::LibraryService::update_cleanup_draft`] uses
+    /// this.
     pub fn apply(
         &mut self,
         update: CleanupDraftUpdate,
         now: Timestamp,
         set_of: impl FnOnce(&str) -> ApiResult<Option<DuplicateSet>>,
+        pair_of: impl FnOnce(&str, &str) -> ApiResult<Option<FolderPair>>,
     ) -> ApiResult<()> {
         match update {
             CleanupDraftUpdate::Decide { set, decision } => {
@@ -279,6 +313,44 @@ impl CleanupDraft {
                 self.decisions.retain(|d| d.set != set);
             }
             CleanupDraftUpdate::Identical { include } => self.identical = include,
+            CleanupDraftUpdate::KeepSide { keep, remove } => {
+                if keep == remove {
+                    return Err(ApiError::invalid("Choose two different folders."));
+                }
+                let pair = pair_of(&keep, &remove)?.ok_or_else(|| {
+                    ApiError::not_found(format!(
+                        "{keep} and {remove} do not hold the same fonts any more."
+                    ))
+                })?;
+                let removed = if pair.a.path == remove {
+                    &pair.a
+                } else if pair.b.path == remove {
+                    &pair.b
+                } else {
+                    return Err(ApiError::not_found(format!(
+                        "{remove} is not a side of this folder pair."
+                    )));
+                };
+                if let Some(kind) = removed.protected {
+                    return Err(ApiError::invalid(format!(
+                        "{remove} is {}: it can be the side that is kept, never the side that is removed.",
+                        kind.describe()
+                    )));
+                }
+                let entry = DraftPair {
+                    identical: removed.shared.identical,
+                    identical_size: removed.identical_size,
+                    keep,
+                    remove,
+                    at: now,
+                };
+                self.pairs
+                    .retain(|p| !p.is_pair(&entry.keep, &entry.remove));
+                self.pairs.push(entry);
+            }
+            CleanupDraftUpdate::TakeBackPair { a, b } => {
+                self.pairs.retain(|p| !p.is_pair(&a, &b));
+            }
             CleanupDraftUpdate::Clear => *self = Self::default(),
         }
         Ok(())
@@ -311,7 +383,27 @@ pub enum CleanupDraftUpdate {
         /// In the plan.
         include: bool,
     },
-    /// Start again: no decision, identical sets out.
+    /// Keep one folder's copies and plan the removal of the other folder's
+    /// identical copies (E56.12); replaces a decision about the same two
+    /// folders. `NotFound` when the folders are no folder pair any more;
+    /// `InvalidRequest` when `remove` is protected
+    /// ([`crate::library::FolderPairSide::protected`]).
+    #[serde(rename_all = "camelCase")]
+    KeepSide {
+        /// The folder whose copies stay, absolute.
+        keep: String,
+        /// The folder whose identical copies leave, absolute.
+        remove: String,
+    },
+    /// Take back the decision about two folders, either way round.
+    #[serde(rename_all = "camelCase")]
+    TakeBackPair {
+        /// One folder, absolute.
+        a: String,
+        /// The other folder, absolute.
+        b: String,
+    },
+    /// Start again: no decision, identical sets out, no folder pair.
     Clear,
 }
 
@@ -319,7 +411,7 @@ pub enum CleanupDraftUpdate {
 mod tests {
     use super::*;
     use crate::cleanup::{CLEANUP_PLAN_VERSION, CleanupFile, PlanCleanupRequest};
-    use crate::library::DuplicateSetCopy;
+    use crate::library::{DuplicateSetCopy, FolderPairSide, ProtectedFolder, SharedCounts};
     use crate::{FaceId, SourceId};
 
     fn copy(path: &str, system: bool) -> DuplicateSetCopy {
@@ -353,6 +445,127 @@ mod tests {
             ],
             recommendation: None,
         }
+    }
+
+    fn no_pair(_: &str, _: &str) -> ApiResult<Option<FolderPair>> {
+        Ok(None)
+    }
+
+    fn side(path: &str, identical: u32, protected: Option<ProtectedFolder>) -> FolderPairSide {
+        FolderPairSide {
+            path: path.to_owned(),
+            font_files: 10,
+            size: 1000,
+            shared: SharedCounts {
+                identical,
+                same_version: 1,
+                other_version: 0,
+            },
+            shared_size: 700,
+            identical_size: identical * 100,
+            only_here: 10 - identical - 1,
+            other_files: 0,
+            contained: false,
+            protected,
+        }
+    }
+
+    fn pair(protected_b: Option<ProtectedFolder>) -> FolderPair {
+        FolderPair {
+            a: side("/a", 6, None),
+            b: side("/b", 4, protected_b),
+            frees: 400,
+        }
+    }
+
+    fn keep_side(keep: &str, remove: &str) -> CleanupDraftUpdate {
+        CleanupDraftUpdate::KeepSide {
+            keep: keep.to_owned(),
+            remove: remove.to_owned(),
+        }
+    }
+
+    #[test]
+    fn keep_this_side_adds_the_pair_with_what_it_covers_and_replaces_the_other_way_round() {
+        let mut draft = CleanupDraft::default();
+        let open = |_: &str, _: &str| Ok(Some(pair(None)));
+        draft
+            .apply(keep_side("/b", "/a"), "t1".to_owned(), |_| Ok(None), open)
+            .expect("keep /b");
+        assert_eq!(draft.pairs.len(), 1);
+        assert_eq!(draft.pairs[0].remove, "/a");
+        assert_eq!(
+            draft.pairs[0].identical, 6,
+            "/a's identical copies, nothing else"
+        );
+        assert_eq!(draft.pairs[0].identical_size, 600);
+        draft
+            .apply(keep_side("/a", "/b"), "t2".to_owned(), |_| Ok(None), open)
+            .expect("keep /a instead");
+        assert_eq!(draft.pairs.len(), 1, "one decision per pair of folders");
+        assert_eq!(draft.pairs[0].remove, "/b");
+        assert_eq!(draft.pairs[0].identical, 4);
+
+        draft
+            .apply(
+                CleanupDraftUpdate::TakeBackPair {
+                    a: "/b".to_owned(),
+                    b: "/a".to_owned(),
+                },
+                "t3".to_owned(),
+                |_| Ok(None),
+                no_pair,
+            )
+            .expect("take back");
+        assert!(draft.pairs.is_empty());
+    }
+
+    #[test]
+    fn keep_this_side_never_removes_a_protected_side_or_a_pair_that_is_gone() {
+        let mut draft = CleanupDraft::default();
+        let system = |_: &str, _: &str| Ok(Some(pair(Some(ProtectedFolder::SystemFolder))));
+        let refused = draft
+            .apply(keep_side("/a", "/b"), "t1".to_owned(), |_| Ok(None), system)
+            .expect_err("the system folder is never the removed side");
+        assert_eq!(refused.code, crate::ErrorCode::InvalidRequest);
+        assert!(
+            refused.message.contains("a system font folder"),
+            "{}",
+            refused.message
+        );
+        assert!(draft.pairs.is_empty());
+        draft
+            .apply(keep_side("/b", "/a"), "t2".to_owned(), |_| Ok(None), system)
+            .expect("the system folder can be the kept side");
+        assert_eq!(draft.pairs.len(), 1);
+
+        let gone = draft
+            .apply(
+                keep_side("/a", "/c"),
+                "t3".to_owned(),
+                |_| Ok(None),
+                no_pair,
+            )
+            .expect_err("no pair");
+        assert_eq!(gone.code, crate::ErrorCode::NotFound);
+        let same = draft
+            .apply(
+                keep_side("/a", "/a"),
+                "t4".to_owned(),
+                |_| Ok(None),
+                no_pair,
+            )
+            .expect_err("one folder");
+        assert_eq!(same.code, crate::ErrorCode::InvalidRequest);
+        draft
+            .apply(
+                CleanupDraftUpdate::Clear,
+                "t5".to_owned(),
+                |_| Ok(None),
+                no_pair,
+            )
+            .expect("clear");
+        assert!(draft.pairs.is_empty(), "clear drops the pairs too");
     }
 
     fn copies(choices: &[(&str, CopyChoice)]) -> SetDecision {
@@ -420,6 +633,7 @@ mod tests {
                 },
                 "t1".to_owned(),
                 found,
+                no_pair,
             )
             .expect("decide");
         draft
@@ -430,6 +644,7 @@ mod tests {
                 },
                 "t2".to_owned(),
                 found,
+                no_pair,
             )
             .expect("decide again");
         assert_eq!(draft.decisions.len(), 1);
@@ -442,6 +657,7 @@ mod tests {
             },
             "t3".to_owned(),
             |_| Ok(None),
+            no_pair,
         );
         assert!(gone.is_err(), "a set that is not there any more");
         draft
@@ -451,6 +667,7 @@ mod tests {
                 },
                 "t4".to_owned(),
                 found,
+                no_pair,
             )
             .expect("take back");
         assert!(draft.decisions.is_empty());

@@ -66,6 +66,7 @@ fn a_copied_tree_is_one_pair_with_its_other_files_counted() {
             b: path(&two),
             side: Some(PairSide::B),
             only_here: false,
+            levels: None,
             page: Page::default(),
         })
         .expect("files");
@@ -85,4 +86,96 @@ fn a_copied_tree_is_one_pair_with_its_other_files_counted() {
         ..Default::default()
     });
     assert_eq!(missing.unwrap_err().code, fm_api::ErrorCode::NotFound);
+}
+
+#[test]
+fn keep_this_side_puts_a_pair_in_the_draft_and_never_removes_a_source_folder() {
+    use fm_api::cleanup_draft::CleanupDraftUpdate;
+    use fm_api::library::{DuplicateLevel, ProtectedFolder};
+
+    let lib = Lib::new("api-folder-pair-draft");
+    let base = lib.root.parent().expect("base").to_path_buf();
+    let (copies, two) = (base.join("Copies"), base.join("Two"));
+    let one = copies.join("one");
+    for name in ["bebasneue", "asapsharp", "barlow", "agdasima", "archivo"] {
+        copy_tree(&lib.root.join(name), &one.join(name));
+        copy_tree(&lib.root.join(name), &two.join(name));
+    }
+    for folder in [&copies, &two] {
+        let source = lib
+            .api
+            .add_source(AddSourceRequest {
+                path: folder.display().to_string(),
+                mode: ImportMode::IndexInPlace,
+            })
+            .expect("source");
+        lib.scan(Some(source.id), true);
+    }
+    let path = |p: &Path| p.display().to_string();
+    let pairs = lib
+        .api
+        .list_folder_pairs(ListFolderPairsRequest::default())
+        .expect("pairs");
+    let pair = pairs
+        .items
+        .iter()
+        .find(|p| p.a.path == path(&one) && p.b.path == path(&two))
+        .unwrap_or_else(|| panic!("the copied folder: {pairs:#?}"));
+    assert_eq!(pair.a.protected, None);
+    assert_eq!(pair.b.protected, Some(ProtectedFolder::SourceRoot));
+
+    // What both have, and the copies that are not identical (none here).
+    let files = |levels: Vec<DuplicateLevel>| {
+        lib.api
+            .list_folder_pair_files(ListFolderPairFilesRequest {
+                a: path(&one),
+                b: path(&two),
+                side: Some(PairSide::A),
+                only_here: false,
+                levels: Some(levels),
+                page: Page::default(),
+            })
+            .expect("files")
+            .total
+    };
+    assert_eq!(files(vec![DuplicateLevel::Identical]), pair.a.font_files);
+    assert_eq!(
+        files(vec![
+            DuplicateLevel::SameVersion,
+            DuplicateLevel::OtherVersion
+        ]),
+        0
+    );
+
+    let refused = lib
+        .api
+        .update_cleanup_draft(CleanupDraftUpdate::KeepSide {
+            keep: path(&one),
+            remove: path(&two),
+        })
+        .expect_err("a source's folder is never the removed side");
+    assert_eq!(refused.code, fm_api::ErrorCode::InvalidRequest);
+    assert!(lib.api.get_cleanup_draft().expect("draft").pairs.is_empty());
+
+    let draft = lib
+        .api
+        .update_cleanup_draft(CleanupDraftUpdate::KeepSide {
+            keep: path(&two),
+            remove: path(&one),
+        })
+        .expect("keep the source's folder");
+    assert_eq!(draft.pairs.len(), 1);
+    assert_eq!(draft.pairs[0].remove, path(&one));
+    assert_eq!(draft.pairs[0].identical, pair.a.shared.identical);
+    assert_eq!(draft.pairs[0].identical_size, pair.a.identical_size);
+    assert_eq!(lib.api.get_cleanup_draft().expect("stored"), draft);
+
+    let gone = lib
+        .api
+        .update_cleanup_draft(CleanupDraftUpdate::KeepSide {
+            keep: path(&two),
+            remove: path(&lib.root),
+        })
+        .expect_err("no pair");
+    assert_eq!(gone.code, fm_api::ErrorCode::NotFound);
 }

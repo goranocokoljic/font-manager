@@ -410,6 +410,16 @@ pub(super) fn list(
     }
 }
 
+/// The listed pair of the folders `a` and `b` (either way round), at the
+/// default threshold over the whole library; `None` when they are no pair.
+/// The draft's "Keep this side" (E56.12) checks a pair with it.
+pub(super) fn find(files: &[SetFile], roots: &[Root], a: &str, b: &str) -> Option<FolderPair> {
+    Pairs::new(files, roots)
+        .pairs(&DuplicateScope::Library, FOLDER_PAIR_MIN_SHARED)
+        .into_iter()
+        .find(|p| (p.a.path == a && p.b.path == b) || (p.a.path == b && p.b.path == a))
+}
+
 /// The page `req` asks for of the files of two folders.
 pub(super) fn list_files(
     files: &[SetFile],
@@ -423,8 +433,7 @@ pub(super) fn list_files(
     let all: Vec<FolderPairFile> = Pairs::new(files, roots)
         .files(a, b)
         .into_iter()
-        .filter(|f| req.side.is_none_or(|s| s == f.side))
-        .filter(|f| !req.only_here || f.level.is_none())
+        .filter(|f| req.keeps(f))
         .collect();
     Ok(Paged {
         total: sat(all.len()),
