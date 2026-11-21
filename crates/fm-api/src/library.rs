@@ -1690,6 +1690,12 @@ pub struct KeeperPolicyPreview {
     pub changed: u32,
     /// Whether my languages were set.
     pub my_languages: crate::settings::MyLanguagesStatus,
+    /// The policy that was tried, as the rules read it
+    /// ([`KeeperPolicy::normalized`], a missing value the default's): an
+    /// editor shows it, so an empty policy previews as the default one
+    /// (E56.14). `None` from a service before this field.
+    #[serde(default)]
+    pub policy: Option<KeeperPolicy>,
 }
 
 /// The fewest shared font files a folder pair needs to be listed

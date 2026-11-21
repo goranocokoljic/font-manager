@@ -708,6 +708,7 @@ pub fn preview(
         keep_both,
         changed,
         my_languages: MyLanguagesStatus::of(my_languages),
+        policy: Some(tried.normalized()),
     }
 }
 

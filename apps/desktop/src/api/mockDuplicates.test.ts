@@ -229,6 +229,11 @@ describe('MockApi keeper policy (E56.4)', () => {
     const preview = await client.previewKeeperPolicy({ policy: { rules: ['path'] } });
     expect(preview).toMatchObject({ keepBoth: 0, changed: 0, myLanguages: 'notSet' });
     expect(preview.withKeeper).toBeLessThanOrEqual(preview.sets);
+    expect(preview.policy?.rules).toEqual(['path']);
+    // An empty policy previews as the default one, for "Back to the default" (E56.14).
+    const empty = await client.previewKeeperPolicy({ policy: {} });
+    expect(empty.policy).toEqual((await client.getSettings()).keeperPolicy);
+    expect(empty.policy?.rules).toContain('newestVersion');
     await expect(
       client.previewKeeperPolicy({ scope: { kind: 'source', source: 999 }, policy: {} }),
     ).rejects.toMatchObject({ code: 'notFound' });

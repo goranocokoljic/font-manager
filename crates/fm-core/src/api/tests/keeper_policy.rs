@@ -239,6 +239,8 @@ fn my_languages_and_the_guard_decide_the_keeper_in_every_listing() {
         })
         .expect("preview");
     assert_eq!(same.changed, 0);
+    assert_eq!(same.policy, Some(saved.keeper_policy.normalized()));
+    assert_eq!(preview.policy, Some(KeeperPolicy::default()));
     assert_eq!(
         lib.api.get_settings().expect("settings").keeper_policy,
         saved.keeper_policy

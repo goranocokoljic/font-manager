@@ -2,7 +2,7 @@
 // The Duplicates module (E56.11, board 14): a full view of its own, like Studio. A
 // 232 px navigation on the surface colour ("Library" to go back, then Overview,
 // Folders, Sets, Plan, History and Hidden copies with their counts, and at its foot
-// the languages the user works in with the link to the rules); the section is in the
+// the languages the user works in with the link to the rules, E56.14); the section is in the
 // URL (`#/duplicates?section=sets`). The overview leads with the identical copies as
 // one decision, then the levels still to decide, then the top folder pairs. Every
 // number comes from the API; nothing moves until a plan is applied.
@@ -11,11 +11,10 @@ import { useRoute, useRouter } from 'vue-router';
 import type { DuplicateLevel, FolderPair } from '../api/types';
 import DuplicatesFolders from '../components/DuplicatesFolders.vue';
 import DuplicatesQueue from '../components/DuplicatesQueue.vue';
+import DuplicatesRules from '../components/DuplicatesRules.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
-import UiIconButton from '../components/ui/UiIconButton.vue';
-import UiSelect from '../components/ui/UiSelect.vue';
 import { errorMessage, formatDate, formatNumber, t, type MessageKey } from '../i18n';
 import { fileSizeText } from '../list/columns';
 import { fadeIn } from '../motion/fadeIn';
@@ -160,16 +159,6 @@ watch(
   },
   { immediate: true },
 );
-
-// Rules: the languages the user works in (E56.14 adds the keeper policy).
-const languageOptions = computed(() =>
-  store.presets
-    .filter((p) => !myLanguages.value.includes(p.code))
-    .map((p) => ({ value: p.code, label: p.name })),
-);
-async function setLanguages(codes: string[]): Promise<void> {
-  if (await settings.update({ myLanguages: codes })) await store.load();
-}
 
 const decisionLabel = (d: (typeof store.draft.decisions & object)[number]) =>
   d.decision.kind === 'copies'
@@ -445,31 +434,8 @@ onMounted(async () => {
         />
       </div>
 
-      <!-- Languages and rules (E56.14 adds the keeper policy) -->
-      <div v-else class="page" data-testid="duplicates-rules">
-        <h2 class="heading">{{ t('duplicatesModule.rules.heading') }}</h2>
-        <p class="lead">{{ t('duplicatesModule.rules.body') }}</p>
-        <ul v-if="languagePresets.length" class="chips">
-          <li v-for="p in languagePresets" :key="p.code" class="language-chip">
-            {{ p.name }}
-            <UiIconButton
-              icon="close"
-              size="sm"
-              :label="t('duplicatesModule.rules.remove', { name: p.name })"
-              @click="setLanguages(myLanguages.filter((c) => c !== p.code))"
-            />
-          </li>
-        </ul>
-        <p v-else class="muted">{{ t('duplicatesModule.rules.none') }}</p>
-        <UiSelect
-          :model-value="null"
-          :options="languageOptions"
-          :placeholder="t('duplicatesModule.rules.add')"
-          :aria-label="t('duplicatesModule.rules.add')"
-          searchable
-          @update:model-value="$event && setLanguages([...myLanguages, $event as string])"
-        />
-      </div>
+      <!-- Languages and the keeper policy (E56.14) -->
+      <DuplicatesRules v-else />
     </main>
   </div>
 </template>
@@ -702,24 +668,6 @@ onMounted(async () => {
   border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-radius-md);
   color: var(--fm-fg);
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fm-space-2);
-  margin: 0 0 var(--fm-space-4);
-  padding: 0;
-  list-style: none;
-}
-.language-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--fm-space-1);
-  height: 28px;
-  padding-block: 0;
-  padding-inline: var(--fm-space-3) var(--fm-space-1);
-  border: 1px solid var(--fm-control-border);
-  border-radius: 999px;
 }
 .error {
   margin: var(--fm-space-4) var(--fm-space-8) 0;

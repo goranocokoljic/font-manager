@@ -4761,9 +4761,16 @@ fn the_mock_previews_a_keeper_policy_without_saving_it() {
     let preview = mock
         .preview_keeper_policy(PreviewKeeperPolicyRequest {
             scope: DuplicateScope::Library,
-            policy: tried,
+            policy: tried.clone(),
         })
         .unwrap();
+    assert_eq!(preview.policy, Some(tried.normalized()));
+    // An empty policy on the wire previews as the default one (E56.14).
+    let empty: PreviewKeeperPolicyRequest =
+        serde_json::from_value(serde_json::json!({ "policy": {} })).unwrap();
+    let default = mock.preview_keeper_policy(empty).unwrap();
+    assert_eq!(default.policy, Some(KeeperPolicy::default()));
+    assert_ne!(default.policy, preview.policy);
     assert_eq!(preview.sets, 2);
     assert_eq!(
         (preview.with_keeper, preview.keep_both, preview.changed),

@@ -55,6 +55,8 @@ export const ICONS = {
   clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 4.8V8l2.2 1.3"/>',
   zap: '<path d="M8.8 2.5L3.5 9h4l-.3 4.5L12.5 7h-4z"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',
+  // Grip (E56.14): two columns of three dots, the handle of a row that can be reordered.
+  grip: '<path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2"/>',
   power: '<path d="M8 2.5v5M4.7 4.6a5 5 0 1 0 6.6 0"/>',
   // Similar (E54.9): a bold "≈", two waves across the box, "looks like this". The lens is
   // gone: at 16 px its small "≈" read as a search, and a lens is Search's icon. The 2 px

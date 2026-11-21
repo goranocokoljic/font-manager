@@ -3165,6 +3165,13 @@ export type KeeperPolicyPreview = {
 	changed: number,
 	/**  Whether my languages were set. */
 	myLanguages: MyLanguagesStatus,
+	/**
+	 *  The policy that was tried, as the rules read it
+	 *  ([`KeeperPolicy::normalized`], a missing value the default's): an
+	 *  editor shows it, so an empty policy previews as the default one
+	 *  (E56.14). `None` from a service before this field.
+	 */
+	policy?: KeeperPolicy | null,
 };
 
 /**  The rule that decided between two copies and the values it compared. */
