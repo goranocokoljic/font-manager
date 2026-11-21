@@ -576,3 +576,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E56.9 #669] crates/fm-cli/src/commands.rs:526 — `fm sets export --out` writes with a plain `fs::write`, replacing an existing file with no `--force` check, unlike export/specimen/preview.
 - [E56.9 #669] crates/fm-core/src/resolve/cleanup.rs:246 — files moved inside one set are logged only when the set ends, so killing a direct-link `fm duplicates apply` mid-set (Ctrl-C) leaves trashed files without a session undo.
 - [E56.9 #669] crates/fm-cli/src/commands.rs:129 — `scan_one` does not check that its event subscription is alive before it starts the scan, so a dead endpoint stream reports a running scan as stopped.
+- [E56.12 #672] apps/desktop/src-tauri/src/lib.rs:1679 — `show_source_folder` has no test that runs the command; the new `show_pair_folder` follows the same untested pattern.
+- [E56.12 #672] apps/desktop/src/stores/duplicates.ts:99 — the duplicates store subscribes to no library or scan event, so the overview, the queue and the folder pairs stay stale after a rescan while the module is open.
+- [E56.12 #672] apps/desktop/src/stores/duplicates.ts:412 — `reloadPairs` keeps the old `pairTotal` when the first page fails, so placeholder cards for the old count show next to the error.

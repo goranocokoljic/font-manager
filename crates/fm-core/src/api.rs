@@ -1238,16 +1238,25 @@ impl LibraryService for CoreApi {
     ) -> ApiResult<fm_api::cleanup_draft::CleanupDraft> {
         let index = self.lock();
         let mut draft = index.cleanup_draft()?;
-        draft.apply(update, crate::catalog::now_rfc3339(), |id| {
-            let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
-            // A set answered for good (E56.8) is not listed, so it is not decided again.
-            let answered = index.decided_keys()?;
-            Ok(
-                crate::duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
-                    .into_iter()
-                    .find(|s| s.id == id),
-            )
-        })?;
+        draft.apply(
+            update,
+            crate::catalog::now_rfc3339(),
+            |id| {
+                let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+                // A set answered for good (E56.8) is not listed, so it is not decided again.
+                let answered = index.decided_keys()?;
+                Ok(
+                    crate::duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
+                        .into_iter()
+                        .find(|s| s.id == id),
+                )
+            },
+            |a, b| {
+                let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+                let roots = folder_roots(&index)?;
+                Ok(crate::folder_pairs::find(&files, &roots, a, b))
+            },
+        )?;
         index.set_cleanup_draft(&draft)?;
         Ok(draft)
     }

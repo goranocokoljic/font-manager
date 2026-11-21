@@ -3,16 +3,14 @@
 //! in B, and nothing else. Copies of another level are planned only when
 //! the user asks for it, and then the keeper policy and the language guard
 //! decide each font ([`crate::keeper_policy::recommend`]), over the copies
-//! of the pair. A protected folder ([`ProtectedFolder`]) can be the kept
+//! of the pair. A protected folder ([`fm_api::library::ProtectedFolder`]) can be the kept
 //! side, never the removed side. Nothing here touches a file: the plan of
 //! E56.7 carries the answer to the user and applies it.
 
 use std::collections::HashMap;
 use std::path::Path;
 
-use fm_api::library::{
-    CopyFacts, DuplicateLevel, KeeperPolicy, PairSide, ProtectedFolder, format_from_extension,
-};
+use fm_api::library::{CopyFacts, DuplicateLevel, KeeperPolicy, PairSide, format_from_extension};
 use fm_api::{ApiError, ApiResult, FaceId};
 
 use super::{Pairs, Root};
@@ -92,14 +90,6 @@ pub struct PairRemovals {
     pub stays: Vec<PairKept>,
 }
 
-fn protected_name(kind: ProtectedFolder) -> &'static str {
-    match kind {
-        ProtectedFolder::SourceRoot => "a folder you added to the library",
-        ProtectedFolder::SystemFolder => "a system font folder",
-        ProtectedFolder::LibraryFolder => "the library folder",
-    }
-}
-
 /// What keeping `req.keep`'s copies would remove from the other side.
 /// `InvalidRequest` when the folders are the same, or the side to remove
 /// is protected. Data that is no font is never planned.
@@ -122,7 +112,7 @@ pub fn removals(
         return Err(ApiError::invalid(format!(
             "{} is {}: it can be the side that is kept, never the side that is removed.",
             removed.display(),
-            protected_name(kind)
+            kind.describe()
         )));
     }
     let held = holdings(files);

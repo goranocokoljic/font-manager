@@ -197,6 +197,16 @@ test('every interactive element of the Duplicates module has a name', async ({ p
   await expect(page.getByTestId('duplicate-copy')).toHaveCount(3);
   await page.getByRole('button', { name: 'Filters' }).click();
   expect(await unnamedControls(page)).toEqual([]);
+  // The Folders view (E56.12): the pair cards and an open pair.
+  await open(page, '/duplicates?section=folders', '?mockFolderPairs=1');
+  await expect(page.getByTestId('folder-pair')).toHaveCount(3);
+  expect(await unnamedControls(page)).toEqual([]);
+  await page
+    .getByRole('button', { name: /^Show files of/ })
+    .first()
+    .click();
+  await expect(page.getByTestId('folder-pair-detail')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
 });
 
 test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) => {

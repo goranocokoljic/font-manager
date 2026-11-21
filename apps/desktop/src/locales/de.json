@@ -2482,6 +2482,11 @@
         },
         "keepAll": "Alle behalten",
         "notDuplicates": "Keine Duplikate"
+      },
+      "pairs": "Ordner",
+      "pairLine": {
+        "one": "{keep} behalten: {count} identische Kopie in {remove} geht",
+        "other": "{keep} behalten: {count} identische Kopien in {remove} gehen"
       }
     },
     "history": {
@@ -2496,6 +2501,64 @@
       "body": "Eine ausgeblendete Kopie bleibt, wo sie ist, und verlässt die Bibliothek."
     },
     "folders": {
+      "heading": "Ordner mit denselben Schriften",
+      "lead": "Entscheide einen ganzen Ordner auf einmal. „Diese Seite behalten“ plant, die identischen Kopien der anderen Seite zu entfernen, und sonst nichts.",
+      "listLabel": "Ordnerpaare, größte Ersparnis zuerst",
+      "containedIn": "{a} ist ganz in {b} enthalten",
+      "and": "{a} und {b} teilen Schriften",
+      "contained": "Enthalten",
+      "share": "{share} gemeinsam",
+      "frees": "Bis zu {size} frei",
+      "open": "Dateien zeigen",
+      "openName": "Dateien zeigen: {name}",
+      "fullPath": "Ganzen Pfad zeigen",
+      "shortPath": "Pfad kürzen",
+      "show": "Im Dateimanager zeigen",
+      "inOther": {
+        "one": "{shared} von {count} Datei liegt im anderen Ordner",
+        "other": "{shared} von {count} Dateien liegen im anderen Ordner"
+      },
+      "onlyHere": {
+        "one": "{count} nur hier",
+        "other": "{count} nur hier"
+      },
+      "keep": "Diese Seite behalten",
+      "keepName": "Diese Seite behalten: {name}",
+      "protected": {
+        "sourceRoot": "Ein hinzugefügter Ordner wird nie als Ganzes entfernt",
+        "systemFolder": "Aus einem Systemschriftenordner wird nie etwas entfernt",
+        "libraryFolder": "Der Bibliotheksordner wird nie als Ganzes entfernt"
+      },
+      "covers": {
+        "one": "Im Plan: Die {count} identische Kopie in {folder} ({size}) kommt in den {trash}. Sonst nichts.",
+        "other": "Im Plan: Die {count} identischen Kopien in {folder} ({size}) kommen in den {trash}. Sonst nichts."
+      },
+      "takeBackName": "{name} zurücknehmen",
+      "otherLevels": {
+        "one": "{count} weitere Schrift liegt in beiden Ordnern in einer anderen Datei. Sie bleibt in der Warteschlange der Sätze.",
+        "other": "{count} weitere Schriften liegen in beiden Ordnern in einer anderen Datei. Sie bleiben in der Warteschlange der Sätze."
+      },
+      "backToPairs": "Alle Ordnerpaare",
+      "files": {
+        "both": {
+          "one": "In beiden Ordnern: {count} Datei",
+          "other": "In beiden Ordnern: {count} Dateien"
+        },
+        "differ": {
+          "one": "In beiden, nicht identisch: {count} Datei",
+          "other": "In beiden, nicht identisch: {count} Dateien"
+        },
+        "onlyA": {
+          "one": "Nur in {a}: {count} Datei",
+          "other": "Nur in {a}: {count} Dateien"
+        },
+        "onlyB": {
+          "one": "Nur in {b}: {count} Datei",
+          "other": "Nur in {b}: {count} Dateien"
+        },
+        "none": "Keine Dateien.",
+        "more": "Mehr zeigen"
+      },
       "empty": "Keine Ordner enthalten dieselben Schriften."
     },
     "rules": {

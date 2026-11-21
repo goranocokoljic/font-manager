@@ -2482,6 +2482,11 @@
         },
         "keepAll": "Keep all",
         "notDuplicates": "Not duplicates"
+      },
+      "pairs": "Folders",
+      "pairLine": {
+        "one": "Keep {keep}: {count} identical copy in {remove} leaves",
+        "other": "Keep {keep}: {count} identical copies in {remove} leave"
       }
     },
     "history": {
@@ -2496,6 +2501,64 @@
       "body": "A copy you hide stays where it is and leaves the library."
     },
     "folders": {
+      "heading": "Folders that hold the same fonts",
+      "lead": "Decide a whole folder at once. \"Keep this side\" plans the removal of the other side's identical copies, and nothing else.",
+      "listLabel": "Folder pairs, largest saving first",
+      "containedIn": "{a} is contained in {b}",
+      "and": "{a} and {b} share fonts",
+      "contained": "Contained",
+      "share": "{share} shared",
+      "frees": "Up to {size} to free",
+      "open": "Show files",
+      "openName": "Show files of {name}",
+      "fullPath": "Show the full path",
+      "shortPath": "Shorten the path",
+      "show": "Show in file manager",
+      "inOther": {
+        "one": "{shared} of {count} file is in the other folder",
+        "other": "{shared} of {count} files are in the other folder"
+      },
+      "onlyHere": {
+        "one": "{count} only here",
+        "other": "{count} only here"
+      },
+      "keep": "Keep this side",
+      "keepName": "Keep this side: {name}",
+      "protected": {
+        "sourceRoot": "A folder you added is never removed as a whole",
+        "systemFolder": "A system font folder is never removed from",
+        "libraryFolder": "The library folder is never removed as a whole"
+      },
+      "covers": {
+        "one": "In the plan: the {count} identical copy in {folder} ({size}) goes to the {trash}. Nothing else.",
+        "other": "In the plan: the {count} identical copies in {folder} ({size}) go to the {trash}. Nothing else."
+      },
+      "takeBackName": "Take back {name}",
+      "otherLevels": {
+        "one": "{count} more font is in both folders in another file. It stays in the queue of sets.",
+        "other": "{count} more fonts are in both folders in another file. They stay in the queue of sets."
+      },
+      "backToPairs": "All folder pairs",
+      "files": {
+        "both": {
+          "one": "In both folders: {count} file",
+          "other": "In both folders: {count} files"
+        },
+        "differ": {
+          "one": "In both, not identical: {count} file",
+          "other": "In both, not identical: {count} files"
+        },
+        "onlyA": {
+          "one": "Only in {a}: {count} file",
+          "other": "Only in {a}: {count} files"
+        },
+        "onlyB": {
+          "one": "Only in {b}: {count} file",
+          "other": "Only in {b}: {count} files"
+        },
+        "none": "No files.",
+        "more": "Show more"
+      },
       "empty": "No folders hold the same fonts."
     },
     "rules": {

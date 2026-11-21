@@ -15,7 +15,7 @@ use fm_api::catalog::{
     CheckUpdatesRequest, DownloadFamilyRequest, DownloadFamilyResponse, InstallFamilyRequest,
     InstallFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
-use fm_api::common::Paged;
+use fm_api::common::{Page, Paged};
 use fm_api::comparison::{
     Comparison, ComparisonEntry, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
@@ -29,7 +29,7 @@ use fm_api::library::{
     DuplicateGroup, DuplicateSet, FaceDetail, Family, FamilySummary, FolderPair, FolderPairFile,
     FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
     KeepCopyRequest, KeeperPolicyPreview, LibraryService, ListDuplicateSetsRequest,
-    ListFamiliesRequest, ListFolderPairFilesRequest, ListFolderPairsRequest,
+    ListFamiliesRequest, ListFolderPairFilesRequest, ListFolderPairsRequest, PairSide,
     PreviewKeeperPolicyRequest, Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest,
     SetSourcePausedRequest, SidecarConflict, Source,
 };
@@ -1684,7 +1684,50 @@ async fn show_source_folder(state: State<'_, AppState>, source: SourceId) -> Api
         .into_iter()
         .find(|s| s.id == source)
         .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "The source is not in the library."))?;
-    fm_platform::show_folder(Path::new(&found.path)).map_err(|e| match e {
+    show_in_file_manager(Path::new(&found.path))
+}
+
+/// Shows one side of a folder pair in the OS file manager (E56.12: the
+/// Folders view's "Show in file manager"), through the same platform helper
+/// as `show_source_folder`. The UI names the pair and the side, not a free
+/// path: only a folder that holds font files of the library next to the
+/// other side can be opened.
+#[tauri::command]
+async fn show_pair_folder(
+    state: State<'_, AppState>,
+    a: String,
+    b: String,
+    side: PairSide,
+) -> ApiResult<()> {
+    let req = ListFolderPairFilesRequest {
+        a: a.clone(),
+        b: b.clone(),
+        side: Some(side),
+        only_here: false,
+        levels: None,
+        page: Page {
+            offset: 0,
+            limit: 1,
+        },
+    };
+    let files = call(&state, move |api| api.list_folder_pair_files(req)).await?;
+    if files.total == 0 {
+        return Err(ApiError::new(
+            ErrorCode::NotFound,
+            "The folder holds no font of the library.",
+        ));
+    }
+    let folder = match side {
+        PairSide::A => a,
+        PairSide::B => b,
+    };
+    show_in_file_manager(Path::new(&folder))
+}
+
+/// Opens `folder` in the OS file manager; a folder that is not there is
+/// `NotFound`.
+fn show_in_file_manager(folder: &Path) -> ApiResult<()> {
+    fm_platform::show_folder(folder).map_err(|e| match e {
         fm_platform::ShowFolderError::NotAFolder(_) => {
             ApiError::new(ErrorCode::NotFound, "The folder cannot be found.")
                 .with_detail(e.to_string())
@@ -1925,6 +1968,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             open_help,
             open_url,
             show_source_folder,
+            show_pair_folder,
             set_shell_locale,
             print_page,
             updater::update_support,

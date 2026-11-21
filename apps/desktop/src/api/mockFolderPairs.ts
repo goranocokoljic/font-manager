@@ -333,6 +333,21 @@ export const listFolderPairs = (
   return page(all, req.page?.offset ?? 0, req.page?.limit ?? 100);
 };
 
+/**
+ * The listed pair of the folders `a` and `b` (either way round), at the default
+ * threshold over the whole library, as `folder_pairs::find`; `undefined` when they are
+ * no pair. The draft's "Keep this side" (E56.12) checks a pair with it.
+ */
+export const findFolderPair = (
+  files: SetFile[],
+  roots: PairRoot[],
+  a: string,
+  b: string,
+): FolderPair | undefined =>
+  new Pairs(files, roots)
+    .pairs({ kind: 'library' }, FOLDER_PAIR_MIN_SHARED)
+    .find((p) => (p.a.path === a && p.b.path === b) || (p.a.path === b && p.b.path === a));
+
 /** The page `req` asks for of the files of two folders; `null` when they are the same. */
 export const listFolderPairFiles = (
   files: SetFile[],
@@ -343,6 +358,7 @@ export const listFolderPairFiles = (
   const all = new Pairs(files, roots)
     .files(req.a, req.b)
     .filter((f) => (req.side ?? null) === null || f.side === req.side)
-    .filter((f) => !req.onlyHere || f.level === null);
+    .filter((f) => !req.onlyHere || f.level === null)
+    .filter((f) => req.levels == null || (f.level !== null && req.levels.includes(f.level)));
   return page(all, req.page?.offset ?? 0, req.page?.limit ?? 100);
 };

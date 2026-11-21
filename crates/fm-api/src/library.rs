@@ -1722,6 +1722,18 @@ pub enum ProtectedFolder {
     LibraryFolder,
 }
 
+impl ProtectedFolder {
+    /// What the folder is, in the words of a sentence ("a system font
+    /// folder"): the plan's refusal and the draft's say it the same way.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::SourceRoot => "a folder you added to the library",
+            Self::SystemFolder => "a system font folder",
+            Self::LibraryFolder => "the library folder",
+        }
+    }
+}
+
 /// One side of a folder pair: a folder with its subfolders, without the
 /// other side when one holds the other.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -1792,9 +1804,29 @@ pub struct ListFolderPairFilesRequest {
     /// folders as the same would lose.
     #[serde(default)]
     pub only_here: bool,
+    /// Only the files whose best copy on the other side is of one of these
+    /// levels (E56.12: what both folders have, the copies that are not
+    /// identical); every file when `None`. A file only one side has has no
+    /// level and is left out by any list.
+    #[serde(default)]
+    pub levels: Option<Vec<DuplicateLevel>>,
     /// The window into the files.
     #[serde(default)]
     pub page: Page,
+}
+
+impl ListFolderPairFilesRequest {
+    /// Whether `file` passes the request's side, `only_here` and `levels`
+    /// filters. Every implementation of
+    /// [`LibraryService::list_folder_pair_files`] uses this.
+    pub fn keeps(&self, file: &FolderPairFile) -> bool {
+        self.side.is_none_or(|s| s == file.side)
+            && (!self.only_here || file.level.is_none())
+            && self
+                .levels
+                .as_ref()
+                .is_none_or(|ls| file.level.is_some_and(|l| ls.contains(&l)))
+    }
 }
 
 /// One font file of a folder pair, with its best copy on the other side.

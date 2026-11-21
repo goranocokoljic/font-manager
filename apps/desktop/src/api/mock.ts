@@ -26,7 +26,12 @@ import {
   setKey,
   type SetFile,
 } from './mockDuplicates';
-import { listFolderPairFiles, listFolderPairs, type PairRoot } from './mockFolderPairs';
+import {
+  findFolderPair,
+  listFolderPairFiles,
+  listFolderPairs,
+  type PairRoot,
+} from './mockFolderPairs';
 import { mockPlanCleanup } from './mockCleanup';
 import { applyDraftUpdate, overviewFromPlan } from './mockCleanupDraft';
 import {
@@ -1371,14 +1376,15 @@ function savedDraft(storage: MockOptions['settingsStorage']): CleanupDraft {
   try {
     const saved: unknown = JSON.parse(storage?.getItem(MOCK_DRAFT_KEY) ?? 'null');
     if (!saved || typeof saved !== 'object' || Array.isArray(saved))
-      return { identical: false, decisions: [] };
+      return { identical: false, decisions: [], pairs: [] };
     const d = saved as CleanupDraft;
     return {
       identical: d.identical === true,
       decisions: Array.isArray(d.decisions) ? d.decisions : [],
+      pairs: Array.isArray(d.pairs) ? d.pairs : [],
     };
   } catch {
-    return { identical: false, decisions: [] };
+    return { identical: false, decisions: [], pairs: [] };
   }
 }
 
@@ -1498,6 +1504,57 @@ export const mockDuplicates: DuplicateGroup[] = [
 
 /** Id of the first extra face and family; above every sample id. */
 export const EXTRA_ID_BASE = 1000;
+
+/** The extra sample families `?mockFolderPairs=1` needs (E56.12). */
+export const MOCK_FOLDER_PAIR_FACES = 18;
+
+/**
+ * The copies of `?mockFolderPairs=1` (E56.12), over the first 18 extra sample families
+ * in `/Users/demo/Fonts/Samples`: three folders that hold the same fonts.
+ * - `/Users/demo/Backup 2014/Samples` holds Sample 1–6 unchanged: a contained pair.
+ * - `/Users/demo/Downloads/fonts-old` holds Sample 7–11 unchanged and an older version of
+ *   Sample 12: a partial pair with one copy that is not identical.
+ * - `/System/Library/Fonts/Supplemental` holds Sample 13–18 unchanged: a system font
+ *   folder, so the API refuses it as the removed side.
+ */
+export const mockFolderPairCopies: NonNullable<MockOptions['copies']> = Array.from(
+  { length: MOCK_FOLDER_PAIR_FACES },
+  (_, i) => {
+    const name = `Sample${i + 1}-Regular.ttf`;
+    const face = EXTRA_ID_BASE + i;
+    if (i < 6)
+      return { face, path: `/Users/demo/Backup 2014/Samples/${name}`, hash: null, version: null };
+    if (i < 11)
+      return { face, path: `/Users/demo/Downloads/fonts-old/${name}`, hash: null, version: null };
+    if (i === 11)
+      return {
+        face,
+        path: `/Users/demo/Downloads/fonts-old/${name}`,
+        hash: 'old12',
+        version: 'Version 0.5',
+      };
+    return {
+      face,
+      path: `/System/Library/Fonts/Supplemental/${name}`,
+      hash: null,
+      version: null,
+    };
+  },
+);
+
+/**
+ * `?mockFolderPairs=2` adds these to `mockFolderPairCopies`: Sample 1–5 copied into 20
+ * archive folders, so the Folders view lists a few hundred pairs (its list is virtualized).
+ */
+export const mockFolderPairArchive: NonNullable<MockOptions['copies']> = Array.from(
+  { length: 20 * 5 },
+  (_, n) => ({
+    face: EXTRA_ID_BASE + (n % 5),
+    path: `/Users/demo/Archive/Copy ${Math.floor(n / 5) + 1}/Sample${(n % 5) + 1}-Regular.ttf`,
+    hash: null,
+    version: null,
+  }),
+);
 
 /** The first face and family id of the families the mock watcher adds (E51.2). */
 export const WATCHER_ID_BASE = 900_000;
@@ -5158,8 +5215,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     getCleanupDraft: async () => structuredClone(cleanupDraft),
     updateCleanupDraft: async (update) => {
       const all = duplicateSets(setFiles(), { kind: 'library' }, decided());
-      cleanupDraft = applyDraftUpdate(cleanupDraft, update, MOCK_NOW, (id) =>
-        all.find((s) => s.id === id),
+      cleanupDraft = applyDraftUpdate(
+        cleanupDraft,
+        update,
+        MOCK_NOW,
+        (id) => all.find((s) => s.id === id),
+        (a, b) => findFolderPair(setFiles(), pairRoots(), a, b),
       );
       options.settingsStorage?.setItem(MOCK_DRAFT_KEY, JSON.stringify(cleanupDraft));
       return structuredClone(cleanupDraft);
@@ -5399,6 +5460,23 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         throw { code: 'notFound' as const, message: 'The folder cannot be found.', detail: null };
       const w = globalThis as { __fmMockShownFolders?: string[] };
       (w.__fmMockShownFolders ??= []).push(s.path);
+    },
+    // As the Tauri command (E56.12): only a side that holds library fonts opens.
+    showPairFolder: async (a, b, side) => {
+      const files = listFolderPairFiles(setFiles(), pairRoots(), {
+        a,
+        b,
+        side,
+        page: { offset: 0, limit: 1 },
+      });
+      if (!files || files.total === 0)
+        throw {
+          code: 'notFound' as const,
+          message: 'The folder holds no font of the library.',
+          detail: null,
+        };
+      const w = globalThis as { __fmMockShownFolders?: string[] };
+      (w.__fmMockShownFolders ??= []).push(side === 'a' ? a : b);
     },
     pickFolder: async () => {
       // A Playwright spec queues its picks on the page (`__fmMockPickFolders`); a unit test
@@ -5740,9 +5818,22 @@ export const mockClient: FmClient = createMockClient({
   // `?mockDuplicates=1` adds copies for the Duplicates module (E56.11): JetBrains Mono
   // twice as the same file, Inter in three versions, Legacy Grotesk twice in one version.
   ...(countFromUrl('mockDuplicates', 1) ? { copies: mockDuplicateCopies } : {}),
+  // `?mockFolderPairs=1` adds three folders that hold the same sample fonts (E56.12): a
+  // contained pair, a partial pair and a system font folder that can only be kept.
+  // `=2` adds 20 archive folders with Sample 1–5, for a few hundred pairs.
+  ...(countFromUrl('mockFolderPairs', 2)
+    ? {
+        copies: [
+          ...mockFolderPairCopies,
+          ...(countFromUrl('mockFolderPairs', 2) === 2 ? mockFolderPairArchive : []),
+        ],
+      }
+    : {}),
   // `?mockComparisons=1` starts with a saved comparison that names a missing font.
   comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],
-  extraFaces: countFromUrl('mockFaces', 100_000),
+  extraFaces:
+    countFromUrl('mockFaces', 100_000) ||
+    (countFromUrl('mockFolderPairs', 1) ? MOCK_FOLDER_PAIR_FACES : 0),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
   // `?mockActive=1` starts with face 1 active, `=6` with face 6 (Document fonts, E32.2).
   activeFaces: [countFromUrl('mockActive', 9)].filter((id) => id > 0),

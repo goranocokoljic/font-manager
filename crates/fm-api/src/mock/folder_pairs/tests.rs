@@ -81,5 +81,61 @@ fn the_pair_rule_gives_the_core_answer_for_every_shared_case() {
             .collect();
         let got = serde_json::to_value(list(&files, &roots, &case.request)).unwrap();
         assert_eq!(got, case.pairs, "case: {}", case.name);
+        // `find` names a listed pair either way round (E56.12's draft), at
+        // the default threshold.
+        if case.request.min_shared.is_none() && case.request.scope == DuplicateScope::Library {
+            let listed = list(&files, &roots, &case.request).items;
+            for pair in &listed {
+                assert_eq!(
+                    find(&files, &roots, &pair.a.path, &pair.b.path).as_ref(),
+                    Some(pair)
+                );
+                assert_eq!(
+                    find(&files, &roots, &pair.b.path, &pair.a.path).as_ref(),
+                    Some(pair)
+                );
+            }
+            assert_eq!(
+                find(&files, &roots, "/nowhere", "/else"),
+                None,
+                "case: {}",
+                case.name
+            );
+        }
     }
+}
+
+#[test]
+fn the_files_of_a_pair_filter_by_level() {
+    let file = |level| FolderPairFile {
+        path: "/a/x.ttf".to_owned(),
+        side: PairSide::A,
+        size: 1,
+        level,
+        copy: None,
+    };
+    let req = |levels: Option<Vec<DuplicateLevel>>, only_here| ListFolderPairFilesRequest {
+        a: "/a".to_owned(),
+        b: "/b".to_owned(),
+        side: None,
+        only_here,
+        levels,
+        page: crate::common::Page::default(),
+    };
+    let identical = Some(vec![DuplicateLevel::Identical]);
+    let other = Some(vec![
+        DuplicateLevel::SameVersion,
+        DuplicateLevel::OtherVersion,
+    ]);
+    assert!(req(identical.clone(), false).keeps(&file(Some(DuplicateLevel::Identical))));
+    assert!(!req(identical.clone(), false).keeps(&file(Some(DuplicateLevel::OtherVersion))));
+    assert!(
+        !req(identical, false).keeps(&file(None)),
+        "only here has no level"
+    );
+    assert!(req(other.clone(), false).keeps(&file(Some(DuplicateLevel::SameVersion))));
+    assert!(!req(other, false).keeps(&file(Some(DuplicateLevel::Identical))));
+    assert!(req(None, false).keeps(&file(Some(DuplicateLevel::Identical))));
+    assert!(req(None, true).keeps(&file(None)));
+    assert!(!req(None, true).keeps(&file(Some(DuplicateLevel::Identical))));
 }

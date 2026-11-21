@@ -2584,14 +2584,20 @@ impl LibraryService for MockApi {
         let files = self.duplicate_set_files(&DuplicateScope::Library)?;
         // A set answered for good (E56.8) is not listed, so it is not decided again.
         let answered = self.decided_keys();
+        let roots = self.folder_roots();
         let mut st = self.state();
-        st.cleanup_draft.apply(update, MOCK_NOW.to_owned(), |id| {
-            Ok(
-                duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
-                    .into_iter()
-                    .find(|s| s.id == id),
-            )
-        })?;
+        st.cleanup_draft.apply(
+            update,
+            MOCK_NOW.to_owned(),
+            |id| {
+                Ok(
+                    duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
+                        .into_iter()
+                        .find(|s| s.id == id),
+                )
+            },
+            |a, b| Ok(folder_pairs::find(&files, &roots, a, b)),
+        )?;
         Ok(st.cleanup_draft.clone())
     }
 
