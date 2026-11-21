@@ -79,22 +79,20 @@ const MAX_PAGE: u32 = 500;
 
 /// The page `req` asks for of the sets among `files`.
 /// Without the sets answered for exactly their files (`decided`, E56.8),
-/// as fm-core leaves them out.
+/// as fm-core leaves them out; filtered and sorted as `DuplicateSet::page`,
+/// where `drafted` holds the sets the cleanup draft has a decision for (E56.11).
 pub(super) fn list_with(
     files: &[SetFile],
     req: &ListDuplicateSetsRequest,
     decided: &HashSet<String>,
+    drafted: &HashSet<String>,
 ) -> Paged<DuplicateSet> {
-    let all = sets_with(files, &req.scope, decided);
-    let total = u32::try_from(all.len()).unwrap_or(u32::MAX);
-    Paged {
-        items: all
-            .into_iter()
-            .skip(req.page.offset as usize)
-            .take(req.page.limit.min(MAX_PAGE) as usize)
-            .collect(),
-        total,
-    }
+    DuplicateSet::page(
+        sets_with(files, &req.scope, decided),
+        req,
+        drafted,
+        MAX_PAGE,
+    )
 }
 
 /// Whether `file` is in `scope`.

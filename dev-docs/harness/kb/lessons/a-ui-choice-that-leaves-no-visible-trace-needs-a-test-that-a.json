@@ -5,17 +5,21 @@
   "rule": "When two UI choices differ only in a parameter that the result does not show (a scale, a quality, a mode that does not change the file name or the status text), the Playwright check must assert the parameter the view sends, not only the visible result. Record the requests in the MockApi on `globalThis` (as `__fmMockFileDrags` and `__fmMockPngScales` do) and assert the recorded values per choice; check that swapping the choice-to-parameter mapping in the view makes the test fail. A store unit test that calls the store method with the parameter skips the view's mapping and does not count.",
   "rationale": "E45.4 (#476): the Export menu's PNG 1× and PNG 2× mapped to scale 1/2 in StudioView.vue, but the export name no longer carried the scale, so the e2e only checked names and the store test called exportPng directly; a swapped or always-2 mapping passed every test.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
-    476
+    476,
+    671
   ],
   "file_globs": [
     "apps/desktop/src/views/**",
     "apps/desktop/src/components/**",
     "apps/desktop/e2e/**",
-    "apps/desktop/src/api/mock.ts"
+    "apps/desktop/src/api/mock.ts",
+    "apps/desktop/src/stores/**/*.ts",
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/e2e/**/*.ts"
   ],
   "first_seen": "2026-11-09T04:06:15.148Z",
-  "last_seen": "2026-11-09T04:06:15.148Z"
+  "last_seen": "2026-11-21T10:18:20.663Z"
 }

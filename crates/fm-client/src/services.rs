@@ -8,6 +8,7 @@ use std::sync::mpsc::Receiver;
 use fm_api::activation::*;
 use fm_api::catalog::*;
 use fm_api::cleanup::*;
+use fm_api::cleanup_draft::*;
 use fm_api::common::Paged;
 use fm_api::comparison::*;
 use fm_api::export::*;
@@ -68,6 +69,9 @@ service!(LibraryService {
     cancel_cleanup(job: JobId) -> ();
     list_cleanup_sessions() -> Vec<CleanupSession>;
     undo_cleanup_session(req: UndoCleanupRequest) -> CleanupSession;
+    duplicates_overview(req: DuplicatesOverviewRequest) -> DuplicatesOverview;
+    get_cleanup_draft() -> CleanupDraft;
+    update_cleanup_draft(update: CleanupDraftUpdate) -> CleanupDraft;
     list_hidden_copies() -> Vec<HiddenCopy>;
     show_hidden_copies(req: ShowHiddenRequest) -> Vec<HiddenCopy>;
     decide_duplicate_set(req: DecideSetRequest) -> DuplicateDecision;

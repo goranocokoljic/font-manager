@@ -560,6 +560,43 @@ export type CleanupAction =
 /**  It stays in the library. */
 "stays";
 
+/**
+ *  The decisions collected for the next cleanup plan (E56.11). Touches no
+ *  file; stored by the service, so it survives a restart.
+ */
+export type CleanupDraft = {
+	/**
+	 *  The identical sets are in the plan, as one decision with the policy's
+	 *  keepers.
+	 */
+	identical?: boolean,
+	/**  The decisions, in the order they were made; one per set. */
+	decisions?: DraftDecision[],
+};
+
+/**  A change to the draft ([`crate::LibraryService::update_cleanup_draft`]). */
+export type CleanupDraftUpdate = 
+/**
+ *  Decide a set, or decide it again. `NotFound` when the set is not a
+ *  duplicate set any more; `InvalidRequest` when the decision does not
+ *  fit it ([`SetDecision::check`]).
+ */
+{ kind: "decide"; 
+/**  The set id. */
+set: string; 
+/**  The answer. */
+decision: SetDecision } | 
+/**  Take a set's decision back: it is in the queue again. */
+{ kind: "takeBack"; 
+/**  The set id. */
+set: string } | 
+/**  Put the identical sets in the plan, or take them out. */
+{ kind: "identical"; 
+/**  In the plan. */
+include: boolean } | 
+/**  Start again: no decision, identical sets out. */
+{ kind: "clear" };
+
 /**  One file of a plan. */
 export type CleanupFile = {
 	/**  Absolute file path. */
@@ -908,6 +945,15 @@ path: string } |
 /**  That face. */
 face: FaceId };
 
+/**  What the user chose for one copy of a set. */
+export type CopyChoice = 
+/**  The copy stays. */
+"keep" | 
+/**  The copy goes to the OS trash when the plan is applied. */
+"trash" | 
+/**  The copy is hidden when the plan is applied: its file stays (E56.8). */
+"hide";
+
 /**
  *  Two copies of a duplicate set side by side (E56.2): read from their files
  *  on demand.
@@ -921,6 +967,14 @@ export type CopyComparison = {
 	differences: CopyDifferences | null,
 	/**  The answer in sentences a user reads, most important first. */
 	summary: string[],
+};
+
+/**  One copy's choice in a [`SetDecision::Copies`]. */
+export type CopyDecision = {
+	/**  The copy, a path of the set. */
+	path: string,
+	/**  What happens to it. */
+	choice: CopyChoice,
 };
 
 /**
@@ -1298,6 +1352,20 @@ export type DownloadFamilyResponse = {
 	error?: ApiError | null,
 };
 
+/**  One decision of the draft. */
+export type DraftDecision = {
+	/**  The set id ([`DuplicateSet::id`]). */
+	set: string,
+	/**  The set's level when it was decided. */
+	level: DuplicateLevel,
+	/**  The set's PostScript name, when it has one. */
+	postscriptName: string | null,
+	/**  The answer. */
+	decision: SetDecision,
+	/**  When it was decided. */
+	at: string,
+};
+
 /**
  *  The font files a file drag carries, where the user keeps them; never a
  *  copy (rule 2).
@@ -1518,6 +1586,71 @@ export type DuplicateSetCopy = {
 	 *  or the service has no index to read them from (the mocks).
 	 */
 	facts?: CopyFacts | null,
+};
+
+/**
+ *  Which duplicate sets a listing returns (E56.11): every condition that is
+ *  set must hold.
+ */
+export type DuplicateSetFilter = {
+	/**  The levels to list; every level when empty. */
+	levels?: DuplicateLevel[],
+	/**  Only sets with a copy of this format. */
+	format?: FontFormat | null,
+	/**
+	 *  Only sets with this recommendation. A service without an index to
+	 *  recommend from (the mocks) has none, so it lists no set.
+	 */
+	recommendation?: RecommendationFilter | null,
+	/**
+	 *  Leave out the sets the cleanup draft has a decision for
+	 *  ([`crate::cleanup_draft::CleanupDraft`]): the queue the user works
+	 *  through.
+	 */
+	undecided?: boolean,
+};
+
+/**  The order of a duplicate set listing (E56.11). */
+export type DuplicateSetSort = 
+/**  The listing's own order: by PostScript name. */
+"name" | 
+/**  The most bytes freed first ([`DuplicateSet::frees`]), then by name. */
+"frees" | 
+/**  The most copies first, then by name. */
+"copies";
+
+/**
+ *  What a cleanup of a scope would do with the saved policy, counted
+ *  (E56.11).
+ */
+export type DuplicatesOverview = {
+	/**  Fonts with more than one copy: the duplicate sets. */
+	fonts: number,
+	/**  The files a cleanup would remove. */
+	extraFiles: number,
+	/**  The folders those files are in. */
+	folders: number,
+	/**  The bytes those files free (saturating). */
+	frees: number,
+	/**  Identical files: one decision for all of them. */
+	identical: LevelSummary,
+	/**  The same version in files that differ. */
+	sameVersion: LevelSummary,
+	/**  Other versions of one font. */
+	otherVersion: LevelSummary,
+	/**  The sets the policy answered "keep both": nothing is removed. */
+	keepBoth: number,
+	/**
+	 *  Whether my languages are set; `NotSet` means the guard did nothing,
+	 *  and the module offers to set them.
+	 */
+	myLanguages: MyLanguagesStatus,
+};
+
+/**  The overview of a scope ([`crate::LibraryService::duplicates_overview`]). */
+export type DuplicatesOverviewRequest = {
+	/**  The sets to count; the whole library by default. */
+	scope?: DuplicateScope,
 };
 
 /**  Embedding permissions from `OS/2.fsType`. */
@@ -3290,6 +3423,18 @@ export type LayoutVersion = {
 	broken?: string | null,
 };
 
+/**  The sets of one level and what a cleanup would do with them. */
+export type LevelSummary = {
+	/**  The sets of this level (each one font). */
+	sets: number,
+	/**  The files the plan removes from them. */
+	files: number,
+	/**  The bytes those files free (saturating). */
+	frees: number,
+	/**  The folders those files are in. */
+	folders: number,
+};
+
 /**
  *  Declare the license of a family (E15.2). It applies to every face of the
  *  family and replaces what was declared before: a field left absent is
@@ -3408,6 +3553,13 @@ export type ListDuplicateSetsRequest = {
 	scope?: DuplicateScope,
 	/**  The window into the sets. */
 	page?: Page,
+	/**
+	 *  Which of the sets in the scope to list (E56.11); every set by
+	 *  default.
+	 */
+	filter?: DuplicateSetFilter,
+	/**  The order of the sets (E56.11); by PostScript name by default. */
+	sort?: DuplicateSetSort,
 };
 
 /**  List families, one page at a time (the UI list is virtualized). */
@@ -4109,6 +4261,13 @@ export type ReceiptPlace =
 /**  In the app's data folder, on this machine only. */
 "appData";
 
+/**  Which recommendation a listed set has (E56.11). */
+export type RecommendationFilter = 
+/**  The policy recommends removing at least one copy. */
+"hasRecommendation" | 
+/**  The policy answered the set "keep both" ([`KeeperOutcome::KeepBoth`]). */
+"keepBoth";
+
 /**  How a copy leaves the library. */
 export type RemoveAs = 
 /**  The file goes to the OS trash (ADR 0009). */
@@ -4463,6 +4622,20 @@ export type SetCatalogEnabledRequest = {
 	/**  On or off. */
 	enabled: boolean,
 };
+
+/**  The user's answer for one duplicate set. */
+export type SetDecision = 
+/**
+ *  A choice per copy; at least one copy is kept, and a copy not named
+ *  stays.
+ */
+{ kind: "copies"; 
+/**  The choices. */
+copies: CopyDecision[] } | 
+/**  Keep every copy ("keep both"). */
+{ kind: "keepAll" } | 
+/**  The copies are not duplicates of each other. */
+{ kind: "notDuplicates" };
 
 /**
  *  One font of an exported set, referenced by content so a teammate's copy

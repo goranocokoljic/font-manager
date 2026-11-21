@@ -198,6 +198,30 @@ impl std::fmt::Debug for CoreApi {
     }
 }
 
+/// Fills the `facts` of every copy of `sets` that has none yet, from the
+/// index (E56.2).
+fn fill_copy_facts(index: &Index, sets: &mut [DuplicateSet]) -> FmResult<()> {
+    let faces: Vec<FaceId> = sets
+        .iter()
+        .flat_map(|s| {
+            s.copies
+                .iter()
+                .filter(|c| c.facts.is_none())
+                .filter_map(|c| c.face)
+        })
+        .collect();
+    if faces.is_empty() {
+        return Ok(());
+    }
+    let facts = index.copy_facts(&faces)?;
+    for copy in sets.iter_mut().flat_map(|s| s.copies.iter_mut()) {
+        if copy.facts.is_none() {
+            copy.facts = copy.face.and_then(|f| facts.get(&f).cloned());
+        }
+    }
+    Ok(())
+}
+
 impl CoreApi {
     /// The API over `index` in the app folders `paths`: activation through
     /// `activator` (the app passes [`fm_platform::activator::system`]), the
@@ -1040,29 +1064,45 @@ impl LibraryService for CoreApi {
             return Err(ApiError::not_found(format!("Source {source}")));
         }
         let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
-        let decided = index.decided_keys()?;
-        let mut page = crate::duplicate_sets::list_with(&files, &req, &decided);
-        // The facts of the copies on this page only (E56.2): the listing
-        // budget (ADR 0027) is spent on the sets, not on every copy.
-        let faces: Vec<FaceId> = page
-            .items
-            .iter()
-            .flat_map(|s| s.copies.iter().filter_map(|c| c.face))
-            .collect();
-        let facts = index.copy_facts(&faces)?;
-        drop(index);
-        for copy in page.items.iter_mut().flat_map(|s| s.copies.iter_mut()) {
-            copy.facts = copy.face.and_then(|f| facts.get(&f).cloned());
-        }
+        // Sets answered "not duplicates" or "keep both" for exactly their
+        // files are not listed (E56.8); the draft's decided sets leave the
+        // queue only when the request asks for the undecided ones (E56.11).
+        let answered = index.decided_keys()?;
+        let drafted = index.cleanup_draft()?.decided();
         let settings = self.settings.read()?;
         let names = crate::keeper_policy::LanguageNames::load(&settings.my_languages)?;
-        crate::keeper_policy::apply_to_sets(
-            &mut page.items,
-            &files,
-            &settings.keeper_policy,
-            &settings.my_languages,
-            &names,
-        );
+        // A filter or an order by the recommendation needs it for every set
+        // before the page is cut (E56.11); otherwise only the page's sets
+        // are weighed, so the listing budget (ADR 0027) is spent on the sets.
+        let whole = req.filter.needs_recommendation() || req.sort.needs_recommendation();
+        let policy = &settings.keeper_policy;
+        let mut all = crate::duplicate_sets::sets_with(&files, &req.scope, &answered);
+        if whole {
+            if crate::keeper_policy::needs_facts(policy, &settings.my_languages) {
+                fill_copy_facts(&index, &mut all)?;
+            }
+            crate::keeper_policy::apply_to_sets(
+                &mut all,
+                &files,
+                policy,
+                &settings.my_languages,
+                &names,
+            );
+        }
+        let mut page = DuplicateSet::page(all, &req, &drafted, crate::duplicate_sets::MAX_PAGE);
+        // The facts of the copies on this page (E56.2): the listing budget
+        // (ADR 0027) is spent on the sets, not on every copy.
+        fill_copy_facts(&index, &mut page.items)?;
+        drop(index);
+        if !whole {
+            crate::keeper_policy::apply_to_sets(
+                &mut page.items,
+                &files,
+                policy,
+                &settings.my_languages,
+                &names,
+            );
+        }
         Ok(page)
     }
 
@@ -1175,6 +1215,41 @@ impl LibraryService for CoreApi {
         req: fm_api::cleanup::PlanCleanupRequest,
     ) -> ApiResult<fm_api::cleanup::CleanupPlan> {
         self.cleanup_plan(req)
+    }
+
+    fn duplicates_overview(
+        &self,
+        req: fm_api::cleanup_draft::DuplicatesOverviewRequest,
+    ) -> ApiResult<fm_api::cleanup_draft::DuplicatesOverview> {
+        let plan = self.cleanup_plan(fm_api::cleanup::PlanCleanupRequest {
+            scope: req.scope.into(),
+            ..Default::default()
+        })?;
+        Ok(fm_api::cleanup_draft::DuplicatesOverview::from_plan(&plan))
+    }
+
+    fn get_cleanup_draft(&self) -> ApiResult<fm_api::cleanup_draft::CleanupDraft> {
+        Ok(self.lock().cleanup_draft()?)
+    }
+
+    fn update_cleanup_draft(
+        &self,
+        update: fm_api::cleanup_draft::CleanupDraftUpdate,
+    ) -> ApiResult<fm_api::cleanup_draft::CleanupDraft> {
+        let index = self.lock();
+        let mut draft = index.cleanup_draft()?;
+        draft.apply(update, crate::catalog::now_rfc3339(), |id| {
+            let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+            // A set answered for good (E56.8) is not listed, so it is not decided again.
+            let answered = index.decided_keys()?;
+            Ok(
+                crate::duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
+                    .into_iter()
+                    .find(|s| s.id == id),
+            )
+        })?;
+        index.set_cleanup_draft(&draft)?;
+        Ok(draft)
     }
 
     fn apply_cleanup(&self, req: fm_api::cleanup::ApplyCleanupRequest) -> ApiResult<JobId> {

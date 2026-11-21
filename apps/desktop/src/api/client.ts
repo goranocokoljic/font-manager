@@ -118,9 +118,13 @@ import type {
   Resolution,
   ResolutionId,
   PlanCleanupRequest,
+  CleanupDraft,
+  CleanupDraftUpdate,
   CleanupPlan,
   ApplyCleanupRequest,
   CleanupSession,
+  DuplicatesOverview,
+  DuplicatesOverviewRequest,
   UndoCleanupRequest,
   HiddenCopy,
   ShowHiddenRequest,
@@ -407,6 +411,12 @@ export interface FmClient {
   listCleanupSessions(): Promise<CleanupSession[]>;
   /** Puts a session's files back from the trash, all of them or the ones named. */
   undoCleanupSession(req: UndoCleanupRequest): Promise<CleanupSession>;
+  /** What a cleanup of a scope would do with the saved policy, counted (E56.11). */
+  duplicatesOverview(req: DuplicatesOverviewRequest): Promise<DuplicatesOverview>;
+  /** The decisions collected for the next cleanup plan, as stored (E56.11). */
+  getCleanupDraft(): Promise<CleanupDraft>;
+  /** Changes the draft plan and returns it; touches no file (E56.11). */
+  updateCleanupDraft(update: CleanupDraftUpdate): Promise<CleanupDraft>;
   /** The copies hidden from the library (E56.8); their files stay where they are. */
   listHiddenCopies(): Promise<HiddenCopy[]>;
   /** Shows hidden copies again one by one; a whole session is `undoCleanupSession`. */
@@ -629,6 +639,9 @@ export const tauriClient: FmClient = {
   cancelCleanup: (job) => invoke<void>('cancel_cleanup', { job }),
   listCleanupSessions: () => invoke<CleanupSession[]>('list_cleanup_sessions'),
   undoCleanupSession: (req) => invoke<CleanupSession>('undo_cleanup_session', { req }),
+  duplicatesOverview: (req) => invoke<DuplicatesOverview>('duplicates_overview', { req }),
+  getCleanupDraft: () => invoke<CleanupDraft>('get_cleanup_draft'),
+  updateCleanupDraft: (update) => invoke<CleanupDraft>('update_cleanup_draft', { update }),
   listHiddenCopies: () => invoke<HiddenCopy[]>('list_hidden_copies'),
   showHiddenCopies: (req) => invoke<HiddenCopy[]>('show_hidden_copies', { req }),
   decideDuplicateSet: (req) => invoke<DuplicateDecision>('decide_duplicate_set', { req }),

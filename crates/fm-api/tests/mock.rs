@@ -4526,6 +4526,99 @@ fn the_mock_lists_the_duplicate_sets_the_typescript_mock_lists() {
 }
 
 #[test]
+#[allow(clippy::unwrap_used)] // test: a failure fails the test
+fn the_mock_filters_sorts_and_leaves_decided_sets_out_of_the_queue() {
+    use fm_api::cleanup_draft::{CleanupDraftUpdate, DuplicatesOverviewRequest, SetDecision};
+    use fm_api::library::{DuplicateLevel, DuplicateSetFilter, DuplicateSetSort};
+    let (mock, _) = with_duplicate_files();
+    let list = |filter: DuplicateSetFilter, sort: DuplicateSetSort| {
+        mock.list_duplicate_sets(ListDuplicateSetsRequest {
+            filter,
+            sort,
+            ..Default::default()
+        })
+        .unwrap()
+    };
+    let other = list(
+        DuplicateSetFilter {
+            levels: vec![DuplicateLevel::OtherVersion],
+            ..Default::default()
+        },
+        DuplicateSetSort::Name,
+    );
+    assert_eq!(other.total, 1);
+    assert_eq!(other.items[0].id, "name:Inter-Regular");
+    let by_copies = list(DuplicateSetFilter::default(), DuplicateSetSort::Copies);
+    assert_eq!(
+        by_copies.items[0].copies.len(),
+        3,
+        "Inter's three copies first"
+    );
+    // The mock has no index to recommend from: no set has a recommendation.
+    let recommended = list(
+        DuplicateSetFilter {
+            recommendation: Some(fm_api::library::RecommendationFilter::HasRecommendation),
+            ..Default::default()
+        },
+        DuplicateSetSort::Name,
+    );
+    assert_eq!(recommended.total, 0);
+
+    let draft = mock
+        .update_cleanup_draft(CleanupDraftUpdate::Decide {
+            set: "name:Inter-Regular".into(),
+            decision: SetDecision::NotDuplicates,
+        })
+        .unwrap();
+    assert_eq!(draft, mock.get_cleanup_draft().unwrap());
+    let queue = list(
+        DuplicateSetFilter {
+            undecided: true,
+            ..Default::default()
+        },
+        DuplicateSetSort::Name,
+    );
+    assert_eq!(queue.total, 1, "the decided set left the queue");
+    let overview = mock
+        .duplicates_overview(DuplicatesOverviewRequest::default())
+        .unwrap();
+    assert_eq!(overview.fonts, 2);
+    assert_eq!(overview.identical.sets, 1);
+    assert_eq!(overview.other_version.files, 2);
+}
+
+#[test]
+fn a_set_answered_for_good_is_neither_queued_nor_drafted() {
+    use fm_api::cleanup::{DecideSetRequest, DuplicateAnswer};
+    use fm_api::cleanup_draft::{CleanupDraftUpdate, SetDecision};
+    let (mock, _) = with_duplicate_files();
+    let ids = |mock: &MockApi| -> Vec<String> {
+        mock.list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|s| s.id)
+            .collect()
+    };
+    assert!(ids(&mock).contains(&"name:Inter-Regular".to_owned()));
+    // E56.8 remembers the answer; E56.11's queue and draft both honor it.
+    mock.decide_duplicate_set(DecideSetRequest {
+        set: "name:Inter-Regular".into(),
+        answer: DuplicateAnswer::KeepBoth,
+    })
+    .unwrap();
+    assert!(!ids(&mock).contains(&"name:Inter-Regular".to_owned()));
+    let err = mock
+        .update_cleanup_draft(CleanupDraftUpdate::Decide {
+            set: "name:Inter-Regular".into(),
+            decision: SetDecision::KeepAll,
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    assert!(mock.get_cleanup_draft().unwrap().decisions.is_empty());
+}
+
+#[test]
 fn duplicate_sets_page_scope_and_refuse_an_unknown_source() {
     let (mock, _) = with_duplicate_files();
     let all = mock

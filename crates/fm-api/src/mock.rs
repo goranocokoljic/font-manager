@@ -622,6 +622,8 @@ struct State {
     resolutions: Vec<Resolution>,
     /// Applied cleanup plans, oldest first (E56.7).
     sessions: Vec<crate::cleanup::CleanupSession>,
+    /// The Duplicates module's draft plan (E56.11), in memory.
+    cleanup_draft: crate::cleanup_draft::CleanupDraft,
     /// Copies hidden by a cleanup, by path (E56.8); their paths are in
     /// `trashed` too, so they leave every list.
     hidden: Vec<crate::cleanup::HiddenCopy>,
@@ -1121,6 +1123,7 @@ impl State {
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             sessions: Vec::new(),
+            cleanup_draft: crate::cleanup_draft::CleanupDraft::default(),
             hidden: Vec::new(),
             decisions: Vec::new(),
             sidecar_conflicts: Vec::new(),
@@ -2139,7 +2142,8 @@ impl LibraryService for MockApi {
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
         let files = self.duplicate_set_files(&req.scope)?;
         let decided = self.decided_keys();
-        Ok(duplicate_sets::list_with(&files, &req, &decided))
+        let drafted = self.state().cleanup_draft.decided();
+        Ok(duplicate_sets::list_with(&files, &req, &decided, &drafted))
     }
 
     fn list_folder_pairs(&self, req: ListFolderPairsRequest) -> ApiResult<Paged<FolderPair>> {
@@ -2556,6 +2560,39 @@ impl LibraryService for MockApi {
         req: crate::cleanup::UndoCleanupRequest,
     ) -> ApiResult<crate::cleanup::CleanupSession> {
         self.mock_undo_cleanup_session(req)
+    }
+
+    fn duplicates_overview(
+        &self,
+        req: crate::cleanup_draft::DuplicatesOverviewRequest,
+    ) -> ApiResult<crate::cleanup_draft::DuplicatesOverview> {
+        let plan = self.mock_plan_cleanup(crate::cleanup::PlanCleanupRequest {
+            scope: req.scope.into(),
+            ..Default::default()
+        })?;
+        Ok(crate::cleanup_draft::DuplicatesOverview::from_plan(&plan))
+    }
+
+    fn get_cleanup_draft(&self) -> ApiResult<crate::cleanup_draft::CleanupDraft> {
+        Ok(self.state().cleanup_draft.clone())
+    }
+
+    fn update_cleanup_draft(
+        &self,
+        update: crate::cleanup_draft::CleanupDraftUpdate,
+    ) -> ApiResult<crate::cleanup_draft::CleanupDraft> {
+        let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        // A set answered for good (E56.8) is not listed, so it is not decided again.
+        let answered = self.decided_keys();
+        let mut st = self.state();
+        st.cleanup_draft.apply(update, MOCK_NOW.to_owned(), |id| {
+            Ok(
+                duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
+                    .into_iter()
+                    .find(|s| s.id == id),
+            )
+        })?;
+        Ok(st.cleanup_draft.clone())
     }
 
     fn list_hidden_copies(&self) -> ApiResult<Vec<crate::cleanup::HiddenCopy>> {

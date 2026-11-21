@@ -193,6 +193,45 @@ export const duplicateSets = (
 };
 
 /**
+ * The bytes removing the recommended copies frees, as `DuplicateSet::frees`: the
+ * recommendation's `remove` copies; without one (the mocks) every copy outside the
+ * system folders but the largest.
+ */
+export const setFrees = (set: DuplicateSet): number => {
+  const cap = (n: number) => Math.min(n, 0xffff_ffff);
+  if (set.recommendation)
+    return cap(
+      set.recommendation.remove.reduce(
+        (n, r) => n + (set.copies.find((c) => c.path === r.path)?.size ?? 0),
+        0,
+      ),
+    );
+  const sizes = set.copies.filter((c) => !c.system).map((c) => c.size);
+  const total = cap(sizes.reduce((n, x) => n + x, 0));
+  return Math.max(0, total - Math.max(0, ...sizes));
+};
+
+/** Whether `set` passes `req.filter`, as `DuplicateSetFilter::matches`. */
+const matches = (
+  set: DuplicateSet,
+  req: ListDuplicateSetsRequest,
+  drafted: ReadonlySet<string>,
+) => {
+  const f = req.filter ?? {};
+  const r = set.recommendation;
+  return (
+    (!f.levels?.length || f.levels.includes(set.level)) &&
+    (f.format == null || set.copies.some((c) => c.format === f.format)) &&
+    (f.recommendation == null ||
+      (r != null &&
+        (f.recommendation === 'keepBoth'
+          ? r.outcome === 'keepBoth'
+          : r.outcome === 'keeper' && r.remove.length > 0))) &&
+    !(f.undecided && drafted.has(set.id))
+  );
+};
+
+/**
  * The key a decision about a set is remembered by: its id and one hash per copy, sorted,
  * as `fm_api::cleanup::decision_key` makes it.
  */
@@ -206,13 +245,27 @@ export const setKey = (set: DuplicateSet): string =>
     set.copies.map((c) => c.hash),
   );
 
-/** The page `req` asks for of the sets among `files`, without the sets in `decided`. */
+/**
+ * The page `req` asks for of the sets among `files`: without the sets answered for
+ * exactly their files (`decided`, E56.8), filtered and sorted as `DuplicateSet::page`;
+ * `drafted` holds the sets the cleanup draft has a decision for (E56.11).
+ */
 export const listDuplicateSets = (
   files: SetFile[],
   req: ListDuplicateSetsRequest,
   decided: ReadonlySet<string> = new Set(),
+  drafted: ReadonlySet<string> = new Set(),
 ): Paged<DuplicateSet> => {
-  const all = duplicateSets(files, req.scope ?? { kind: 'library' }, decided);
+  const all = duplicateSets(files, req.scope ?? { kind: 'library' }, decided).filter((s) =>
+    matches(s, req, drafted),
+  );
+  const name = (s: DuplicateSet) => s.postscriptName ?? '';
+  const byName = (a: DuplicateSet, b: DuplicateSet) =>
+    byString(name(a), name(b)) || byString(a.id, b.id);
+  // A stable sort, as Rust's `sort_by_cached_key`; by name the listing's own order.
+  if (req.sort === 'frees') all.sort((a, b) => setFrees(b) - setFrees(a) || byName(a, b));
+  else if (req.sort === 'copies')
+    all.sort((a, b) => b.copies.length - a.copies.length || byName(a, b));
   const offset = req.page?.offset ?? 0;
   const limit = Math.min(req.page?.limit ?? 100, MAX_PAGE);
   return { items: all.slice(offset, offset + limit), total: all.length };
