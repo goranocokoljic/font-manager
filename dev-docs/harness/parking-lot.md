@@ -579,3 +579,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E56.12 #672] apps/desktop/src-tauri/src/lib.rs:1679 — `show_source_folder` has no test that runs the command; the new `show_pair_folder` follows the same untested pattern.
 - [E56.12 #672] apps/desktop/src/stores/duplicates.ts:99 — the duplicates store subscribes to no library or scan event, so the overview, the queue and the folder pairs stay stale after a rescan while the module is open.
 - [E56.12 #672] apps/desktop/src/stores/duplicates.ts:412 — `reloadPairs` keeps the old `pairTotal` when the first page fails, so placeholder cards for the old count show next to the error.
+- [E56.14 #674] apps/desktop/src/views/DuplicatesView.vue:81 — the `myLanguages`/`languagePresets` computeds are repeated in DuplicatesRules.vue:27; identical today, could drift.
+- [E56.14 #674] apps/desktop/src/stores/settings.ts:96 — settings have no change Event, so a keeper policy changed by the CLI or MCP while the rules page is open is not reloaded and Save restores the old one.
+- [E56.14 #674] apps/desktop/src/components/DuplicatesRules.vue:205 — removing a language chip (or a format or folder row) removes the focused button and focus falls to body; the chip pattern came from DuplicatesView.vue.
