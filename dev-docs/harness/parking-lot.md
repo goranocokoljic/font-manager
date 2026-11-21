@@ -565,3 +565,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-21
 
 - [E56.5 #665] crates/fm-core/src/index/metadata_merge.rs:519 — the explicit `mark_dirty` calls in `apply`/`take_back` are not proven by any test: the V7 triggers already mark the kept face, and nothing shows the leaving source's sidecar needs a rewrite.
+- [E56.6 #666] crates/fm-core/src/api.rs:908 — `add_source` refuses a folder inside a source but accepts a parent of an existing source, so nested sources can exist.
+- [E56.6 #666] apps/desktop/src/api/mock.ts:3165 — the TS mock's `setFiles()` reads only source 1 while the Rust mock reads every unpaused source; the two mocks agree only while the sample stays in one source.
+- [E56.6 #666] crates/fm-core/src/folder_pairs.rs:1 — one physical file seen at two paths through a link between sources is not de-duplicated; E56.7 must resolve links before it trashes a "copy" (same exposure in E56.1 sets).
+- [E56.6 #666] crates/fm-core/src/folder_pairs.rs:1 — folder-pair path checks use case-sensitive `Path` comparison; E56.9 should normalize user-typed paths the way `fm_platform::paths::is_within` does.
+- [E56.6 #666] apps/desktop/src/api/mockFolderPairs.test.ts:30 — the client test titled "names the files only one side has" checks only the empty result and the two errors.
