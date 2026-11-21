@@ -168,6 +168,14 @@ impl DuplicateResolver {
         result
     }
 
+    /// Ends `job`: it leaves the running cleanups first, so a caller that
+    /// sees the last event can undo the session or finds the job gone, then
+    /// the last [`Event::CleanupProgress`] is sent.
+    fn finish(&self, job: JobId, session: ResolutionId, done: u32, total: u32, cancelled: bool) {
+        self.running.lock().remove(&job);
+        self.progress(job, Some(session), done, total, None, Some(cancelled));
+    }
+
     fn progress(
         &self,
         job: JobId,
@@ -298,7 +306,7 @@ impl DuplicateResolver {
             return Err(self.abort(job, session, &pending, done, total, e));
         }
         self.lock().finish_session(session, cancelled)?;
-        self.progress(job, Some(session), done, total, None, Some(cancelled));
+        self.finish(job, session, done, total, cancelled);
         Ok(Applied { session, cancelled })
     }
 
@@ -353,7 +361,7 @@ impl DuplicateResolver {
         if let Err(e) = self.lock().finish_session(session, true) {
             tracing::warn!(error = %e, "ending a failed cleanup session");
         }
-        self.progress(job, Some(session), done, total, None, Some(true));
+        self.finish(job, session, done, total, true);
         error
     }
 
