@@ -71,6 +71,8 @@ import { rowLabel, styleCount, styleName, type ListRow, type RowKey } from '../l
 import { poolSize, scrollToShow, type RowRange } from '../list/virtual';
 import { useCompareStore } from '../stores/compare';
 import { useSearchStore } from '../stores/search';
+import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
+import { useRouter } from 'vue-router';
 import { likeThisLabel } from '../search/like';
 import { useFontListStore } from '../stores/fontList';
 import { useFontDragStore } from '../stores/fontDrag';
@@ -125,6 +127,11 @@ const palettes = usePalettesStore();
 const previewStore = usePreviewStore();
 const compare = useCompareStore();
 const search = useSearchStore();
+const dupes = useDuplicateSummaryStore();
+const router = useRouter();
+/** The family's sets in the Duplicates module (E56.15). */
+const openCopies = (family: number) =>
+  router.push({ name: 'duplicates', query: { section: 'sets', family: String(family) } });
 
 const viewport = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
@@ -768,6 +775,24 @@ function onToggle(row: ListRow): void {
                   >{{ weightRangeText(item.row.family.weightRange) }}</span
                 >
               </span>
+              <!-- "2 copies" beside the style count (E56.15): opens that font's sets in the
+                   Duplicates module. Not a button: an option holds none; the palette's "Show
+                   the copies of …" is the keyboard's way, as C is for the compare icon. -->
+              <span
+                v-if="item.row.kind === 'family' && dupes.of(item.row.family.id)"
+                class="copies"
+                data-testid="card-copies"
+                data-ghost="hide"
+                aria-hidden="true"
+                :title="t('duplicatesModule.mark.title', { name: item.row.family.name })"
+                @click.stop="openCopies(item.row.family.id)"
+                @pointerdown.stop
+                >{{
+                  t('duplicatesModule.mark.copies', {
+                    count: dupes.of(item.row.family.id)!.copies,
+                  })
+                }}</span
+              >
               <MissingGlyphs v-if="item.tofu.length" :missing="item.tofu" />
               <UiBadge v-if="item.fallback" data-testid="fallback-hint">{{
                 t('list.fallback')
@@ -948,6 +973,19 @@ function onToggle(row: ListRow): void {
   text-overflow: ellipsis;
 }
 /* The weight span takes the style count's place on hover or at the cursor: no extra width. */
+.copies {
+  flex: none;
+  margin-inline-start: var(--fm-space-2);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.copies:hover {
+  color: var(--fm-fg);
+}
 .detail {
   display: inline-grid;
   flex: none;

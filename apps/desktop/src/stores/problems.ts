@@ -34,9 +34,11 @@ export function resolutionSummary(r: Resolution): string {
   return parts.join(' ');
 }
 
-/** A filter of the Problems view: a group of `ProblemKind`s under one label. */
-export type ProblemGroupId =
-  'duplicates' | 'broken' | 'legacy' | 'sidecar' | 'activation' | 'library';
+/**
+ * A filter of the Problems view: a group of `ProblemKind`s under one label. Duplicates are
+ * no group: they are the Duplicates module's (E56.15), and the view shows one line for them.
+ */
+export type ProblemGroupId = 'broken' | 'legacy' | 'sidecar' | 'activation' | 'library';
 
 export interface ProblemGroup {
   id: ProblemGroupId;
@@ -57,10 +59,10 @@ function group(id: ProblemGroupId, kinds: ProblemKind[]): ProblemGroup {
 
 /**
  * The filters of the Problems view, in display order. A label table over the kinds
- * fm-api reports, like the facet labels in `search/chips.ts`; every kind is in one group.
+ * fm-api reports, like the facet labels in `search/chips.ts`; every kind but the duplicate
+ * ones (`duplicateFile`, `duplicateFace`: the Duplicates module's, E56.15) is in one group.
  */
 export const PROBLEM_GROUPS: ProblemGroup[] = [
-  group('duplicates', ['duplicateFile', 'duplicateFace']),
   group('broken', ['broken', 'noUnicodeCmap']),
   group('legacy', ['unsupported']),
   group('sidecar', ['sidecarConflict']),
@@ -107,14 +109,16 @@ export const useProblemsStore = defineStore('problems', () => {
   /** Bumped by every read; an answer to an older read is dropped. */
   let round = 0;
 
-  const total = computed(() => problems.value.length);
+  /** The entries of every group: the duplicate kinds are not counted (E56.15). */
+  const listed = computed(() => problems.value.filter((p) => groupOf(p.kind)));
+  const total = computed(() => listed.value.length);
   /** Entries per group, every group present (0 when it has none). */
   const counts = computed(() => {
     const out = Object.fromEntries(PROBLEM_GROUPS.map((g) => [g.id, 0])) as Record<
       ProblemGroupId,
       number
     >;
-    for (const p of problems.value) {
+    for (const p of listed.value) {
       const group = groupOf(p.kind);
       if (group) out[group.id] += 1;
     }
@@ -124,7 +128,7 @@ export const useProblemsStore = defineStore('problems', () => {
   /** The entries of `group`, or all of them without one. */
   function inGroup(group: ProblemGroupId | undefined): Problem[] {
     const kinds = group && problemGroup(group)?.kinds;
-    return kinds ? problems.value.filter((p) => kinds.includes(p.kind)) : problems.value;
+    return kinds ? listed.value.filter((p) => kinds.includes(p.kind)) : listed.value;
   }
 
   async function refresh(): Promise<void> {

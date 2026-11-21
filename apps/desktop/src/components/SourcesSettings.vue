@@ -12,6 +12,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { Source, SourceId } from '../api/types';
 import { formatRelativeTime, t, type MessageKey } from '../i18n';
+import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import { PROBLEM_GROUPS, useProblemsStore } from '../stores/problems';
 import { useSourcesStore } from '../stores/sources';
 import UiBadge from './ui/UiBadge.vue';
@@ -22,8 +23,12 @@ import UiSwitch from './ui/UiSwitch.vue';
 
 const sources = useSourcesStore();
 const problems = useProblemsStore();
+const dupes = useDuplicateSummaryStore();
 
-onMounted(() => problems.load());
+onMounted(() => {
+  void problems.load();
+  void dupes.start();
+});
 onBeforeUnmount(() => problems.stop());
 
 /** The folders the user chose (and the library folder); the system fonts have their own card. */
@@ -220,6 +225,15 @@ function onConfirmKey(e: KeyboardEvent, id: SourceId): void {
       </span>
       <RouterLink :to="{ name: 'problems' }" class="link">{{
         t('settings.sources.openProblems')
+      }}</RouterLink>
+    </div>
+    <!-- Duplicates are the Duplicates module's (E56.15): its own line, without the dot. -->
+    <div v-if="dupes.fonts" class="problems" data-testid="sources-duplicates">
+      <span class="problems-text">
+        <strong>{{ t('settings.sources.duplicates', { count: dupes.fonts }) }}</strong>
+      </span>
+      <RouterLink :to="{ name: 'duplicates' }" class="link">{{
+        t('settings.sources.openDuplicates')
       }}</RouterLink>
     </div>
 

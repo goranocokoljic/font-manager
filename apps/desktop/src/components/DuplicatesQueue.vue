@@ -13,6 +13,7 @@
 // comparison (E56.13) takes the cards' place; Escape closes it and gives the focus back
 // to the Compare button.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import type {
   CopyChoice,
   DuplicateSet,
@@ -37,6 +38,8 @@ const props = defineProps<{
   trash: string;
 }>();
 
+const route = useRoute();
+const router = useRouter();
 const store = useDuplicatesStore();
 const sources = useSourcesStore();
 
@@ -145,6 +148,13 @@ function pickSource(v: string): void {
 function applyFolder(): void {
   const path = folderText.value.trim();
   void store.setFilter({ scope: path ? { kind: 'folder', path } : { kind: 'library' } });
+}
+/** Leaves one family's sets (E56.15): the whole queue again, and `?family=` off the URL. */
+async function showAll(): Promise<void> {
+  const query = { ...route.query };
+  delete query.family;
+  await router.replace({ query });
+  await store.setFilter({ ids: null });
 }
 const filtersOpen = ref(false);
 const filtered = computed(
@@ -339,6 +349,12 @@ onBeforeUnmount(() => observer?.disconnect());
           {{ t('duplicatesModule.queue.filters') }}
         </button>
       </div>
+      <p v-if="store.filter.ids" class="family-filter" data-testid="queue-family">
+        {{ t('duplicatesModule.queue.family', { count: store.filter.ids.length }) }}
+        <button type="button" class="link-button" @click="showAll">
+          {{ t('duplicatesModule.queue.allSets') }}
+        </button>
+      </p>
       <div v-if="filtersOpen" id="queue-filters" class="filters">
         <label class="field">
           <span>{{ t('duplicatesModule.queue.source') }}</span>
@@ -568,6 +584,24 @@ onBeforeUnmount(() => observer?.disconnect());
   flex-wrap: wrap;
   gap: var(--fm-space-1);
   padding: 0 var(--fm-space-4) var(--fm-space-3);
+}
+.family-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fm-space-2);
+  margin: var(--fm-space-2) 0 0;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fm-fg);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .chip {
   height: 28px;

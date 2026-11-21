@@ -1501,7 +1501,12 @@
       "systemTitle": "System fonts",
       "systemNote": "Shown in the library, read-only — the app never writes to system folders.",
       "show": "Show",
-      "showSystemLabel": "Show system fonts in the library"
+      "showSystemLabel": "Show system fonts in the library",
+      "duplicates": {
+        "one": "{count} font has more than one copy",
+        "other": "{count} fonts have more than one copy"
+      },
+      "openDuplicates": "Open Duplicates"
     },
     "activation": {
       "modeLegend": "The Activate button activates fonts",
@@ -1792,7 +1797,9 @@
       "xHeightRatio": "{value} ({ratio})",
       "ascender": "Ascender",
       "descender": "Descender",
-      "axisRange": "{name} {min}–{max}"
+      "axisRange": "{name} {min}–{max}",
+      "copies": "Copies",
+      "decide": "Decide which to keep"
     }
   },
   "studio": {
@@ -1975,7 +1982,12 @@
         "familyNotes": "Family notes",
         "familyLicense": "License"
       }
-    }
+    },
+    "duplicatesLine": {
+      "one": "{count} font has more than one copy.",
+      "other": "{count} fonts have more than one copy."
+    },
+    "openDuplicates": "Open Duplicates"
   },
   "sources": {
     "title": "Sources",
@@ -2001,7 +2013,12 @@
     "resume": "Resume",
     "resumeLabel": "Resume {name}",
     "removeLabel": "Remove {name} from the library",
-    "removeTitle": "Remove from the library. The files stay where they are."
+    "removeTitle": "Remove from the library. The files stay where they are.",
+    "duplicates": "Duplicates",
+    "duplicatesCount": {
+      "one": "{count} font has copies",
+      "other": "{count} fonts have copies"
+    }
   },
   "catalogs": {
     "offShort": "off",
@@ -2309,7 +2326,8 @@
       "plan": "Plan",
       "history": "History",
       "hidden": "Hidden copies",
-      "rules": "Languages and rules"
+      "rules": "Languages and rules",
+      "decisions": "Remembered decisions"
     },
     "languages": {
       "heading": "Languages I work in",
@@ -2405,7 +2423,12 @@
         "sameVersion": "Same version",
         "otherVersion": "Another version",
         "formatsDiffer": "Same version · {formats}"
-      }
+      },
+      "family": {
+        "one": "The copies of one family: {count} set",
+        "other": "The copies of one family: {count} sets"
+      },
+      "allSets": "Show every set"
     },
     "set": {
       "region": "Duplicate set {name}",
@@ -2530,18 +2553,139 @@
       "pairLine": {
         "one": "Keep {keep}: {count} identical copy in {remove} leaves",
         "other": "Keep {keep}: {count} identical copies in {remove} leave"
-      }
+      },
+      "review": "What the plan does",
+      "planning": "Planning…",
+      "trashGroup": {
+        "one": "{count} file goes to the {trash}",
+        "other": "{count} files go to the {trash}"
+      },
+      "hideGroup": {
+        "one": "{count} file is hidden",
+        "other": "{count} files are hidden"
+      },
+      "hideNote": "A hidden file stays where it is.",
+      "stayGroup": {
+        "one": "{count} file stays",
+        "other": "{count} files stay"
+      },
+      "stays": {
+        "keeper": "The copies you keep",
+        "myLanguages": "The only copy of one of your languages",
+        "keepBoth": "Every copy is kept",
+        "lastCopy": "The last copy of a font",
+        "active": "Active copies",
+        "system": "In a system font folder",
+        "keptByOtherSet": "Kept for another font in the same file",
+        "notThere": "Not there any more",
+        "outsideScope": "Outside the folder you clean up",
+        "onlyHere": "No copy in the folder that is kept",
+        "otherLevel": "Another version in the folder that is kept"
+      },
+      "answers": {
+        "one": "{count} set is answered, no file moves",
+        "other": "{count} sets are answered, no file moves"
+      },
+      "answersNote": "Remembered, so they are not listed again.",
+      "conflicts": "Different values",
+      "conflictsNote": "A copy that leaves holds another value than the copy you keep. The kept copy's value stays unless you take the other one.",
+      "field": {
+        "rating": "Rating",
+        "license": "License",
+        "notes": "Notes"
+      },
+      "stars": {
+        "one": "{count} star",
+        "other": "{count} stars"
+      },
+      "seats": {
+        "one": "{count} seat",
+        "other": "{count} seats"
+      },
+      "noLicense": "No license",
+      "keepValue": "Keep {value}",
+      "takeValue": "Take {value} from {file}",
+      "frees": "Frees {size}",
+      "applyTrash": {
+        "one": "Move {count} file to the {trash}",
+        "other": "Move {count} files to the {trash}"
+      },
+      "applyBoth": "Move {trashed} to the {trash} and hide {hidden}",
+      "applyHide": "Hide {hidden}",
+      "applyAnswers": {
+        "one": "Remember {count} answer",
+        "other": "Remember {count} answers"
+      },
+      "progressLabel": "Applying the plan",
+      "progress": "{done} of {total} files",
+      "cancel": "Cancel",
+      "cancelling": "Stopping after this file…",
+      "resultLabel": "What the cleanup did",
+      "doneTitle": "Done.",
+      "cancelledTitle": "Cancelled.",
+      "cancelledNote": "The files after the last one done stay where they are.",
+      "moved": {
+        "one": "{count} file moved to the {trash}",
+        "other": "{count} files moved to the {trash}"
+      },
+      "hiddenCount": {
+        "one": "{count} file hidden",
+        "other": "{count} files hidden"
+      },
+      "skipped": {
+        "one": "{count} file not moved",
+        "other": "{count} files not moved"
+      },
+      "undo": "Undo",
+      "undoLabel": "Undo {name}",
+      "seeHistory": "See it in History"
     },
     "history": {
       "empty": "No cleanup yet.",
       "files": {
         "one": "{count} file",
         "other": "{count} files"
-      }
+      },
+      "sets": {
+        "one": "{count} font",
+        "other": "{count} fonts"
+      },
+      "trashed": {
+        "one": "{count} in the {trash}",
+        "other": "{count} in the {trash}"
+      },
+      "hidden": {
+        "one": "{count} hidden",
+        "other": "{count} hidden"
+      },
+      "running": "Running",
+      "undone": "Undone",
+      "cancelled": "Cancelled",
+      "status": {
+        "planned": "Planned",
+        "trashed": "In the {trash}",
+        "restored": "Put back",
+        "skipped": "Not moved",
+        "failed": "Cannot come back"
+      },
+      "hiddenStatus": {
+        "trashed": "Hidden",
+        "restored": "Shown again"
+      },
+      "undoSession": "Undo all",
+      "undoSessionLabel": "Undo all of {name}",
+      "undoFile": "Put back",
+      "undoFileLabel": "Put back {file}",
+      "retry": "Try again"
     },
     "hidden": {
       "empty": "No hidden copies.",
-      "body": "A copy you hide stays where it is and leaves the library."
+      "body": "A copy you hide stays where it is and leaves the library.",
+      "at": "Hidden {date}",
+      "kept": "{file} is kept",
+      "otherFile": "Another file is at this path now.",
+      "show": "Show again",
+      "showLabel": "Show {file} again"
     },
     "folders": {
       "heading": "Folders that hold the same fonts",
@@ -2675,11 +2819,45 @@
       "unsaved": "Not saved yet",
       "saved": "The rules are saved.",
       "defaultLoaded": "The default rules are loaded. Save to keep them."
+    },
+    "commands": {
+      "find": "Find duplicates",
+      "showCopies": "Show the copies of {name}"
+    },
+    "mark": {
+      "copies": {
+        "one": "{count} copy",
+        "other": "{count} copies"
+      },
+      "title": "Show the copies of {name}"
+    },
+    "decisions": {
+      "answer": {
+        "keepBoth": "Keep both",
+        "notDuplicates": "Not duplicates"
+      },
+      "outdated": "A copy changed since: the set is listed again.",
+      "takeBackLabel": "Take back the answer about {name}",
+      "empty": "No remembered decisions.",
+      "body": "A set you answer “keep both” or “not duplicates” is not listed again."
     }
   },
   "reorder": {
     "move": "Move {name}",
     "hint": "Drag, or press the Up and Down arrow keys to move",
     "moved": "{name} moved to place {position} of {count}."
+  },
+  "duplicatesNotice": {
+    "label": "Copies found",
+    "added": {
+      "one": "{folder} added · {count} font",
+      "other": "{folder} added · {count} fonts"
+    },
+    "copies": {
+      "one": "{count} file is a copy of a font you have",
+      "other": "{count} files are copies of fonts you have"
+    },
+    "review": "Review",
+    "dismiss": "Dismiss"
   }
 }

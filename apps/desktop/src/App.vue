@@ -10,6 +10,7 @@ import SetupView from './components/SetupView.vue';
 import ToastMessage from './components/ToastMessage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
 import UpdateNotice from './components/UpdateNotice.vue';
+import DuplicatesNotice from './components/DuplicatesNotice.vue';
 import { HELP_PAGES } from './help';
 import { direction, locale, resolveLocale, setLocale, t, type MessageKey } from './i18n';
 import { ACTIONS } from './keyboard/keymap';
@@ -19,6 +20,7 @@ import { useSetupStore } from './stores/setup';
 import { useThemesStore } from './stores/themes';
 import { useUpdatesStore } from './stores/updates';
 import { useWatchNoticeStore } from './stores/watchNotice';
+import { useDuplicateSummaryStore } from './stores/duplicateSummary';
 
 const settings = useSettingsStore();
 const updates = useUpdatesStore();
@@ -81,6 +83,24 @@ onMounted(() => {
     .catch((e: unknown) => console.warn('the shell menu cannot open Settings', e));
 });
 onUnmounted(() => stopShellNavigate?.());
+
+// The ways into the Duplicates module (E56.15): the counts, the notice after a scan that
+// found copies, and "Find duplicates" in the command palette.
+const duplicateSummary = useDuplicateSummaryStore();
+onMounted(() => void duplicateSummary.start());
+onUnmounted(() => void duplicateSummary.stop());
+useActions([
+  {
+    id: 'duplicates.open',
+    get title() {
+      return t('duplicatesModule.commands.find');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    run: () => router.push({ name: 'duplicates' }),
+  },
+]);
 
 // The folder watcher's notice (E51.2): "3 fonts added from Fonts", with Show, on every page.
 const watchNotice = useWatchNoticeStore();
@@ -161,6 +181,7 @@ watch(
   <ToastMessage />
   <McpConfirmToast />
   <UpdateNotice />
+  <DuplicatesNotice />
   <UpdateDialog />
   <TextFieldMenu />
 </template>

@@ -1,38 +1,45 @@
 <script setup lang="ts">
 // The Duplicates module (E56.11, board 14): a full view of its own, like Studio. A
 // 232 px navigation on the surface colour ("Library" to go back, then Overview,
-// Folders, Sets, Plan, History and Hidden copies with their counts, and at its foot
+// Folders, Sets, Plan, History, Hidden copies and Remembered decisions with their counts, and at its foot
 // the languages the user works in with the link to the rules, E56.14); the section is in the
 // URL (`#/duplicates?section=sets`). The overview leads with the identical copies as
 // one decision, then the levels still to decide, then the top folder pairs. Every
-// number comes from the API; nothing moves until a plan is applied.
+// number comes from the API; nothing moves until a plan is applied. The Plan, History,
+// Hidden copies and Remembered decisions are E56.15's; `#/duplicates?family=<id>` opens the
+// queue on the sets of one family (the "N copies" mark of a wall card or the family page).
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { DuplicateLevel, FolderPair } from '../api/types';
 import DuplicatesFolders from '../components/DuplicatesFolders.vue';
+import DuplicatesHistory from '../components/DuplicatesHistory.vue';
+import DuplicatesKept from '../components/DuplicatesKept.vue';
+import DuplicatesPlan from '../components/DuplicatesPlan.vue';
 import DuplicatesQueue from '../components/DuplicatesQueue.vue';
 import DuplicatesRules from '../components/DuplicatesRules.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
-import { errorMessage, formatDate, formatNumber, t, type MessageKey } from '../i18n';
+import { errorMessage, formatNumber, t, type MessageKey } from '../i18n';
 import { fileSizeText } from '../list/columns';
 import { fadeIn } from '../motion/fadeIn';
 import { useAppStore } from '../stores/app';
+import { useCleanupStore } from '../stores/cleanup';
 import { useCommandsStore } from '../stores/commands';
+import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import { useDuplicatesStore } from '../stores/duplicates';
 import { useSettingsStore } from '../stores/settings';
-import { useClient } from '../api/client';
-import type { CleanupSession } from '../api/types';
 
 const store = useDuplicatesStore();
+const cleanup = useCleanupStore();
+const summary = useDuplicateSummaryStore();
 const settings = useSettingsStore();
 const app = useAppStore();
 const commands = useCommandsStore();
 const route = useRoute();
 const router = useRouter();
 
-const SECTIONS = ['overview', 'folders', 'sets', 'plan', 'history', 'hidden'] as const;
+const SECTIONS = ['overview', 'folders', 'sets', 'plan', 'history', 'hidden', 'decisions'] as const;
 type Section = (typeof SECTIONS)[number] | 'rules';
 const section = computed<Section>(() => {
   const s = route.query.section;
@@ -91,8 +98,9 @@ const counts = computed<Record<Section, number | null>>(() => ({
   folders: store.pairTotal,
   sets: store.total,
   plan: store.planned,
-  history: sessions.value?.length ?? store.sessions,
+  history: cleanup.sessions?.length ?? store.sessions,
   hidden: null,
+  decisions: null,
   rules: null,
 }));
 
@@ -147,25 +155,20 @@ const pairLine = (p: FolderPair) => {
   };
 };
 
-// History (E56.15 shows sessions in full).
-const sessions = ref<CleanupSession[] | null>(null);
-watch(
-  section,
-  async (s) => {
-    if (s === 'history' && sessions.value === null)
-      sessions.value = await useClient()
-        .listCleanupSessions()
-        .catch(() => []);
-  },
-  { immediate: true },
-);
-
-const decisionLabel = (d: (typeof store.draft.decisions & object)[number]) =>
-  d.decision.kind === 'copies'
-    ? t('duplicatesModule.plan.kind.copies', {
-        count: d.decision.copies.filter((c) => c.choice !== 'keep').length,
-      })
-    : t(`duplicatesModule.plan.kind.${d.decision.kind}`);
+/** The sets of the family in `?family=`, from the summary; null without one. */
+const familySets = computed(() => {
+  const id = Number(route.query.family);
+  return Number.isInteger(id) && route.query.family != null ? (summary.of(id)?.sets ?? []) : null;
+});
+async function showFamily(): Promise<void> {
+  const ids = familySets.value;
+  if (ids === null) return;
+  await store.setFilter({ ids, level: null, recommendation: null });
+  if (section.value !== 'sets') await open('sets');
+}
+watch(familySets, (now, before) => {
+  if (now && JSON.stringify(now) !== JSON.stringify(before)) void showFamily();
+});
 
 onMounted(async () => {
   document.getElementById(`dup-nav-${section.value}`)?.focus();
@@ -174,8 +177,10 @@ onMounted(async () => {
     settings.settings ? undefined : settings.load(),
     app.info ? undefined : app.load(),
     store.load(),
+    cleanup.start(),
+    summary.start(),
     // Fresh each time the module opens: the library may have changed since.
-    store.reload(store.cursor),
+    familySets.value === null ? store.reload(store.cursor) : showFamily(),
   ]);
 });
 </script>
@@ -333,106 +338,21 @@ onMounted(async () => {
       <!-- Sets: the queue -->
       <DuplicatesQueue v-else-if="section === 'sets'" :languages="languagePresets" :trash="trash" />
 
-      <!-- Plan: what the draft holds (E56.15 shows the plan in full and applies it) -->
-      <div v-else-if="section === 'plan'" class="page" data-testid="duplicates-plan">
-        <h2 class="heading">{{ t('duplicatesModule.plan.heading') }}</h2>
-        <p class="lead">{{ t('duplicatesModule.plan.note') }}</p>
-        <p class="plan-identical">
-          <template v-if="store.draft.identical && o">
-            {{ t('duplicatesModule.plan.identicalIn', { count: o.identical.files }) }}
-          </template>
-          <template v-else>{{ t('duplicatesModule.plan.identicalOut') }}</template>
-          <UiButton
-            v-if="o && o.identical.sets > 0"
-            class="outlined"
-            @click="store.includeIdentical(!store.draft.identical)"
-          >
-            {{
-              store.draft.identical
-                ? t('duplicatesModule.plan.removeIdentical')
-                : t('duplicatesModule.plan.addIdentical')
-            }}
-          </UiButton>
-        </p>
-        <h3 class="section-label">{{ t('duplicatesModule.plan.decisions') }}</h3>
-        <ul v-if="store.draft.decisions?.length" class="rows decisions">
-          <li v-for="d in store.draft.decisions" :key="d.set" class="decision" :data-set="d.set">
-            <span>
-              <span>{{ d.postscriptName ?? d.set }}</span>
-              <span class="muted small">
-                {{ t(`duplicatesModule.queue.level.${d.level}`) }} · {{ decisionLabel(d) }}
-              </span>
-            </span>
-            <UiButton
-              :aria-label="
-                t('duplicatesModule.plan.takeBackName', { name: d.postscriptName ?? d.set })
-              "
-              @click="store.takeBack(d.set)"
-            >
-              {{ t('duplicatesModule.plan.takeBack') }}
-            </UiButton>
-          </li>
-        </ul>
-        <p v-else class="muted">{{ t('duplicatesModule.plan.empty') }}</p>
-        <template v-if="store.draft.pairs?.length">
-          <h3 class="section-label">{{ t('duplicatesModule.plan.pairs') }}</h3>
-          <ul class="rows decisions" data-testid="plan-pairs">
-            <li v-for="p in store.draft.pairs" :key="`${p.keep}|${p.remove}`" class="decision">
-              <span class="pair-line">
-                {{
-                  t('duplicatesModule.plan.pairLine', {
-                    keep: p.keep,
-                    remove: p.remove,
-                    count: p.identical,
-                  })
-                }}
-              </span>
-              <UiButton
-                :aria-label="t('duplicatesModule.plan.takeBackName', { name: p.remove })"
-                @click="store.takeBackPair(p.keep, p.remove)"
-              >
-                {{ t('duplicatesModule.plan.takeBack') }}
-              </UiButton>
-            </li>
-          </ul>
-        </template>
-        <UiButton
-          v-if="store.draft.decisions?.length || store.draft.identical || store.draft.pairs?.length"
-          class="outlined"
-          @click="store.clearDraft()"
-        >
-          {{ t('duplicatesModule.plan.clear') }}
-        </UiButton>
-      </div>
+      <!-- Plan: what the draft holds, the plan, the apply (E56.15) -->
+      <DuplicatesPlan
+        v-else-if="section === 'plan'"
+        :trash="trash"
+        :size-text="sizeText"
+        @history="open('history')"
+      />
 
       <!-- Folders: the folder pairs and "Keep this side" (E56.12) -->
       <DuplicatesFolders v-else-if="section === 'folders'" :trash="trash" />
 
-      <!-- History (E56.15 adds undo) -->
-      <div v-else-if="section === 'history'" class="page">
-        <h2 class="heading">{{ t('duplicatesModule.nav.history') }}</h2>
-        <ul v-if="sessions?.length" class="rows">
-          <li v-for="s in sessions" :key="s.id" class="decision">
-            <span>
-              <span>{{ s.name }}</span>
-              <span class="muted small">
-                {{ formatDate(Date.parse(s.at)) }} ·
-                {{ t('duplicatesModule.history.files', { count: s.files.length }) }}
-              </span>
-            </span>
-          </li>
-        </ul>
-        <UiEmptyState v-else-if="sessions" :title="t('duplicatesModule.history.empty')" />
-      </div>
-
-      <!-- Hidden copies (E56.8 stores them; E56.15 lists them) -->
-      <div v-else-if="section === 'hidden'" class="page">
-        <h2 class="heading">{{ t('duplicatesModule.nav.hidden') }}</h2>
-        <UiEmptyState
-          :title="t('duplicatesModule.hidden.empty')"
-          :body="t('duplicatesModule.hidden.body')"
-        />
-      </div>
+      <!-- History, hidden copies and remembered decisions (E56.15) -->
+      <DuplicatesHistory v-else-if="section === 'history'" :trash="trash" :size-text="sizeText" />
+      <DuplicatesKept v-else-if="section === 'hidden'" kind="hidden" />
+      <DuplicatesKept v-else-if="section === 'decisions'" kind="decisions" />
 
       <!-- Languages and the keeper policy (E56.14) -->
       <DuplicatesRules v-else />
