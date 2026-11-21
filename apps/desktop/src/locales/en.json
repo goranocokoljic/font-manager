@@ -2610,6 +2610,76 @@
       "add": "Add a language",
       "remove": "Remove {name}",
       "none": "No language is set."
+    },
+    "policy": {
+      "heading": "Which copy to keep",
+      "body": "The rules choose the copy of a set to keep. A copy that wins a rule wins the set; a tie goes to the next rule.",
+      "rulesLabel": "Rules, most important first",
+      "guard": {
+        "title": "Language guard",
+        "on": "Always on",
+        "body": "A copy that is the only one to cover one of your languages is never recommended for removal.",
+        "notSet": "Set your languages above, so that the guard can protect them."
+      },
+      "rule": {
+        "myLanguages": "Covers more of my languages",
+        "myLanguagesLocl": "Has local forms (locl) for more of my languages",
+        "newestVersion": "Newest version",
+        "format": "Format, in my order",
+        "variable": "Variable over static",
+        "mostGlyphs": "Most glyphs",
+        "preferredFolder": "In a folder I prefer",
+        "libraryFolder": "In the library folder",
+        "userMetadata": "Carries more of my favorites, ratings, tags, notes, collections and sets",
+        "activeOrRequested": "Active, or asked for by a document",
+        "path": "Last: the path, A to Z. This rule always ends the list, so the answer never depends on chance."
+      },
+      "use": "Use the rule “{name}”",
+      "formats": {
+        "open": {
+          "one": "{count} format",
+          "other": "{count} formats"
+        },
+        "label": "Formats, best first",
+        "remove": "Remove {name}",
+        "add": "Add a format",
+        "rest": "A format that is not in this list comes after all formats in it."
+      },
+      "folders": {
+        "open": {
+          "one": "{count} folder",
+          "other": "{count} folders"
+        },
+        "label": "Preferred folders, best first",
+        "remove": "Remove {name}",
+        "add": "Add a folder…",
+        "pick": "Choose a preferred folder",
+        "none": "No folder is set."
+      },
+      "preview": {
+        "keeper": {
+          "one": "With these rules, {count} set gets a keeper,",
+          "other": "With these rules, {count} sets get a keeper,"
+        },
+        "keepBoth": {
+          "one": "{count} set is “keep both”,",
+          "other": "{count} sets are “keep both”,"
+        },
+        "changed": {
+          "one": "and {count} recommendation changes.",
+          "other": "and {count} recommendations change."
+        }
+      },
+      "save": "Save",
+      "default": "Back to the default",
+      "unsaved": "Not saved yet",
+      "saved": "The rules are saved.",
+      "defaultLoaded": "The default rules are loaded. Save to keep them."
     }
+  },
+  "reorder": {
+    "move": "Move {name}",
+    "hint": "Drag, or press the Up and Down arrow keys to move",
+    "moved": "{name} moved to place {position} of {count}."
   }
 }

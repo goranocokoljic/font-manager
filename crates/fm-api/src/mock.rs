@@ -2183,6 +2183,7 @@ impl LibraryService for MockApi {
             my_languages: crate::settings::MyLanguagesStatus::of(
                 &self.state().settings.my_languages,
             ),
+            policy: Some(req.policy.normalized()),
         })
     }
 

@@ -5221,6 +5221,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         keepBoth: 0,
         changed: 0,
         myLanguages: settings.myLanguages.length ? 'set' : 'notSet',
+        policy: normalizedPolicy(req.policy),
       };
     },
     compareCopies: async (req) => {

@@ -2610,6 +2610,76 @@
       "add": "Sprache hinzufügen",
       "remove": "{name} entfernen",
       "none": "Keine Sprache festgelegt."
+    },
+    "policy": {
+      "heading": "Welche Kopie bleibt",
+      "body": "Die Regeln wählen die Kopie eines Satzes, die bleibt. Eine Kopie, die eine Regel gewinnt, gewinnt den Satz; bei Gleichstand entscheidet die nächste Regel.",
+      "rulesLabel": "Regeln, die wichtigste zuerst",
+      "guard": {
+        "title": "Sprachschutz",
+        "on": "Immer an",
+        "body": "Eine Kopie, die als einzige eine Ihrer Sprachen abdeckt, wird nie zum Entfernen empfohlen.",
+        "notSet": "Legen Sie oben Ihre Sprachen fest, damit der Schutz sie bewahren kann."
+      },
+      "rule": {
+        "myLanguages": "Deckt mehr meiner Sprachen ab",
+        "myLanguagesLocl": "Hat lokale Formen (locl) für mehr meiner Sprachen",
+        "newestVersion": "Neueste Version",
+        "format": "Format, in meiner Reihenfolge",
+        "variable": "Variabel vor statisch",
+        "mostGlyphs": "Die meisten Glyphen",
+        "preferredFolder": "In einem bevorzugten Ordner",
+        "libraryFolder": "Im Bibliotheksordner",
+        "userMetadata": "Trägt mehr meiner Favoriten, Bewertungen, Tags, Notizen, Sammlungen und Sets",
+        "activeOrRequested": "Aktiv oder von einem Dokument angefordert",
+        "path": "Zuletzt: der Pfad, A bis Z. Diese Regel steht immer am Ende, damit die Antwort nie vom Zufall abhängt."
+      },
+      "use": "Regel „{name}“ verwenden",
+      "formats": {
+        "open": {
+          "one": "{count} Format",
+          "other": "{count} Formate"
+        },
+        "label": "Formate, das beste zuerst",
+        "remove": "{name} entfernen",
+        "add": "Format hinzufügen",
+        "rest": "Ein Format, das nicht in dieser Liste steht, kommt nach allen Formaten der Liste."
+      },
+      "folders": {
+        "open": {
+          "one": "{count} Ordner",
+          "other": "{count} Ordner"
+        },
+        "label": "Bevorzugte Ordner, der beste zuerst",
+        "remove": "{name} entfernen",
+        "add": "Ordner hinzufügen …",
+        "pick": "Bevorzugten Ordner wählen",
+        "none": "Kein Ordner festgelegt."
+      },
+      "preview": {
+        "keeper": {
+          "one": "Mit diesen Regeln bekommt {count} Satz eine Kopie, die bleibt,",
+          "other": "Mit diesen Regeln bekommen {count} Sätze eine Kopie, die bleibt,"
+        },
+        "keepBoth": {
+          "one": "{count} Satz heißt „beide behalten“,",
+          "other": "{count} Sätze heißen „beide behalten“,"
+        },
+        "changed": {
+          "one": "und {count} Empfehlung ändert sich.",
+          "other": "und {count} Empfehlungen ändern sich."
+        }
+      },
+      "save": "Speichern",
+      "default": "Zurück zum Standard",
+      "unsaved": "Noch nicht gespeichert",
+      "saved": "Die Regeln sind gespeichert.",
+      "defaultLoaded": "Die Standardregeln sind geladen. Speichern Sie, um sie zu behalten."
     }
+  },
+  "reorder": {
+    "move": "{name} verschieben",
+    "hint": "Ziehen oder mit den Pfeiltasten nach oben und unten verschieben",
+    "moved": "{name} steht jetzt an Stelle {position} von {count}."
   }
 }
