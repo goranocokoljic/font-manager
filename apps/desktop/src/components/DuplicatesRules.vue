@@ -438,7 +438,8 @@ async function backToDefault(): Promise<void> {
   flex-basis: 100%;
   gap: var(--fm-space-2);
   justify-items: start;
-  margin: var(--fm-space-1) 0 var(--fm-space-2) var(--fm-space-8);
+  margin-block: var(--fm-space-1) var(--fm-space-2);
+  margin-inline: var(--fm-space-8) 0;
 }
 .sublist > :first-child {
   justify-self: stretch;
@@ -451,7 +452,8 @@ async function backToDefault(): Promise<void> {
   font-size: var(--fm-text-sm);
 }
 .path-rule {
-  margin: var(--fm-space-2) 0 var(--fm-space-4) var(--fm-space-3);
+  margin-block: var(--fm-space-2) var(--fm-space-4);
+  margin-inline: var(--fm-space-3) 0;
 }
 .preview {
   min-height: 1.5em;

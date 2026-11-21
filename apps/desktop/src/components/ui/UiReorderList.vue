@@ -136,7 +136,8 @@ function onDragEnd(): void {
   align-items: center;
   gap: var(--fm-space-2);
   min-height: 40px;
-  padding: var(--fm-space-1) var(--fm-space-3) var(--fm-space-1) var(--fm-space-1);
+  padding-block: var(--fm-space-1);
+  padding-inline: var(--fm-space-1) var(--fm-space-3);
 }
 .row + .row {
   border-top: 1px solid var(--fm-border);
