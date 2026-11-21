@@ -49,7 +49,7 @@ export const versionKey = (version: string | null): string | null => {
 };
 
 /** Whether `file` is in `scope`; a folder takes its subfolders, compared by path parts. */
-const inScope = (file: SetFile, scope: DuplicateScope): boolean => {
+export const inScope = (file: SetFile, scope: DuplicateScope): boolean => {
   if (scope.kind === 'library') return true;
   if (scope.kind === 'source') return file.source === scope.source;
   const parts = (p: string) => p.split(/[\\/]+/).filter((x, i) => x !== '' || i === 0);
@@ -227,7 +227,8 @@ const matches = (
         (f.recommendation === 'keepBoth'
           ? r.outcome === 'keepBoth'
           : r.outcome === 'keeper' && r.remove.length > 0))) &&
-    !(f.undecided && drafted.has(set.id))
+    !(f.undecided && drafted.has(set.id)) &&
+    (!f.ids?.length || f.ids.includes(set.id))
   );
 };
 

@@ -121,6 +121,9 @@ import type {
   PlanCleanupRequest,
   CleanupDraft,
   CleanupDraftUpdate,
+  PlanDraftRequest,
+  DuplicateSummaryRequest,
+  DuplicateSummary,
   CleanupPlan,
   ApplyCleanupRequest,
   CleanupSession,
@@ -414,6 +417,10 @@ export interface FmClient {
   undoCleanupSession(req: UndoCleanupRequest): Promise<CleanupSession>;
   /** What a cleanup of a scope would do with the saved policy, counted (E56.11). */
   duplicatesOverview(req: DuplicatesOverviewRequest): Promise<DuplicatesOverview>;
+  /** The cleanup draft as one plan; touches nothing (E56.15). Applying it empties the draft. */
+  planCleanupDraft(req: PlanDraftRequest): Promise<CleanupPlan>;
+  /** The duplicates of a scope, counted, for the ways into the module (E56.15). */
+  duplicateSummary(req: DuplicateSummaryRequest): Promise<DuplicateSummary>;
   /** The decisions collected for the next cleanup plan, as stored (E56.11). */
   getCleanupDraft(): Promise<CleanupDraft>;
   /** Changes the draft plan and returns it; touches no file (E56.11). */
@@ -646,6 +653,8 @@ export const tauriClient: FmClient = {
   listCleanupSessions: () => invoke<CleanupSession[]>('list_cleanup_sessions'),
   undoCleanupSession: (req) => invoke<CleanupSession>('undo_cleanup_session', { req }),
   duplicatesOverview: (req) => invoke<DuplicatesOverview>('duplicates_overview', { req }),
+  planCleanupDraft: (req) => invoke<CleanupPlan>('plan_cleanup_draft', { req }),
+  duplicateSummary: (req) => invoke<DuplicateSummary>('duplicate_summary', { req }),
   getCleanupDraft: () => invoke<CleanupDraft>('get_cleanup_draft'),
   updateCleanupDraft: (update) => invoke<CleanupDraft>('update_cleanup_draft', { update }),
   listHiddenCopies: () => invoke<HiddenCopy[]>('list_hidden_copies'),
