@@ -1,0 +1,676 @@
+[
+  {
+    "name": "a copied tree is one pair at its top, not one per subfolder",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}, {"path": "/backup", "kind": "sourceRoot"}],
+    "request": {},
+    "files": [
+      {"path": "/lib/fonts/a/Fa0.ttf", "hash": "ha0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "Fa0", "version": "Version 1.0"}]},
+      {"path": "/backup/old/a/Fa0.ttf", "hash": "ha0", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 2, "name": "Fa0", "version": "Version 1.0"}]},
+      {"path": "/lib/fonts/a/Fa1.ttf", "hash": "ha1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 3, "name": "Fa1", "version": "Version 1.0"}]},
+      {"path": "/backup/old/a/Fa1.ttf", "hash": "ha1", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 4, "name": "Fa1", "version": "Version 1.0"}]},
+      {"path": "/lib/fonts/a/Fa2.ttf", "hash": "ha2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "Fa2", "version": "Version 1.0"}]},
+      {"path": "/backup/old/a/Fa2.ttf", "hash": "ha2", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 6, "name": "Fa2", "version": "Version 1.0"}]},
+      {"path": "/lib/fonts/b/Fb0.ttf", "hash": "hb0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "Fb0", "version": "Version 1.0"}]},
+      {"path": "/backup/old/b/Fb0.ttf", "hash": "hb0", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 8, "name": "Fb0", "version": "Version 1.0"}]},
+      {"path": "/lib/fonts/b/Fb1.ttf", "hash": "hb1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 9, "name": "Fb1", "version": "Version 1.0"}]},
+      {"path": "/backup/old/b/Fb1.ttf", "hash": "hb1", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 10, "name": "Fb1", "version": "Version 1.0"}]},
+      {"path": "/lib/fonts/b/Fb2.ttf", "hash": "hb2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "Fb2", "version": "Version 1.0"}]},
+      {"path": "/backup/old/b/Fb2.ttf", "hash": "hb2", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 12, "name": "Fb2", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": true,
+            "fontFiles": 6,
+            "identicalSize": 6000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/backup/old",
+            "protected": null,
+            "shared": {
+              "identical": 6,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 6000,
+            "size": 6000
+          },
+          "b": {
+            "contained": true,
+            "fontFiles": 6,
+            "identicalSize": 6000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/fonts",
+            "protected": null,
+            "shared": {
+              "identical": 6,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 6000,
+            "size": 6000
+          },
+          "frees": 6000
+        }
+      ],
+      "total": 1
+    }
+  },
+  {
+    "name": "a copied tree with one changed file: the unchanged folder is contained, the changed one shares the rest",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}, {"path": "/backup", "kind": "sourceRoot"}],
+    "request": {},
+    "files": [
+      {"path": "/lib/tree/x/Gx0.ttf", "hash": "gx0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "Gx0", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/x/Gx0.ttf", "hash": "gx0", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 2, "name": "Gx0", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/x/Gx1.ttf", "hash": "gx1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 3, "name": "Gx1", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/x/Gx1.ttf", "hash": "gx1", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 4, "name": "Gx1", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/x/Gx2.ttf", "hash": "gx2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "Gx2", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/x/Gx2.ttf", "hash": "gx2", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 6, "name": "Gx2", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/x/Gx3.ttf", "hash": "gx3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "Gx3", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/x/Gx3.ttf", "hash": "gx3", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 8, "name": "Gx3", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/x/Gx4.ttf", "hash": "gx4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 9, "name": "Gx4", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/x/Gx4.ttf", "hash": "gx4", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 10, "name": "Gx4", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/y/Gy0.ttf", "hash": "gy0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "Gy0", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/y/Gy0.ttf", "hash": "gy0", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 12, "name": "Gy0", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/y/Gy1.ttf", "hash": "gy1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 13, "name": "Gy1", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/y/Gy1.ttf", "hash": "gy1", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 14, "name": "Gy1", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/y/Gy2.ttf", "hash": "gy2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 15, "name": "Gy2", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/y/Gy2.ttf", "hash": "gy2", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 16, "name": "Gy2", "version": "Version 1.0"}]},
+      {"path": "/lib/tree/y/Gy3.ttf", "hash": "gy3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 17, "name": "Gy3", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/y/Gy3.ttf", "hash": "gy3x", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 18, "name": "Gy3", "version": "Version 2.0"}]},
+      {"path": "/lib/tree/y/Gy4.ttf", "hash": "gy4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 19, "name": "Gy4", "version": "Version 1.0"}]},
+      {"path": "/backup/tree/y/Gy4.ttf", "hash": "gy4", "format": "ttf", "source": 2, "kind": "watched", "faces": [{"face": 20, "name": "Gy4", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": true,
+            "fontFiles": 5,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/backup/tree/x",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "b": {
+            "contained": true,
+            "fontFiles": 5,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/tree/x",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "frees": 5000
+        },
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 5,
+            "identicalSize": 4000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/backup/tree/y",
+            "protected": null,
+            "shared": {
+              "identical": 4,
+              "otherVersion": 1,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 5,
+            "identicalSize": 4000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/tree/y",
+            "protected": null,
+            "shared": {
+              "identical": 4,
+              "otherVersion": 1,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "frees": 4000
+        }
+      ],
+      "total": 2
+    }
+  },
+  {
+    "name": "two folders that share a third of their files",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}],
+    "request": {},
+    "files": [
+      {"path": "/lib/p/P0.ttf", "hash": "p0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "P0", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/P0.ttf", "hash": "p0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "P0", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P1.ttf", "hash": "p1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 3, "name": "P1", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/P1.ttf", "hash": "p1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "P1", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P2.ttf", "hash": "p2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "P2", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/P2.ttf", "hash": "p2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 6, "name": "P2", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P3.ttf", "hash": "p3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "P3", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/P3.ttf", "hash": "p3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "P3", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P4.ttf", "hash": "p4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 9, "name": "P4", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/P4.ttf", "hash": "p4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "P4", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P5.ttf", "hash": "p5", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "P5", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q5.ttf", "hash": "q5", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 12, "name": "Q5", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P6.ttf", "hash": "p6", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 13, "name": "P6", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q6.ttf", "hash": "q6", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 14, "name": "Q6", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P7.ttf", "hash": "p7", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 15, "name": "P7", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q7.ttf", "hash": "q7", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 16, "name": "Q7", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P8.ttf", "hash": "p8", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 17, "name": "P8", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q8.ttf", "hash": "q8", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 18, "name": "Q8", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P9.ttf", "hash": "p9", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 19, "name": "P9", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q9.ttf", "hash": "q9", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 20, "name": "Q9", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P10.ttf", "hash": "p10", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 21, "name": "P10", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q10.ttf", "hash": "q10", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 22, "name": "Q10", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P11.ttf", "hash": "p11", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 23, "name": "P11", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q11.ttf", "hash": "q11", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 24, "name": "Q11", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P12.ttf", "hash": "p12", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 25, "name": "P12", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q12.ttf", "hash": "q12", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 26, "name": "Q12", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P13.ttf", "hash": "p13", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 27, "name": "P13", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q13.ttf", "hash": "q13", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 28, "name": "Q13", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/p/P14.ttf", "hash": "p14", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 29, "name": "P14", "version": "Version 1.0"}], "size": 2000},
+      {"path": "/lib/q/Q14.ttf", "hash": "q14", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 30, "name": "Q14", "version": "Version 1.0"}], "size": 2000}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 15,
+            "identicalSize": 10000,
+            "onlyHere": 10,
+            "otherFiles": 0,
+            "path": "/lib/p",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 10000,
+            "size": 30000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 15,
+            "identicalSize": 10000,
+            "onlyHere": 10,
+            "otherFiles": 0,
+            "path": "/lib/q",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 10000,
+            "size": 30000
+          },
+          "frees": 10000
+        }
+      ],
+      "total": 1
+    }
+  },
+  {
+    "name": "a folder contained in two others",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}],
+    "request": {},
+    "files": [
+      {"path": "/lib/c/C0.ttf", "hash": "c0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "C0", "version": "Version 1.0"}]},
+      {"path": "/lib/d/C0.ttf", "hash": "c0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "C0", "version": "Version 1.0"}]},
+      {"path": "/lib/e/C0.ttf", "hash": "c0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 3, "name": "C0", "version": "Version 1.0"}]},
+      {"path": "/lib/c/C1.ttf", "hash": "c1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "C1", "version": "Version 1.0"}]},
+      {"path": "/lib/d/C1.ttf", "hash": "c1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "C1", "version": "Version 1.0"}]},
+      {"path": "/lib/e/C1.ttf", "hash": "c1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 6, "name": "C1", "version": "Version 1.0"}]},
+      {"path": "/lib/c/C2.ttf", "hash": "c2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "C2", "version": "Version 1.0"}]},
+      {"path": "/lib/d/C2.ttf", "hash": "c2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "C2", "version": "Version 1.0"}]},
+      {"path": "/lib/e/C2.ttf", "hash": "c2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 9, "name": "C2", "version": "Version 1.0"}]},
+      {"path": "/lib/c/C3.ttf", "hash": "c3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "C3", "version": "Version 1.0"}]},
+      {"path": "/lib/d/C3.ttf", "hash": "c3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "C3", "version": "Version 1.0"}]},
+      {"path": "/lib/e/C3.ttf", "hash": "c3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 12, "name": "C3", "version": "Version 1.0"}]},
+      {"path": "/lib/c/C4.ttf", "hash": "c4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 13, "name": "C4", "version": "Version 1.0"}]},
+      {"path": "/lib/d/C4.ttf", "hash": "c4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 14, "name": "C4", "version": "Version 1.0"}]},
+      {"path": "/lib/e/C4.ttf", "hash": "c4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 15, "name": "C4", "version": "Version 1.0"}]},
+      {"path": "/lib/d/D0.ttf", "hash": "d0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 16, "name": "D0", "version": "Version 1.0"}]},
+      {"path": "/lib/d/D1.ttf", "hash": "d1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 17, "name": "D1", "version": "Version 1.0"}]},
+      {"path": "/lib/e/E0.ttf", "hash": "e0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 18, "name": "E0", "version": "Version 1.0"}], "size": 4000},
+      {"path": "/lib/e/E1.ttf", "hash": "e1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 19, "name": "E1", "version": "Version 1.0"}], "size": 4000},
+      {"path": "/lib/e/E2.ttf", "hash": "e2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 20, "name": "E2", "version": "Version 1.0"}], "size": 4000}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": true,
+            "fontFiles": 5,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/c",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 7,
+            "identicalSize": 5000,
+            "onlyHere": 2,
+            "otherFiles": 0,
+            "path": "/lib/d",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 7000
+          },
+          "frees": 5000
+        },
+        {
+          "a": {
+            "contained": true,
+            "fontFiles": 5,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/c",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 8,
+            "identicalSize": 5000,
+            "onlyHere": 3,
+            "otherFiles": 0,
+            "path": "/lib/e",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 17000
+          },
+          "frees": 5000
+        },
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 7,
+            "identicalSize": 5000,
+            "onlyHere": 2,
+            "otherFiles": 0,
+            "path": "/lib/d",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 7000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 8,
+            "identicalSize": 5000,
+            "onlyHere": 3,
+            "otherFiles": 0,
+            "path": "/lib/e",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 17000
+          },
+          "frees": 5000
+        }
+      ],
+      "total": 3
+    }
+  },
+  {
+    "name": "four shared files are below the threshold, and data that is no font is not counted",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}],
+    "request": {},
+    "files": [
+      {"path": "/lib/s/S0.ttf", "hash": "s0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "S0", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S0.ttf", "hash": "s0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "S0", "version": "Version 1.0"}]},
+      {"path": "/lib/s/S1.ttf", "hash": "s1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 3, "name": "S1", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S1.ttf", "hash": "s1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "S1", "version": "Version 1.0"}]},
+      {"path": "/lib/s/S2.ttf", "hash": "s2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "S2", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S2.ttf", "hash": "s2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 6, "name": "S2", "version": "Version 1.0"}]},
+      {"path": "/lib/s/S3.ttf", "hash": "s3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "S3", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S3.ttf", "hash": "s3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "S3", "version": "Version 1.0"}]},
+      {"path": "/lib/t/readme.txt", "hash": "r0", "format": null, "source": 1, "kind": "watched", "faces": [{"face": 9, "name": "", "version": "Version 1.0"}]},
+      {"path": "/lib/s/readme.txt", "hash": "r0", "format": null, "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [],
+      "total": 0
+    }
+  },
+  {
+    "name": "a lower threshold lists them",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}],
+    "request": {"minShared": 2},
+    "files": [
+      {"path": "/lib/s/S0.ttf", "hash": "s0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "S0", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S0.ttf", "hash": "s0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "S0", "version": "Version 1.0"}]},
+      {"path": "/lib/s/S1.ttf", "hash": "s1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 3, "name": "S1", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S1.ttf", "hash": "s1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "S1", "version": "Version 1.0"}]},
+      {"path": "/lib/s/S2.ttf", "hash": "s2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "S2", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S2.ttf", "hash": "s2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 6, "name": "S2", "version": "Version 1.0"}]},
+      {"path": "/lib/s/S3.ttf", "hash": "s3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "S3", "version": "Version 1.0"}]},
+      {"path": "/lib/t/S3.ttf", "hash": "s3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "S3", "version": "Version 1.0"}]},
+      {"path": "/lib/t/readme.txt", "hash": "r0", "format": null, "source": 1, "kind": "watched", "faces": [{"face": 9, "name": "", "version": "Version 1.0"}]},
+      {"path": "/lib/s/readme.txt", "hash": "r0", "format": null, "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": true,
+            "fontFiles": 4,
+            "identicalSize": 4000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/s",
+            "protected": null,
+            "shared": {
+              "identical": 4,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 4000,
+            "size": 4000
+          },
+          "b": {
+            "contained": true,
+            "fontFiles": 4,
+            "identicalSize": 4000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/t",
+            "protected": null,
+            "shared": {
+              "identical": 4,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 4000,
+            "size": 4000
+          },
+          "frees": 4000
+        }
+      ],
+      "total": 1
+    }
+  },
+  {
+    "name": "a folder that holds the other, other levels, and a system folder",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}, {"path": "/sys", "kind": "systemFolder"}],
+    "request": {},
+    "files": [
+      {"path": "/lib/n/N0.otf", "hash": "n0", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N0.ttf", "hash": "n0t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/sys/N0.otf", "hash": "n0", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 3, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N1.otf", "hash": "n1", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N1.ttf", "hash": "n1t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/sys/N1.otf", "hash": "n1", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 6, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N2.otf", "hash": "n2", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N2.ttf", "hash": "n2t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/sys/N2.otf", "hash": "n2", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 9, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N3.otf", "hash": "n3", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "N3", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N3.ttf", "hash": "n3t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "N3", "version": "Version 0.9"}]},
+      {"path": "/sys/N3.otf", "hash": "n3", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 12, "name": "N3", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N4.otf", "hash": "n4", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 13, "name": "N4", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N4.ttf", "hash": "n4t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 14, "name": "N4", "version": "Version 0.9"}]},
+      {"path": "/sys/N4.otf", "hash": "n4", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 15, "name": "N4", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 10,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/n",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 2,
+              "sameVersion": 3
+            },
+            "sharedSize": 10000,
+            "size": 10000
+          },
+          "b": {
+            "contained": true,
+            "fontFiles": 5,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/sys",
+            "protected": "systemFolder",
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "frees": 5000
+        },
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 5,
+            "identicalSize": 0,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/n",
+            "protected": null,
+            "shared": {
+              "identical": 0,
+              "otherVersion": 2,
+              "sameVersion": 3
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 5,
+            "identicalSize": 0,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/n/copy",
+            "protected": null,
+            "shared": {
+              "identical": 0,
+              "otherVersion": 2,
+              "sameVersion": 3
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "frees": 0
+        }
+      ],
+      "total": 2
+    }
+  },
+  {
+    "name": "a folder scope lists the pairs with a side in it",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}, {"path": "/sys", "kind": "systemFolder"}],
+    "request": {"scope": {"kind": "folder", "path": "/sys"}},
+    "files": [
+      {"path": "/lib/n/N0.otf", "hash": "n0", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N0.ttf", "hash": "n0t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/sys/N0.otf", "hash": "n0", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 3, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N1.otf", "hash": "n1", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N1.ttf", "hash": "n1t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/sys/N1.otf", "hash": "n1", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 6, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N2.otf", "hash": "n2", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N2.ttf", "hash": "n2t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/sys/N2.otf", "hash": "n2", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 9, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N3.otf", "hash": "n3", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "N3", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N3.ttf", "hash": "n3t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "N3", "version": "Version 0.9"}]},
+      {"path": "/sys/N3.otf", "hash": "n3", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 12, "name": "N3", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N4.otf", "hash": "n4", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 13, "name": "N4", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N4.ttf", "hash": "n4t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 14, "name": "N4", "version": "Version 0.9"}]},
+      {"path": "/sys/N4.otf", "hash": "n4", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 15, "name": "N4", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 10,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/n",
+            "protected": null,
+            "shared": {
+              "identical": 5,
+              "otherVersion": 2,
+              "sameVersion": 3
+            },
+            "sharedSize": 10000,
+            "size": 10000
+          },
+          "b": {
+            "contained": true,
+            "fontFiles": 5,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/sys",
+            "protected": "systemFolder",
+            "shared": {
+              "identical": 5,
+              "otherVersion": 0,
+              "sameVersion": 0
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "frees": 5000
+        }
+      ],
+      "total": 1
+    }
+  },
+  {
+    "name": "pages",
+    "roots": [{"path": "/lib", "kind": "sourceRoot"}, {"path": "/sys", "kind": "systemFolder"}],
+    "request": {"page": {"offset": 1, "limit": 1}},
+    "files": [
+      {"path": "/lib/n/N0.otf", "hash": "n0", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 1, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N0.ttf", "hash": "n0t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/sys/N0.otf", "hash": "n0", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 3, "name": "N0", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N1.otf", "hash": "n1", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N1.ttf", "hash": "n1t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 5, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/sys/N1.otf", "hash": "n1", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 6, "name": "N1", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N2.otf", "hash": "n2", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 7, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N2.ttf", "hash": "n2t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/sys/N2.otf", "hash": "n2", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 9, "name": "N2", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N3.otf", "hash": "n3", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "N3", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N3.ttf", "hash": "n3t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 11, "name": "N3", "version": "Version 0.9"}]},
+      {"path": "/sys/N3.otf", "hash": "n3", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 12, "name": "N3", "version": "Version 1.0"}]},
+      {"path": "/lib/n/N4.otf", "hash": "n4", "format": "otf", "source": 1, "kind": "watched", "faces": [{"face": 13, "name": "N4", "version": "Version 1.0"}]},
+      {"path": "/lib/n/copy/N4.ttf", "hash": "n4t", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 14, "name": "N4", "version": "Version 0.9"}]},
+      {"path": "/sys/N4.otf", "hash": "n4", "format": "otf", "source": 3, "kind": "system", "faces": [{"face": 15, "name": "N4", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "contained": false,
+            "fontFiles": 5,
+            "identicalSize": 0,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/n",
+            "protected": null,
+            "shared": {
+              "identical": 0,
+              "otherVersion": 2,
+              "sameVersion": 3
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "b": {
+            "contained": false,
+            "fontFiles": 5,
+            "identicalSize": 0,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "path": "/lib/n/copy",
+            "protected": null,
+            "shared": {
+              "identical": 0,
+              "otherVersion": 2,
+              "sameVersion": 3
+            },
+            "sharedSize": 5000,
+            "size": 5000
+          },
+          "frees": 0
+        }
+      ],
+      "total": 2
+    }
+  }
+]

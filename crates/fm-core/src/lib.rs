@@ -25,6 +25,7 @@ pub mod features;
 pub mod file_drag;
 mod filter;
 pub mod fingerprint;
+pub mod folder_pairs;
 pub mod font_file;
 pub mod font_switch;
 mod foundries;

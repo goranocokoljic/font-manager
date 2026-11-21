@@ -88,6 +88,8 @@ routes! {
     list_duplicate_sets(req),
     compare_copies(req),
     preview_keeper_policy(req),
+    list_folder_pairs(req),
+    list_folder_pair_files(req),
     keep_copy(req),
     list_resolutions(),
     undo_resolution(resolution),

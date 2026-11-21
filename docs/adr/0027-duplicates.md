@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5; 2026-11-21, E56.6)
 
 ## Context
 
@@ -205,6 +205,44 @@ the folder merges the result instead of meeting a conflict. The mocks do
 not merge yet: the merge reaches the API with the cleanup plan (E56.7),
 and the mocks follow it there.
 
+**Folders that hold the same fonts (E56.6).** `list_folder_pairs` lists
+pairs of folders whose font files have copies in each other, at the three
+levels above. A side is a folder with its subfolders; when one folder holds
+the other, each side leaves the other out. For each side the pair says how
+many font files it holds, how many of them have a copy on the other side at
+each level (a file counts once, at its best level), how many have none
+(`onlyHere`), and the sizes; `list_folder_pair_files` names the files, with
+`onlyHere` what treating the folders as the same would lose. A side is
+**contained** when every font file has an identical copy on the other side.
+A pair is first found between the folders that directly hold two copies of
+one file or one font; a contained pair then climbs to the parents while
+both parents have the same name below them, stay inside the sources, are
+not one inside the other, and are still contained. So a copied tree is
+reported once, at its top, and a pair that lies inside a reported contained
+pair is not listed again. **The threshold is five shared files**
+(`FOLDER_PAIR_MIN_SHARED`, the larger of both sides' counts; a request can
+lower or raise it): fewer copies are scattered duplicates, which the sets
+already show, not two folders that are the same. Pairs are ordered by
+`frees`: the bytes of the identical copies of the smaller side (fewer bytes,
+then fewer files), because the identical copies are what a pair plan
+removes. Byte counts are `u32` and saturate, as every size of the API does.
+Files that are not fonts are counted from the folder listings of the
+returned page only (`otherFiles`: every file on disk less the font files
+the library shows) and never touched; the mocks have no disk and count 0.
+
+**A folder pair is a scope of the plan (E56.7).**
+`fm_core::folder_pairs::plan::removals` answers "keep B's copies": it plans
+A's files that have an identical copy in B and nothing else. Copies of the
+same version or another version are planned only when the user asks for
+them, and then each font of the file goes through the keeper policy and the
+language guard against B's copies of it: the file is planned only when the
+policy removes it for every font it holds, else it stays with the keeper
+the rules chose. A file in a system font folder always stays. A source's
+folder, the library folder and a system font folder (or a folder inside
+one) can be the kept side and never the removed side as a whole
+(`protected` on the side; the plan refuses it). The plan request with its
+answer type is E56.7's; this story gives it the selection.
+
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files
 that are not read, and fonts without a PostScript name, are found only as
@@ -219,5 +257,8 @@ identical files.
   for the same library.
 - A set has a stable id (`identical:<hash>`, `name:<PostScript name>`) the
   later stories (plans, "these are not duplicates") can refer to.
+- The folder-pair rule has the same three copies (`fm_core::folder_pairs`,
+  `fm_api::mock`, the TypeScript mock); `fixtures/duplicates/pair-cases.json`
+  runs against all three.
 - Every page reads the whole index again. If a later story needs pages faster
   than the budget, it caches the sets until the next library change.

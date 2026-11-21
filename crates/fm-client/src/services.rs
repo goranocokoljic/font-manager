@@ -57,6 +57,8 @@ service!(LibraryService {
     list_duplicate_sets(req: ListDuplicateSetsRequest) -> Paged<DuplicateSet>;
     compare_copies(req: CompareCopiesRequest) -> CopyComparison;
     preview_keeper_policy(req: PreviewKeeperPolicyRequest) -> KeeperPolicyPreview;
+    list_folder_pairs(req: ListFolderPairsRequest) -> Paged<FolderPair>;
+    list_folder_pair_files(req: ListFolderPairFilesRequest) -> Paged<FolderPairFile>;
     keep_copy(req: KeepCopyRequest) -> Resolution;
     list_resolutions() -> Vec<Resolution>;
     undo_resolution(resolution: ResolutionId) -> Resolution;

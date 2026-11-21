@@ -64,14 +64,14 @@ pub struct SetFace {
 
 /// A piece of a version key: a run of digits by value, or other text.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum Part {
+pub(crate) enum Part {
     Number(u64),
     Text(String),
 }
 
 /// The value two versions are compared by: trimmed, digit runs as numbers,
 /// other text lower-cased; `None` for no version (its own value).
-fn version_key(version: Option<&str>) -> Option<Vec<Part>> {
+pub(crate) fn version_key(version: Option<&str>) -> Option<Vec<Part>> {
     let v = version.map(str::trim).filter(|v| !v.is_empty())?;
     let mut parts = Vec::new();
     let mut rest = v;

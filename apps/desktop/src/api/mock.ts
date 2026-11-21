@@ -20,6 +20,7 @@ import {
   type WallLibrary,
 } from './mockWall';
 import { duplicateSets, listDuplicateSets, type SetFile } from './mockDuplicates';
+import { listFolderPairFiles, listFolderPairs, type PairRoot } from './mockFolderPairs';
 import {
   API_VERSION,
   type ActivationMode,
@@ -3058,6 +3059,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   }
   // The files the library shows, as fm-core reads them for the duplicate sets: one
   // per path, its faces in collection order. Every sample face is in source 1.
+  const pairRoots = (): PairRoot[] =>
+    sources.map((s) => ({
+      path: s.path,
+      kind:
+        s.kind === 'system'
+          ? ('systemFolder' as const)
+          : s.kind === 'libraryFolder'
+            ? ('libraryFolder' as const)
+            : ('sourceRoot' as const),
+    }));
   const setFiles = (): SetFile[] => {
     const home = sources.find((s) => s.id === 1);
     if (!home || home.paused) return [];
@@ -4813,6 +4824,23 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: null,
         };
       return structuredClone(listDuplicateSets(setFiles(), req));
+    },
+    // As the Rust mock (E56.6): the sources' folders are the roots, and
+    // there are no files on disk, so no side has other files.
+    listFolderPairs: async (req) => {
+      const scope = req.scope;
+      if (scope?.kind === 'source' && !sources.some((s) => s.id === scope.source))
+        throw {
+          code: 'notFound' as const,
+          message: `Source ${scope.source} was not found.`,
+          detail: null,
+        };
+      return structuredClone(listFolderPairs(setFiles(), pairRoots(), req));
+    },
+    listFolderPairFiles: async (req) => {
+      const page = listFolderPairFiles(setFiles(), pairRoots(), req);
+      if (!page) throw invalid('Choose two different folders.');
+      return structuredClone(page);
     },
     // As the Rust mock: without the facts of an index, every set with a copy
     // outside the system folders gets a keeper and nothing changes (E56.4).

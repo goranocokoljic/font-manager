@@ -1517,6 +1517,146 @@ pub struct KeeperPolicyPreview {
     pub my_languages: crate::settings::MyLanguagesStatus,
 }
 
+/// The fewest shared font files a folder pair needs to be listed
+/// (ADR 0027, E56.6).
+pub const FOLDER_PAIR_MIN_SHARED: u32 = 5;
+
+/// One page of the folder pairs that share copies
+/// ([`LibraryService::list_folder_pairs`]).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ListFolderPairsRequest {
+    /// The folders to look at; the whole library by default. A pair is
+    /// listed when one of its sides is in the scope.
+    #[serde(default)]
+    pub scope: DuplicateScope,
+    /// The fewest shared font files a pair needs to be listed;
+    /// [`FOLDER_PAIR_MIN_SHARED`] when `None`. A value of 0 counts as 1.
+    #[serde(default)]
+    pub min_shared: Option<u32>,
+    /// The window into the pairs.
+    #[serde(default)]
+    pub page: Page,
+}
+
+/// Font files of one side that have a copy on the other side, by the best
+/// level of that copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedCounts {
+    /// Files with an identical copy (same hash).
+    pub identical: u32,
+    /// Files with a copy of the same PostScript name and version.
+    pub same_version: u32,
+    /// Files with a copy of the same PostScript name in another version.
+    pub other_version: u32,
+}
+
+/// Why a folder can be the kept side of a pair and never the removed side
+/// as a whole (E56.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ProtectedFolder {
+    /// The folder is the root of a source the user added.
+    SourceRoot,
+    /// The folder is, or is inside, a system font folder (rule 4).
+    SystemFolder,
+    /// The folder is the library folder.
+    LibraryFolder,
+}
+
+/// One side of a folder pair: a folder with its subfolders, without the
+/// other side when one holds the other.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPairSide {
+    /// Absolute folder path.
+    pub path: String,
+    /// The font files the library shows in it.
+    pub font_files: u32,
+    /// Their size in bytes (saturating).
+    pub size: u32,
+    /// Its font files with a copy on the other side, by level.
+    pub shared: SharedCounts,
+    /// The size in bytes of its font files with a copy on the other side
+    /// (saturating).
+    pub shared_size: u32,
+    /// The size in bytes of its font files with an identical copy on the
+    /// other side (saturating): what removing them would free.
+    pub identical_size: u32,
+    /// Its font files with no copy on the other side.
+    pub only_here: u32,
+    /// Files in it the library does not show as fonts (not fonts, or not
+    /// read); counted, never touched. The mocks have no files: 0.
+    pub other_files: u32,
+    /// Every font file has an identical copy on the other side.
+    pub contained: bool,
+    /// Set when the folder can be the kept side, never the removed side.
+    pub protected: Option<ProtectedFolder>,
+}
+
+/// Two folders that share copies (E56.6). `a` is the side whose path sorts
+/// first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPair {
+    /// One side.
+    pub a: FolderPairSide,
+    /// The other side.
+    pub b: FolderPairSide,
+    /// The bytes that removing the smaller side's identical copies would
+    /// free; pairs are ordered by it, most first.
+    pub frees: u32,
+}
+
+/// A side of a folder pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PairSide {
+    /// The side named `a`.
+    A,
+    /// The side named `b`.
+    B,
+}
+
+/// One page of the font files of two folders
+/// ([`LibraryService::list_folder_pair_files`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ListFolderPairFilesRequest {
+    /// One folder, absolute.
+    pub a: String,
+    /// The other folder, absolute.
+    pub b: String,
+    /// Only the files of this side; both sides when `None`.
+    #[serde(default)]
+    pub side: Option<PairSide>,
+    /// Only the files with no copy on the other side: what treating the
+    /// folders as the same would lose.
+    #[serde(default)]
+    pub only_here: bool,
+    /// The window into the files.
+    #[serde(default)]
+    pub page: Page,
+}
+
+/// One font file of a folder pair, with its best copy on the other side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPairFile {
+    /// Absolute file path.
+    pub path: String,
+    /// The side it is on.
+    pub side: PairSide,
+    /// Size in bytes.
+    pub size: u32,
+    /// The level of its best copy on the other side; `None` when it has
+    /// none (only here).
+    pub level: Option<DuplicateLevel>,
+    /// That copy's path, the first by path at that level.
+    pub copy: Option<String>,
+}
+
 /// "Keep this one": keep one copy of a duplicate font and move the other
 /// copies to the OS trash (E8.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -2024,6 +2164,25 @@ pub trait LibraryService {
         &self,
         req: PreviewKeeperPolicyRequest,
     ) -> ApiResult<KeeperPolicyPreview>;
+    /// One page of the pairs of folders that share copies (E56.6,
+    /// ADR 0027): for each side, how many of its font files have a copy on
+    /// the other side at each level, how many it has in all, and their
+    /// sizes. A pair whose side is contained in the other is listed once,
+    /// at the highest folder where the trees still match. Pairs below
+    /// `min_shared` shared files are not listed; the rest are ordered by
+    /// the bytes that removing the smaller side's identical copies frees.
+    /// Computed on each call. A `source` scope that does not exist is
+    /// `NotFound`.
+    fn list_folder_pairs(&self, req: ListFolderPairsRequest) -> ApiResult<Paged<FolderPair>>;
+    /// One page of the font files of two folders, each with its best copy
+    /// on the other side (E56.6): with `only_here`, what treating the
+    /// folders as the same would lose. A side's files exclude the other
+    /// side when one folder holds the other. `InvalidRequest` when `a` and
+    /// `b` are the same folder.
+    fn list_folder_pair_files(
+        &self,
+        req: ListFolderPairFilesRequest,
+    ) -> ApiResult<Paged<FolderPairFile>>;
     /// "Keep this one" (E8.3): moves the other copies to the OS trash, never
     /// deleting them, and records the action for undo. With `dry_run`, only
     /// says what would move. A copy that cannot move (the app activated it,

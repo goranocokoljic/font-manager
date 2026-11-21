@@ -60,10 +60,11 @@ use fm_api::layout::{
 use fm_api::library::{
     AddSourceRequest, AppInfo, CompareCopiesRequest, CopyComparison, DragFiles, DragFilesRequest,
     DuplicateGroup, DuplicateScope, DuplicateSet, FaceDetail, Family, FamilySummary,
-    FileDragSupport, FontMatches, FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest,
-    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, KeeperPolicyPreview, LibraryService,
-    ListDuplicateSetsRequest, ListFamiliesRequest, Platform, PreviewKeeperPolicyRequest, Problem,
-    Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
+    FileDragSupport, FolderPair, FolderPairFile, FontMatches, FontSwitchPayload, GlyphDetail,
+    GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest,
+    KeeperPolicyPreview, LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest,
+    ListFolderPairFilesRequest, ListFolderPairsRequest, Platform, PreviewKeeperPolicyRequest,
+    Problem, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
     SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
@@ -1097,6 +1098,38 @@ impl LibraryService for CoreApi {
         Ok(crate::keeper_policy::preview(
             &sets, &files, tried, saved, langs, &names,
         ))
+    }
+
+    fn list_folder_pairs(&self, req: ListFolderPairsRequest) -> ApiResult<Paged<FolderPair>> {
+        let index = self.lock();
+        if let DuplicateScope::Source { source } = req.scope
+            && !index.sources()?.iter().any(|s| s.id == source)
+        {
+            return Err(ApiError::not_found(format!("Source {source}")));
+        }
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        let roots = folder_roots(&index)?;
+        drop(index);
+        let mut page = crate::folder_pairs::list(&files, &roots, &req);
+        // The files that are not fonts, from the folder listings of this
+        // page's pairs only (ADR 0027).
+        for pair in &mut page.items {
+            let (a, b) = (PathBuf::from(&pair.a.path), PathBuf::from(&pair.b.path));
+            pair.a.other_files = crate::folder_pairs::count_other_files(&a, &b, pair.a.font_files);
+            pair.b.other_files = crate::folder_pairs::count_other_files(&b, &a, pair.b.font_files);
+        }
+        Ok(page)
+    }
+
+    fn list_folder_pair_files(
+        &self,
+        req: ListFolderPairFilesRequest,
+    ) -> ApiResult<Paged<FolderPairFile>> {
+        let index = self.lock();
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        let roots = folder_roots(&index)?;
+        drop(index);
+        crate::folder_pairs::list_files(&files, &roots, &req)
     }
 
     fn compare_copies(&self, req: CompareCopiesRequest) -> ApiResult<CopyComparison> {
@@ -2339,6 +2372,33 @@ impl EventSource for CoreApi {
 
 mod fetch_missing;
 mod install;
+
+/// The folders a folder pair climbs no higher than and never removes as a
+/// whole (E56.6): every source's folder, and the system font folders.
+pub(crate) fn folder_roots(index: &Index) -> ApiResult<Vec<crate::folder_pairs::Root>> {
+    use fm_api::library::ProtectedFolder;
+    let mut roots: Vec<crate::folder_pairs::Root> = index
+        .sources()?
+        .into_iter()
+        .map(|s| crate::folder_pairs::Root {
+            path: PathBuf::from(s.path),
+            kind: match s.kind {
+                SourceKind::Watched => ProtectedFolder::SourceRoot,
+                SourceKind::System => ProtectedFolder::SystemFolder,
+                SourceKind::LibraryFolder => ProtectedFolder::LibraryFolder,
+            },
+        })
+        .collect();
+    roots.extend(
+        crate::duplicate_sets::system_folders()
+            .into_iter()
+            .map(|path| crate::folder_pairs::Root {
+                path,
+                kind: ProtectedFolder::SystemFolder,
+            }),
+    );
+    Ok(roots)
+}
 
 /// The duplicate groups of `index` with their keepers from the saved keeper
 /// policy and the language guard (E56.4), so `list_duplicates`,
