@@ -6,17 +6,19 @@
   "rationale": "E33.2 (#197): the 'often paired in curated pairings' reason was tested only on a partner that should get it and on the rules-only path; replacing the probability guard with `if true` left every test green.",
   "severity": "must",
   "status": "active",
-  "occurrences": 2,
+  "occurrences": 3,
   "source_issues": [
     197,
-    413
+    413,
+    671
   ],
   "file_globs": [
     "crates/fm-core/src/**/*.rs",
     "apps/desktop/src/**/*.test.ts",
     "apps/desktop/src/list/**",
-    "apps/desktop/src/components/**"
+    "apps/desktop/src/components/**",
+    "crates/fm-api/src/**/*.rs"
   ],
   "first_seen": "2026-10-27T23:11:03.440Z",
-  "last_seen": "2026-10-30T17:36:58.424Z"
+  "last_seen": "2026-11-21T10:18:20.663Z"
 }
