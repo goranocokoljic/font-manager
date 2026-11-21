@@ -567,4 +567,40 @@ mod tests {
         assert_eq!(o.keep_both, 1);
         assert_eq!(o.my_languages, MyLanguagesStatus::NotSet);
     }
+
+    #[test]
+    fn the_recommendation_filter_lists_a_keep_both_set_and_a_keeper_set_apart() {
+        use crate::library::{
+            DuplicateSetFilter, KeeperOutcome, KeeperRecommendation, RecommendationFilter,
+        };
+        use crate::settings::MyLanguagesStatus;
+        use std::collections::HashSet;
+
+        let with = |outcome| {
+            let mut s = set();
+            s.recommendation = Some(KeeperRecommendation {
+                outcome,
+                keeper: Some("/a/A.otf".to_owned()),
+                reason: None,
+                keep: Vec::new(),
+                remove: Vec::new(),
+                my_languages: MyLanguagesStatus::Set,
+            });
+            s
+        };
+        let filter = |r| DuplicateSetFilter {
+            recommendation: Some(r),
+            ..Default::default()
+        };
+        let none = HashSet::new();
+        let keep_both = with(KeeperOutcome::KeepBoth);
+        let keeper = with(KeeperOutcome::Keeper);
+
+        assert!(filter(RecommendationFilter::KeepBoth).matches(&keep_both, &none));
+        assert!(!filter(RecommendationFilter::KeepBoth).matches(&keeper, &none));
+        assert!(!filter(RecommendationFilter::KeepBoth).matches(&set(), &none));
+        // A keeper with nothing to remove is no recommendation to act on.
+        assert!(!filter(RecommendationFilter::HasRecommendation).matches(&keeper, &none));
+        assert!(!filter(RecommendationFilter::HasRecommendation).matches(&keep_both, &none));
+    }
 }

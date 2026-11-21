@@ -13,7 +13,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type {
   CopyChoice,
-  DuplicateLevel,
   DuplicateSet,
   DuplicateSetSort,
   FontFormat,
@@ -23,7 +22,7 @@ import type {
 import { errorMessage, t } from '../i18n';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { fadeIn } from '../motion/fadeIn';
-import { useDuplicatesStore } from '../stores/duplicates';
+import { useDuplicatesStore, type QueueChip } from '../stores/duplicates';
 import { useSourcesStore } from '../stores/sources';
 import DuplicateCopyCard from './DuplicateCopyCard.vue';
 import UiButton from './ui/UiButton.vue';
@@ -83,10 +82,8 @@ const setName = (s: DuplicateSet) =>
   s.postscriptName ?? s.copies[0]?.path.split(/[\\/]/).pop() ?? s.id;
 
 // Level chips: All, then each level the queue holds, then "Keep both".
-type Chip = 'all' | DuplicateLevel | 'keepBoth';
-const chip = computed<Chip>(() =>
-  store.filter.recommendation === 'keepBoth' ? 'keepBoth' : (store.filter.level ?? 'all'),
-);
+type Chip = QueueChip;
+const chip = computed(() => store.chip);
 const chips = computed(() => {
   const o = store.overview;
   return [
@@ -115,15 +112,7 @@ const chips = computed(() => {
   ];
 });
 function pickChip(id: Chip): void {
-  void store.setFilter(
-    id === 'keepBoth'
-      ? { level: null, recommendation: 'keepBoth' }
-      : {
-          level: id === 'all' ? null : id,
-          recommendation:
-            store.filter.recommendation === 'keepBoth' ? null : store.filter.recommendation,
-        },
-  );
+  void store.showChip(id);
 }
 
 const sortOptions = computed(() => [

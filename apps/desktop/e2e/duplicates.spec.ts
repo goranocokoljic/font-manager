@@ -193,10 +193,26 @@ test('the queue filters by level and format and sorts through the API', async ({
     .getByRole('button', { name: /^Same version/ })
     .click();
   await expect(rows.first()).toContainText('LegacyGrotesk');
+  // Keep both: the mock recommends nothing, so no set keeps both; All lists them again.
+  const keepBoth = page.getByRole('group', { name: 'Level' }).getByRole('button', {
+    name: /^Keep both/,
+  });
+  await keepBoth.click();
+  await expect(keepBoth).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'No set matches these filters.' })).toBeVisible();
   await page.getByRole('group', { name: 'Level' }).getByRole('button', { name: 'All' }).click();
   await expect(rows).toHaveCount(2);
 
   await page.getByRole('button', { name: 'Filters' }).click();
+  // A folder narrows the queue to the sets with a copy in it: only Inter is in Older.
+  const folder = page.getByRole('textbox', { name: 'Folder' });
+  await folder.fill('/Users/demo/Fonts/Older');
+  await folder.press('Enter');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Inter-Regular');
+  await folder.fill('');
+  await folder.press('Enter');
+  await expect(rows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Format' }).click();
   await page.getByRole('option', { name: /Type 1/ }).click();
   await expect(rows).toHaveCount(1);

@@ -47,6 +47,9 @@ export interface QueueFilter {
   scope: DuplicateScope;
 }
 
+/** The level chips of the queue. */
+export type QueueChip = 'all' | DuplicateLevel | 'keepBoth';
+
 const emptyDraft = (): CleanupDraft => ({ identical: false, decisions: [] });
 
 export const useDuplicatesStore = defineStore('duplicates', () => {
@@ -283,6 +286,27 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     await reload(0);
   }
 
+  /**
+   * The chip in view: "All", one queue level, or "Keep both" (the sets whose
+   * recommendation keeps several copies, at either level).
+   */
+  const chip = computed<QueueChip>(() =>
+    filter.value.recommendation === 'keepBoth' ? 'keepBoth' : (filter.value.level ?? 'all'),
+  );
+
+  /** Shows the queue of one chip; leaving "Keep both" drops its recommendation filter. */
+  async function showChip(id: QueueChip): Promise<void> {
+    await setFilter(
+      id === 'keepBoth'
+        ? { level: null, recommendation: 'keepBoth' }
+        : {
+            level: id === 'all' ? null : id,
+            recommendation:
+              filter.value.recommendation === 'keepBoth' ? null : filter.value.recommendation,
+          },
+    );
+  }
+
   async function setSort(value: DuplicateSetSort): Promise<void> {
     sort.value = value;
     await reload(0);
@@ -343,6 +367,8 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     includeIdentical,
     clearDraft,
     setFilter,
+    chip,
+    showChip,
     setSort,
     compare,
   };
