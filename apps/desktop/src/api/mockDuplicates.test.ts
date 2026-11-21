@@ -168,6 +168,11 @@ describe('MockApi copy comparison (E56.13)', () => {
     expect(d.mayReflow).toBe(true);
     expect(d.containerOnly).toBe(false);
     expect(c.summary).toContain('Text set in one copy may reflow in the other.');
+    // The static copy without ss01: the first copy alone has the axis and the feature.
+    expect(d.axesRemoved).toEqual(['wght']);
+    expect(d.featuresRemoved).toEqual(['ss01']);
+    expect(d.axesAdded).toEqual([]);
+    expect(d.featuresAdded).toEqual([]);
   });
 
   it('says only the container differs for the same font in another format, and not otherwise', async () => {

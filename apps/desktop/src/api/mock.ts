@@ -803,6 +803,8 @@ export interface MockCopyHint {
   noLocl?: boolean;
   /** The vertical metrics and this many advance widths differ from the sample's. */
   metrics?: number;
+  /** Feature and axis tags the copy lacks (`ss01`, `wght`). */
+  drops?: string[];
   /** The file cannot be read: the reason, as fm-core's `Health::Broken`. */
   broken?: string;
 }
@@ -992,8 +994,18 @@ export function mockCompareCopies(a: FaceDetail, b: FaceDetail): CopyComparison 
       codePoints: first.map((c) => c.codePointAt(0) ?? null),
     };
   };
-  const features = (f: FaceDetail) => f.features.map((x) => x.tag);
-  const axes = (f: FaceDetail) => f.axes.map((x) => x.tag);
+  const kept = (f: FaceDetail, tags: string[]) =>
+    tags.filter((t) => !(hint(f).drops ?? []).includes(t));
+  const features = (f: FaceDetail) =>
+    kept(
+      f,
+      f.features.map((x) => x.tag),
+    );
+  const axes = (f: FaceDetail) =>
+    kept(
+      f,
+      f.axes.map((x) => x.tag),
+    );
   const [ma, mb] = [hint(a).metrics ?? 0, hint(b).metrics ?? 0];
   const metrics = ma !== mb;
   const widths = metrics ? Math.max(ma, mb) : 0;
@@ -1541,13 +1553,14 @@ export interface MockOptions {
  */
 export const mockDuplicateCopies: NonNullable<MockOptions['copies']> = [
   { face: 6, path: '/Users/demo/Downloads/JetBrainsMono-Regular.ttf', hash: null, version: null },
-  // Compared with the sample's Inter (E56.13): other metrics and no `locl`.
+  // Compared with the sample's Inter (E56.13): other metrics, no `locl`, static and
+  // without `ss01`.
   {
     face: 1,
     path: '/Users/demo/Fonts/Old/Inter-Regular.ttf',
     hash: '1f00d',
     version: null,
-    compare: { metrics: 14, noLocl: true },
+    compare: { metrics: 14, noLocl: true, drops: ['ss01', 'wght'] },
   },
   // Without Cyrillic, so it does not cover Serbian (Cyrillic).
   {

@@ -1,5 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+
+// Specimens load face files from `/fmfont/<id>`, as the app's asset protocol; serve one
+// fixture for all.
+const fixture = readFileSync(
+  fileURLToPath(
+    new URL(
+      '../../../fixtures/fonts/google-repo/asapsharp/AsapSharp[wdth,wght].ttf',
+      import.meta.url,
+    ),
+  ),
+);
 
 // Comparing two copies (E56.13) on the browser mock with `?mockDuplicates=1` and
 // `?mockCopyCompare=1`: Inter as the sample's file (Inter/Inter[wght].ttf), an older
@@ -10,6 +23,9 @@ import { expect, test, type Page } from '@playwright/test';
 const MY_LANGUAGES = ['en', 'sr-Cyrl'];
 
 const open = async (page: Page) => {
+  await page.route('**/fmfont/*', (route) =>
+    route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+  );
   await page.addInitScript((languages) => {
     sessionStorage.setItem('fm.mock.settings.v1', JSON.stringify({ myLanguages: languages }));
   }, MY_LANGUAGES);
@@ -66,11 +82,24 @@ test('a language one copy lacks comes first, its glyphs are drawn and the sample
     .locator(':scope > [data-testid]')
     .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
   expect(order.indexOf('compare-languages')).toBeLessThan(order.indexOf('compare-glyphs'));
+  // Each specimen is drawn in its copy's own face, registered with the webview.
+  for (const side of ['a', 'b'] as const) {
+    const specimen = half(page, side).getByTestId('compare-specimen');
+    await expect(specimen).toHaveAttribute('data-loaded', 'true');
+    await expect(specimen).toHaveCSS('font-family', /fm-face-/);
+  }
   // The glyphs the second copy lacks are shown as glyphs, in the first copy's face.
   const removed = c.getByTestId('compare-glyphs').locator('[data-kind="removed"]');
   await expect(removed).toContainText('30 glyphs only in Inter/Inter[wght].ttf:');
   await expect(removed.getByRole('img', { name: 'а (U+0430)' })).toHaveText('а');
   await expect(removed).toContainText('+20 more');
+  const removedList = removed.locator('ul.glyphs');
+  await expect(removedList).toHaveCSS('font-family', /fm-face-/);
+  expect(await removedList.evaluate((el) => getComputedStyle(el).fontFamily)).toBe(
+    await half(page, 'a')
+      .getByTestId('compare-specimen')
+      .evaluate((el) => getComputedStyle(el).fontFamily),
+  );
   // Neither a metrics change nor a container-only answer for this pair.
   await expect(c.getByTestId('compare-reflow')).toHaveCount(0);
   await expect(c.getByTestId('compare-container-only')).toHaveCount(0);
@@ -122,6 +151,13 @@ test('changed metrics say the text may reflow, and locl on one side only is name
   await expect(half(page, 'a').locator('[data-language="sr-Cyrl"]')).toContainText('locl');
   await expect(half(page, 'b').locator('[data-language="sr-Cyrl"]')).not.toContainText('locl');
   await expect(c.getByTestId('compare-glyphs')).toHaveCount(0);
+  // Features and axes as lists, each under the copy that alone has them.
+  const lists = c.getByTestId('compare-lists');
+  await expect(lists.getByRole('term')).toHaveText([
+    'Features only in Inter/Inter[wght].ttf',
+    'Axes only in Inter/Inter[wght].ttf',
+  ]);
+  await expect(lists.getByRole('definition')).toHaveText(['ss01', 'wght']);
 
   // Hide and Keep both act on the same plan as the queue.
   await half(page, 'b').getByRole('button', { name: 'Hide: Old/Inter-Regular.ttf' }).click();
@@ -143,6 +179,7 @@ test('the same font in another format differs only in the container', async ({ p
   await expect(c.getByTestId('compare-languages')).toHaveCount(0);
   await expect(c.getByTestId('compare-glyphs')).toHaveCount(0);
   await expect(c.getByTestId('compare-metrics')).toHaveCount(0);
+  await expect(c.getByTestId('compare-lists')).toHaveCount(0);
   await expect(half(page, 'b')).toContainText('WOFF2');
 });
 
