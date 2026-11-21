@@ -40,6 +40,8 @@ answer.
 | `fm export <family> --woff2 [--woff] [--css] --out <folder> [--force]` | Write every style of a family as web fonts into the folder. `--css` also writes `fonts.css`. Shows the files written. Exits with code 4 when the license of a font does not allow web use. |
 | `fm specimen <family> [--html] --out <file.html> [--force]` | Write a specimen page of a family. `--pdf` needs the app running; when the app is closed, `fm` exits with code 4. |
 | `fm preview <font> --text "..." [--size 48] [--fg "#1a1a1a"] [--bg "#ffffff"] --out <file.png> [--force]` | Draw the text in the font and write a PNG. `--out -` writes the PNG to stdout. |
+| `fm doctor` | Check the library for duplicates, broken files and activation conflicts. Changes nothing. Exits with code 5 when it finds something. When the library has duplicate sets, the last line names `fm duplicates`. |
+| `fm duplicates list` / `folders` / `compare` / `plan` / `apply` / `sessions` / `undo` | Find and clean up duplicate fonts. Read [Cleaning up duplicates](duplicates.md). |
 | `fm --help` | Show every command and the exit codes |
 
 ## Activation needs the app
@@ -50,7 +52,7 @@ activated itself would stop when `fm` stops.
 
 ## Files that `fm` writes
 
-`fm export`, `fm specimen` and `fm preview` write only to the path that you
+`fm export`, `fm specimen`, `fm preview` and `fm duplicates plan --out` write only to the path that you
 give with `--out`. When a file with the same name is there, `fm` does not
 replace it and exits with code 2. Add `--force` to replace it.
 

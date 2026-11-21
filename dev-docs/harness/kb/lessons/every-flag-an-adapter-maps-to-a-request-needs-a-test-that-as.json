@@ -1,0 +1,19 @@
+{
+  "id": "every-flag-an-adapter-maps-to-a-request-needs-a-test-that-as",
+  "title": "Every flag an adapter maps to a request needs a test that asserts the request it sends",
+  "category": "testing",
+  "rule": "When a CLI subcommand or an MCP tool turns flags or arguments into an fm-api request (a scope, a mode, kept versus removed folders), test every flag on the adapter: run the command with that flag and assert the exact request field it produced, for example the request the plan echoes with --json, or a call recorded by the mock. Give paired flags different values (keep and remove) so a swap fails. A test that runs the command without the flag, or a unit test of another adapter's own mapping, leaves the mapping untested.",
+  "rationale": "E56.9 (#669): fm duplicates plan mapped --keep-folder/--remove-folder, --set, --source and --folder to a CleanupScope, but no test passed a scope flag, so swapping keep and remove (trash the folder the user asked to keep) passed every test.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    669
+  ],
+  "file_globs": [
+    "crates/fm-cli/**",
+    "crates/fm-mcp/**"
+  ],
+  "first_seen": "2026-11-21T13:26:47.069Z",
+  "last_seen": "2026-11-21T13:26:47.069Z"
+}

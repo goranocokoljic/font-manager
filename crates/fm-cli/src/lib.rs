@@ -4,12 +4,13 @@
 //! the same commands run on [`fm_api::mock::MockApi`] in the tests.
 
 mod commands;
+mod duplicates;
 mod exit;
 mod generate;
 pub mod link;
 mod output;
 
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -19,6 +20,7 @@ use fm_api::search::{MergeFoundriesRequest, Supports, TraitFilter, UnmergeFoundr
 use fm_api::{Api, ApiError, ErrorCode};
 
 pub use commands::{Doctor, PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
+pub use duplicates::{DuplicatesCommand, Level, PlanFlags, PlanScopeFlags, ScopeFlags};
 pub use exit::{EXIT_CODES, Exit};
 pub use generate::{
     COMPLETIONS_INSTALL, Completions, ManPage, ManPages, Shell, completions as completions_script,
@@ -168,6 +170,15 @@ pub enum Command {
     /// conflicts, with the files involved. Changes nothing. Exits 5 when it
     /// finds anything, so a script can gate on it.
     Doctor,
+    /// Find and clean up duplicate fonts: list the sets and the folders
+    /// that hold the same fonts, compare two copies, plan a cleanup, apply
+    /// it and undo it. Files go to the OS trash or are hidden, never
+    /// deleted for good.
+    Duplicates {
+        /// What to do with duplicates.
+        #[command(subcommand)]
+        command: DuplicatesCommand,
+    },
     /// Export or import project sets.
     Sets {
         /// What to do with sets.
@@ -329,8 +340,21 @@ fn man(output: Output, dir: &std::path::Path, force: bool) -> Exit {
 }
 
 /// Runs `cli` on `api`, reached over `link`, printing to `out` and errors
-/// to `err`; the exit code.
+/// to `err`; the exit code. A command that asks (`fm duplicates apply`
+/// without `--yes`) reads no answer, so it does nothing.
 pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -> Exit {
+    run_with_input(api, link, cli, &mut std::io::empty(), out, err)
+}
+
+/// As [`run`], reading the answer of a command that asks from `input`.
+pub fn run_with_input(
+    api: &dyn Api,
+    link: Link,
+    cli: &Cli,
+    input: &mut dyn BufRead,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Exit {
     let mut output = Output::new(cli.json, out, err);
     match &cli.command {
         Command::Version => {
@@ -516,8 +540,84 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
                 output::previewed,
             )
         }
+        Command::Duplicates { command } => run_duplicates(api, cli.json, command, input, output),
         Command::Completions { shell } => completions(output, *shell),
         Command::Man { out, force } => man(output, out, *force),
+    }
+}
+
+/// The `fm duplicates` commands.
+fn run_duplicates(
+    api: &dyn Api,
+    json: bool,
+    command: &DuplicatesCommand,
+    input: &mut dyn BufRead,
+    mut output: Output,
+) -> Exit {
+    match command {
+        DuplicatesCommand::List { scope, level } => output
+            .print(duplicates::list(api, scope, level), |s, o| {
+                duplicates::print_sets(s, o)
+            }),
+        DuplicatesCommand::Folders { scope, min_shared } => output
+            .print(duplicates::folders(api, scope, *min_shared), |p, o| {
+                duplicates::print_folders(p, o)
+            }),
+        DuplicatesCommand::Compare { a, b } => {
+            output.print(duplicates::compare(api, a, b), duplicates::print_comparison)
+        }
+        DuplicatesCommand::Plan {
+            scope,
+            hide,
+            move_activations,
+            out,
+            force,
+        } => {
+            let flags = PlanFlags {
+                scope: scope.clone(),
+                hide: *hide,
+                move_activations: *move_activations,
+            };
+            let planned = duplicates::plan(api, &flags, out.as_deref(), *force);
+            match out {
+                Some(path) => {
+                    output.print(planned, |p, o| duplicates::print_plan_written(p, path, o))
+                }
+                None => output.print(planned, duplicates::print_plan),
+            }
+        }
+        DuplicatesCommand::Apply { plan, yes, name } => {
+            let plan = match duplicates::read_plan(plan) {
+                Ok(plan) => plan,
+                Err(failure) => return output.print(Err::<(), _>(failure), |(), _| Ok(())),
+            };
+            if !*yes {
+                if json {
+                    return output.print(Err::<(), _>(duplicates::needs_yes()), |(), _| Ok(()));
+                }
+                match output.ask(|o| duplicates::ask(&plan, input, o)) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        return output.check(
+                            Ok::<(), output::Failure>(()),
+                            |(), o| duplicates::print_declined(o),
+                            |()| Exit::Refused,
+                        );
+                    }
+                    Err(_) => return Exit::Unexpected,
+                }
+            }
+            let applied = duplicates::apply(api, plan, name.clone(), output.progress());
+            output.check(applied, duplicates::print_session, duplicates::session_exit)
+        }
+        DuplicatesCommand::Sessions => output.print(api.list_cleanup_sessions(), |s, o| {
+            duplicates::print_sessions(s, o)
+        }),
+        DuplicatesCommand::Undo { session, path } => output.check(
+            duplicates::undo(api, *session, path),
+            duplicates::print_session,
+            duplicates::session_exit,
+        ),
     }
 }
 

@@ -6,17 +6,20 @@
   "rationale": "E26.2 (#165): the check that `fm search --supports` prints the missing characters looped over hits with non-empty `missing`, but every MockApi hit for sr-Cyrl covered fully, so the loop never ran and a broken MISSING column passed.",
   "severity": "must",
   "status": "active",
-  "occurrences": 2,
+  "occurrences": 3,
   "source_issues": [
     165,
-    452
+    452,
+    669
   ],
   "file_globs": [
     "crates/*/tests/**",
     "crates/*/src/**",
     "apps/desktop/src/**/*.test.ts",
-    "apps/desktop/e2e/**"
+    "apps/desktop/e2e/**",
+    "crates/fm-cli/**",
+    "crates/**/tests/**"
   ],
   "first_seen": "2026-10-25T09:55:47.743Z",
-  "last_seen": "2026-11-04T10:41:19.504Z"
+  "last_seen": "2026-11-21T13:26:47.069Z"
 }

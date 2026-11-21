@@ -17,7 +17,8 @@ use fm_api::export::{
 };
 use fm_api::library::{
     AddSourceRequest, DuplicateGroup, FaceDetail, FaceSummary, FamilySummary, FontMatchKind,
-    ImportMode, ListFamiliesRequest, Problem, ProblemKind, ResolveFontRequest, ScanRequest, Source,
+    ImportMode, ListDuplicateSetsRequest, ListFamiliesRequest, Problem, ProblemKind,
+    ResolveFontRequest, ScanRequest, Source,
 };
 use fm_api::organization::{ImportSetResponse, ProjectSet, SetExport};
 use fm_api::preview::PreviewRequest;
@@ -460,6 +461,11 @@ pub struct Doctor {
     pub problems: Vec<Problem>,
     /// Two active fonts with one PostScript name.
     pub conflicts: Vec<Clash>,
+    /// The duplicate sets of the library (E56.9), every level: the text
+    /// names `fm duplicates` when there are any. Not in the JSON, which
+    /// keeps its three lists.
+    #[serde(skip)]
+    pub sets: u32,
 }
 
 impl Doctor {
@@ -473,7 +479,7 @@ impl Doctor {
     }
 }
 
-/// `fm doctor`: the three lists, read only; it resolves, moves and
+/// `fm doctor`: the three lists and the number of duplicate sets, read only; it resolves, moves and
 /// (de)activates nothing. `list_problems` also lists every duplicate copy
 /// and every conflict; those are left out of `problems`, as the other two
 /// lists report them, so a finding is counted once.
@@ -490,10 +496,20 @@ pub fn doctor(api: &dyn Api) -> Result<Doctor, Failure> {
                 | ProblemKind::ActiveConflict
         )
     });
+    let sets = api
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            page: Page {
+                offset: 0,
+                limit: 1,
+            },
+            ..ListDuplicateSetsRequest::default()
+        })?
+        .total;
     Ok(Doctor {
         duplicates,
         problems,
         conflicts,
+        sets,
     })
 }
 

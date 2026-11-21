@@ -28,9 +28,13 @@ use std::path::Path;
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, Target,
 };
+use fm_api::cleanup::{CleanupScope, PlanCleanupRequest, RemoveAs};
 use fm_api::common::{AxisValue, Classification, FeatureSetting, Page};
 use fm_api::export::{ExportWebRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat};
-use fm_api::library::LicenseType;
+use fm_api::library::{
+    CompareCopiesRequest, DuplicateLevel, DuplicateScope, DuplicateSetFilter, LicenseType,
+    ListDuplicateSetsRequest, ListFolderPairsRequest,
+};
 use fm_api::organization::TagFacesRequest;
 use fm_api::preview::{
     ComparePreviewRequest, MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest,
@@ -41,7 +45,7 @@ use fm_api::search::{
 };
 use fm_api::settings::McpToolCall;
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
-use fm_api::{Api, ApiError, CollectionId, ErrorCode, FaceId, FamilyId, SetId};
+use fm_api::{Api, ApiError, CollectionId, ErrorCode, FaceId, FamilyId, SetId, SourceId};
 use rmcp::handler::server::common::schema_for_type;
 use rmcp::model::{CallToolResult, ContentBlock, JsonObject, Tool, ToolAnnotations};
 use rmcp::schemars::JsonSchema;
@@ -85,9 +89,21 @@ pub const PICK_FONTS_FOR_BRIEF: &str = "pick_fonts_for_brief";
 pub const PREPARE_FOR_WEB: &str = "prepare_for_web";
 /// Write a family's HTML specimen into a folder.
 pub const BUILD_SPECIMEN: &str = "build_specimen";
+/// The duplicate sets, with the keeper policy's answer (E56.9).
+pub const LIST_DUPLICATE_SETS: &str = "list_duplicate_sets";
+/// The pairs of folders that hold the same fonts (E56.9).
+pub const LIST_FOLDER_PAIRS: &str = "list_folder_pairs";
+/// What differs between two copies of a font (E56.9).
+pub const COMPARE_COPIES: &str = "compare_copies";
+/// Plan a cleanup of duplicates; there is no tool that applies one (E56.9).
+pub const PLAN_CLEANUP: &str = "plan_cleanup";
+
+/// Where the user applies a plan: `plan_cleanup` answers it, because no
+/// tool applies a cleanup (Goran, 20 Nov 2026).
+pub const PLAN_APPLY: &str = "Nothing was changed: this is only a plan. AI assistants cannot apply a cleanup. The user applies it in Font Fu, in Duplicates, or saves this plan as JSON and runs `fm duplicates apply <plan.json>` in a terminal; files go to the trash or are hidden, and the cleanup can be undone.";
 
 /// Every tool, in the order `tools/list` gives them.
-pub const NAMES: [&str; 17] = [
+pub const NAMES: [&str; 21] = [
     SEARCH_FONTS,
     GET_FONT,
     LIST_COLLECTIONS,
@@ -105,6 +121,10 @@ pub const NAMES: [&str; 17] = [
     PICK_FONTS_FOR_BRIEF,
     PREPARE_FOR_WEB,
     BUILD_SPECIMEN,
+    LIST_DUPLICATE_SETS,
+    LIST_FOLDER_PAIRS,
+    COMPARE_COPIES,
+    PLAN_CLEANUP,
 ];
 
 /// The tools that change something and have a grant of their own; they go
@@ -329,6 +349,96 @@ impl TryFrom<TraitInput> for TraitFilter {
 pub struct FaceInput {
     /// The face id (from `search_fonts`).
     pub face_id: u32,
+}
+
+/// A level of sameness of a duplicate set.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum LevelInput {
+    /// The same file at different paths.
+    Identical,
+    /// One font and one version in files that differ.
+    SameVersion,
+    /// One font in files whose versions differ.
+    OtherVersion,
+}
+
+impl From<LevelInput> for DuplicateLevel {
+    fn from(level: LevelInput) -> Self {
+        match level {
+            LevelInput::Identical => Self::Identical,
+            LevelInput::SameVersion => Self::SameVersion,
+            LevelInput::OtherVersion => Self::OtherVersion,
+        }
+    }
+}
+
+/// `list_duplicate_sets`: one page of the duplicate sets.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct ListDuplicateSetsInput {
+    /// Only sets with a copy in this source (its id).
+    pub source_id: Option<u32>,
+    /// Only sets with a copy in this folder or its subfolders (absolute).
+    pub folder: Option<String>,
+    /// Only sets of these levels; every level when empty.
+    pub levels: Vec<LevelInput>,
+    /// Sets to return (default 20).
+    pub limit: Option<u32>,
+    /// Sets to skip.
+    pub offset: u32,
+}
+
+/// `list_folder_pairs`: one page of the folder pairs.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct ListFolderPairsInput {
+    /// Only pairs with a side in this source (its id).
+    pub source_id: Option<u32>,
+    /// Only pairs with a side in this folder or its subfolders (absolute).
+    pub folder: Option<String>,
+    /// The fewest shared font files a pair needs (default 5).
+    pub min_shared: Option<u32>,
+    /// Pairs to return (default 20).
+    pub limit: Option<u32>,
+    /// Pairs to skip.
+    pub offset: u32,
+}
+
+/// `compare_copies`: two copies, by face id.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct CompareCopiesInput {
+    /// The first copy's face id (`face` of a copy in `list_duplicate_sets`).
+    pub a: u32,
+    /// The second copy's face id; the differences read from `a` to `b`.
+    pub b: u32,
+}
+
+/// `plan_cleanup`: which sets to plan; the whole library by default.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct PlanCleanupInput {
+    /// Only sets with a copy in this source (its id); only its copies leave.
+    pub source_id: Option<u32>,
+    /// Only sets with a copy in this folder (absolute); only its copies leave.
+    pub folder: Option<String>,
+    /// Only these sets, by id (`id` in `list_duplicate_sets`).
+    pub set_ids: Vec<String>,
+    /// A folder pair: the folder whose copies stay (absolute); needs
+    /// `remove_folder`.
+    pub keep_folder: Option<String>,
+    /// A folder pair: the folder whose copies would leave (absolute).
+    pub remove_folder: Option<String>,
+    /// A folder pair: also plan copies of the same or another version.
+    pub other_levels: bool,
+    /// Plan to hide the extra copies (their files stay) instead of the trash.
+    pub hide: bool,
 }
 
 /// No arguments.
@@ -714,6 +824,22 @@ pub fn list() -> Vec<Tool> {
             BUILD_SPECIMEN,
             "Write a self-contained HTML specimen of one family into a folder, created when missing. Returns the file's path.",
         ),
+        tool::<ListDuplicateSetsInput>(
+            LIST_DUPLICATE_SETS,
+            "Duplicate fonts in the library, in sets: `identical` (the same file at different paths), `sameVersion` (one font and version in files that differ) and `otherVersion` (one font in other versions). Each set lists its copies with their face ids and facts, and the keeper policy's recommendation: the copies to keep and to remove, each with the reason in one sentence. Changes nothing.",
+        ),
+        tool::<ListFolderPairsInput>(
+            LIST_FOLDER_PAIRS,
+            "Pairs of folders that hold copies of the same fonts: per side, how many font files have a copy on the other side at each level, how many are only there, and the bytes that removing the smaller side's identical copies would free. Changes nothing.",
+        ),
+        tool::<CompareCopiesInput>(
+            COMPARE_COPIES,
+            "What differs between two copies of a font, by face id: languages gained and lost, glyphs, features, axes and metrics, with sentences a user reads. Changes nothing.",
+        ),
+        tool::<PlanCleanupInput>(
+            PLAN_CLEANUP,
+            "Plan a cleanup of duplicates: per file, whether it would go to the trash, be hidden or stay, and why in one sentence, with a summary and the space freed. Changes nothing, and no tool applies it: the answer's `apply` says where the user does.",
+        ),
     ]
 }
 
@@ -802,6 +928,58 @@ fn to_json<T: serde::Serialize>(value: &T) -> Result<Value, ApiError> {
             "The answer could not be written as JSON.",
         )
         .with_detail(e.to_string())
+    })
+}
+
+/// The files a duplicates tool looks at: a source or a folder, not both.
+fn duplicate_scope(
+    source: Option<u32>,
+    folder: Option<String>,
+) -> Result<DuplicateScope, ApiError> {
+    match (source, folder) {
+        (Some(_), Some(_)) => Err(ApiError::invalid("Give source_id or folder, not both.")),
+        (Some(id), None) => Ok(DuplicateScope::Source {
+            source: SourceId(id),
+        }),
+        (None, Some(path)) => Ok(DuplicateScope::Folder { path }),
+        (None, None) => Ok(DuplicateScope::Library),
+    }
+}
+
+/// The sets `plan_cleanup` plans: one of a source, a folder, set ids or a
+/// folder pair (both folders), or the library.
+fn cleanup_scope(a: PlanCleanupInput) -> Result<CleanupScope, ApiError> {
+    let pair = match (a.keep_folder, a.remove_folder) {
+        (Some(keep), Some(remove)) => Some(CleanupScope::FolderPair {
+            keep,
+            remove,
+            other_levels: a.other_levels,
+        }),
+        (None, None) => None,
+        _ => {
+            return Err(ApiError::invalid(
+                "A folder pair needs keep_folder and remove_folder.",
+            ));
+        }
+    };
+    let sets = (!a.set_ids.is_empty()).then_some(CleanupScope::Sets { ids: a.set_ids });
+    let given = [
+        pair.is_some(),
+        sets.is_some(),
+        a.source_id.is_some() || a.folder.is_some(),
+    ];
+    if given.iter().filter(|g| **g).count() > 1 {
+        return Err(ApiError::invalid(
+            "Give one scope: source_id, folder, set_ids, or keep_folder with remove_folder.",
+        ));
+    }
+    if let Some(scope) = pair.or(sets) {
+        return Ok(scope);
+    }
+    Ok(match duplicate_scope(a.source_id, a.folder)? {
+        DuplicateScope::Library => CleanupScope::Library,
+        DuplicateScope::Source { source } => CleanupScope::Source { source },
+        DuplicateScope::Folder { path } => CleanupScope::Folder { path },
     })
 }
 
@@ -1153,6 +1331,58 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                 out_path: out.display().to_string(),
             })?)
         }
+        LIST_DUPLICATE_SETS => {
+            let a: ListDuplicateSetsInput = args(name, value)?;
+            to_json(&api.list_duplicate_sets(ListDuplicateSetsRequest {
+                scope: duplicate_scope(a.source_id, a.folder)?,
+                page: Page {
+                    offset: a.offset,
+                    limit: a.limit.unwrap_or(DEFAULT_SEARCH_LIMIT),
+                },
+                filter: DuplicateSetFilter {
+                    levels: a.levels.into_iter().map(Into::into).collect(),
+                    ..DuplicateSetFilter::default()
+                },
+                ..ListDuplicateSetsRequest::default()
+            })?)
+        }
+        LIST_FOLDER_PAIRS => {
+            let a: ListFolderPairsInput = args(name, value)?;
+            to_json(&api.list_folder_pairs(ListFolderPairsRequest {
+                scope: duplicate_scope(a.source_id, a.folder)?,
+                min_shared: a.min_shared,
+                page: Page {
+                    offset: a.offset,
+                    limit: a.limit.unwrap_or(DEFAULT_SEARCH_LIMIT),
+                },
+            })?)
+        }
+        COMPARE_COPIES => {
+            let a: CompareCopiesInput = args(name, value)?;
+            to_json(&api.compare_copies(CompareCopiesRequest {
+                a: FaceId(a.a),
+                b: FaceId(a.b),
+            })?)
+        }
+        PLAN_CLEANUP => {
+            let a: PlanCleanupInput = args(name, value)?;
+            let remove_as = if a.hide {
+                RemoveAs::Hide
+            } else {
+                RemoveAs::Trash
+            };
+            let plan = api.plan_cleanup(PlanCleanupRequest {
+                scope: cleanup_scope(a)?,
+                keepers: Vec::new(),
+                remove_as,
+                move_activations: false,
+            })?;
+            Ok(json!({
+                "plan": to_json(&plan)?,
+                "summary": to_json(&plan.summary())?,
+                "apply": PLAN_APPLY,
+            }))
+        }
         _ => Err(ApiError::not_found(format!("The tool {name}"))),
     }
 }
@@ -1206,6 +1436,44 @@ mod tests {
     }
 
     #[test]
+    fn no_tool_applies_a_cleanup_and_the_duplicates_tools_change_nothing() {
+        for name in NAMES {
+            assert!(!name.contains("apply"), "{name}");
+        }
+        for name in [
+            LIST_DUPLICATE_SETS,
+            LIST_FOLDER_PAIRS,
+            COMPARE_COPIES,
+            PLAN_CLEANUP,
+        ] {
+            assert!(grants(name).is_empty(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_cleanup_has_one_scope_and_a_pair_needs_both_folders() {
+        let plan = |v: Value| cleanup_scope(serde_json::from_value(v).unwrap());
+        assert_eq!(plan(json!({})).unwrap(), CleanupScope::Library);
+        assert_eq!(
+            plan(json!({ "keep_folder": "/k", "remove_folder": "/r" })).unwrap(),
+            CleanupScope::FolderPair {
+                keep: "/k".into(),
+                remove: "/r".into(),
+                other_levels: false
+            }
+        );
+        assert_eq!(
+            plan(json!({ "source_id": 2 })).unwrap(),
+            CleanupScope::Source {
+                source: SourceId(2)
+            }
+        );
+        assert!(plan(json!({ "keep_folder": "/k" })).is_err());
+        assert!(plan(json!({ "source_id": 1, "set_ids": ["name:A"] })).is_err());
+        assert!(duplicate_scope(Some(1), Some("/f".into())).is_err());
+    }
+
+    #[test]
     fn subsets_take_presets_or_text_not_both() {
         assert!(subset(vec!["latin".into()], Some("x".into())).is_err());
         assert_eq!(subset(Vec::new(), None).unwrap(), None);
@@ -1234,7 +1502,7 @@ mod tests {
     }
 
     #[test]
-    fn there_are_seventeen_tools_in_order_with_object_schemas() {
+    fn there_are_twenty_one_tools_in_order_with_object_schemas() {
         let tools = list();
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert_eq!(names, NAMES);
