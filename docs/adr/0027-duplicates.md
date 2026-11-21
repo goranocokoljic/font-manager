@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5)
 
 ## Context
 
@@ -169,6 +169,41 @@ Problems entry. The policy reads the copies' facts from the index only
 when a language is set or a rule weighs a fact, so the default costs one
 read of the files. The mocks have no index: their sets carry no
 recommendation and `list_duplicates` uses `choose_keeper`.
+
+**The kept copy takes over the metadata (E56.5).** Favorite, rating,
+notes, tags, collections and sets are stored per face, so before this
+version they stayed on the copy that went to the trash. Now, before a copy
+leaves the library, each face of the kept copy takes over what the user put
+on the face of that copy with the same PostScript name (so a `.ttc` and
+loose files match face by face; a face without a match keeps its data on
+its copy, and it comes back with undo). Tags, manual collections and sets
+are joined; favorite is on when any copy has it; rating, the face's own
+license with its seats (one value) and notes keep the kept copy's value
+when it has one and take the other's when it has none. Where two copies
+hold different values nothing is guessed: the merge plan
+(`DuplicateResolver::merge_plan`) lists each as a conflict with both
+values, the kept copy's value is the default (the first leaving copy's
+when the kept copy has none), and the user can take the other one
+(`keep_copy_with`). The other copy's value is never dropped: it stays on
+that copy, which undo brings back. The family's notes and declared license
+are stored by family name, so both copies already share them.
+
+**The merge runs for every resolution, `keep_copy` included** (Goran,
+20 Nov 2026). What `keep_copy` does changes; no type changes: it takes the
+default of every conflict. The plan with its choices reaches the API with
+the cleanup plan (E56.7), and hiding a copy (E56.8) uses the same merge.
+Only copies that actually moved give their metadata. The merge, the gone
+flags and the undo log are one transaction (`resolution_merge`, schema
+V27, holds each value before and after): when no copy moves, or the log
+cannot be written (the moved copies are then put back), the kept copy's
+metadata is as it was. Undo takes the merge back once every copy is back,
+and only where the kept face still holds what the merge wrote: what the
+user changed after the cleanup stays. The writes go through the sidecar
+triggers and the faces of both copies are marked, so the sidecars of both
+sources are written through the E7.3 path and another machine that syncs
+the folder merges the result instead of meeting a conflict. The mocks do
+not merge yet: the merge reaches the API with the cleanup plan (E56.7),
+and the mocks follow it there.
 
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files

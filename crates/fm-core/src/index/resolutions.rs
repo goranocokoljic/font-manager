@@ -11,6 +11,7 @@ use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, params};
 
 use super::files::{path_from_sql, path_to_sql};
+use super::metadata_merge::{self, MergePlan};
 use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
 
@@ -118,14 +119,16 @@ impl Index {
             .map_err(|e| db_error(&e))
     }
 
-    /// Records an action and its copies, and marks every `Trashed` copy's
-    /// file gone (its faces, tags and ids kept, ADR 0004), in one
-    /// transaction: either all of it is written or none. Returns its id and
-    /// time.
+    /// Records an action and its copies, marks every `Trashed` copy's
+    /// file gone (its faces, tags and ids kept, ADR 0004), and writes
+    /// `merge` onto the kept copy with its log (E56.5), in one transaction:
+    /// either all of it is written or none. Then writes the sidecars of the
+    /// faces the merge touched. Returns its id and time.
     pub(crate) fn insert_resolution(
         &mut self,
         kept: &str,
         moves: &[StoredMove],
+        merge: &MergePlan,
     ) -> FmResult<(ResolutionId, String)> {
         let at = self.now()?;
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
@@ -157,7 +160,11 @@ impl Index {
                 set_gone(&tx, &m.path, true)?;
             }
         }
+        metadata_merge::apply(&tx, id, merge)?;
         tx.commit().map_err(|e| db_error(&e))?;
+        if !merge.faces.is_empty() {
+            self.mirror_sidecars();
+        }
         let id = u32::try_from(id)
             .map_err(|_| FmError::internal("a resolution id does not fit the API"))?;
         Ok((ResolutionId(id), at))
@@ -165,7 +172,9 @@ impl Index {
 
     /// Writes the status and message of the copies of `id` after an undo,
     /// whether every moved copy is back, and clears the gone flag of every
-    /// `Restored` copy, in one transaction.
+    /// `Restored` copy, in one transaction. When every copy is back, the
+    /// metadata the action merged onto the kept copy is taken back in it
+    /// too (E56.5), and the sidecars written after.
     pub(crate) fn update_resolution(
         &mut self,
         id: ResolutionId,
@@ -194,7 +203,16 @@ impl Index {
             params![id.0, undone],
         )
         .map_err(|e| db_error(&e))?;
-        tx.commit().map_err(|e| db_error(&e))
+        let touched = if undone {
+            metadata_merge::take_back(&tx, i64::from(id.0))?
+        } else {
+            Vec::new()
+        };
+        tx.commit().map_err(|e| db_error(&e))?;
+        if !touched.is_empty() {
+            self.mirror_sidecars();
+        }
+        Ok(())
     }
 
     /// The action `id` and its copies, or `None` when there is none.

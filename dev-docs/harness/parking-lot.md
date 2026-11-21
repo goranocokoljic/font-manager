@@ -561,3 +561,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E56.3 #663] crates/fm-core/src/config.rs:44 — `Config` has no catch-all for keys it does not model, so every `save` drops keys a newer version wrote; `get_settings` now also saves when it drops an unknown language id.
 - [E56.4 #664] apps/desktop/src/stores/problems.ts:197 — "Keep this one" in the Problems view sends every other copy of the group to the trash plan, without reading the keep marks of copies the language guard protects.
 - [E56.4 #664] crates/fm-core/src/index/problems.rs:46 — `Index::problems()` still uses the choose_keeper groups and has no caller outside tests; a second keeper path that can drift from `list_problems`.
+
+## 2026-11-21
+
+- [E56.5 #665] crates/fm-core/src/index/metadata_merge.rs:519 — the explicit `mark_dirty` calls in `apply`/`take_back` are not proven by any test: the V7 triggers already mark the kept face, and nothing shows the leaving source's sidecar needs a rewrite.
