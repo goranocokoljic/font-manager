@@ -18,6 +18,23 @@ export type ActivationMode =
 /**  Survives reboot; per-user, pointing at the file in place. */
 "permanent";
 
+/**
+ *  The activation of an active copy moved to the kept copy (identical sets
+ *  only): the leaving copy is deactivated, the kept one activated in the same
+ *  mode; both are the app's own registrations.
+ */
+export type ActivationMove = {
+	/**  The kept copy that takes over the activation. */
+	to: string,
+	/**  The mode of the activation. */
+	mode: ActivationMode,
+	/**
+	 *  The plan does it ([`PlanCleanupRequest::move_activations`]); when
+	 *  false it is only offered and the copy stays.
+	 */
+	planned: boolean,
+};
+
 /**  One face's result. */
 export type ActivationOutcome = {
 	/**  The face. */
@@ -113,6 +130,16 @@ export type AppInfo = {
 	 *  build: not available.
 	 */
 	fileDrag?: FileDragSupport,
+};
+
+/**  Apply a plan ([`crate::LibraryService::apply_cleanup`]). */
+export type ApplyCleanupRequest = {
+	/**  The plan, as [`crate::LibraryService::plan_cleanup`] answered it. */
+	plan: CleanupPlan,
+	/**  The session's name; a name from the date when `None`. */
+	name?: string | null,
+	/**  The other values the user takes in the plan's conflicts. */
+	choices?: MetadataChoice[],
 };
 
 /**  An update the release server offers. */
@@ -523,6 +550,147 @@ export type Classification =
 "mono" | 
 /**  Symbols, icons, dingbats. */
 "symbol";
+
+/**  What the plan does with one file. */
+export type CleanupAction = 
+/**  It goes to the OS trash. */
+"trash" | 
+/**  It is hidden: the file stays where it is (E56.8). */
+"hide" | 
+/**  It stays in the library. */
+"stays";
+
+/**  One file of a plan. */
+export type CleanupFile = {
+	/**  Absolute file path. */
+	path: string,
+	/**  Size in bytes. */
+	size: number,
+	/**
+	 *  blake3 hash of the file when planned, hex; applying skips the file
+	 *  when it no longer has it.
+	 */
+	hash: string,
+	/**  Its faces. */
+	faces: FaceId[],
+	/**  The set it is planned in (the first, for a file in several). */
+	set: string,
+	/**  That set's level. */
+	level: DuplicateLevel,
+	/**  What happens to it. */
+	action: CleanupAction,
+	/**  Why it stays; `None` when it leaves. */
+	reason: StayReason | null,
+	/**
+	 *  The copy that stays for it: its set's keeper; `None` when its set has
+	 *  none (every copy a system copy).
+	 */
+	kept: string | null,
+	/**
+	 *  The copies kept for the other fonts of this file, when it takes part
+	 *  in other sets (a collection file): they take over its metadata too.
+	 */
+	alsoKept?: string[],
+	/**  Why, in one sentence, the same in the UI, the CLI and MCP. */
+	sentence: string,
+	/**
+	 *  For an active copy of an identical set: the activation move offered
+	 *  or planned.
+	 */
+	activation?: ActivationMove | null,
+};
+
+/**  The copy the user picked to keep in one set, instead of the policy's. */
+export type CleanupKeeper = {
+	/**  The set id. */
+	set: string,
+	/**  The copy to keep, a path of that set. */
+	keep: string,
+};
+
+/**
+ *  What a cleanup would do (E56.7). Plain data: it can be saved as JSON and
+ *  applied later ([`ApplyCleanupRequest`]).
+ */
+export type CleanupPlan = {
+	/**  The format version ([`CLEANUP_PLAN_VERSION`]). */
+	version: number,
+	/**  When it was planned. */
+	plannedAt: string,
+	/**  What was planned. */
+	request: PlanCleanupRequest,
+	/**  The sets planned. */
+	sets: number,
+	/**  Every file of the planned sets, by set, then path. */
+	files: CleanupFile[],
+	/**  The metadata conflicts of the copies that leave, per set. */
+	conflicts: MetadataConflict[],
+	/**  The bytes the files that go to the trash free (saturating). */
+	frees: number,
+	/**  Whether my languages were set; `NotSet` means the guard did nothing. */
+	myLanguages: MyLanguagesStatus,
+};
+
+/**  Which duplicate sets a cleanup plans. */
+export type CleanupScope = 
+/**  Every set of the library. */
+{ kind: "library" } | 
+/**  The sets with a copy in one source; only its copies can leave. */
+{ kind: "source"; 
+/**  The source. */
+source: SourceId } | 
+/**
+ *  The sets with a copy in one folder and its subfolders; only the copies
+ *  in it can leave.
+ */
+{ kind: "folder"; 
+/**  Absolute folder path. */
+path: string } | 
+/**
+ *  Two folders: keep `keep`'s copies and plan `remove`'s files that have
+ *  a copy there (E56.6).
+ */
+{ kind: "folderPair"; 
+/**  The folder whose copies stay, absolute. */
+keep: string; 
+/**  The folder whose copies are planned for removal, absolute. */
+remove: string; 
+/**
+ *  Also plan copies of the same version and of another version,
+ *  through the keeper policy and the language guard; identical
+ *  copies only when false.
+ */
+otherLevels?: boolean } | 
+/**  The sets named by id ([`crate::library::DuplicateSet::id`]). */
+{ kind: "sets"; 
+/**  The set ids. */
+ids: string[] };
+
+/**  A cleanup session: one applied plan, or one "Keep this one" action. */
+export type CleanupSession = {
+	/**  The session, for undo. */
+	id: ResolutionId,
+	/**  Its name. */
+	name: string,
+	/**  When it was applied. */
+	at: string,
+	/**  Where it came from. */
+	kind: SessionKind,
+	/**  The apply was cancelled: the session holds what was done before. */
+	cancelled: boolean,
+	/**  Still being applied. */
+	running: boolean,
+	/**  Every moved file was put back. */
+	undone: boolean,
+	/**  The sets it touched. */
+	sets: number,
+	/**  The files that are in the trash now. */
+	trashed: number,
+	/**  The bytes those files free (saturating). */
+	frees: number,
+	/**  Its files, in the order they were done. */
+	files: SessionFile[],
+};
 
 /**
  *  A manual collection, or a smart one when `rules` is set. Siblings are
@@ -1470,7 +1638,28 @@ notice: UpdateNotice } |
  *  a check ran, or an update downloaded and waits for the quit. The UI
  *  reads `update_status` again.
  */
-{ type: "updateStatusChanged" };
+{ type: "updateStatusChanged" } | 
+/**
+ *  A cleanup plan is being applied (E56.7): `done` of the `total` files
+ *  that leave, under the job `apply_cleanup` returned. The last event of
+ *  the job has `finished` set; `cancelled` when `cancel_cleanup` stopped
+ *  it between files. The session holds what was done either way.
+ */
+{ type: "cleanupProgress"; 
+/**  The apply. */
+job: JobId; 
+/**  The session it writes; `None` when it could not start. */
+session: ResolutionId | null; 
+/**  Files done (moved, skipped or failed). */
+done: number; 
+/**  Files that leave in the plan. */
+total: number; 
+/**  The file just done. */
+path?: string | null; 
+/**  The apply ended. */
+finished: boolean; 
+/**  It ended because it was cancelled. */
+cancelled: boolean };
 
 /**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
 export type ExportLayoutPngRequest = {
@@ -3307,6 +3496,63 @@ export type MergeFoundriesRequest = {
 	into: string,
 };
 
+/**  The user takes the other value of a [`MetadataConflict`]. */
+export type MetadataChoice = {
+	/**  The kept face. */
+	keptFace: FaceId,
+	/**  The field. */
+	field: MetadataField,
+	/**  The face whose value is taken: the conflict's `other_face`. */
+	take: FaceId,
+};
+
+/**
+ *  Two copies of a set hold different values in one field; nothing is
+ *  guessed (E56.5).
+ */
+export type MetadataConflict = {
+	/**  The set. */
+	set: string,
+	/**  The kept face the value is for. */
+	keptFace: FaceId,
+	/**  The field. */
+	field: MetadataField,
+	/**  The face whose value is the default: the kept face when it has one. */
+	defaultFrom: FaceId,
+	/**  The default value. */
+	default: MetadataValue,
+	/**  The face with the other value. */
+	otherFace: FaceId,
+	/**  The other value. */
+	other: MetadataValue,
+};
+
+/**  A field of the user's metadata with one value (E56.5). */
+export type MetadataField = 
+/**  The rating. */
+"rating" | 
+/**  The face's license and seats, one value. */
+"license" | 
+/**  The notes. */
+"notes";
+
+/**  A value of a [`MetadataField`]. */
+export type MetadataValue = 
+/**  A rating, 1–5 stars. */
+{ kind: "rating"; 
+/**  Stars. */
+stars: number } | 
+/**  A license type and seats. */
+{ kind: "license"; 
+/**  The license type as stored. */
+license: string | null; 
+/**  Seats. */
+seats: number | null } | 
+/**  Notes. */
+{ kind: "notes"; 
+/**  The text. */
+text: string };
+
 /**  Vertical metrics in font units. */
 export type Metrics = {
 	/**  Units per em. */
@@ -3578,6 +3824,24 @@ export type PinInstanceRequest = {
 	set?: SetId | null,
 };
 
+/**  Plan a cleanup ([`crate::LibraryService::plan_cleanup`]). */
+export type PlanCleanupRequest = {
+	/**  The sets to plan; the whole library by default. */
+	scope?: CleanupScope,
+	/**
+	 *  The keepers the user picked; every other set follows the saved keeper
+	 *  policy and the language guard.
+	 */
+	keepers?: CleanupKeeper[],
+	/**  How the copies leave. */
+	removeAs?: RemoveAs,
+	/**
+	 *  Move the activation of an active copy of an identical set to the
+	 *  kept copy, so that copy can leave too. Off: an active copy stays.
+	 */
+	moveActivations?: boolean,
+};
+
 /**  The operating system the app runs on. */
 export type Platform = 
 /**  Windows 10 or 11. */
@@ -3763,6 +4027,13 @@ export type ReceiptPlace =
 "nextToFont" | 
 /**  In the app's data folder, on this machine only. */
 "appData";
+
+/**  How a copy leaves the library. */
+export type RemoveAs = 
+/**  The file goes to the OS trash (ADR 0009). */
+"trash" | 
+/**  The file stays where it is and leaves the library (E56.8). */
+"hide";
 
 /**
  *  One copy the recommendation would remove, with the rule it lost by
@@ -4072,6 +4343,32 @@ export type SelectionTagsRequest = {
 	/**  Whole families: every face of each, as the library lists it. */
 	families?: FamilyId[],
 };
+
+/**  One file of a session. */
+export type SessionFile = {
+	/**  The file's path in the library. */
+	path: string,
+	/**
+	 *  The set it left, when known (a "Keep this one" action from before
+	 *  E56.7 names none).
+	 */
+	set: string | null,
+	/**  The copy kept for it. */
+	kept: string,
+	/**  Its size in bytes, when known. */
+	size: number | null,
+	/**  What happened to it. */
+	status: TrashMoveStatus,
+	/**  Why it was skipped or failed, in one sentence. */
+	message: string | null,
+};
+
+/**  Where a session came from. */
+export type SessionKind = 
+/**  "Keep this one" on one set (E8.3). */
+"keepCopy" | 
+/**  An applied cleanup plan. */
+"cleanup";
 
 /**  Turns a catalog on or off. Turning it off keeps its cache. */
 export type SetCatalogEnabledRequest = {
@@ -4558,6 +4855,34 @@ export type SpecimenResponse = {
 	path: string,
 };
 
+/**  Why a file stays. */
+export type StayReason = 
+/**  It is the copy kept for its set. */
+"keeper" | 
+/**  The app activated it (rule 3). */
+"active" | 
+/**  It is the only copy that covers one of my languages (the guard). */
+"myLanguages" | 
+/**  The policy answered its set "keep both". */
+"keepBoth" | 
+/**  It is in a system font folder (rule 4). */
+"system" | 
+/**  It takes part in another set that keeps it (a collection file). */
+"keptByOtherSet" | 
+/**  It holds a font no file outside the removed copies holds. */
+"lastCopy" | 
+/**  The file is not there any more. */
+"notThere" | 
+/**  It is outside the scope: the plan only removes copies in it. */
+"outsideScope" | 
+/**  It has no copy on the kept side of a folder pair. */
+"onlyHere" | 
+/**
+ *  Its copy on the kept side of a folder pair is of another level, and
+ *  other levels were not asked for.
+ */
+"otherLevel";
+
 /**
  *  A Pairing Studio context (E45.1): where a pairing is tried out. Each one is a
  *  layout template on a page of its own size.
@@ -4769,6 +5094,17 @@ export type TrashMoveStatus =
 "skipped" | 
 /**  The move or the undo failed (`message` says why). */
 "failed";
+
+/**
+ *  Undo a session whole or some of its files
+ *  ([`crate::LibraryService::undo_cleanup_session`]).
+ */
+export type UndoCleanupRequest = {
+	/**  The session. */
+	session: ResolutionId,
+	/**  The files to put back; every file of the session when empty. */
+	paths?: string[],
+};
 
 /**  Undo a merge (E50.11): the foundry is listed under its own name again. */
 export type UnmergeFoundryRequest = {

@@ -285,6 +285,8 @@ fn allowance(target: &Supports) -> usize {
     }
 }
 
+mod cleanup;
+mod cleanup_service;
 mod duplicate_sets;
 mod folder_pairs;
 
@@ -618,6 +620,8 @@ struct State {
     trashed: BTreeSet<String>,
     /// "Keep this one" actions, oldest first.
     resolutions: Vec<Resolution>,
+    /// Applied cleanup plans, oldest first (E56.7).
+    sessions: Vec<crate::cleanup::CleanupSession>,
     /// Sidecar conflicts waiting for the user, oldest first (E28.1).
     sidecar_conflicts: Vec<SidecarConflict>,
     /// The layout template files, in the order they were made.
@@ -1111,6 +1115,7 @@ impl State {
             mutations: Vec::new(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
+            sessions: Vec::new(),
             sidecar_conflicts: Vec::new(),
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
@@ -2513,6 +2518,36 @@ impl LibraryService for MockApi {
             });
         }
         Ok(r)
+    }
+
+    /// As fm-core without an index or a disk (`mock/cleanup.rs`): no
+    /// language guard, no metadata conflicts, every file there.
+    fn plan_cleanup(
+        &self,
+        req: crate::cleanup::PlanCleanupRequest,
+    ) -> ApiResult<crate::cleanup::CleanupPlan> {
+        self.mock_plan_cleanup(req)
+    }
+
+    /// The mock applies at once, on the caller's thread: its job has ended
+    /// when it returns, so it cannot be cancelled.
+    fn apply_cleanup(&self, req: crate::cleanup::ApplyCleanupRequest) -> ApiResult<JobId> {
+        self.mock_apply_cleanup(req)
+    }
+
+    fn cancel_cleanup(&self, job: JobId) -> ApiResult<()> {
+        Err(ApiError::not_found(format!("Cleanup {job}")))
+    }
+
+    fn list_cleanup_sessions(&self) -> ApiResult<Vec<crate::cleanup::CleanupSession>> {
+        Ok(self.mock_list_cleanup_sessions())
+    }
+
+    fn undo_cleanup_session(
+        &self,
+        req: crate::cleanup::UndoCleanupRequest,
+    ) -> ApiResult<crate::cleanup::CleanupSession> {
+        self.mock_undo_cleanup_session(req)
     }
 
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {

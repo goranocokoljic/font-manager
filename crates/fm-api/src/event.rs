@@ -147,6 +147,28 @@ pub enum Event {
     /// a check ran, or an update downloaded and waits for the quit. The UI
     /// reads `update_status` again.
     UpdateStatusChanged,
+    /// A cleanup plan is being applied (E56.7): `done` of the `total` files
+    /// that leave, under the job `apply_cleanup` returned. The last event of
+    /// the job has `finished` set; `cancelled` when `cancel_cleanup` stopped
+    /// it between files. The session holds what was done either way.
+    #[serde(rename_all = "camelCase")]
+    CleanupProgress {
+        /// The apply.
+        job: JobId,
+        /// The session it writes; `None` when it could not start.
+        session: Option<crate::ResolutionId>,
+        /// Files done (moved, skipped or failed).
+        done: u32,
+        /// Files that leave in the plan.
+        total: u32,
+        /// The file just done.
+        #[serde(default)]
+        path: Option<String>,
+        /// The apply ended.
+        finished: bool,
+        /// It ended because it was cancelled.
+        cancelled: bool,
+    },
 }
 
 /// The event stream.

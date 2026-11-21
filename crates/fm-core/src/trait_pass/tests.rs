@@ -396,7 +396,7 @@ fn an_index_from_before_glyph_traits_measures_them_after_the_upgrade() {
     let index = scanned(&dir, &fonts);
     let face = face_of(&index, "static.ttf");
     index.trait_debug_sql(
-        "DROP TABLE foundry_merge; ALTER TABLE source DROP COLUMN scanned_at; DROP TABLE resolution_merge; DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits; PRAGMA user_version = 22;",
+        "DROP TABLE foundry_merge; ALTER TABLE source DROP COLUMN scanned_at; DROP TABLE resolution_merge; ALTER TABLE resolution DROP COLUMN name; ALTER TABLE resolution DROP COLUMN kind; ALTER TABLE resolution DROP COLUMN state; ALTER TABLE resolution_move DROP COLUMN set_id; ALTER TABLE resolution_move DROP COLUMN kept; ALTER TABLE resolution_move DROP COLUMN size; DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits; PRAGMA user_version = 22;",
     );
     drop(index);
     let index = Index::open(&dir.path().join("data").join(INDEX_FILE))
@@ -554,7 +554,7 @@ fn an_index_from_before_glyph_descriptors_describes_them_after_the_upgrade() {
     let face = face_of(&index, "static.ttf");
     index.trait_debug_sql(
         "UPDATE glyph_traits SET confidence = 0.123;
-         DROP TABLE foundry_merge; ALTER TABLE source DROP COLUMN scanned_at; DROP TABLE resolution_merge;
+         DROP TABLE foundry_merge; ALTER TABLE source DROP COLUMN scanned_at; DROP TABLE resolution_merge; ALTER TABLE resolution DROP COLUMN name; ALTER TABLE resolution DROP COLUMN kind; ALTER TABLE resolution DROP COLUMN state; ALTER TABLE resolution_move DROP COLUMN set_id; ALTER TABLE resolution_move DROP COLUMN kept; ALTER TABLE resolution_move DROP COLUMN size;
          DROP TABLE glyph_descriptor; PRAGMA user_version = 23;",
     );
     drop(index);

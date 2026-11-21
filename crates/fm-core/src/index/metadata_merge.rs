@@ -536,14 +536,44 @@ const SET_LICENSE: &str = "UPDATE user_meta SET license_type = json_extract(?2, 
 /// holds it, and forgets the log. Returns the faces touched, for the
 /// sidecars.
 pub(super) fn take_back(tx: &Transaction<'_>, resolution: i64) -> FmResult<Vec<FaceId>> {
+    take_back_where(tx, resolution, None)
+}
+
+/// [`take_back`] for the rows the merge of one set of a session wrote
+/// (E56.7): file-by-file undo takes back a set's merge once its copies are
+/// back.
+pub(super) fn take_back_set(
+    tx: &Transaction<'_>,
+    resolution: i64,
+    set: &str,
+) -> FmResult<Vec<FaceId>> {
+    take_back_where(tx, resolution, Some(set))
+}
+
+/// Tags the merge rows of `resolution` that have no set yet with `set`: the
+/// rows [`apply`] just wrote for that set of a session.
+pub(super) fn tag_set(tx: &Transaction<'_>, resolution: i64, set: &str) -> FmResult<()> {
+    tx.execute(
+        "UPDATE resolution_merge SET set_id = ?2 WHERE resolution_id = ?1 AND set_id IS NULL",
+        params![resolution, set],
+    )
+    .map_err(|e| db_error(&e))?;
+    Ok(())
+}
+
+fn take_back_where(
+    tx: &Transaction<'_>,
+    resolution: i64,
+    set: Option<&str>,
+) -> FmResult<Vec<FaceId>> {
     let e = |e: rusqlite::Error| db_error(&e);
     let rows: Vec<(u32, String, u32, String, String)> = tx
         .prepare(
             "SELECT face_id, field, item, before, after FROM resolution_merge
-                  WHERE resolution_id = ?1 ORDER BY rowid DESC",
+                  WHERE resolution_id = ?1 AND (?2 IS NULL OR set_id = ?2) ORDER BY rowid DESC",
         )
         .map_err(e)?
-        .query_map([resolution], |r| {
+        .query_map(params![resolution, set], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })
         .map_err(e)?
@@ -596,8 +626,8 @@ pub(super) fn take_back(tx: &Transaction<'_>, resolution: i64) -> FmResult<Vec<F
             .map_err(e)?;
     }
     tx.execute(
-        "DELETE FROM resolution_merge WHERE resolution_id = ?1",
-        [resolution],
+        "DELETE FROM resolution_merge WHERE resolution_id = ?1 AND (?2 IS NULL OR set_id = ?2)",
+        params![resolution, set],
     )
     .map_err(e)?;
     for face in &faces {

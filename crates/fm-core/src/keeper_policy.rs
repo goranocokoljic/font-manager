@@ -93,7 +93,7 @@ impl LanguageNames {
     }
 
     /// `ids` by name: "A", "A and B", "A, B and C".
-    fn list(&self, ids: &[String]) -> String {
+    pub(crate) fn list(&self, ids: &[String]) -> String {
         words(ids.iter().map(|id| self.name(id).to_owned()).collect())
     }
 }

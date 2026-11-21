@@ -16,7 +16,7 @@ use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
 
 /// How many actions the Problems history lists.
-const HISTORY: u32 = 100;
+pub(super) const HISTORY: u32 = 100;
 
 /// A file of the library as "Keep this one" needs it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,7 +248,7 @@ impl Index {
     pub(crate) fn resolutions(&self) -> FmResult<Vec<Resolution>> {
         let ids: Vec<u32> = self
             .conn
-            .prepare("SELECT id FROM resolution ORDER BY id DESC LIMIT ?1")
+            .prepare("SELECT id FROM resolution WHERE kind = 'keepCopy' ORDER BY id DESC LIMIT ?1")
             .and_then(|mut s| {
                 s.query_map([HISTORY], |r| r.get(0))?
                     .collect::<Result<Vec<_>, _>>()
@@ -300,7 +300,11 @@ impl Index {
 }
 
 /// Sets or clears the gone flag of the file at `path`.
-fn set_gone(conn: &rusqlite::Connection, path: &std::path::Path, gone: bool) -> FmResult<()> {
+pub(super) fn set_gone(
+    conn: &rusqlite::Connection,
+    path: &std::path::Path,
+    gone: bool,
+) -> FmResult<()> {
     conn.execute(
         "UPDATE font_file SET gone = ?2 WHERE path = ?1",
         params![path_to_sql(path), gone],
@@ -309,7 +313,7 @@ fn set_gone(conn: &rusqlite::Connection, path: &std::path::Path, gone: bool) -> 
     Ok(())
 }
 
-fn trashed_to_sql(trashed: Option<&(PathBuf, Option<PathBuf>)>) -> (Value, Value) {
+pub(super) fn trashed_to_sql(trashed: Option<&(PathBuf, Option<PathBuf>)>) -> (Value, Value) {
     match trashed {
         Some((location, info)) => (
             path_to_sql(location),
@@ -319,14 +323,14 @@ fn trashed_to_sql(trashed: Option<&(PathBuf, Option<PathBuf>)>) -> (Value, Value
     }
 }
 
-fn status_to_sql(status: TrashMoveStatus) -> FmResult<String> {
+pub(super) fn status_to_sql(status: TrashMoveStatus) -> FmResult<String> {
     match serde_json::to_value(status) {
         Ok(serde_json::Value::String(s)) => Ok(s),
         _ => Err(FmError::internal("a trash move status has no name")),
     }
 }
 
-fn status_from_sql(text: &str) -> FmResult<TrashMoveStatus> {
+pub(super) fn status_from_sql(text: &str) -> FmResult<TrashMoveStatus> {
     serde_json::from_value(serde_json::Value::String(text.to_owned()))
         .map_err(|_| FmError::internal(format!("unknown trash move status {text:?} in the index")))
 }

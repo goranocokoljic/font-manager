@@ -117,6 +117,11 @@ import type {
   RenameComparisonRequest,
   Resolution,
   ResolutionId,
+  PlanCleanupRequest,
+  CleanupPlan,
+  ApplyCleanupRequest,
+  CleanupSession,
+  UndoCleanupRequest,
   ResolveSidecarConflictRequest,
   SampleText,
   SampleTextRequest,
@@ -387,6 +392,16 @@ export interface FmClient {
   listResolutions(): Promise<Resolution[]>;
   /** Puts the copies of an action back from the trash. */
   undoResolution(resolution: ResolutionId): Promise<Resolution>;
+  /** Plans a cleanup of the duplicate sets of a scope; touches nothing (E56.7). */
+  planCleanup(req: PlanCleanupRequest): Promise<CleanupPlan>;
+  /** Applies a plan as one session on a job; progress arrives as `cleanupProgress` events. */
+  applyCleanup(req: ApplyCleanupRequest): Promise<JobId>;
+  /** Stops a cleanup between two files; the session keeps what was done. */
+  cancelCleanup(job: JobId): Promise<void>;
+  /** The cleanup sessions and "Keep this one" actions, newest first: one history. */
+  listCleanupSessions(): Promise<CleanupSession[]>;
+  /** Puts a session's files back from the trash, all of them or the ones named. */
+  undoCleanupSession(req: UndoCleanupRequest): Promise<CleanupSession>;
   /** Sidecar values another computer set differently, oldest first (E28.1). */
   listSidecarConflicts(): Promise<SidecarConflict[]>;
   /** Keeps one value of a sidecar conflict; the other computer takes it. */
@@ -594,6 +609,11 @@ export const tauriClient: FmClient = {
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
+  planCleanup: (req) => invoke<CleanupPlan>('plan_cleanup', { req }),
+  applyCleanup: (req) => invoke<JobId>('apply_cleanup', { req }),
+  cancelCleanup: (job) => invoke<void>('cancel_cleanup', { job }),
+  listCleanupSessions: () => invoke<CleanupSession[]>('list_cleanup_sessions'),
+  undoCleanupSession: (req) => invoke<CleanupSession>('undo_cleanup_session', { req }),
   listSidecarConflicts: () => invoke<SidecarConflict[]>('list_sidecar_conflicts'),
   resolveSidecarConflict: (req) => invoke<void>('resolve_sidecar_conflict', { req }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),

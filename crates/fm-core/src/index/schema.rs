@@ -726,6 +726,32 @@ CREATE TABLE resolution_merge (
 CREATE INDEX resolution_merge_resolution ON resolution_merge (resolution_id);
 ";
 
+/// A cleanup as one session (E56.7, ADR 0027): the resolution tables are
+/// extended, not replaced, so a "Keep this one" action is a session of one
+/// set and an index from an earlier version lists its actions as sessions.
+///
+/// - `resolution.name`: the session's name; `NULL` for "Keep this one".
+/// - `resolution.kind`: `keepCopy` or `cleanup`.
+/// - `resolution.state`: `done`, `running` (an apply that has not ended:
+///   a crash leaves it so, and the next read calls it cancelled) or
+///   `cancelled`.
+/// - `resolution_move.set_id` and `kept`: the set the copy left and the copy
+///   kept for it; `NULL` for actions from before (one set, `resolution.kept`).
+/// - `resolution_move.size`: the file's size in bytes, when known.
+/// - `resolution_merge.set_id`: the set whose merge wrote the row, so undo
+///   file by file takes back one set's merge once its copies are back.
+const V28: &str = r"
+ALTER TABLE resolution ADD COLUMN name TEXT;
+ALTER TABLE resolution ADD COLUMN kind TEXT NOT NULL DEFAULT 'keepCopy'
+    CHECK (kind IN ('keepCopy', 'cleanup'));
+ALTER TABLE resolution ADD COLUMN state TEXT NOT NULL DEFAULT 'done'
+    CHECK (state IN ('done', 'running', 'cancelled'));
+ALTER TABLE resolution_move ADD COLUMN set_id TEXT;
+ALTER TABLE resolution_move ADD COLUMN kept TEXT;
+ALTER TABLE resolution_move ADD COLUMN size INTEGER;
+ALTER TABLE resolution_merge ADD COLUMN set_id TEXT;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -733,7 +759,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
-    V22, V23, V24, V25, V26, V27,
+    V22, V23, V24, V25, V26, V27, V28,
 ];
 
 /// The schema version this build writes.
