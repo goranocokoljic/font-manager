@@ -1430,6 +1430,11 @@ export interface MockOptions {
    * its progress shows and `cancelCleanup` stops it between two files, as fm-core does.
    */
   cleanupStepMs?: number;
+  /**
+   * Paths (or parts of them) whose undo fails, as when the trash was emptied (E56.15): the
+   * session keeps the file as `failed` with a message, so History shows it cannot come back.
+   */
+  undoFails?: string[];
   /** Ratings of sample faces from the start (none by default), e.g. for a metadata conflict. */
   ratings?: Partial<Record<FaceId, number>>;
   /** Sources after the sample ones (`mockMoreSources`: a cloud and a missing folder). */
@@ -5604,6 +5609,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           throw invalid(`${p} is not a file of this session.`);
       for (const f of s.files)
         if (f.status === 'trashed' && (!paths.length || paths.includes(f.path))) {
+          if (options.undoFails?.some((part) => f.path.includes(part))) {
+            f.status = 'failed';
+            f.message = 'The trash was emptied, so this file cannot come back.';
+            continue;
+          }
           trashed.delete(f.path);
           hidden.splice(0, hidden.length, ...hidden.filter((h) => h.path !== f.path));
           f.status = 'restored';
@@ -6053,6 +6063,13 @@ function countFromUrl(name: string, max: number): number {
   return Number.isInteger(n) && n > 0 ? Math.min(n, max) : 0;
 }
 
+/** A text option from the page URL, before the hash, as a list of one (e2e). */
+function textFromUrl(name: string): string[] {
+  if (typeof location === 'undefined') return [];
+  const v = new URLSearchParams(location.search).get(name)?.trim();
+  return v ? [v] : [];
+}
+
 /** The tab's session storage, where there is one (not in Node). */
 function sessionStorageOf(): Storage | undefined {
   try {
@@ -6166,6 +6183,9 @@ export const mockClient: FmClient = createMockClient({
   // `?mockCleanupStep=<ms>` applies a cleanup file by file, so its progress and Cancel
   // show (E56.15).
   cleanupStepMs: countFromUrl('mockCleanupStep', 5000),
+  // `?mockUndoFail=Older` makes the undo of every file whose path holds "Older" fail, as
+  // when the trash was emptied, so History shows a file that cannot come back (E56.15).
+  undoFails: textFromUrl('mockUndoFail'),
   // `?mockFolderPairs=1` adds three folders that hold the same sample fonts (E56.12): a
   // contained pair, a partial pair and a system font folder that can only be kept.
   // `=2` adds 20 archive folders with Sample 1–5, for a few hundred pairs.

@@ -217,6 +217,8 @@ export const planDraft = async (
   const byChoice = new Set<string>();
   const planned: PlannedDraft = { identical: false, sets: [], pairs: [] };
   const answers: PlannedAnswer[] = [];
+  // The sets answered "keep both" or "not duplicates": none of their copies leaves.
+  const answered = new Set<string>();
   const key = (set: string, path: string) => `${set}\u0000${path}`;
   if (draft.identical) {
     planned.identical = true;
@@ -235,16 +237,18 @@ export const planDraft = async (
       for (const c of set.copies) chosen.set(key(set.id, c.path), choice(c.path));
       byChoice.add(set.id);
       if (!ids.includes(set.id)) ids.push(set.id);
-    } else
+    } else {
+      answered.add(set.id);
       answers.push({
         set: set.id,
         postscriptName: set.postscriptName,
         answer: decision.kind === 'keepAll' ? 'keepBoth' : 'notDuplicates',
       });
+    }
     planned.sets!.push(set.id);
   }
   const out = await plan({
-    scope: { kind: 'sets', ids },
+    scope: { kind: 'sets', ids: ids.filter((id) => !answered.has(id)) },
     keepers,
     removeAs: 'trash',
     moveActivations: req.moveActivations ?? false,
@@ -274,7 +278,7 @@ export const planDraft = async (
       continue;
     }
     const have = new Set(out.files.map((f) => f.path));
-    out.files.push(...part.files.filter((f) => !have.has(f.path)));
+    out.files.push(...part.files.filter((f) => !have.has(f.path) && !answered.has(f.set)));
     for (const c of part.conflicts)
       if (!out.conflicts.some((x) => JSON.stringify(x) === JSON.stringify(c)))
         out.conflicts.push(c);

@@ -420,7 +420,8 @@ const KEPT_FOR_ANOTHER: &str = "Stays: another file of this plan leaves for it, 
 ///   the copy kept for it stays (`keptByOtherSet`), so the parts never
 ///   remove each other's keepers.
 /// - "Keep both" and "not duplicates" move nothing: they are the plan's
-///   [`CleanupPlan::answers`], recorded when it is applied.
+///   [`CleanupPlan::answers`], recorded when it is applied. An answered set
+///   is out of the identical sets and out of every folder pair.
 pub fn plan_draft(
     draft: &CleanupDraft,
     sets: &[DuplicateSet],
@@ -435,6 +436,9 @@ pub fn plan_draft(
     let mut by_choice: HashSet<String> = HashSet::new();
     let mut planned = PlannedDraft::default();
     let mut answers: Vec<PlannedAnswer> = Vec::new();
+    // The sets answered "keep both" or "not duplicates": none of their copies
+    // leaves, whatever else of the draft covers them.
+    let mut answered: HashSet<String> = HashSet::new();
     if draft.identical {
         planned.identical = true;
         ids.extend(
@@ -477,18 +481,22 @@ pub fn plan_draft(
                     ids.push(set.id.clone());
                 }
             }
-            SetDecision::KeepAll | SetDecision::NotDuplicates => answers.push(PlannedAnswer {
-                set: set.id.clone(),
-                postscript_name: set.postscript_name.clone(),
-                answer: if d.decision == SetDecision::KeepAll {
-                    DuplicateAnswer::KeepBoth
-                } else {
-                    DuplicateAnswer::NotDuplicates
-                },
-            }),
+            SetDecision::KeepAll | SetDecision::NotDuplicates => {
+                answered.insert(set.id.clone());
+                answers.push(PlannedAnswer {
+                    set: set.id.clone(),
+                    postscript_name: set.postscript_name.clone(),
+                    answer: if d.decision == SetDecision::KeepAll {
+                        DuplicateAnswer::KeepBoth
+                    } else {
+                        DuplicateAnswer::NotDuplicates
+                    },
+                });
+            }
         }
         planned.sets.push(set.id.clone());
     }
+    ids.retain(|id| !answered.contains(id));
     let mut out = plan(PlanCleanupRequest {
         scope: CleanupScope::Sets { ids },
         keepers,
@@ -536,8 +544,11 @@ pub fn plan_draft(
             continue;
         };
         let have: HashSet<String> = out.files.iter().map(|f| f.path.clone()).collect();
-        out.files
-            .extend(part.files.into_iter().filter(|f| !have.contains(&f.path)));
+        out.files.extend(
+            part.files
+                .into_iter()
+                .filter(|f| !have.contains(&f.path) && !answered.contains(&f.set)),
+        );
         for c in part.conflicts {
             if !out.conflicts.contains(&c) {
                 out.conflicts.push(c);
@@ -1297,6 +1308,59 @@ mod tests {
             "a set that is gone stays in the draft"
         );
         assert!(!planned.identical);
+    }
+
+    #[test]
+    fn an_answered_set_loses_no_copy_to_the_identical_sets_or_a_folder_pair() {
+        // The family queue lists identical sets too, so one can be answered
+        // "keep both" while the identical copies are in the plan; a folder
+        // pair can cover an answered set as well.
+        let same = DuplicateSet {
+            level: DuplicateLevel::Identical,
+            ..named("identical:h", &["/a/S.otf", "/b/S.otf"])
+        };
+        let other = DuplicateSet {
+            level: DuplicateLevel::Identical,
+            ..named("identical:k", &["/a/K.otf", "/b/K.otf"])
+        };
+        let draft = CleanupDraft {
+            identical: true,
+            decisions: vec![
+                decision("identical:h", SetDecision::KeepAll),
+                decision("name:A", SetDecision::NotDuplicates),
+            ],
+            pairs: vec![draft_pair("/z", "/a")],
+        };
+        let sets = vec![same, other, named("name:A", &["/a/A.otf", "/z/A.otf"])];
+        let plan = plan_draft(
+            &draft,
+            &sets,
+            &PlanDraftRequest::default(),
+            fake_plan(sets.clone()),
+        )
+        .unwrap();
+        let leaving: Vec<&str> = plan.leaving().map(|f| f.path.as_str()).collect();
+        assert_eq!(
+            leaving,
+            vec!["/b/K.otf"],
+            "only the unanswered identical set loses a copy"
+        );
+        assert!(
+            plan.files
+                .iter()
+                .all(|f| f.set != "identical:h" && f.set != "name:A"),
+            "an answered set has no row"
+        );
+        assert_eq!(
+            plan.request.scope,
+            CleanupScope::Sets {
+                ids: vec!["identical:k".into()]
+            }
+        );
+        assert_eq!(plan.answers.len(), 2);
+        let planned = plan.draft.unwrap();
+        assert!(planned.identical);
+        assert_eq!(planned.pairs.len(), 1);
     }
 
     #[test]

@@ -122,6 +122,27 @@ test('History lists the session and undoes it whole or file by file', async ({ p
   await expect(session.getByRole('button', { name: /^Undo all/ })).toHaveCount(0);
 });
 
+test('History says when a file cannot come back', async ({ page }) => {
+  // `?mockUndoFail=Older`: the trash no longer holds the Older copy, as when it was emptied.
+  await open(page, '', '?mockDuplicates=1&mockUndoFail=Older');
+  await planInter(page);
+  await page.getByTestId('plan-apply').click();
+  await expect(page.getByTestId('plan-result')).toContainText('Done.');
+  await nav(page)
+    .getByRole('button', { name: /^History/ })
+    .click();
+  const session = history(page).locator('[data-session]');
+  await session.getByRole('button', { name: /^Undo all/ }).click();
+  await session.getByRole('button', { expanded: false }).click();
+  const lost = session.locator('[data-status="failed"]');
+  await expect(lost).toHaveCount(1);
+  await expect(lost).toContainText('/Users/demo/Fonts/Older/Inter-Regular.ttf');
+  await expect(lost).toContainText(
+    'Cannot come back — The trash was emptied, so this file cannot come back.',
+  );
+  await expect(session.locator('[data-status="restored"]')).toHaveCount(1);
+});
+
 test('a hidden copy and a remembered answer can each be taken back', async ({ page }) => {
   await open(page, 'sets', '?mockDuplicates=1');
   // Hide the old Inter copy, trash none: Keep the others.

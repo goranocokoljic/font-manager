@@ -165,6 +165,39 @@ describe('planDraft', () => {
     expect(plan.draft?.pairs).toHaveLength(2);
   });
 
+  it('lets an answered set lose no copy to the identical sets or a folder pair', async () => {
+    const identical = (id: string, paths: string[]): DuplicateSet => ({
+      ...named(id, paths),
+      level: 'identical',
+    });
+    const sets = [
+      identical('identical:h', ['/a/S.otf', '/b/S.otf']),
+      identical('identical:k', ['/a/K.otf', '/b/K.otf']),
+      named('name:A', ['/a/A.otf', '/z/A.otf']),
+    ];
+    const answer = (set: string, kind: 'keepAll' | 'notDuplicates') => ({
+      set,
+      level: 'identical' as const,
+      postscriptName: null,
+      at: 't0',
+      decision: { kind },
+    });
+    const plan = await planDraft(
+      {
+        identical: true,
+        decisions: [answer('identical:h', 'keepAll'), answer('name:A', 'notDuplicates')],
+        pairs: [pair('/z', '/a')],
+      },
+      sets,
+      {},
+      fakePlan(sets),
+    );
+    expect(plan.files.filter((f) => f.action !== 'stays').map((f) => f.path)).toEqual(['/b/K.otf']);
+    expect(plan.files.some((f) => f.set === 'identical:h' || f.set === 'name:A')).toBe(false);
+    expect(plan.request.scope).toEqual({ kind: 'sets', ids: ['identical:k'] });
+    expect(plan.answers).toHaveLength(2);
+  });
+
   it('takes out of the draft only what the plan held', () => {
     const draft = takePlanned(
       {
