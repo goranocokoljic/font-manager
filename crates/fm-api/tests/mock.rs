@@ -4619,6 +4619,27 @@ fn a_set_answered_for_good_is_neither_queued_nor_drafted() {
 }
 
 #[test]
+fn keep_this_side_refuses_folders_that_are_no_pair() {
+    use fm_api::cleanup_draft::CleanupDraftUpdate;
+    let (mock, _) = with_duplicate_files();
+    let err = mock
+        .update_cleanup_draft(CleanupDraftUpdate::KeepSide {
+            keep: "/Users/demo/Fonts".into(),
+            remove: "/Users/demo/Downloads".into(),
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    let err = mock
+        .update_cleanup_draft(CleanupDraftUpdate::KeepSide {
+            keep: "/x".into(),
+            remove: "/x".into(),
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert!(mock.get_cleanup_draft().unwrap().pairs.is_empty());
+}
+
+#[test]
 fn duplicate_sets_page_scope_and_refuse_an_unknown_source() {
     let (mock, _) = with_duplicate_files();
     let all = mock

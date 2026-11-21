@@ -78,6 +78,13 @@ mod tests {
                 decision: SetDecision::NotDuplicates,
                 at: "2026-11-21T10:00:00Z".to_owned(),
             }],
+            pairs: vec![fm_api::cleanup_draft::DraftPair {
+                keep: "/keep".to_owned(),
+                remove: "/remove".to_owned(),
+                identical: 6,
+                identical_size: 600,
+                at: "2026-11-21T10:01:00Z".to_owned(),
+            }],
         };
         {
             let index = Index::open(&path).expect("open").index;

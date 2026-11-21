@@ -104,6 +104,7 @@ import type {
   SaveLayoutRequest,
   MoveCollectionRequest,
   Paged,
+  PairSide,
   PinInstanceRequest,
   PreviewRequest,
   Problem,
@@ -455,6 +456,11 @@ export interface FmClient {
   setSourcePaused(req: SetSourcePausedRequest): Promise<Source>;
   /** Shows a source's folder in the OS file manager; `notFound` when the folder is not there. */
   showSourceFolder(source: SourceId): Promise<void>;
+  /**
+   * Shows one side of a folder pair in the OS file manager (E56.12). The pair and the
+   * side are named, not a free path; a folder without library fonts is `notFound`.
+   */
+  showPairFolder(a: string, b: string, side: PairSide): Promise<void>;
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
   /** The themes the app ships, the default first (`themeId` in the settings holds one id). */
@@ -660,6 +666,7 @@ export const tauriClient: FmClient = {
   removeSource: (source) => invoke<void>('remove_source', { source }),
   setSourcePaused: (req) => invoke<Source>('set_source_paused', { req }),
   showSourceFolder: (source) => invoke<void>('show_source_folder', { source }),
+  showPairFolder: (a, b, side) => invoke<void>('show_pair_folder', { a, b, side }),
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
   listThemes: () => invoke<ThemeDefinition[]>('list_themes'),

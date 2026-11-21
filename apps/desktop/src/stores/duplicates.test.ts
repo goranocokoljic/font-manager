@@ -1,9 +1,14 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockDuplicateCopies } from '../api/mock';
-import { QUEUE_PAGE, useDuplicatesStore } from './duplicates';
-import type { DuplicateSet, ListDuplicateSetsRequest } from '../api/types';
+import {
+  createMockClient,
+  mockDuplicateCopies,
+  mockFolderPairCopies,
+  MOCK_FOLDER_PAIR_FACES,
+} from '../api/mock';
+import { pairShare, QUEUE_PAGE, useDuplicatesStore } from './duplicates';
+import type { DuplicateSet, FolderPair, ListDuplicateSetsRequest } from '../api/types';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
@@ -186,5 +191,90 @@ describe('the duplicates store', () => {
     );
     expect(store.cursor).toBe(TOTAL - 1);
     expect(store.current?.id).toBe(`name:S${TOTAL - 1}`);
+  });
+});
+
+describe('the duplicates store: folder pairs (E56.12)', () => {
+  const SAMPLES = '/Users/demo/Fonts/Samples';
+  const OLD = '/Users/demo/Downloads/fonts-old';
+  const SYSTEM = '/System/Library/Fonts/Supplemental';
+  const withPairs = () => {
+    setClient(
+      createMockClient({ extraFaces: MOCK_FOLDER_PAIR_FACES, copies: mockFolderPairCopies }),
+    );
+    return useDuplicatesStore();
+  };
+  const find = (store: ReturnType<typeof useDuplicatesStore>, path: string) => {
+    for (let i = 0; i < (store.pairTotal ?? 0); i++) {
+      const p = store.pairAt(i);
+      if (p && (p.a.path === path || p.b.path === path)) return p;
+    }
+    throw new Error(`no pair with ${path}`);
+  };
+
+  it('pages the pairs in the API order and counts them for the navigation', async () => {
+    const store = withPairs();
+    await store.reloadPairs();
+    expect(store.pairTotal).toBe(3);
+    const frees = [0, 1, 2].map((i) => store.pairAt(i)!.frees);
+    expect([...frees].sort((a, b) => b - a)).toEqual(frees);
+  });
+
+  it("'Keep this side' puts the pair into the draft with what it covers, and counts it", async () => {
+    const store = withPairs();
+    await store.load();
+    await store.reloadPairs();
+    const pair = find(store, OLD);
+    const keepSamples = pair.a.path === SAMPLES ? 'a' : 'b';
+    expect(store.planned).toBe(0);
+    expect(await store.keepSide(pair, keepSamples)).toBe(true);
+    expect(store.draftPair(pair)).toMatchObject({ keep: SAMPLES, remove: OLD, identical: 5 });
+    expect(store.planned).toBe(1);
+    expect(await store.takeBackPair(OLD, SAMPLES)).toBe(true);
+    expect(store.draftPair(pair)).toBeUndefined();
+    expect(store.planned).toBe(0);
+  });
+
+  it('shows the refusal when the side to remove is a system folder', async () => {
+    const store = withPairs();
+    await store.reloadPairs();
+    const pair = find(store, SYSTEM);
+    const keepSamples = pair.a.path === SAMPLES ? 'a' : 'b';
+    expect(await store.keepSide(pair, keepSamples)).toBe(false);
+    expect(store.error).toMatchObject({ code: 'invalidRequest' });
+    expect(store.draftPair(pair)).toBeUndefined();
+  });
+
+  it('opens a pair to its lists: both, not identical, and only one side', async () => {
+    const store = withPairs();
+    await store.reloadPairs();
+    const pair = find(store, OLD);
+    await store.showPair(pair);
+    const oldIsA = pair.a.path === OLD;
+    expect(store.pairFiles.both?.total).toBe(5);
+    expect(store.pairFiles.differ?.total).toBe(1);
+    expect(store.pairFiles.differ?.items[0]?.level).toBe('otherVersion');
+    expect(store.pairFiles[oldIsA ? 'onlyB' : 'onlyA']?.total).toBe(12);
+    expect(store.pairFiles[oldIsA ? 'onlyA' : 'onlyB']?.total).toBe(0);
+    await store.showPair(null);
+    expect(store.pairFiles).toEqual({});
+  });
+
+  it('the share is the larger of both sides, from the API counts', () => {
+    const side = (fontFiles: number, identical: number, otherVersion: number) =>
+      ({
+        path: '/x',
+        fontFiles,
+        size: 0,
+        shared: { identical, sameVersion: 0, otherVersion },
+        sharedSize: 0,
+        identicalSize: 0,
+        onlyHere: fontFiles - identical - otherVersion,
+        otherFiles: 0,
+        contained: false,
+        protected: null,
+      }) satisfies FolderPair['a'];
+    expect(pairShare({ a: side(10, 4, 1), b: side(100, 5, 0), frees: 0 })).toBe(0.5);
+    expect(pairShare({ a: side(0, 0, 0), b: side(4, 1, 0), frees: 0 })).toBe(0.25);
   });
 });

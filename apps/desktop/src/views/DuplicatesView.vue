@@ -9,6 +9,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { DuplicateLevel, FolderPair } from '../api/types';
+import DuplicatesFolders from '../components/DuplicatesFolders.vue';
 import DuplicatesQueue from '../components/DuplicatesQueue.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
@@ -234,8 +235,12 @@ onMounted(async () => {
       </div>
     </nav>
 
-    <main ref="main" class="main" :class="{ wide: section === 'sets' }">
-      <p v-if="store.error && section !== 'sets'" role="alert" class="error">
+    <main ref="main" class="main" :class="{ wide: section === 'sets' || section === 'folders' }">
+      <p
+        v-if="store.error && section !== 'sets' && section !== 'folders'"
+        role="alert"
+        class="error"
+      >
         {{ errorMessage(store.error) }}
       </p>
 
@@ -380,8 +385,30 @@ onMounted(async () => {
           </li>
         </ul>
         <p v-else class="muted">{{ t('duplicatesModule.plan.empty') }}</p>
+        <template v-if="store.draft.pairs?.length">
+          <h3 class="section-label">{{ t('duplicatesModule.plan.pairs') }}</h3>
+          <ul class="rows decisions" data-testid="plan-pairs">
+            <li v-for="p in store.draft.pairs" :key="`${p.keep}|${p.remove}`" class="decision">
+              <span class="pair-line">
+                {{
+                  t('duplicatesModule.plan.pairLine', {
+                    keep: p.keep,
+                    remove: p.remove,
+                    count: p.identical,
+                  })
+                }}
+              </span>
+              <UiButton
+                :aria-label="t('duplicatesModule.plan.takeBackName', { name: p.remove })"
+                @click="store.takeBackPair(p.keep, p.remove)"
+              >
+                {{ t('duplicatesModule.plan.takeBack') }}
+              </UiButton>
+            </li>
+          </ul>
+        </template>
         <UiButton
-          v-if="store.draft.decisions?.length || store.draft.identical"
+          v-if="store.draft.decisions?.length || store.draft.identical || store.draft.pairs?.length"
           class="outlined"
           @click="store.clearDraft()"
         >
@@ -389,30 +416,8 @@ onMounted(async () => {
         </UiButton>
       </div>
 
-      <!-- Folders (E56.12 adds the pair view and "Keep this side") -->
-      <div v-else-if="section === 'folders'" class="page">
-        <h2 class="heading">{{ t('duplicatesModule.overview.pairs') }}</h2>
-        <ul v-if="store.pairs.length" class="pairs">
-          <li v-for="p in store.pairs" :key="`${p.a.path}|${p.b.path}`" class="pair">
-            <span>
-              <code class="path"
-                ><bdi>{{ pairLine(p).path }}</bdi></code
-              >
-              <span class="muted small">
-                {{ pairLine(p).relation }}
-                <code class="path"
-                  ><bdi>{{ pairLine(p).other }}</bdi></code
-                >
-              </span>
-            </span>
-            <span class="pair-value">
-              <span>{{ pairLine(p).shared }}</span>
-              <span class="muted small">{{ pairLine(p).size }}</span>
-            </span>
-          </li>
-        </ul>
-        <UiEmptyState v-else :title="t('duplicatesModule.folders.empty')" />
-      </div>
+      <!-- Folders: the folder pairs and "Keep this side" (E56.12) -->
+      <DuplicatesFolders v-else-if="section === 'folders'" :trash="trash" />
 
       <!-- History (E56.15 adds undo) -->
       <div v-else-if="section === 'history'" class="page">
@@ -682,6 +687,9 @@ onMounted(async () => {
 .path {
   font-family: var(--fm-font-mono);
   font-size: var(--fm-text-sm);
+}
+.pair-line {
+  overflow-wrap: anywhere;
 }
 .plan-identical {
   display: flex;

@@ -154,10 +154,11 @@ describe('the mock cleanup draft', () => {
     draft = applyDraftUpdate(draft, { kind: 'identical', include: true }, 't', () => undefined);
     expect(draft.identical).toBe(true);
     draft = applyDraftUpdate(draft, { kind: 'takeBack', set: 'name:A' }, 't', () => undefined);
-    expect(draft).toEqual({ identical: true, decisions: [] });
+    expect(draft).toEqual({ identical: true, decisions: [], pairs: [] });
     expect(applyDraftUpdate(draft, { kind: 'clear' }, 't', () => undefined)).toEqual({
       identical: false,
       decisions: [],
+      pairs: [],
     });
   });
 

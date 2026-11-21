@@ -572,6 +572,11 @@ export type CleanupDraft = {
 	identical?: boolean,
 	/**  The decisions, in the order they were made; one per set. */
 	decisions?: DraftDecision[],
+	/**
+	 *  The folder pairs decided with "Keep this side" (E56.12), in the
+	 *  order they were added; one per pair of folders.
+	 */
+	pairs?: DraftPair[],
 };
 
 /**  A change to the draft ([`crate::LibraryService::update_cleanup_draft`]). */
@@ -594,7 +599,25 @@ set: string } |
 { kind: "identical"; 
 /**  In the plan. */
 include: boolean } | 
-/**  Start again: no decision, identical sets out. */
+/**
+ *  Keep one folder's copies and plan the removal of the other folder's
+ *  identical copies (E56.12); replaces a decision about the same two
+ *  folders. `NotFound` when the folders are no folder pair any more;
+ *  `InvalidRequest` when `remove` is protected
+ *  ([`crate::library::FolderPairSide::protected`]).
+ */
+{ kind: "keepSide"; 
+/**  The folder whose copies stay, absolute. */
+keep: string; 
+/**  The folder whose identical copies leave, absolute. */
+remove: string } | 
+/**  Take back the decision about two folders, either way round. */
+{ kind: "takeBackPair"; 
+/**  One folder, absolute. */
+a: string; 
+/**  The other folder, absolute. */
+b: string } | 
+/**  Start again: no decision, identical sets out, no folder pair. */
 { kind: "clear" };
 
 /**  One file of a plan. */
@@ -1363,6 +1386,28 @@ export type DraftDecision = {
 	/**  The answer. */
 	decision: SetDecision,
 	/**  When it was decided. */
+	at: string,
+};
+
+/**
+ *  A folder pair in the draft (E56.12): keep `keep`'s copies and plan the
+ *  removal of `remove`'s font files that have an identical copy there, and
+ *  nothing else ([`crate::cleanup::CleanupScope::FolderPair`] without
+ *  `other_levels`).
+ */
+export type DraftPair = {
+	/**  The folder whose copies stay, absolute. */
+	keep: string,
+	/**  The folder whose identical copies are planned for removal, absolute. */
+	remove: string,
+	/**
+	 *  The font files of `remove` with an identical copy in `keep` when the
+	 *  pair was added: what the decision covers.
+	 */
+	identical: number,
+	/**  Their size in bytes (saturating). */
+	identicalSize: number,
+	/**  When it was added. */
 	at: string,
 };
 
@@ -3595,6 +3640,13 @@ export type ListFolderPairFilesRequest = {
 	 *  folders as the same would lose.
 	 */
 	onlyHere?: boolean,
+	/**
+	 *  Only the files whose best copy on the other side is of one of these
+	 *  levels (E56.12: what both folders have, the copies that are not
+	 *  identical); every file when `None`. A file only one side has has no
+	 *  level and is left out by any list.
+	 */
+	levels?: DuplicateLevel[] | null,
 	/**  The window into the files. */
 	page?: Page,
 };
