@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5; 2026-11-21, E56.6)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5; 2026-11-21, E56.6, E56.7)
 
 ## Context
 
@@ -242,6 +242,80 @@ folder, the library folder and a system font folder (or a folder inside
 one) can be the kept side and never the removed side as a whole
 (`protected` on the side; the plan refuses it). The plan request with its
 answer type is E56.7's; this story gives it the selection.
+
+**A cleanup is one session (E56.7).** `plan_cleanup` plans the sets of a
+scope (the library, a source, a folder, a folder pair, or a list of set
+ids) and answers, per file, `trash`, `hide` or `stays`, each with one
+sentence; it touches nothing. Each set follows the saved policy and the
+guard, unless the user picked its keeper (`keepers`); then the guard still
+keeps the only copy of one of my languages, and a file that holds a font
+no file outside the removed copies holds is kept too. What a plan never
+does is named (`StayReason`): a copy the app activated (rule 3), the only
+copy of one of my languages, a set answered "keep both", a system copy
+(rule 4), a file another set keeps (every set a planned file takes part in
+is decided, so a collection file never leaves for one font while another
+set keeps it), a file that is not there any more, and, for a folder or
+source scope, a copy outside it (the user cleans up a folder; a copy
+outside it can be the keeper, never removed). An active copy of an
+**identical** set is offered to hand its activation to the kept copy
+(`move_activations`): the app deactivates the one and activates the other
+in the same mode, both its own registrations, and when the kept copy
+cannot be activated the leaving copy is activated again and stays. At
+every other level an active copy stays: another version is another font
+to the documents that use it. Undo does not move the activation back; the
+kept copy is the same file.
+
+**A plan is data.** `CleanupPlan` (format `version` 1) carries the files
+with their hash, the metadata conflicts of E56.5 per set, and the bytes
+the trashed files free; it can be saved as JSON and applied later.
+`apply_cleanup` checks every file again when its turn comes: still a
+library file on disk, not a system copy, its set's kept copy still there,
+not active unless the plan moves its activation, and the **plan's hash**
+(blake3 of the bytes): a file that changed is skipped and reported.
+Hiding (`removeAs: hide`) is planned now and applied by E56.8; until then
+`apply_cleanup` refuses a plan with a hidden copy (`Unsupported`).
+
+**Applying.** `apply_cleanup` returns a job at once and runs on its own
+thread; progress is `Event::CleanupProgress` (one new variant: `done` of
+`total`, the session, and the last event `finished`, `cancelled` when
+`cancel_cleanup` stopped it). Cancel stops between two files; the session
+holds what was done. Files go to the OS trash through `fm_platform::Trash`
+(ADR 0009). The session is written first; then the sets are done in
+order. Each set's moves, gone flags and merge are one transaction as soon
+as the set is done, so a quit or a crash in the middle leaves at most the
+files of one set without a log, as "Keep this one" does. Every **100
+files** (`BATCH`, whole sets) the sidecars are written once and one
+`Event::LibraryChanged` is sent, not one per file. A set whose log cannot
+be written is put back from the trash before the error is reported. A
+session left `running` by a crash reads as cancelled. Just before a file
+goes to the trash, its activation is read again, and the move happens
+under the same index lock, so a copy activated while the apply runs stays
+(rule 3).
+
+**Sessions extend the resolution log** (schema V28): `resolution` gains
+`name`, `kind` (`keepCopy`, `cleanup`) and `state`; `resolution_move`
+gains the set, the kept copy and the size; `resolution_merge` gains the
+set. A "Keep this one" action is a session of one set named "Keep
+<file>", so `list_cleanup_sessions` is one history, and an index from an
+earlier version lists its actions there. `list_resolutions` and its
+`Resolution` type do not change and list "Keep this one" actions only.
+`undo_cleanup_session` puts back a whole session or the files named, as
+ADR 0009 says (never over a file at the old path; an emptied trash is
+`failed` on that file's row, and calling again retries); a set's merge is
+taken back once every moved copy of it is back.
+
+**Apply budget.** `crates/fm-core/src/api/tests/cleanup.rs` applies a plan
+of a thousand reference-library files (each copied beside itself) with a
+folder trash. On 21 Nov 2026 on Windows that took 2.1 s in release and
+2.4 s in debug, most of it reading each file again for its hash. The
+budget is **5 s** for the core's own work: twice the measured number, for
+slower CI disks. The OS trash's own time per file comes on top and is not
+budgeted, because it is the OS's (the Recycle Bin's `IFileOperation`, the
+Finder's trash) and cannot be made faster here.
+
+The mocks plan as the core does without an index or a disk: the E8.1
+keeper rule (`choose_keeper`), no language guard, no metadata conflicts;
+they apply at once, so their job cannot be cancelled.
 
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files

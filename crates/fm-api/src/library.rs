@@ -2197,6 +2197,29 @@ pub trait LibraryService {
     /// cannot come back (another file is at its path, the trash was emptied)
     /// is `Failed` and the others still come back; calling again retries it.
     fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution>;
+    /// Plans a cleanup of the duplicate sets of a scope (E56.7): per file,
+    /// whether it would go to the trash, be hidden or stay, and why; the
+    /// metadata conflicts and the space it frees. Touches nothing.
+    fn plan_cleanup(
+        &self,
+        req: crate::cleanup::PlanCleanupRequest,
+    ) -> ApiResult<crate::cleanup::CleanupPlan>;
+    /// Applies a plan as one session on a background job and returns the
+    /// job at once; progress arrives as [`crate::Event::CleanupProgress`].
+    /// Every file is checked against the plan's hash first.
+    fn apply_cleanup(&self, req: crate::cleanup::ApplyCleanupRequest) -> ApiResult<JobId>;
+    /// Stops an apply between two files; the session keeps what was done.
+    /// A job that is not running is `NotFound`.
+    fn cancel_cleanup(&self, job: JobId) -> ApiResult<()>;
+    /// The sessions, newest first: applied plans and "Keep this one"
+    /// actions, one history.
+    fn list_cleanup_sessions(&self) -> ApiResult<Vec<crate::cleanup::CleanupSession>>;
+    /// Puts a session's files back from the trash, all of them or the ones
+    /// named; never over a file that is at the old path again.
+    fn undo_cleanup_session(
+        &self,
+        req: crate::cleanup::UndoCleanupRequest,
+    ) -> ApiResult<crate::cleanup::CleanupSession>;
     /// The sidecar conflicts that wait for the user (E28.1): fields this
     /// machine and another set to different values, oldest first.
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>>;

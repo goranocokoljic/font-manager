@@ -44,6 +44,7 @@ mod resolutions;
 mod samples;
 mod schema;
 mod search;
+mod sessions;
 mod sets;
 mod sidecars;
 mod sources;
@@ -76,6 +77,7 @@ pub use metadata_merge::{
 pub(crate) use resolutions::{CopyFile, StoredMove};
 pub use schema::SCHEMA_VERSION;
 pub(crate) use search::glyph_similar::check_code_point;
+pub(crate) use sessions::{SessionHead, SessionMove, session};
 pub use sidecars::SidecarSync;
 
 /// The file name of the index in the app-data folder.

@@ -48,7 +48,9 @@ pub type Emit = Arc<dyn Fn(Event) + Send + Sync>;
 /// The reason a face the app did not register is not deactivated.
 const NOT_OURS: &str = "The app did not activate this font.";
 
-/// Activates faces through the OS and records them in the index.
+/// Activates faces through the OS and records them in the index. A clone
+/// shares the index, the activator and the event sink.
+#[derive(Clone)]
 pub struct ActivationManager {
     index: Arc<Mutex<Index>>,
     activator: Arc<dyn FontActivator>,

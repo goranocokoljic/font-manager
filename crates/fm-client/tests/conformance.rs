@@ -99,6 +99,12 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; keep_copy, json!({ "keep": "/a.ttf", "trash": [], "dryRun": true }));
     same!(seen, d, c; list_resolutions);
     same!(seen, d, c; undo_resolution, json!(1));
+    same!(seen, d, c; plan_cleanup, json!({}));
+    same!(seen, d, c; plan_cleanup, json!({ "scope": { "kind": "sets", "ids": ["name:Nope"] } }));
+    same!(seen, d, c; apply_cleanup, json!({ "plan": {"version":9,"plannedAt":"2026-11-21T00:00:00Z","request":{},"sets":0,"files":[],"conflicts":[],"frees":0,"myLanguages":"notSet"} }));
+    same!(seen, d, c; cancel_cleanup, json!(1));
+    same!(seen, d, c; list_cleanup_sessions);
+    same!(seen, d, c; undo_cleanup_session, json!({ "session": 999 }));
     same!(seen, d, c; list_sidecar_conflicts);
     same!(seen, d, c; resolve_sidecar_conflict, json!({ "id": 1, "keep": "mine" }));
     same!(seen, d, c; list_glyphs, json!({ "face": 1 }));

@@ -22,6 +22,7 @@
 
 pub mod activation;
 pub mod catalog;
+pub mod cleanup;
 pub mod common;
 pub mod comparison;
 pub mod error;
@@ -174,6 +175,11 @@ pub fn types() -> specta::Types {
         library::FolderPairFile,
         library::KeepCopyRequest,
         library::Resolution,
+        cleanup::PlanCleanupRequest,
+        cleanup::CleanupPlan,
+        cleanup::ApplyCleanupRequest,
+        cleanup::CleanupSession,
+        cleanup::UndoCleanupRequest,
         library::SidecarConflict,
         library::SidecarField,
         library::ConflictSide,

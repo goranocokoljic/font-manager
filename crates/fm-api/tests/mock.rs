@@ -1981,6 +1981,71 @@ fn keep(keep: &str, trash: &str, dry_run: bool) -> KeepCopyRequest {
 }
 
 #[test]
+fn a_cleanup_applies_as_a_named_session_and_undo_brings_each_file_back() {
+    use fm_api::cleanup::{
+        ApplyCleanupRequest, PlanCleanupRequest, SessionKind, UndoCleanupRequest,
+    };
+    let (api, _, _) = with_copy();
+    let plan = api.plan_cleanup(PlanCleanupRequest::default()).unwrap();
+    let leaving: Vec<String> = plan.leaving().map(|f| f.path.clone()).collect();
+    assert_eq!(leaving.len(), 1, "{plan:#?}");
+    let events = api.subscribe();
+
+    let job = api
+        .apply_cleanup(ApplyCleanupRequest {
+            plan,
+            name: Some("Spring cleanup".into()),
+            choices: Vec::new(),
+        })
+        .unwrap();
+    let progress: Vec<(u32, u32, bool)> = events
+        .try_iter()
+        .filter_map(|e| match e {
+            Event::CleanupProgress {
+                job: j,
+                done,
+                total,
+                finished,
+                ..
+            } if j == job => Some((done, total, finished)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(progress, [(1, 1, false), (1, 1, true)]);
+    assert_eq!(
+        api.list_duplicates().unwrap(),
+        [],
+        "the copy left the library"
+    );
+    let session = api
+        .list_cleanup_sessions()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.kind == SessionKind::Cleanup)
+        .expect("listed");
+    assert_eq!(session.name, "Spring cleanup");
+    assert_eq!((session.sets, session.trashed), (1, 1));
+    assert_eq!(session.files[0].status, TrashMoveStatus::Trashed);
+
+    let err = api
+        .undo_cleanup_session(UndoCleanupRequest {
+            session: session.id,
+            paths: vec!["/not/in/it.ttf".into()],
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    let undone = api
+        .undo_cleanup_session(UndoCleanupRequest {
+            session: session.id,
+            paths: leaving.clone(),
+        })
+        .unwrap();
+    assert!(undone.undone && undone.trashed == 0, "{undone:#?}");
+    assert_eq!(undone.files[0].status, TrashMoveStatus::Restored);
+    assert_eq!(api.list_duplicates().unwrap().len(), 1, "the copy is back");
+}
+
+#[test]
 fn keep_this_one_trashes_the_other_copy_and_undo_brings_it_back() {
     let (api, original, copy) = with_copy();
     assert_eq!(api.list_duplicates().unwrap().len(), 1);

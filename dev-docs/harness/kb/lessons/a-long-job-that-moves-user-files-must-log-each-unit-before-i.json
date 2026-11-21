@@ -1,0 +1,19 @@
+{
+  "id": "a-long-job-that-moves-user-files-must-log-each-unit-before-i",
+  "title": "A long job that moves user files must log each unit before it starts the next",
+  "category": "data-integrity",
+  "rule": "When a background job moves many user files (a cleanup, a batch trash), write each unit's undo record (a set, a file) in its own transaction as soon as that unit is done; batch only the events and derived mirrors (sidecars, LibraryChanged). A log written once per batch leaves every file moved since the last write without undo when the app quits or crashes, because nothing waits for the job thread on quit. Test it with a hook between two units (a callback or stand-in that runs mid-job) that lists the session and asserts the first unit is already logged. Measure the budget: a per-unit write that also mirrors sidecars can cost 25 ms a unit.",
+  "rationale": "E56.7 (#667): apply logged moves only every 100 files, so a quit after file 150 left files 101-150 in the OS trash with no row; undo could not bring them back.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    667
+  ],
+  "file_globs": [
+    "crates/fm-core/src/resolve/**",
+    "crates/fm-core/src/index/sessions.rs"
+  ],
+  "first_seen": "2026-11-21T05:39:44.184Z",
+  "last_seen": "2026-11-21T05:39:44.184Z"
+}

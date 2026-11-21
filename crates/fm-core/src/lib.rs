@@ -12,6 +12,7 @@ mod brief;
 pub mod catalog;
 pub mod charsets;
 pub mod classify;
+pub mod cleanup;
 pub mod config;
 pub mod copy_diff;
 pub mod coverage;

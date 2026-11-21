@@ -7,6 +7,7 @@ use std::sync::mpsc::Receiver;
 
 use fm_api::activation::*;
 use fm_api::catalog::*;
+use fm_api::cleanup::*;
 use fm_api::common::Paged;
 use fm_api::comparison::*;
 use fm_api::export::*;
@@ -62,6 +63,11 @@ service!(LibraryService {
     keep_copy(req: KeepCopyRequest) -> Resolution;
     list_resolutions() -> Vec<Resolution>;
     undo_resolution(resolution: ResolutionId) -> Resolution;
+    plan_cleanup(req: PlanCleanupRequest) -> CleanupPlan;
+    apply_cleanup(req: ApplyCleanupRequest) -> JobId;
+    cancel_cleanup(job: JobId) -> ();
+    list_cleanup_sessions() -> Vec<CleanupSession>;
+    undo_cleanup_session(req: UndoCleanupRequest) -> CleanupSession;
     list_sidecar_conflicts() -> Vec<SidecarConflict>;
     resolve_sidecar_conflict(req: ResolveSidecarConflictRequest) -> ();
     list_glyphs(req: GlyphsRequest) -> GlyphPage;

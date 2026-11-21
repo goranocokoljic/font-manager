@@ -39,13 +39,18 @@ const SYSTEM_COPY: &str = "This copy is in a system font folder. Font Fu never m
 /// Why a copy that is no longer on disk does not move.
 const NOT_THERE: &str = "The file is not there any more.";
 
-/// Moves duplicate copies to the trash and back, and keeps the log.
+/// Moves duplicate copies to the trash and back, and keeps the log. A
+/// clone shares the index, the trash, the event sink and the running
+/// cleanups.
+#[derive(Clone)]
 pub struct DuplicateResolver {
     index: Arc<Mutex<Index>>,
     trash: Arc<dyn Trash>,
     emit: Emit,
     /// The OS font folders: a copy in one never moves (rule 4).
     system: Vec<PathBuf>,
+    /// The cleanups being applied (E56.7), by job.
+    running: cleanup::Running,
 }
 
 impl std::fmt::Debug for DuplicateResolver {
@@ -67,6 +72,7 @@ impl DuplicateResolver {
             trash,
             emit: Arc::new(emit),
             system: crate::duplicate_sets::system_folders(),
+            running: cleanup::Running::default(),
         }
     }
 
@@ -376,6 +382,8 @@ fn moved_merge(
     plan.choose(&still)?;
     Ok(plan)
 }
+
+pub mod cleanup;
 
 #[cfg(test)]
 mod tests;

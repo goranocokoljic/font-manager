@@ -21,6 +21,7 @@ import {
 } from './mockWall';
 import { duplicateSets, listDuplicateSets, type SetFile } from './mockDuplicates';
 import { listFolderPairFiles, listFolderPairs, type PairRoot } from './mockFolderPairs';
+import { mockPlanCleanup } from './mockCleanup';
 import {
   API_VERSION,
   type ActivationMode,
@@ -104,6 +105,7 @@ import {
   type PreviewRequest,
   type Problem,
   type Resolution,
+  type CleanupSession,
   type RuleGroup,
   type SidecarConflict,
   type ProjectSet,
@@ -2996,6 +2998,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
   const resolutions: Resolution[] = [];
+  // Applied cleanup plans, newest first (E56.7).
+  const sessions: CleanupSession[] = [];
   // Sidecar conflicts (E28.1): each is listed in Problems until resolved.
   const sidecarConflicts: SidecarConflict[] = structuredClone(options.sidecarConflicts ?? []);
   const duplicates = (): DuplicateGroup[] =>
@@ -4948,6 +4952,182 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return structuredClone(resolution);
     },
     listResolutions: async () => structuredClone(resolutions),
+    // As the Rust mock (E56.7): no index, no disk, no facts; the apply is done at once.
+    planCleanup: async (req) => {
+      const scope = req.scope ?? { kind: 'library' as const };
+      if (scope.kind === 'source' && !sources.some((s) => s.id === scope.source))
+        throw {
+          code: 'notFound' as const,
+          message: `Source ${scope.source} was not found.`,
+          detail: null,
+        };
+      const files = setFiles();
+      const all = duplicateSets(files, { kind: 'library' });
+      const activeFiles = new Map<string, ActivationMode>();
+      for (const f of faces) {
+        const mode = active.get(f.face.id);
+        if (mode && !activeFiles.has(f.path)) activeFiles.set(f.path, mode);
+      }
+      const sourceOf = new Map(files.map((f) => [f.path, f.source]));
+      const inScope = (path: string) =>
+        scope.kind === 'source'
+          ? sourceOf.get(path) === scope.source
+          : scope.kind === 'folder'
+            ? path === scope.path || path.startsWith(`${scope.path.replace(/[\\/]+$/, '')}/`)
+            : true;
+      const planned = mockPlanCleanup(all, req, activeFiles, inScope);
+      if (typeof planned === 'string') throw invalid(planned);
+      return {
+        version: 1,
+        plannedAt: '2026-10-16T09:00:00Z',
+        request: req,
+        sets: planned.sets,
+        files: planned.files,
+        conflicts: [],
+        frees: planned.files
+          .filter((f) => f.action === 'trash')
+          .reduce((sum, f) => Math.min(sum + f.size, 0xffffffff), 0),
+        myLanguages: settings.myLanguages.length ? 'set' : 'notSet',
+      };
+    },
+    applyCleanup: async (req) => {
+      const plan = req.plan;
+      if (plan.version !== 1)
+        throw invalid('This plan was made by another version of Font Fu. Plan the cleanup again.');
+      if (plan.files.some((f) => f.action === 'hide'))
+        throw {
+          code: 'unsupported' as const,
+          message: 'Hiding a copy is not available yet. Plan the cleanup with the trash.',
+          detail: null,
+        };
+      if ((req.choices ?? []).length)
+        throw invalid('A choice names a value that is not a conflict of this plan.');
+      const job = ++nextId;
+      const id = ++nextId;
+      const leaving = plan.files.filter((f) => f.action !== 'stays');
+      const done: CleanupSession['files'] = leaving.map((f) => {
+        const mine = faces.filter((x) => x.path === f.path);
+        const hash = mine[0]?.hash;
+        const isActive = mine.some((x) => active.has(x.face.id));
+        let status: CleanupSession['files'][number]['status'] = 'trashed';
+        let message: string | null = null;
+        if (trashed.has(f.path) || hash === undefined) {
+          status = 'skipped';
+          message = 'The file is no longer in the library.';
+        } else if (hash !== f.hash) {
+          status = 'skipped';
+          message = 'The file changed since the plan was made, so it was not moved.';
+        } else if (isActive && !f.activation?.planned) {
+          status = 'skipped';
+          message = 'This copy is active. Deactivate it first, then move it to the trash.';
+        } else {
+          trashed.add(f.path);
+          mine.forEach((x) => active.delete(x.face.id));
+        }
+        return { path: f.path, set: f.set, kept: f.kept ?? '', size: f.size, status, message };
+      });
+      const moved = done.filter((f) => f.status === 'trashed');
+      sessions.unshift({
+        id,
+        name: req.name?.trim() || 'Cleanup of 2026-10-16',
+        at: '2026-10-16T09:00:00Z',
+        kind: 'cleanup',
+        cancelled: false,
+        running: false,
+        undone: false,
+        sets: new Set(done.map((f) => f.set)).size,
+        trashed: moved.length,
+        frees: moved.reduce((sum, f) => sum + (f.size ?? 0), 0),
+        files: done,
+      });
+      done.forEach((f, i) =>
+        emit({
+          type: 'cleanupProgress',
+          job,
+          session: id,
+          done: i + 1,
+          total: done.length,
+          path: f.path,
+          finished: false,
+          cancelled: false,
+        }),
+      );
+      if (moved.length)
+        emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
+      emit({
+        type: 'cleanupProgress',
+        job,
+        session: id,
+        done: done.length,
+        total: done.length,
+        path: null,
+        finished: true,
+        cancelled: false,
+      });
+      return job;
+    },
+    cancelCleanup: async (job) => {
+      throw { code: 'notFound' as const, message: `Cleanup ${job} was not found.`, detail: null };
+    },
+    listCleanupSessions: async () => {
+      const fromResolutions: CleanupSession[] = resolutions.map((r) => ({
+        id: r.id ?? 0,
+        name: `Keep ${r.kept.split(/[\\/]/).pop() ?? r.kept}`,
+        at: r.at,
+        kind: 'keepCopy',
+        cancelled: false,
+        running: false,
+        undone: r.undone,
+        sets: r.moves.length ? 1 : 0,
+        trashed: r.moves.filter((m) => m.status === 'trashed').length,
+        frees: 0,
+        files: r.moves.map((m) => ({
+          path: m.path,
+          set: null,
+          kept: r.kept,
+          size: null,
+          status: m.status,
+          message: m.message,
+        })),
+      }));
+      return structuredClone([...fromResolutions, ...sessions].sort((a, b) => b.id - a.id));
+    },
+    undoCleanupSession: async (req) => {
+      const s = sessions.find((x) => x.id === req.session);
+      if (!s) {
+        const r = resolutions.find((x) => x.id === req.session);
+        if (!r)
+          throw {
+            code: 'notFound' as const,
+            message: `Session ${req.session} was not found.`,
+            detail: null,
+          };
+        const paths = req.paths ?? [];
+        for (const m of r.moves)
+          if (m.status === 'trashed' && (!paths.length || paths.includes(m.path))) {
+            trashed.delete(m.path);
+            m.status = 'restored';
+          }
+        r.undone = !r.moves.some((m) => m.status === 'trashed');
+        emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
+        return (await client.listCleanupSessions()).find((x) => x.id === r.id)!;
+      }
+      const paths = req.paths ?? [];
+      for (const p of paths)
+        if (!s.files.some((f) => f.path === p))
+          throw invalid(`${p} is not a file of this session.`);
+      for (const f of s.files)
+        if (f.status === 'trashed' && (!paths.length || paths.includes(f.path))) {
+          trashed.delete(f.path);
+          f.status = 'restored';
+        }
+      const left = s.files.filter((f) => f.status === 'trashed');
+      s.trashed = left.length;
+      s.frees = left.reduce((sum, f) => sum + (f.size ?? 0), 0);
+      s.undone = left.length === 0;
+      emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
+      return structuredClone(s);
+    },
     listSidecarConflicts: async () => structuredClone(sidecarConflicts),
     resolveSidecarConflict: async (req) => {
       const c = sidecarConflicts.find((c) => c.id === req.id);

@@ -107,6 +107,14 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ),
         ("list_resolutions", String::new()),
         ("undo_resolution", "1".into()),
+        ("plan_cleanup", "{}".into()),
+        (
+            "apply_cleanup",
+            r#"{"plan":{"version":1,"plannedAt":"2026-11-21T00:00:00Z","request":{},"sets":0,"files":[],"conflicts":[],"frees":0,"myLanguages":"notSet"}}"#.into(),
+        ),
+        ("cancel_cleanup", "1".into()),
+        ("list_cleanup_sessions", String::new()),
+        ("undo_cleanup_session", r#"{"session":1}"#.into()),
         ("list_sidecar_conflicts", String::new()),
         (
             "resolve_sidecar_conflict",

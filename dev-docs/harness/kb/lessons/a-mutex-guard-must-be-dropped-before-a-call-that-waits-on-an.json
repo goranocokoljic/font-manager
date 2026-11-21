@@ -5,16 +5,18 @@
   "rule": "Before calling anything that blocks on another thread (a request/reply over a channel such as Watcher::ask, a join, a recv), make sure no lock that thread may need is held. A guard made in a `match` scrutinee or an `if let`/`while let` condition lives to the end of that statement, so `match self.lock().sources() { Ok(s) => other_thread_call(&s) }` keeps the lock across the call. Bind the value in its own statement first (`let sources = self.lock().sources();`). Test it deterministically: hold the lock the other thread takes first, let it reach its wait, start the call on a third thread, release, and assert the call returns within a timeout.",
   "rationale": "E51.1 (#599): `sync_watch` matched on `self.lock().sources()` and called the watcher thread inside the match; the watcher, mid-change, held the file index and waited for the index lock, so adding or pausing a source while fonts arrived froze the app.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
-    599
+    599,
+    667
   ],
   "file_globs": [
     "crates/fm-core/src/**/*.rs",
     "crates/fm-platform/src/**/*.rs",
-    "apps/desktop/src-tauri/src/**/*.rs"
+    "apps/desktop/src-tauri/src/**/*.rs",
+    "crates/fm-core/src/resolve/**"
   ],
   "first_seen": "2026-11-15T23:36:11.546Z",
-  "last_seen": "2026-11-15T23:36:11.546Z"
+  "last_seen": "2026-11-21T05:39:44.184Z"
 }

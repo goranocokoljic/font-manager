@@ -1168,6 +1168,32 @@ impl LibraryService for CoreApi {
         Ok(resolution)
     }
 
+    fn plan_cleanup(
+        &self,
+        req: fm_api::cleanup::PlanCleanupRequest,
+    ) -> ApiResult<fm_api::cleanup::CleanupPlan> {
+        self.cleanup_plan(req)
+    }
+
+    fn apply_cleanup(&self, req: fm_api::cleanup::ApplyCleanupRequest) -> ApiResult<JobId> {
+        self.cleanup_apply(req)
+    }
+
+    fn cancel_cleanup(&self, job: JobId) -> ApiResult<()> {
+        self.cleanup_cancel(job)
+    }
+
+    fn list_cleanup_sessions(&self) -> ApiResult<Vec<fm_api::cleanup::CleanupSession>> {
+        self.cleanup_sessions()
+    }
+
+    fn undo_cleanup_session(
+        &self,
+        req: fm_api::cleanup::UndoCleanupRequest,
+    ) -> ApiResult<fm_api::cleanup::CleanupSession> {
+        self.cleanup_undo(req)
+    }
+
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {
         Ok(self.lock().sidecar_conflicts()?)
     }
@@ -2370,6 +2396,7 @@ impl EventSource for CoreApi {
     }
 }
 
+mod cleanup;
 mod fetch_missing;
 mod install;
 

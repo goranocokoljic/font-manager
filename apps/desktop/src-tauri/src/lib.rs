@@ -1000,6 +1000,47 @@ async fn list_resolutions(state: State<'_, AppState>) -> ApiResult<Vec<Resolutio
     call(&state, |api| api.list_resolutions()).await
 }
 
+/// Plans a cleanup of the duplicate sets of a scope; touches nothing (E56.7).
+#[tauri::command]
+async fn plan_cleanup(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup::PlanCleanupRequest,
+) -> ApiResult<fm_api::cleanup::CleanupPlan> {
+    call(&state, move |api| api.plan_cleanup(req)).await
+}
+
+/// Applies a cleanup plan as one session on a job; progress arrives as events.
+#[tauri::command]
+async fn apply_cleanup(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup::ApplyCleanupRequest,
+) -> ApiResult<JobId> {
+    call(&state, move |api| api.apply_cleanup(req)).await
+}
+
+/// Stops a cleanup between two files.
+#[tauri::command]
+async fn cancel_cleanup(state: State<'_, AppState>, job: JobId) -> ApiResult<()> {
+    call(&state, move |api| api.cancel_cleanup(job)).await
+}
+
+/// The cleanup sessions and "Keep this one" actions, newest first.
+#[tauri::command]
+async fn list_cleanup_sessions(
+    state: State<'_, AppState>,
+) -> ApiResult<Vec<fm_api::cleanup::CleanupSession>> {
+    call(&state, move |api| api.list_cleanup_sessions()).await
+}
+
+/// Puts a session's files back from the trash, all or the ones named.
+#[tauri::command]
+async fn undo_cleanup_session(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup::UndoCleanupRequest,
+) -> ApiResult<fm_api::cleanup::CleanupSession> {
+    call(&state, move |api| api.undo_cleanup_session(req)).await
+}
+
 /// Puts the copies of a "Keep this one" action back from the trash.
 #[tauri::command]
 async fn undo_resolution(
@@ -1780,6 +1821,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             keep_copy,
             list_resolutions,
             undo_resolution,
+            plan_cleanup,
+            apply_cleanup,
+            cancel_cleanup,
+            list_cleanup_sessions,
+            undo_cleanup_session,
             list_sidecar_conflicts,
             resolve_sidecar_conflict,
             list_sources,
