@@ -2458,7 +2458,50 @@
     "compare": {
       "title": "{a} mit {b} vergleichen",
       "close": "Vergleich schließen",
-      "same": "Die Kopien enthalten dieselben Daten."
+      "same": "Die Kopien enthalten dieselben Daten.",
+      "first": "Erste Kopie",
+      "second": "Zweite Kopie",
+      "copyOption": "{n}. {name} · {version}",
+      "sampleLabel": "Mustertext",
+      "yourSample": "Ihr Muster",
+      "unreadable": "Diese Kopie konnte nicht gelesen werden.",
+      "notCompared": "Die Kopien werden nicht verglichen, weil eine davon nicht gelesen werden konnte.",
+      "locl": "locl",
+      "loclTitle": "Hat lokalisierte Formen (locl) für diese Sprache",
+      "inDraft": "Im Plan: {choice}",
+      "choice": {
+        "keep": "behalten",
+        "hide": "ausblenden"
+      },
+      "keepThis": "Diese behalten",
+      "keepThisName": "Diese behalten: {name}",
+      "hideName": "Ausblenden: {name}",
+      "keepBoth": "Beide behalten",
+      "containerOnly": "Nur der Container unterscheidet sich: die {a}- und die {b}-Datei enthalten dieselbe Schrift.",
+      "languages": "Sprachen",
+      "onlyCovers": "Nur {name} deckt {languages} vollständig ab.",
+      "onlyLocl": "Nur {name} hat lokalisierte Formen (locl) für {languages}.",
+      "glyphs": "Glyphen",
+      "glyphsOnly": {
+        "one": "{count} Glyphe nur in {name}:",
+        "other": "{count} Glyphen nur in {name}:"
+      },
+      "more": {
+        "one": "+{count} weitere",
+        "other": "+{count} weitere"
+      },
+      "featuresAxes": "Features und Achsen",
+      "featuresOnly": "Features nur in {name}",
+      "axesOnly": "Achsen nur in {name}",
+      "metrics": "Metriken",
+      "verticalMetrics": "Die vertikalen Metriken unterscheiden sich: der Zeilenabstand ändert sich.",
+      "unitsPerEm": "Die Einheiten pro Geviert unterscheiden sich.",
+      "advanceWidths": {
+        "one": "{count} Glyphe hat eine andere Breite.",
+        "other": "{count} Glyphen haben eine andere Breite."
+      },
+      "mayReflow": "Text in der einen Kopie kann in der anderen anders umbrechen.",
+      "otherData": "Glyphen, Metriken, Features, Achsen und Sprachen sind gleich. Andere Schriftdaten unterscheiden sich: {tables}."
     },
     "plan": {
       "heading": "Der Plan",

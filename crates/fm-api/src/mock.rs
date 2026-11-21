@@ -2200,11 +2200,34 @@ impl LibraryService for MockApi {
         let (a, b) = (face(req.a)?, face(req.b)?);
         // The sample has no files: only what it knows of each face is
         // compared (characters, features, axes), the rest is the same.
+        // Coverage as `face_coverage` reads it: a preset in full, and `locl`
+        // for Serbian (Cyrillic) where the face has its letters.
+        let full = |f: &MockFace| -> Vec<String> {
+            LANGUAGES
+                .iter()
+                .filter(|(_, _, _, chars)| chars.chars().all(|c| f.chars.contains(&c)))
+                .map(|(code, ..)| (*code).to_owned())
+                .collect()
+        };
+        let locl = |f: &MockFace| -> Vec<String> {
+            if f.chars.contains(&'б') {
+                vec!["sr-Cyrl".to_owned()]
+            } else {
+                Vec::new()
+            }
+        };
         let side = |f: &MockFace| ComparedCopy {
             face: f.detail.face.id,
             path: f.detail.path.clone(),
             format: Some(f.detail.face.format),
             health: Health::Ok,
+            languages: full(f),
+            locl: locl(f),
+        };
+        let minus = |x: Vec<String>, y: &[String]| -> Vec<String> {
+            let mut out: Vec<String> = x.into_iter().filter(|c| !y.contains(c)).collect();
+            out.sort();
+            out
         };
         let only = |x: &MockFace, y: &MockFace| -> Vec<char> {
             x.chars.difference(&y.chars).copied().collect()
@@ -2216,6 +2239,7 @@ impl LibraryService for MockApi {
                 .take(10)
                 .map(|c| format!("{c} (U+{:04X})", u32::from(*c)))
                 .collect(),
+            code_points: chars.iter().take(10).map(|c| Some(u32::from(*c))).collect(),
         };
         let tags = |x: &MockFace, y: &MockFace, of: fn(&FaceDetail) -> Vec<String>| {
             let theirs = of(&y.detail);
@@ -2227,6 +2251,10 @@ impl LibraryService for MockApi {
         let features = |d: &FaceDetail| d.features.iter().map(|f| f.tag.clone()).collect();
         let axes = |d: &FaceDetail| d.axes.iter().map(|x| x.tag.clone()).collect();
         let differences = CopyDifferences {
+            languages_gained: minus(full(b), &full(a)),
+            languages_lost: minus(full(a), &full(b)),
+            locl_gained: minus(locl(b), &locl(a)),
+            locl_lost: minus(locl(a), &locl(b)),
             glyphs_added: glyphs(only(b, a)),
             glyphs_removed: glyphs(only(a, b)),
             features_added: tags(b, a, features),

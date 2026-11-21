@@ -885,6 +885,16 @@ export type ComparedCopy = {
 	 *  could not (gone, cut off, malformed).
 	 */
 	health: Health,
+	/**
+	 *  The language presets (`data/charsets` codes) the file read now covers
+	 *  in full, in preset order; empty when it could not be read (E56.13).
+	 */
+	languages?: string[],
+	/**
+	 *  The language presets the file read now has `locl` forms for, in
+	 *  preset order; empty when it could not be read (E56.13).
+	 */
+	locl?: string[],
 };
 
 /**  A saved comparison, ready to reopen. */
@@ -1010,6 +1020,10 @@ export type CopyDifferences = {
 	languagesGained: string[],
 	/**  Language presets the first copy covers in full and the second does not. */
 	languagesLost: string[],
+	/**  Language presets only the second copy has `locl` forms for (E56.13). */
+	loclGained?: string[],
+	/**  Language presets only the first copy has `locl` forms for (E56.13). */
+	loclLost?: string[],
 	/**  Glyphs the second copy has and the first does not. */
 	glyphsAdded: GlyphChange,
 	/**  Glyphs the first copy has and the second does not. */
@@ -2703,6 +2717,11 @@ export type GlyphChange = {
 	 *  name: `ä (U+00E4)` for a character, the glyph name otherwise.
 	 */
 	first: string[],
+	/**
+	 *  The character each of `first` maps, in the same order; `None` for a
+	 *  glyph known by its name only (E56.13), so the UI can draw it.
+	 */
+	codePoints?: (number | null)[],
 };
 
 /**  The detail of one mapped character of a face. */

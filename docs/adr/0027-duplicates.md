@@ -1,6 +1,6 @@
 # 0027 — Duplicates
 
-Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5; 2026-11-21, E56.6, E56.7)
+Status: Accepted (2026-11-20, E56.1; amended 2026-11-20, E56.2, E56.3, E56.4, E56.5; 2026-11-21, E56.6, E56.7, E56.13)
 
 ## Context
 
@@ -85,6 +85,18 @@ WOFF2 stores `glyf` differently; `head` without its checksum and transform
 flag; `DSIG` and `loca` left out) only the container differs, and the answer
 says so. A file that cannot be read is `Health::Broken` for its side and the
 comparison names that side; it is never an error.
+
+**The comparison names each side's languages (E56.13).** So the UI shows
+what each copy covers of the user's languages without computing it, each side
+of `compare_copies` also carries the presets its file covers in full
+(`languages`) and those it has `locl` forms for (`locl`), read from the file
+like the rest of the comparison (empty for a side that could not be read);
+the differences name the presets only one side has `locl` for (`loclGained`,
+`loclLost`), and each glyph change carries the character of each glyph it
+names (`codePoints`, `None` for a glyph known by name), so the UI draws it in
+the copy that has it. All are new `serde(default)` fields; no type changes.
+The mocks read the sample faces' characters and the copies' hints (other
+metrics, no `locl`, an unreadable file), because they have no font files.
 
 **Comparison budget.** `scripts/bench.sh` times `compare_copies` on the two
 copies of a set in the bench index that hold the most bytes, other versions

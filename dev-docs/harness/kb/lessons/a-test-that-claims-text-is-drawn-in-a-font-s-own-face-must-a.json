@@ -1,0 +1,19 @@
+{
+  "id": "a-test-that-claims-text-is-drawn-in-a-font-s-own-face-must-a",
+  "title": "A test that claims text is drawn in a font's own face must assert the computed font-family",
+  "category": "testing",
+  "rule": "When a criterion says a specimen, glyph tile or preview is drawn in a face's own font (webview font through the asset protocol), the Playwright check must serve a fixture font for `/fmfont/*` (page.route) and assert `data-loaded=\"true\"` and `toHaveCSS('font-family', /fm-face-/)` on each element, and, where two faces sit side by side, that each element has the family of its own side. Tofu and text assertions come from the samples API and pass in any font, so they do not prove the face.",
+  "rationale": "E56.13 (#673): the copy comparison's specimens and glyph lists had no font-family check; removing the useHeldFace binding left every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    673
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/components/**/*.vue"
+  ],
+  "first_seen": "2026-11-21T15:53:30.211Z",
+  "last_seen": "2026-11-21T15:53:30.211Z"
+}

@@ -56,11 +56,23 @@ pub struct Target {
 pub fn compare(a: &Target, b: &Target) -> CopyComparison {
     let read_a = read(a);
     let read_b = read(b);
-    let side = |t: &Target, r: &Read| ComparedCopy {
-        face: t.face,
-        path: t.path.to_string_lossy().into_owned(),
-        format: r.format,
-        health: r.font.as_ref().err().cloned().unwrap_or(Health::Ok),
+    let side = |t: &Target, r: &Read| {
+        let (full, locl) = r
+            .font
+            .as_ref()
+            .map(|l| {
+                let langs = languages(&l.parsed);
+                (langs.complete, langs.locl)
+            })
+            .unwrap_or_default();
+        ComparedCopy {
+            face: t.face,
+            path: t.path.to_string_lossy().into_owned(),
+            format: r.format,
+            health: r.font.as_ref().err().cloned().unwrap_or(Health::Ok),
+            languages: full,
+            locl,
+        }
     };
     let (sa, sb) = (side(a, &read_a), side(b, &read_b));
     let (differences, summary) = match (&read_a.font, &read_b.font) {
@@ -182,6 +194,38 @@ impl GlyphKey {
             GlyphKey::Name(name) => name.clone(),
         }
     }
+
+    /// The character the glyph maps; `None` for a glyph known by name.
+    fn code_point(&self) -> Option<u32> {
+        match self {
+            GlyphKey::Char(cp) => Some(*cp),
+            GlyphKey::Name(_) => None,
+        }
+    }
+}
+
+/// The presets a face covers in full and those it has `locl` forms for,
+/// each in preset order.
+struct Languages {
+    complete: Vec<String>,
+    locl: Vec<String>,
+}
+
+fn languages(parsed: &ParsedFace) -> Languages {
+    let set = CodePointSet::from_code_points(parsed.code_points.iter().copied());
+    let all = coverage::languages(&set, &parsed.locl_languages);
+    Languages {
+        complete: all
+            .iter()
+            .filter(|l| l.is_complete())
+            .map(|l| l.code.clone())
+            .collect(),
+        locl: all
+            .iter()
+            .filter(|l| l.has_locl)
+            .map(|l| l.code.clone())
+            .collect(),
+    }
 }
 
 /// What one face holds that a comparison looks at.
@@ -198,6 +242,7 @@ struct Facts {
     vertical: [Option<i32>; 8],
     advances: BTreeMap<GlyphId, f32>,
     complete: BTreeSet<String>,
+    locl: BTreeSet<String>,
 }
 
 fn facts(font: &FontRef<'_>, parsed: &ParsedFace) -> Facts {
@@ -237,12 +282,7 @@ fn facts(font: &FontRef<'_>, parsed: &ParsedFace) -> Facts {
         os2.as_ref().map(|o| i32::from(o.us_win_ascent())),
         os2.as_ref().map(|o| i32::from(o.us_win_descent())),
     ];
-    let set = CodePointSet::from_code_points(parsed.code_points.iter().copied());
-    let complete = coverage::languages(&set, &parsed.locl_languages)
-        .into_iter()
-        .filter(coverage::FaceLanguage::is_complete)
-        .map(|l| l.code)
-        .collect();
+    let langs = languages(parsed);
     Facts {
         glyphs,
         names,
@@ -250,7 +290,8 @@ fn facts(font: &FontRef<'_>, parsed: &ParsedFace) -> Facts {
         upem: font.head().map(|h| h.units_per_em()).unwrap_or(0),
         vertical,
         advances,
-        complete,
+        complete: langs.complete.into_iter().collect(),
+        locl: langs.locl.into_iter().collect(),
     }
 }
 
@@ -276,6 +317,11 @@ fn differences(la: &Loaded, fa: &FontRef<'_>, lb: &Loaded, fb: &FontRef<'_>) -> 
         GlyphChange {
             count: u32::try_from(keys.len()).unwrap_or(u32::MAX),
             first: keys.iter().take(FIRST_GLYPHS).map(|k| k.label()).collect(),
+            code_points: keys
+                .iter()
+                .take(FIRST_GLYPHS)
+                .map(|k| k.code_point())
+                .collect(),
         }
     };
     let tags = |x: &[String], y: &[String]| -> Vec<String> {
@@ -306,6 +352,8 @@ fn differences(la: &Loaded, fa: &FontRef<'_>, lb: &Loaded, fb: &FontRef<'_>) -> 
     CopyDifferences {
         languages_gained: b.complete.difference(&a.complete).cloned().collect(),
         languages_lost: a.complete.difference(&b.complete).cloned().collect(),
+        locl_gained: b.locl.difference(&a.locl).cloned().collect(),
+        locl_lost: a.locl.difference(&b.locl).cloned().collect(),
         glyphs_added: only(&b, &a),
         glyphs_removed: only(&a, &b),
         features_added: tags(&lb.parsed.features, &la.parsed.features),
@@ -473,6 +521,18 @@ fn summary(
         out.push(format!(
             "The first copy covers {} in full; the second does not.",
             list(&names(&d.languages_lost))
+        ));
+    }
+    if !d.locl_gained.is_empty() {
+        out.push(format!(
+            "Only the second copy has localized forms (locl) for {}.",
+            list(&names(&d.locl_gained))
+        ));
+    }
+    if !d.locl_lost.is_empty() {
+        out.push(format!(
+            "Only the first copy has localized forms (locl) for {}.",
+            list(&names(&d.locl_lost))
         ));
     }
     let glyphs = |c: &GlyphChange, verb: &str| {

@@ -1,0 +1,20 @@
+{
+  "id": "a-section-shown-only-for-a-non-empty-api-list-needs-mock-dat",
+  "title": "A section shown only for a non-empty API list needs mock data where the list is non-empty",
+  "category": "testing",
+  "rule": "When a view renders a section only when an API answer holds items (features added, axes removed, a changed metric), make the MockApi produce a case where that list is non-empty (a mock hint or a copy with different data) and assert the section's labels and items in Playwright, plus its absence in a case where the list is empty. Mock data that always yields empty lists renders nothing, so deleting the section or swapping its labels passes every test.",
+  "rationale": "E56.13 (#673): every mock pair copied one sample face, so the features and axes lists of the comparison never rendered in any test.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    673
+  ],
+  "file_globs": [
+    "apps/desktop/src/api/mock.ts",
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/components/**/*.vue"
+  ],
+  "first_seen": "2026-11-21T15:53:30.211Z",
+  "last_seen": "2026-11-21T15:53:30.211Z"
+}

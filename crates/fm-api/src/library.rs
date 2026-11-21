@@ -1269,6 +1269,14 @@ pub struct ComparedCopy {
     /// Whether the file could be read now: `Broken` with the reason when it
     /// could not (gone, cut off, malformed).
     pub health: Health,
+    /// The language presets (`data/charsets` codes) the file read now covers
+    /// in full, in preset order; empty when it could not be read (E56.13).
+    #[serde(default)]
+    pub languages: Vec<String>,
+    /// The language presets the file read now has `locl` forms for, in
+    /// preset order; empty when it could not be read (E56.13).
+    #[serde(default)]
+    pub locl: Vec<String>,
 }
 
 /// Glyphs one copy has and the other does not.
@@ -1280,6 +1288,10 @@ pub struct GlyphChange {
     /// The first of them (at most 10), in Unicode order, then by glyph
     /// name: `ä (U+00E4)` for a character, the glyph name otherwise.
     pub first: Vec<String>,
+    /// The character each of `first` maps, in the same order; `None` for a
+    /// glyph known by its name only (E56.13), so the UI can draw it.
+    #[serde(default)]
+    pub code_points: Vec<Option<u32>>,
 }
 
 /// What differs from one copy to the other (E56.2). Glyphs are matched by
@@ -1292,6 +1304,12 @@ pub struct CopyDifferences {
     pub languages_gained: Vec<String>,
     /// Language presets the first copy covers in full and the second does not.
     pub languages_lost: Vec<String>,
+    /// Language presets only the second copy has `locl` forms for (E56.13).
+    #[serde(default)]
+    pub locl_gained: Vec<String>,
+    /// Language presets only the first copy has `locl` forms for (E56.13).
+    #[serde(default)]
+    pub locl_lost: Vec<String>,
     /// Glyphs the second copy has and the first does not.
     pub glyphs_added: GlyphChange,
     /// Glyphs the first copy has and the second does not.
