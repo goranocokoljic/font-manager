@@ -23,6 +23,7 @@
 pub mod activation;
 pub mod catalog;
 pub mod cleanup;
+pub mod cleanup_draft;
 pub mod common;
 pub mod comparison;
 pub mod error;
@@ -180,6 +181,10 @@ pub fn types() -> specta::Types {
         cleanup::ApplyCleanupRequest,
         cleanup::CleanupSession,
         cleanup::UndoCleanupRequest,
+        cleanup_draft::DuplicatesOverviewRequest,
+        cleanup_draft::DuplicatesOverview,
+        cleanup_draft::CleanupDraft,
+        cleanup_draft::CleanupDraftUpdate,
         library::SidecarConflict,
         library::SidecarField,
         library::ConflictSide,

@@ -4436,6 +4436,68 @@ fn the_mock_lists_the_duplicate_sets_the_typescript_mock_lists() {
 }
 
 #[test]
+#[allow(clippy::unwrap_used)] // test: a failure fails the test
+fn the_mock_filters_sorts_and_leaves_decided_sets_out_of_the_queue() {
+    use fm_api::cleanup_draft::{CleanupDraftUpdate, DuplicatesOverviewRequest, SetDecision};
+    use fm_api::library::{DuplicateLevel, DuplicateSetFilter, DuplicateSetSort};
+    let (mock, _) = with_duplicate_files();
+    let list = |filter: DuplicateSetFilter, sort: DuplicateSetSort| {
+        mock.list_duplicate_sets(ListDuplicateSetsRequest {
+            filter,
+            sort,
+            ..Default::default()
+        })
+        .unwrap()
+    };
+    let other = list(
+        DuplicateSetFilter {
+            levels: vec![DuplicateLevel::OtherVersion],
+            ..Default::default()
+        },
+        DuplicateSetSort::Name,
+    );
+    assert_eq!(other.total, 1);
+    assert_eq!(other.items[0].id, "name:Inter-Regular");
+    let by_copies = list(DuplicateSetFilter::default(), DuplicateSetSort::Copies);
+    assert_eq!(
+        by_copies.items[0].copies.len(),
+        3,
+        "Inter's three copies first"
+    );
+    // The mock has no index to recommend from: no set has a recommendation.
+    let recommended = list(
+        DuplicateSetFilter {
+            recommendation: Some(fm_api::library::RecommendationFilter::HasRecommendation),
+            ..Default::default()
+        },
+        DuplicateSetSort::Name,
+    );
+    assert_eq!(recommended.total, 0);
+
+    let draft = mock
+        .update_cleanup_draft(CleanupDraftUpdate::Decide {
+            set: "name:Inter-Regular".into(),
+            decision: SetDecision::NotDuplicates,
+        })
+        .unwrap();
+    assert_eq!(draft, mock.get_cleanup_draft().unwrap());
+    let queue = list(
+        DuplicateSetFilter {
+            undecided: true,
+            ..Default::default()
+        },
+        DuplicateSetSort::Name,
+    );
+    assert_eq!(queue.total, 1, "the decided set left the queue");
+    let overview = mock
+        .duplicates_overview(DuplicatesOverviewRequest::default())
+        .unwrap();
+    assert_eq!(overview.fonts, 2);
+    assert_eq!(overview.identical.sets, 1);
+    assert_eq!(overview.other_version.files, 2);
+}
+
+#[test]
 fn duplicate_sets_page_scope_and_refuse_an_unknown_source() {
     let (mock, _) = with_duplicate_files();
     let all = mock

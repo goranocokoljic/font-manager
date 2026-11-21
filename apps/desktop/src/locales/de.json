@@ -2296,5 +2296,210 @@
       "installsNothing": "Installiert nichts von selbst",
       "installsNothingNote": "Gibt es eine neue Version, sehen Sie, was sich geändert hat, und entscheiden selbst. Eine Hauptversion fragt zweimal nach."
     }
+  },
+  "duplicatesModule": {
+    "title": "Duplikate",
+    "back": "Bibliothek",
+    "backTitle": "Zurück zur Bibliothek (Esc)",
+    "navLabel": "Duplikate",
+    "nav": {
+      "overview": "Übersicht",
+      "folders": "Ordner",
+      "sets": "Sätze",
+      "plan": "Plan",
+      "history": "Verlauf",
+      "hidden": "Ausgeblendete Kopien",
+      "rules": "Sprachen und Regeln"
+    },
+    "languages": {
+      "heading": "Meine Sprachen",
+      "none": "Keine festgelegt",
+      "link": "Sprachen und Regeln ändern"
+    },
+    "trash": {
+      "windows": "Papierkorb",
+      "unix": "Papierkorb"
+    },
+    "overview": {
+      "heading": {
+        "one": "{count} Schrift hat mehr als eine Kopie",
+        "other": "{count} Schriften haben mehr als eine Kopie"
+      },
+      "files": {
+        "one": "{count} zusätzliche Datei",
+        "other": "{count} zusätzliche Dateien"
+      },
+      "inFolders": {
+        "one": "in {count} Ordner",
+        "other": "in {count} Ordnern"
+      },
+      "rest": "bis zu {size}. Nichts wird entfernt, bevor du einen Plan anwendest, und was du entfernst, kommt in den {trash}.",
+      "none": "Keine Schrift hat mehr als eine Kopie.",
+      "noneBody": "Findet ein Scan eine zweite Kopie einer Schrift, steht sie hier.",
+      "noLanguages": "Lege die Sprachen fest, in denen du arbeitest, damit keine Kopie, die als einzige eine davon abdeckt, je zum Entfernen empfohlen wird.",
+      "setLanguages": "Sprachen festlegen",
+      "identical": {
+        "one": "{count} identische Kopie",
+        "other": "{count} identische Kopien"
+      },
+      "identicalBody": "Dieselbe Datei an mehr als einem Ort. Je eine Kopie bleibt, und deine Favoriten, Bewertungen, Tags und Sammlungen gehen auf sie über.",
+      "review": "Plan prüfen",
+      "inPlan": "Im Plan",
+      "frees": "gibt {size} frei",
+      "toDecide": "Zu entscheiden",
+      "otherVersion": "Andere Version",
+      "otherVersionBody": "Verglichen nach deinen Sprachen, dann nach Version. Jeder Satz zeigt, was die neuere Datei gewinnt oder verliert.",
+      "sameVersion": "Gleiche Version, andere Datei",
+      "sameVersionBody": "Meist dieselbe Schrift als OpenType und TrueType. Die Formatreihenfolge in deinen Regeln entscheidet.",
+      "keepBoth": "Beide behalten",
+      "keepBothBody": "Keine Kopie deckt alles ab, was die anderen in deinen Sprachen abdecken. Nichts wird zum Entfernen empfohlen.",
+      "protected": "geschützt",
+      "fonts": {
+        "one": "{count} Schrift",
+        "other": "{count} Schriften"
+      },
+      "fileCount": {
+        "one": "{count} Datei",
+        "other": "{count} Dateien"
+      },
+      "pairs": "Ordner mit denselben Schriften",
+      "allPairs": {
+        "one": "Alle {count} Paare",
+        "other": "Alle {count} Paare"
+      },
+      "contained": "ist enthalten in",
+      "shares": "teilt die meisten Dateien mit",
+      "shared": "{shared} von {count} Dateien"
+    },
+    "queue": {
+      "heading": {
+        "one": "{count} Satz zu entscheiden",
+        "other": "{count} Sätze zu entscheiden"
+      },
+      "label": "Zu entscheidende Sätze",
+      "levels": "Stufe",
+      "all": "Alle",
+      "chip": "{name} · {count}",
+      "filters": "Filter",
+      "source": "Quelle",
+      "anySource": "Alle Quellen",
+      "folder": "Ordner",
+      "folderPlaceholder": "Vollständiger Pfad eines Ordners",
+      "format": "Format",
+      "anyFormat": "Alle Formate",
+      "recommended": "Mit Empfehlung",
+      "sort": "Reihenfolge",
+      "byName": "nach Name",
+      "byFrees": "nach frei werdendem Platz",
+      "byCopies": "nach Kopien",
+      "copies": {
+        "one": "{count} Kopie",
+        "other": "{count} Kopien"
+      },
+      "empty": "Kein Satz ist mehr zu entscheiden.",
+      "emptyBody": "Jeder Satz ist im Plan, oder auf dieser Stufe gibt es keinen.",
+      "emptyFiltered": "Kein Satz passt zu diesen Filtern.",
+      "loading": "Wird geladen …",
+      "level": {
+        "identical": "Identisch",
+        "sameVersion": "Gleiche Version",
+        "otherVersion": "Andere Version",
+        "formatsDiffer": "Gleiche Version · {formats}"
+      }
+    },
+    "set": {
+      "region": "Satz {name}",
+      "copies": {
+        "one": "{count} Kopie",
+        "other": "{count} Kopien"
+      },
+      "position": "Satz {n} von {total}",
+      "compare": "Zwei Kopien vergleichen",
+      "recommended": "Behalten",
+      "recommendedTitle": "Die Kopie, die die Regeln empfehlen",
+      "outcome": "Was mit {name} geschieht",
+      "keep": "Behalten",
+      "hide": "Ausblenden",
+      "stays": "Bleibt",
+      "noVersion": "Keine Version",
+      "glyphs": {
+        "one": "{count} Glyphe",
+        "other": "{count} Glyphen"
+      },
+      "missing": "{name} fehlt",
+      "covered": "{name}",
+      "favorite": "Favorit",
+      "tags": {
+        "one": "{count} Tag",
+        "other": "{count} Tags"
+      },
+      "collections": {
+        "one": "{count} Sammlung",
+        "other": "{count} Sammlungen"
+      },
+      "notDuplicates": "Keine Duplikate",
+      "keepAll": "Alle behalten",
+      "add": "In den Plan und weiter",
+      "leaving": {
+        "one": "{count} Datei in den {trash}",
+        "other": "{count} Dateien in den {trash}"
+      },
+      "hiding": {
+        "one": "{count} ausgeblendet",
+        "other": "{count} ausgeblendet"
+      },
+      "noKeeper": "Behalte mindestens eine Kopie.",
+      "keys": "Tasten: ↑ ↓ Satz · 1–9 eine Kopie behalten · T, H, K Ergebnis der fokussierten Kopie · B alle behalten · N keine Duplikate · C vergleichen · Eingabe hinzufügen"
+    },
+    "compare": {
+      "title": "{a} und {b}",
+      "close": "Vergleich schließen",
+      "same": "Die Kopien enthalten dieselben Daten."
+    },
+    "plan": {
+      "heading": "Der Plan",
+      "note": "Nichts wird verschoben, bevor du den Plan anwendest.",
+      "identicalIn": {
+        "one": "{count} identische Kopie ist im Plan.",
+        "other": "{count} identische Kopien sind im Plan."
+      },
+      "identicalOut": "Identische Kopien sind nicht im Plan.",
+      "addIdentical": "Identische Kopien hinzufügen",
+      "removeIdentical": "Identische Kopien herausnehmen",
+      "decisions": "Deine Entscheidungen",
+      "empty": "Noch ist nichts im Plan.",
+      "takeBack": "Zurücknehmen",
+      "takeBackName": "{name} zurücknehmen",
+      "clear": "Neu beginnen",
+      "kind": {
+        "copies": {
+          "one": "{count} Kopie geht",
+          "other": "{count} Kopien gehen"
+        },
+        "keepAll": "Alle behalten",
+        "notDuplicates": "Keine Duplikate"
+      }
+    },
+    "history": {
+      "empty": "Noch keine Bereinigung.",
+      "files": {
+        "one": "{count} Datei",
+        "other": "{count} Dateien"
+      }
+    },
+    "hidden": {
+      "empty": "Keine ausgeblendeten Kopien.",
+      "body": "Eine ausgeblendete Kopie bleibt, wo sie ist, und verlässt die Bibliothek."
+    },
+    "folders": {
+      "empty": "Keine Ordner enthalten dieselben Schriften."
+    },
+    "rules": {
+      "heading": "Meine Sprachen",
+      "body": "Eine Kopie, die als einzige eine dieser Sprachen abdeckt, wird nie zum Entfernen empfohlen.",
+      "add": "Sprache hinzufügen",
+      "remove": "{name} entfernen",
+      "none": "Keine Sprache festgelegt."
+    }
   }
 }

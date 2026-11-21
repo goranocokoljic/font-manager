@@ -1032,6 +1032,32 @@ async fn list_cleanup_sessions(
     call(&state, move |api| api.list_cleanup_sessions()).await
 }
 
+/// What a cleanup of a scope would do with the saved policy, counted (E56.11).
+#[tauri::command]
+async fn duplicates_overview(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup_draft::DuplicatesOverviewRequest,
+) -> ApiResult<fm_api::cleanup_draft::DuplicatesOverview> {
+    call(&state, move |api| api.duplicates_overview(req)).await
+}
+
+/// The decisions collected for the next cleanup plan (E56.11).
+#[tauri::command]
+async fn get_cleanup_draft(
+    state: State<'_, AppState>,
+) -> ApiResult<fm_api::cleanup_draft::CleanupDraft> {
+    call(&state, move |api| api.get_cleanup_draft()).await
+}
+
+/// Changes the draft plan; touches no file (E56.11).
+#[tauri::command]
+async fn update_cleanup_draft(
+    state: State<'_, AppState>,
+    update: fm_api::cleanup_draft::CleanupDraftUpdate,
+) -> ApiResult<fm_api::cleanup_draft::CleanupDraft> {
+    call(&state, move |api| api.update_cleanup_draft(update)).await
+}
+
 /// Puts a session's files back from the trash, all or the ones named.
 #[tauri::command]
 async fn undo_cleanup_session(
@@ -1825,6 +1851,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             apply_cleanup,
             cancel_cleanup,
             list_cleanup_sessions,
+            duplicates_overview,
+            get_cleanup_draft,
+            update_cleanup_draft,
             undo_cleanup_session,
             list_sidecar_conflicts,
             resolve_sidecar_conflict,

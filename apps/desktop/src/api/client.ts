@@ -118,9 +118,13 @@ import type {
   Resolution,
   ResolutionId,
   PlanCleanupRequest,
+  CleanupDraft,
+  CleanupDraftUpdate,
   CleanupPlan,
   ApplyCleanupRequest,
   CleanupSession,
+  DuplicatesOverview,
+  DuplicatesOverviewRequest,
   UndoCleanupRequest,
   ResolveSidecarConflictRequest,
   SampleText,
@@ -402,6 +406,12 @@ export interface FmClient {
   listCleanupSessions(): Promise<CleanupSession[]>;
   /** Puts a session's files back from the trash, all of them or the ones named. */
   undoCleanupSession(req: UndoCleanupRequest): Promise<CleanupSession>;
+  /** What a cleanup of a scope would do with the saved policy, counted (E56.11). */
+  duplicatesOverview(req: DuplicatesOverviewRequest): Promise<DuplicatesOverview>;
+  /** The decisions collected for the next cleanup plan, as stored (E56.11). */
+  getCleanupDraft(): Promise<CleanupDraft>;
+  /** Changes the draft plan and returns it; touches no file (E56.11). */
+  updateCleanupDraft(update: CleanupDraftUpdate): Promise<CleanupDraft>;
   /** Sidecar values another computer set differently, oldest first (E28.1). */
   listSidecarConflicts(): Promise<SidecarConflict[]>;
   /** Keeps one value of a sidecar conflict; the other computer takes it. */
@@ -614,6 +624,9 @@ export const tauriClient: FmClient = {
   cancelCleanup: (job) => invoke<void>('cancel_cleanup', { job }),
   listCleanupSessions: () => invoke<CleanupSession[]>('list_cleanup_sessions'),
   undoCleanupSession: (req) => invoke<CleanupSession>('undo_cleanup_session', { req }),
+  duplicatesOverview: (req) => invoke<DuplicatesOverview>('duplicates_overview', { req }),
+  getCleanupDraft: () => invoke<CleanupDraft>('get_cleanup_draft'),
+  updateCleanupDraft: (update) => invoke<CleanupDraft>('update_cleanup_draft', { update }),
   listSidecarConflicts: () => invoke<SidecarConflict[]>('list_sidecar_conflicts'),
   resolveSidecarConflict: (req) => invoke<void>('resolve_sidecar_conflict', { req }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),

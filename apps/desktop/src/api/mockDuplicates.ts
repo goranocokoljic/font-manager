@@ -178,12 +178,60 @@ export const duplicateSets = (files: SetFile[], scope: DuplicateScope): Duplicat
   });
 };
 
-/** The page `req` asks for of the sets among `files`. */
+/**
+ * The bytes removing the recommended copies frees, as `DuplicateSet::frees`: the
+ * recommendation's `remove` copies; without one (the mocks) every copy outside the
+ * system folders but the largest.
+ */
+export const setFrees = (set: DuplicateSet): number => {
+  const cap = (n: number) => Math.min(n, 0xffff_ffff);
+  if (set.recommendation)
+    return cap(
+      set.recommendation.remove.reduce(
+        (n, r) => n + (set.copies.find((c) => c.path === r.path)?.size ?? 0),
+        0,
+      ),
+    );
+  const sizes = set.copies.filter((c) => !c.system).map((c) => c.size);
+  const total = cap(sizes.reduce((n, x) => n + x, 0));
+  return Math.max(0, total - Math.max(0, ...sizes));
+};
+
+/** Whether `set` passes `req.filter`, as `DuplicateSetFilter::matches`. */
+const matches = (set: DuplicateSet, req: ListDuplicateSetsRequest, decided: Set<string>) => {
+  const f = req.filter ?? {};
+  const r = set.recommendation;
+  return (
+    (!f.levels?.length || f.levels.includes(set.level)) &&
+    (f.format == null || set.copies.some((c) => c.format === f.format)) &&
+    (f.recommendation == null ||
+      (r != null &&
+        (f.recommendation === 'keepBoth'
+          ? r.outcome === 'keepBoth'
+          : r.outcome === 'keeper' && r.remove.length > 0))) &&
+    !(f.undecided && decided.has(set.id))
+  );
+};
+
+/**
+ * The page `req` asks for of the sets among `files`, filtered and sorted as
+ * `DuplicateSet::page`; `decided` holds the sets the cleanup draft has decided.
+ */
 export const listDuplicateSets = (
   files: SetFile[],
   req: ListDuplicateSetsRequest,
+  decided: Set<string> = new Set(),
 ): Paged<DuplicateSet> => {
-  const all = duplicateSets(files, req.scope ?? { kind: 'library' });
+  const all = duplicateSets(files, req.scope ?? { kind: 'library' }).filter((s) =>
+    matches(s, req, decided),
+  );
+  const name = (s: DuplicateSet) => s.postscriptName ?? '';
+  const byName = (a: DuplicateSet, b: DuplicateSet) =>
+    byString(name(a), name(b)) || byString(a.id, b.id);
+  // A stable sort, as Rust's `sort_by_cached_key`; by name the listing's own order.
+  if (req.sort === 'frees') all.sort((a, b) => setFrees(b) - setFrees(a) || byName(a, b));
+  else if (req.sort === 'copies')
+    all.sort((a, b) => b.copies.length - a.copies.length || byName(a, b));
   const offset = req.page?.offset ?? 0;
   const limit = Math.min(req.page?.limit ?? 100, MAX_PAGE);
   return { items: all.slice(offset, offset + limit), total: all.length };

@@ -105,6 +105,11 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; cancel_cleanup, json!(1));
     same!(seen, d, c; list_cleanup_sessions);
     same!(seen, d, c; undo_cleanup_session, json!({ "session": 999 }));
+    same!(seen, d, c; duplicates_overview, json!({}));
+    same!(seen, d, c; duplicates_overview, json!({ "scope": { "kind": "source", "source": 999 } }));
+    same!(seen, d, c; get_cleanup_draft);
+    same!(seen, d, c; update_cleanup_draft, json!({ "kind": "identical", "include": false }));
+    same!(seen, d, c; update_cleanup_draft, json!({ "kind": "decide", "set": "name:Nope", "decision": { "kind": "keepAll" } }));
     same!(seen, d, c; list_sidecar_conflicts);
     same!(seen, d, c; resolve_sidecar_conflict, json!({ "id": 1, "keep": "mine" }));
     same!(seen, d, c; list_glyphs, json!({ "face": 1 }));

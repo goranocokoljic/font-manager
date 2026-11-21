@@ -1008,6 +1008,163 @@ pub struct ListDuplicateSetsRequest {
     /// The window into the sets.
     #[serde(default)]
     pub page: Page,
+    /// Which of the sets in the scope to list (E56.11); every set by
+    /// default.
+    #[serde(default)]
+    pub filter: DuplicateSetFilter,
+    /// The order of the sets (E56.11); by PostScript name by default.
+    #[serde(default)]
+    pub sort: DuplicateSetSort,
+}
+
+/// Which recommendation a listed set has (E56.11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum RecommendationFilter {
+    /// The policy recommends removing at least one copy.
+    HasRecommendation,
+    /// The policy answered the set "keep both" ([`KeeperOutcome::KeepBoth`]).
+    KeepBoth,
+}
+
+/// Which duplicate sets a listing returns (E56.11): every condition that is
+/// set must hold.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateSetFilter {
+    /// The levels to list; every level when empty.
+    #[serde(default)]
+    pub levels: Vec<DuplicateLevel>,
+    /// Only sets with a copy of this format.
+    #[serde(default)]
+    pub format: Option<FontFormat>,
+    /// Only sets with this recommendation. A service without an index to
+    /// recommend from (the mocks) has none, so it lists no set.
+    #[serde(default)]
+    pub recommendation: Option<RecommendationFilter>,
+    /// Leave out the sets the cleanup draft has a decision for
+    /// ([`crate::cleanup_draft::CleanupDraft`]): the queue the user works
+    /// through.
+    #[serde(default)]
+    pub undecided: bool,
+}
+
+impl DuplicateSetFilter {
+    /// Whether the policy's recommendation must be known before the filter
+    /// can be applied.
+    pub fn needs_recommendation(&self) -> bool {
+        self.recommendation.is_some()
+    }
+
+    /// Whether `set` passes; `decided` holds the ids of the sets the cleanup
+    /// draft has a decision for.
+    pub fn matches(&self, set: &DuplicateSet, decided: &std::collections::HashSet<String>) -> bool {
+        (self.levels.is_empty() || self.levels.contains(&set.level))
+            && self
+                .format
+                .is_none_or(|f| set.copies.iter().any(|c| c.format == Some(f)))
+            && self.recommendation.is_none_or(|want| {
+                set.recommendation.as_ref().is_some_and(|r| match want {
+                    RecommendationFilter::HasRecommendation => {
+                        r.outcome == KeeperOutcome::Keeper && !r.remove.is_empty()
+                    }
+                    RecommendationFilter::KeepBoth => r.outcome == KeeperOutcome::KeepBoth,
+                })
+            })
+            && !(self.undecided && decided.contains(&set.id))
+    }
+}
+
+/// The order of a duplicate set listing (E56.11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum DuplicateSetSort {
+    /// The listing's own order: by PostScript name.
+    #[default]
+    Name,
+    /// The most bytes freed first ([`DuplicateSet::frees`]), then by name.
+    Frees,
+    /// The most copies first, then by name.
+    Copies,
+}
+
+impl DuplicateSetSort {
+    /// Whether the policy's recommendation must be known to sort.
+    pub fn needs_recommendation(self) -> bool {
+        self == Self::Frees
+    }
+
+    /// Sorts `sets` in this order; stable, so equal sets keep their order.
+    pub fn sort(self, sets: &mut [DuplicateSet]) {
+        let name = |s: &DuplicateSet| (s.postscript_name.clone().unwrap_or_default(), s.id.clone());
+        match self {
+            Self::Name => {}
+            Self::Frees => {
+                sets.sort_by_cached_key(|s| (std::cmp::Reverse(s.frees()), name(s)));
+            }
+            Self::Copies => {
+                sets.sort_by_cached_key(|s| (std::cmp::Reverse(s.copies.len()), name(s)));
+            }
+        }
+    }
+}
+
+impl DuplicateSet {
+    /// The bytes removing the recommended copies frees (saturating): the
+    /// copies of [`KeeperRecommendation::remove`]. Without a recommendation
+    /// (a service without an index, the mocks) every copy outside the
+    /// system folders but the largest; 0 for a set of system copies.
+    pub fn frees(&self) -> u32 {
+        let size = |path: &str| {
+            self.copies
+                .iter()
+                .find(|c| c.path == path)
+                .map_or(0, |c| c.size)
+        };
+        match &self.recommendation {
+            Some(r) => r
+                .remove
+                .iter()
+                .fold(0u32, |n, c| n.saturating_add(size(&c.path))),
+            None => {
+                let sizes: Vec<u32> = self
+                    .copies
+                    .iter()
+                    .filter(|c| !c.system)
+                    .map(|c| c.size)
+                    .collect();
+                let largest = sizes.iter().copied().max().unwrap_or(0);
+                sizes
+                    .iter()
+                    .fold(0u32, |n, s| n.saturating_add(*s))
+                    .saturating_sub(largest)
+            }
+        }
+    }
+
+    /// Filters and sorts `sets` as `req` asks and returns the page `req`
+    /// asks for, with the total that passed the filter. `decided` holds the
+    /// ids of the sets the cleanup draft has a decision for. Every
+    /// implementation of [`LibraryService::list_duplicate_sets`] uses this,
+    /// so the rule is one.
+    pub fn page(
+        mut sets: Vec<DuplicateSet>,
+        req: &ListDuplicateSetsRequest,
+        decided: &std::collections::HashSet<String>,
+        max_page: u32,
+    ) -> Paged<DuplicateSet> {
+        sets.retain(|s| req.filter.matches(s, decided));
+        req.sort.sort(&mut sets);
+        let total = u32::try_from(sets.len()).unwrap_or(u32::MAX);
+        Paged {
+            items: sets
+                .into_iter()
+                .skip(req.page.offset as usize)
+                .take(req.page.limit.min(max_page) as usize)
+                .collect(),
+            total,
+        }
+    }
 }
 
 /// One copy of a duplicate set: one file, for the face the set is about.
@@ -2220,6 +2377,23 @@ pub trait LibraryService {
         &self,
         req: crate::cleanup::UndoCleanupRequest,
     ) -> ApiResult<crate::cleanup::CleanupSession>;
+    /// What a cleanup of a scope would do with the saved policy, counted
+    /// (E56.11): the sets, the extra files, their folders and the space
+    /// they free, per level. Computed from a plan, so it touches nothing.
+    /// A `source` scope that does not exist is `NotFound`.
+    fn duplicates_overview(
+        &self,
+        req: crate::cleanup_draft::DuplicatesOverviewRequest,
+    ) -> ApiResult<crate::cleanup_draft::DuplicatesOverview>;
+    /// The decisions collected for the next cleanup plan (E56.11), as
+    /// stored: they survive a restart. Touches no file.
+    fn get_cleanup_draft(&self) -> ApiResult<crate::cleanup_draft::CleanupDraft>;
+    /// Changes the draft and returns it (E56.11). Touches no file: nothing
+    /// moves until a plan is applied.
+    fn update_cleanup_draft(
+        &self,
+        update: crate::cleanup_draft::CleanupDraftUpdate,
+    ) -> ApiResult<crate::cleanup_draft::CleanupDraft>;
     /// The sidecar conflicts that wait for the user (E28.1): fields this
     /// machine and another set to different values, oldest first.
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>>;

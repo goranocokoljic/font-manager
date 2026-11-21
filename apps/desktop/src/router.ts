@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router';
 import HomeView from './views/HomeView.vue';
 import ConflictsView from './views/ConflictsView.vue';
+import DuplicatesView from './views/DuplicatesView.vue';
 import FamilyView from './views/FamilyView.vue';
 import ProblemsView from './views/ProblemsView.vue';
 import SettingsView from './views/SettingsView.vue';
@@ -13,6 +14,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/conflicts', name: 'conflicts', component: ConflictsView },
   { path: '/problems', name: 'problems', component: ProblemsView },
   { path: '/studio', name: 'studio', component: StudioView },
+  { path: '/duplicates', name: 'duplicates', component: DuplicatesView },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 

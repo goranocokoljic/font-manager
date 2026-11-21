@@ -23,6 +23,7 @@
 
 mod activation;
 mod catalog_downloads;
+mod cleanup_draft;
 mod collections;
 mod comparisons;
 mod drops;

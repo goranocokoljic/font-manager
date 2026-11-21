@@ -622,6 +622,8 @@ struct State {
     resolutions: Vec<Resolution>,
     /// Applied cleanup plans, oldest first (E56.7).
     sessions: Vec<crate::cleanup::CleanupSession>,
+    /// The Duplicates module's draft plan (E56.11), in memory.
+    cleanup_draft: crate::cleanup_draft::CleanupDraft,
     /// Sidecar conflicts waiting for the user, oldest first (E28.1).
     sidecar_conflicts: Vec<SidecarConflict>,
     /// The layout template files, in the order they were made.
@@ -1116,6 +1118,7 @@ impl State {
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             sessions: Vec::new(),
+            cleanup_draft: crate::cleanup_draft::CleanupDraft::default(),
             sidecar_conflicts: Vec::new(),
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
@@ -2131,7 +2134,8 @@ impl LibraryService for MockApi {
 
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
         let files = self.duplicate_set_files(&req.scope)?;
-        Ok(duplicate_sets::list(&files, &req))
+        let decided = self.state().cleanup_draft.decided();
+        Ok(duplicate_sets::list(&files, &req, &decided))
     }
 
     fn list_folder_pairs(&self, req: ListFolderPairsRequest) -> ApiResult<Paged<FolderPair>> {
@@ -2548,6 +2552,35 @@ impl LibraryService for MockApi {
         req: crate::cleanup::UndoCleanupRequest,
     ) -> ApiResult<crate::cleanup::CleanupSession> {
         self.mock_undo_cleanup_session(req)
+    }
+
+    fn duplicates_overview(
+        &self,
+        req: crate::cleanup_draft::DuplicatesOverviewRequest,
+    ) -> ApiResult<crate::cleanup_draft::DuplicatesOverview> {
+        let plan = self.mock_plan_cleanup(crate::cleanup::PlanCleanupRequest {
+            scope: req.scope.into(),
+            ..Default::default()
+        })?;
+        Ok(crate::cleanup_draft::DuplicatesOverview::from_plan(&plan))
+    }
+
+    fn get_cleanup_draft(&self) -> ApiResult<crate::cleanup_draft::CleanupDraft> {
+        Ok(self.state().cleanup_draft.clone())
+    }
+
+    fn update_cleanup_draft(
+        &self,
+        update: crate::cleanup_draft::CleanupDraftUpdate,
+    ) -> ApiResult<crate::cleanup_draft::CleanupDraft> {
+        let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        let mut st = self.state();
+        st.cleanup_draft.apply(update, MOCK_NOW.to_owned(), |id| {
+            Ok(duplicate_sets::sets(&files, &DuplicateScope::Library)
+                .into_iter()
+                .find(|s| s.id == id))
+        })?;
+        Ok(st.cleanup_draft.clone())
     }
 
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {

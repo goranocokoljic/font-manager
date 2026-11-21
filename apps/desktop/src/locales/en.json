@@ -2296,5 +2296,210 @@
       "installsNothing": "Installs nothing by itself",
       "installsNothingNote": "When there is a new version you see what changed and decide. A major version asks twice."
     }
+  },
+  "duplicatesModule": {
+    "title": "Duplicates",
+    "back": "Library",
+    "backTitle": "Back to the library (Esc)",
+    "navLabel": "Duplicates",
+    "nav": {
+      "overview": "Overview",
+      "folders": "Folders",
+      "sets": "Sets",
+      "plan": "Plan",
+      "history": "History",
+      "hidden": "Hidden copies",
+      "rules": "Languages and rules"
+    },
+    "languages": {
+      "heading": "Languages I work in",
+      "none": "None set",
+      "link": "Change languages and rules"
+    },
+    "trash": {
+      "windows": "Recycle Bin",
+      "unix": "Trash"
+    },
+    "overview": {
+      "heading": {
+        "one": "{count} font has more than one copy",
+        "other": "{count} fonts have more than one copy"
+      },
+      "files": {
+        "one": "{count} extra file",
+        "other": "{count} extra files"
+      },
+      "inFolders": {
+        "one": "in {count} folder",
+        "other": "in {count} folders"
+      },
+      "rest": "up to {size}. Nothing is removed until you apply a plan, and what you remove goes to the {trash}.",
+      "none": "No font has more than one copy.",
+      "noneBody": "When a scan finds a second copy of a font, it is listed here.",
+      "noLanguages": "Set the languages you work in, so that no copy that alone covers one of them is ever recommended for removal.",
+      "setLanguages": "Set languages",
+      "identical": {
+        "one": "{count} identical copy",
+        "other": "{count} identical copies"
+      },
+      "identicalBody": "The same file in more than one place. One copy of each stays, and your favorites, ratings, tags and collections move to it.",
+      "review": "Review the plan",
+      "inPlan": "In the plan",
+      "frees": "frees {size}",
+      "toDecide": "To decide",
+      "otherVersion": "Another version",
+      "otherVersionBody": "Compared by the languages you work in, then by version. Each set shows what the newer file gains or loses.",
+      "sameVersion": "Same version, another file",
+      "sameVersionBody": "Mostly the same font as OpenType and TrueType. The format order in your rules decides.",
+      "keepBoth": "Keep both",
+      "keepBothBody": "No copy covers everything the others cover in your languages. Nothing is recommended for removal.",
+      "protected": "protected",
+      "fonts": {
+        "one": "{count} font",
+        "other": "{count} fonts"
+      },
+      "fileCount": {
+        "one": "{count} file",
+        "other": "{count} files"
+      },
+      "pairs": "Folders that hold the same fonts",
+      "allPairs": {
+        "one": "All {count} pair",
+        "other": "All {count} pairs"
+      },
+      "contained": "is contained in",
+      "shares": "shares most of its files with",
+      "shared": "{shared} of {count} files"
+    },
+    "queue": {
+      "heading": {
+        "one": "{count} set to decide",
+        "other": "{count} sets to decide"
+      },
+      "label": "Sets to decide",
+      "levels": "Level",
+      "all": "All",
+      "chip": "{name} · {count}",
+      "filters": "Filters",
+      "source": "Source",
+      "anySource": "Every source",
+      "folder": "Folder",
+      "folderPlaceholder": "Full path of a folder",
+      "format": "Format",
+      "anyFormat": "Every format",
+      "recommended": "Has a recommendation",
+      "sort": "Order",
+      "byName": "by name",
+      "byFrees": "by space freed",
+      "byCopies": "by copies",
+      "copies": {
+        "one": "{count} copy",
+        "other": "{count} copies"
+      },
+      "empty": "No set is left to decide.",
+      "emptyBody": "Every set is in the plan, or there is none at this level.",
+      "emptyFiltered": "No set matches these filters.",
+      "loading": "Loading…",
+      "level": {
+        "identical": "Identical",
+        "sameVersion": "Same version",
+        "otherVersion": "Another version",
+        "formatsDiffer": "Same version · {formats}"
+      }
+    },
+    "set": {
+      "region": "Set {name}",
+      "copies": {
+        "one": "{count} copy",
+        "other": "{count} copies"
+      },
+      "position": "set {n} of {total}",
+      "compare": "Compare two copies",
+      "recommended": "Keep",
+      "recommendedTitle": "The copy the rules recommend",
+      "outcome": "What happens to {name}",
+      "keep": "Keep",
+      "hide": "Hide",
+      "stays": "Stays",
+      "noVersion": "No version",
+      "glyphs": {
+        "one": "{count} glyph",
+        "other": "{count} glyphs"
+      },
+      "missing": "{name} missing",
+      "covered": "{name}",
+      "favorite": "Favorite",
+      "tags": {
+        "one": "{count} tag",
+        "other": "{count} tags"
+      },
+      "collections": {
+        "one": "{count} collection",
+        "other": "{count} collections"
+      },
+      "notDuplicates": "Not duplicates",
+      "keepAll": "Keep all",
+      "add": "Add to plan and go on",
+      "leaving": {
+        "one": "{count} file to the {trash}",
+        "other": "{count} files to the {trash}"
+      },
+      "hiding": {
+        "one": "{count} hidden",
+        "other": "{count} hidden"
+      },
+      "noKeeper": "Keep at least one copy.",
+      "keys": "Keys: ↑ ↓ set · 1–9 keep a copy · T, H, K outcome of the focused copy · B keep all · N not duplicates · C compare · Enter add"
+    },
+    "compare": {
+      "title": "{a} and {b}",
+      "close": "Close the comparison",
+      "same": "The copies hold the same data."
+    },
+    "plan": {
+      "heading": "The plan",
+      "note": "Nothing moves until you apply the plan.",
+      "identicalIn": {
+        "one": "{count} identical copy is in the plan.",
+        "other": "{count} identical copies are in the plan."
+      },
+      "identicalOut": "Identical copies are not in the plan.",
+      "addIdentical": "Add identical copies",
+      "removeIdentical": "Take identical copies out",
+      "decisions": "Your decisions",
+      "empty": "Nothing is in the plan yet.",
+      "takeBack": "Take back",
+      "takeBackName": "Take back {name}",
+      "clear": "Start again",
+      "kind": {
+        "copies": {
+          "one": "{count} copy leaves",
+          "other": "{count} copies leave"
+        },
+        "keepAll": "Keep all",
+        "notDuplicates": "Not duplicates"
+      }
+    },
+    "history": {
+      "empty": "No cleanup yet.",
+      "files": {
+        "one": "{count} file",
+        "other": "{count} files"
+      }
+    },
+    "hidden": {
+      "empty": "No hidden copies.",
+      "body": "A copy you hide stays where it is and leaves the library."
+    },
+    "folders": {
+      "empty": "No folders hold the same fonts."
+    },
+    "rules": {
+      "heading": "Languages I work in",
+      "body": "A copy that alone covers one of these languages is never recommended for removal.",
+      "add": "Add a language",
+      "remove": "Remove {name}",
+      "none": "No language is set."
+    }
   }
 }

@@ -22,11 +22,13 @@ import {
 import { duplicateSets, listDuplicateSets, type SetFile } from './mockDuplicates';
 import { listFolderPairFiles, listFolderPairs, type PairRoot } from './mockFolderPairs';
 import { mockPlanCleanup } from './mockCleanup';
+import { applyDraftUpdate, overviewFromPlan } from './mockCleanupDraft';
 import {
   API_VERSION,
   type ActivationMode,
   type ActivationOutcome,
   type ApiError,
+  type CleanupDraft,
   type KeeperPolicy,
   type FoundryInfo,
   type AppFolders,
@@ -1323,8 +1325,53 @@ export interface MockOptions {
   mcpConfirm?: boolean;
 }
 
+/**
+ * The copies of `?mockDuplicates=1` (E56.11): an identical set (JetBrains Mono), a set
+ * of other versions (Inter: the sample's file, an older one without a version and
+ * Version 0.9) and a set of one version in two files (Legacy Grotesk, Type 1).
+ */
+export const mockDuplicateCopies: NonNullable<MockOptions['copies']> = [
+  { face: 6, path: '/Users/demo/Downloads/JetBrainsMono-Regular.ttf', hash: null, version: null },
+  { face: 1, path: '/Users/demo/Fonts/Old/Inter-Regular.ttf', hash: '1f00d', version: null },
+  {
+    face: 1,
+    path: '/Users/demo/Fonts/Older/Inter-Regular.ttf',
+    hash: '2beef',
+    version: 'Version 0.9',
+  },
+  {
+    face: 7,
+    path: '/Users/demo/Backup/legacy/LEGGR___.PFB',
+    hash: '3cafe',
+    version: 'Version 1.000',
+  },
+];
+
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
 export const MOCK_SETTINGS_KEY = 'fm.mock.settings.v1';
+
+/**
+ * The key of the mock's cleanup draft in `MockOptions.settingsStorage` (E56.11): fm-core
+ * keeps the draft in the index, so it survives a restart; the browser mock keeps it in
+ * the tab's session storage, so it survives a reload.
+ */
+export const MOCK_DRAFT_KEY = 'fm.mock.cleanupDraft.v1';
+
+/** The draft saved in `storage`; an empty one when there is none or it is damaged. */
+function savedDraft(storage: MockOptions['settingsStorage']): CleanupDraft {
+  try {
+    const saved: unknown = JSON.parse(storage?.getItem(MOCK_DRAFT_KEY) ?? 'null');
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved))
+      return { identical: false, decisions: [] };
+    const d = saved as CleanupDraft;
+    return {
+      identical: d.identical === true,
+      decisions: Array.isArray(d.decisions) ? d.decisions : [],
+    };
+  } catch {
+    return { identical: false, decisions: [] };
+  }
+}
 
 /** The settings saved in `storage`, over `base`; `base` when there are none or they are damaged. */
 function savedSettings(base: FullSettings, storage: MockOptions['settingsStorage']): FullSettings {
@@ -2997,6 +3044,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   };
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
+  // The Duplicates module's draft plan (E56.11).
+  let cleanupDraft = savedDraft(options.settingsStorage);
   const resolutions: Resolution[] = [];
   // Applied cleanup plans, newest first (E56.7).
   const sessions: CleanupSession[] = [];
@@ -4827,7 +4876,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: `Source ${scope.source} was not found.`,
           detail: null,
         };
-      return structuredClone(listDuplicateSets(setFiles(), req));
+      const decided = new Set((cleanupDraft.decisions ?? []).map((d) => d.set));
+      return structuredClone(listDuplicateSets(setFiles(), req, decided));
     },
     // As the Rust mock (E56.6): the sources' folders are the roots, and
     // there are no files on disk, so no side has other files.
@@ -5068,6 +5118,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     cancelCleanup: async (job) => {
       throw { code: 'notFound' as const, message: `Cleanup ${job} was not found.`, detail: null };
+    },
+    // As the Rust mock (E56.11): the overview counts the mock's plan of the scope.
+    duplicatesOverview: async (req) =>
+      overviewFromPlan(await client.planCleanup({ scope: req.scope ?? { kind: 'library' } })),
+    getCleanupDraft: async () => structuredClone(cleanupDraft),
+    updateCleanupDraft: async (update) => {
+      const all = duplicateSets(setFiles(), { kind: 'library' });
+      cleanupDraft = applyDraftUpdate(cleanupDraft, update, MOCK_NOW, (id) =>
+        all.find((s) => s.id === id),
+      );
+      options.settingsStorage?.setItem(MOCK_DRAFT_KEY, JSON.stringify(cleanupDraft));
+      return structuredClone(cleanupDraft);
     },
     listCleanupSessions: async () => {
       const fromResolutions: CleanupSession[] = resolutions.map((r) => ({
@@ -5574,6 +5636,9 @@ export const mockClient: FmClient = createMockClient({
         sidecarConflicts: mockSidecarConflicts,
         sets: mockSets,
       }),
+  // `?mockDuplicates=1` adds copies for the Duplicates module (E56.11): JetBrains Mono
+  // twice as the same file, Inter in three versions, Legacy Grotesk twice in one version.
+  ...(countFromUrl('mockDuplicates', 1) ? { copies: mockDuplicateCopies } : {}),
   // `?mockComparisons=1` starts with a saved comparison that names a missing font.
   comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],
   extraFaces: countFromUrl('mockFaces', 100_000),

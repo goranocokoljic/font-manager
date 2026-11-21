@@ -77,18 +77,14 @@ pub(super) fn version_key(version: Option<&str>) -> Option<Vec<Part>> {
 /// The most sets one page holds.
 const MAX_PAGE: u32 = 500;
 
-/// The page `req` asks for of the sets among `files`.
-pub(super) fn list(files: &[SetFile], req: &ListDuplicateSetsRequest) -> Paged<DuplicateSet> {
-    let all = sets(files, &req.scope);
-    let total = u32::try_from(all.len()).unwrap_or(u32::MAX);
-    Paged {
-        items: all
-            .into_iter()
-            .skip(req.page.offset as usize)
-            .take(req.page.limit.min(MAX_PAGE) as usize)
-            .collect(),
-        total,
-    }
+/// The page `req` asks for of the sets among `files`; `decided` holds the
+/// sets the cleanup draft has a decision for.
+pub(super) fn list(
+    files: &[SetFile],
+    req: &ListDuplicateSetsRequest,
+    decided: &std::collections::HashSet<String>,
+) -> Paged<DuplicateSet> {
+    DuplicateSet::page(sets(files, &req.scope), req, decided, MAX_PAGE)
 }
 
 /// Whether `file` is in `scope`.

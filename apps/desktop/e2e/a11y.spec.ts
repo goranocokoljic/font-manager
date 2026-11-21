@@ -189,6 +189,16 @@ test('every interactive element of the Problems view has a name', async ({ page 
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+test('every interactive element of the Duplicates module has a name', async ({ page }) => {
+  await open(page, '/duplicates', '?mockDuplicates=1');
+  await expect(page.getByTestId('dup-identical')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  await open(page, '/duplicates?section=sets', '?mockDuplicates=1');
+  await expect(page.getByTestId('duplicate-copy')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Filters' }).click();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) => {
   await open(page);
   await expect(page.getByRole('treeitem').first()).toBeVisible();

@@ -731,6 +731,38 @@ fn folder_pairs_and_their_files_round_trip() {
 }
 
 #[test]
+fn the_duplicates_overview_and_the_cleanup_draft_round_trip() {
+    let mock = MockApi::new();
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";
+    mock.add_copy(FaceId(3), copy).unwrap();
+    let (_app, webview) = app_on(setup(mock_builder(), Arc::new(mock))).unwrap();
+    let call = |cmd: &str, args: serde_json::Value| -> serde_json::Value {
+        send(&webview, cmd, args)
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let overview = call("duplicates_overview", serde_json::json!({ "req": {} }));
+    assert_eq!(overview["fonts"], 1);
+    assert_eq!(overview["identical"]["sets"], 1);
+    assert_eq!(overview["myLanguages"], "notSet");
+    let sets = call("list_duplicate_sets", serde_json::json!({ "req": {} }));
+    let set = sets["items"][0]["id"].as_str().unwrap().to_owned();
+    let draft = call(
+        "update_cleanup_draft",
+        serde_json::json!({ "update": { "kind": "decide", "set": set, "decision": { "kind": "notDuplicates" } } }),
+    );
+    assert_eq!(draft["decisions"][0]["set"], set);
+    assert_eq!(call("get_cleanup_draft", serde_json::json!({})), draft);
+    let queue = call(
+        "list_duplicate_sets",
+        serde_json::json!({ "req": { "filter": { "undecided": true } } }),
+    );
+    assert_eq!(queue["total"], 0, "a decided set leaves the queue");
+}
+
+#[test]
 fn keep_this_one_round_trips_dry_run_keep_history_and_undo() {
     let mock = MockApi::new();
     let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";
