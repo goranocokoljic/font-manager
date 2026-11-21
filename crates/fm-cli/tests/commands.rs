@@ -5,6 +5,7 @@
 
 use clap::Parser;
 use fm_api::activation::ActivationMode;
+use fm_api::library::ListDuplicateSetsRequest;
 use fm_api::mock::MockApi;
 use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, SetEntry, SetExport};
 use fm_api::search::{Filters, SearchRequest, SimilarRequest, Supports, TraitFilter};
@@ -1296,4 +1297,312 @@ fn foundries_lists_merges_and_unmerges() {
         ])
         .is_err()
     );
+}
+
+/// A mock whose library holds one copy of a file (one identical set).
+fn with_copy() -> (MockApi, String) {
+    let api = MockApi::new();
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf".to_owned();
+    api.add_copy(FaceId(3), &copy).unwrap();
+    (api, copy)
+}
+
+/// Runs `fm <args>` on `api` with `input` on stdin: exit, stdout, stderr.
+fn fm_input(api: &MockApi, input: &str, args: &[&str]) -> (Exit, String, String) {
+    let cli = Cli::try_parse_from(std::iter::once("fm").chain(args.iter().copied()))
+        .expect("valid command line");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let mut input = input.as_bytes();
+    let exit = fm_cli::run_with_input(api, Link::Endpoint, &cli, &mut input, &mut out, &mut err);
+    let text = |b: Vec<u8>| String::from_utf8(b).expect("UTF-8");
+    (exit, text(out), text(err))
+}
+
+fn sets(api: &MockApi) -> u32 {
+    api.list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap()
+        .total
+}
+
+/// E56.9 criterion 2: `apply` prints the summary and asks; "no", or no
+/// answer at all, changes nothing and exits 4; "y" applies the plan as a
+/// session that `undo` takes back.
+#[test]
+fn duplicates_apply_asks_first_and_undo_takes_it_back() {
+    let (api, _copy) = with_copy();
+    let dir = std::env::temp_dir().join(format!("fm-cli-dup-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("plan.json");
+    let path = file.to_str().unwrap();
+    let (exit, out, err) = fm_on(&api, &["duplicates", "plan", "--out", path]);
+    assert_eq!(exit, Exit::Success, "{err}");
+    assert!(out.contains("To the trash: 1 files"), "{out}");
+    assert!(
+        out.contains(&format!("fm duplicates apply {path}")),
+        "{out}"
+    );
+    let (exit, _, err) = fm_on(&api, &["duplicates", "plan", "--out", path]);
+    assert_eq!(exit, Exit::Usage, "an existing file needs --force: {err}");
+
+    for answer in ["n\n", "", "maybe\n"] {
+        let (exit, out, err) = fm_input(&api, answer, &["duplicates", "apply", path]);
+        assert_eq!(exit, Exit::Refused, "{answer:?}: {err}");
+        assert!(out.contains("To the trash: 1 files"), "{out}");
+        assert!(out.contains("none is deleted for good"), "{out}");
+        assert!(out.contains("Apply this plan? [y/N]"), "{out}");
+        assert!(out.ends_with("Nothing was changed.\n"), "{out}");
+        assert_eq!(sets(&api), 1, "{answer:?} changed nothing");
+        assert!(api.list_cleanup_sessions().unwrap().is_empty());
+    }
+    let (exit, out, err) = fm_on(&api, &["--json", "duplicates", "apply", path]);
+    assert_eq!((exit, out.as_str()), (Exit::Usage, ""), "--json cannot ask");
+    assert_eq!(json(&err)["code"], "invalidRequest");
+    assert_eq!(sets(&api), 1);
+
+    let (exit, out, err) = fm_input(
+        &api,
+        "y\n",
+        &["duplicates", "apply", path, "--name", "Tidy"],
+    );
+    assert_eq!(exit, Exit::Success, "{err}");
+    assert!(out.contains("\"Tidy\": 1 trashed"), "{out}");
+    let plan: fm_api::cleanup::CleanupPlan =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let leaving: Vec<&str> = plan.leaving().map(|f| f.path.as_str()).collect();
+    assert_eq!(leaving.len(), 1);
+    assert!(out.contains(&format!("trashed   {}", leaving[0])), "{out}");
+    assert_eq!(sets(&api), 0, "the copy left");
+
+    let (exit, out, _) = fm_on(&api, &["--json", "duplicates", "sessions"]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(
+        json(&out),
+        serde_json::to_value(api.list_cleanup_sessions().unwrap()).unwrap()
+    );
+    let (_, out, _) = fm_on(&api, &["duplicates", "sessions"]);
+    assert!(out.contains("Tidy") && out.contains("done"), "{out}");
+
+    let id = api.list_cleanup_sessions().unwrap()[0].id.to_string();
+    let (exit, out, err) = fm_on(&api, &["--json", "duplicates", "undo", &id]);
+    assert_eq!(exit, Exit::Success, "{err}");
+    assert_eq!(json(&out)["undone"], true, "{out}");
+    assert_eq!(sets(&api), 1, "the copy is back");
+    let (exit, _, _) = fm_on(&api, &["duplicates", "undo", "99"]);
+    assert_eq!(exit, Exit::NotFound);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// E56.9 criterion 2: `apply` has no flag that deletes for good: its only
+/// flags are `--yes` and `--name`.
+#[test]
+fn duplicates_apply_has_no_flag_that_deletes_for_good() {
+    use clap::CommandFactory;
+    let cli = Cli::command();
+    let apply = cli
+        .find_subcommand("duplicates")
+        .and_then(|d| d.find_subcommand("apply"))
+        .expect("fm duplicates apply");
+    let mut flags: Vec<&str> = apply
+        .get_arguments()
+        .filter_map(|a| a.get_long())
+        .filter(|l| !["json", "direct", "help"].contains(l))
+        .collect();
+    flags.sort_unstable();
+    assert_eq!(flags, ["name", "yes"]);
+}
+
+/// E56.9 criteria 1 and 3 on the mock: `--json` is the API's answer, the
+/// level filter reaches it, and `doctor` names `fm duplicates` only when a
+/// set exists.
+#[test]
+fn duplicates_list_is_the_api_answer_and_doctor_names_it() {
+    let (_, out, _) = fm(&["doctor"]);
+    assert!(!out.contains("fm duplicates"), "no sets, no line: {out}");
+
+    let (api, copy) = with_copy();
+    let (exit, out, err) = fm_on(&api, &["--json", "duplicates", "list"]);
+    assert_eq!(exit, Exit::Success, "{err}");
+    let items = api
+        .list_duplicate_sets(ListDuplicateSetsRequest {
+            page: fm_api::common::Page {
+                offset: 0,
+                limit: 500,
+            },
+            ..ListDuplicateSetsRequest::default()
+        })
+        .unwrap()
+        .items;
+    assert_eq!(json(&out), serde_json::to_value(&items).unwrap());
+    let (_, out, _) = fm_on(&api, &["duplicates", "list"]);
+    assert!(out.contains("identical") && out.contains(&copy), "{out}");
+    let (_, out, _) = fm_on(
+        &api,
+        &["--json", "duplicates", "list", "--level", "other-version"],
+    );
+    assert_eq!(json(&out), serde_json::json!([]));
+
+    let (exit, out, _) = fm_on(&api, &["doctor"]);
+    assert_eq!(exit, Exit::Problems);
+    let line: Vec<&str> = out
+        .lines()
+        .filter(|l| l.contains("fm duplicates"))
+        .collect();
+    assert_eq!(
+        line,
+        [
+            "Duplicate sets: 1. Clean them up with fm duplicates (fm duplicates list, then fm duplicates plan)."
+        ]
+    );
+    let (_, out, _) = fm_on(&api, &["--json", "doctor"]);
+    let keys: Vec<String> = json(&out).as_object().unwrap().keys().cloned().collect();
+    assert_eq!(
+        keys,
+        ["conflicts", "duplicates", "problems"],
+        "the JSON keeps its shape"
+    );
+}
+
+/// The scope `fm --json duplicates plan <flags>` sent, as the plan echoes it.
+fn planned_scope(api: &MockApi, flags: &[&str]) -> Value {
+    let mut args = vec!["--json", "duplicates", "plan"];
+    args.extend_from_slice(flags);
+    let (exit, out, err) = fm_on(api, &args);
+    assert_eq!(exit, Exit::Success, "{flags:?}: {err}");
+    json(&out)["request"]["scope"].clone()
+}
+
+/// An absolute path as `fm` sends it: made absolute against the working
+/// folder, as the CLI does.
+fn abs(path: &str) -> String {
+    std::path::absolute(path).unwrap().display().to_string()
+}
+
+/// E56.9 criterion 1 (review TST-1): each scope flag of `fm duplicates
+/// plan` reaches the API as its own scope, the kept folder as `keep` and
+/// the removed one as `remove`.
+#[test]
+fn duplicates_plan_sends_each_scope_flag_as_its_scope() {
+    let (api, _) = with_copy();
+    assert_eq!(
+        planned_scope(&api, &[]),
+        serde_json::json!({ "kind": "library" })
+    );
+    assert_eq!(
+        planned_scope(&api, &["--source", "1"]),
+        serde_json::json!({ "kind": "source", "source": 1 })
+    );
+    assert_eq!(
+        planned_scope(&api, &["--folder", "/Users/demo/Downloads"]),
+        serde_json::json!({ "kind": "folder", "path": abs("/Users/demo/Downloads") })
+    );
+    let set = api
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap()
+        .items[0]
+        .id
+        .clone();
+    assert_eq!(
+        planned_scope(&api, &["--set", &set]),
+        serde_json::json!({ "kind": "sets", "ids": [set] })
+    );
+    let (exit, _, err) = fm_on(&api, &["duplicates", "plan", "--set", "name:Nothing"]);
+    assert_eq!(exit, Exit::Usage, "the set ids reach the API: {err}");
+    assert_eq!(
+        planned_scope(
+            &api,
+            &[
+                "--keep-folder",
+                "/Users/demo/Fonts",
+                "--remove-folder",
+                "/Users/demo/Downloads",
+            ]
+        ),
+        serde_json::json!({
+            "kind": "folderPair",
+            "keep": abs("/Users/demo/Fonts"),
+            "remove": abs("/Users/demo/Downloads"),
+            "otherLevels": false
+        })
+    );
+    let other = planned_scope(
+        &api,
+        &[
+            "--keep-folder",
+            "/k",
+            "--remove-folder",
+            "/r",
+            "--other-levels",
+        ],
+    );
+    assert_eq!(other["otherLevels"], true, "{other}");
+    let (_, out, _) = fm_on(&api, &["--json", "duplicates", "plan", "--hide"]);
+    assert_eq!(json(&out)["request"]["removeAs"], "hide");
+}
+
+/// E56.9 criterion 2 (review TST-2): the summary `apply` asks with names
+/// every file that stays for another reason than being the keeper, with
+/// the API's sentence, and the space the trash frees.
+#[test]
+fn duplicates_apply_summary_lists_the_skipped_files_and_the_space_freed() {
+    use fm_api::activation::{ActivateRequest, ConflictPolicy, Target};
+    let (api, _) = with_copy();
+    let (_, out, _) = fm_on(&api, &["--json", "duplicates", "plan"]);
+    let trashing: fm_api::cleanup::CleanupPlan = serde_json::from_str(&out).unwrap();
+    assert!(
+        trashing.frees > 1_000,
+        "the mock copy has a size: {}",
+        trashing.frees
+    );
+    let dir = std::env::temp_dir().join(format!("fm-cli-dup-skip-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("plan.json");
+    let path = file.to_str().unwrap();
+    fm_on(&api, &["duplicates", "plan", "--out", path]);
+    let (_, out, _) = fm_input(&api, "n\n", &["duplicates", "apply", path]);
+    let frees = format!("{:.0} KB", f64::from(trashing.frees) / 1_000.0);
+    assert!(
+        out.contains(&format!("To the trash: 1 files, frees {frees}")),
+        "{out}"
+    );
+    assert!(out.contains("Skipped: 0 files"), "{out}");
+
+    // The leaving copy is active: it stays, and the summary says why.
+    let leaving = trashing.leaving().next().unwrap();
+    api.activate(ActivateRequest {
+        target: Target::Faces {
+            faces: leaving.faces.clone(),
+        },
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::KeepExisting,
+    })
+    .unwrap();
+    let (exit, _, err) = fm_on(&api, &["duplicates", "plan", "--out", path, "--force"]);
+    assert_eq!(exit, Exit::Success, "{err}");
+    let plan: fm_api::cleanup::CleanupPlan =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let stayed: Vec<&fm_api::cleanup::CleanupFile> = plan
+        .files
+        .iter()
+        .filter(|f| f.reason == Some(fm_api::cleanup::StayReason::Active))
+        .collect();
+    assert_eq!(stayed.len(), 1, "{plan:#?}");
+    assert!(!stayed[0].sentence.is_empty());
+    let (exit, out, _) = fm_input(&api, "n\n", &["duplicates", "apply", path]);
+    assert_eq!(exit, Exit::Refused);
+    assert!(out.contains("To the trash: 0 files"), "{out}");
+    assert!(out.contains("Skipped: 1 files"), "{out}");
+    assert!(
+        out.contains(&format!("  {}: {}", stayed[0].path, stayed[0].sentence)),
+        "the skipped file with its reason: {out}"
+    );
+    let keeper = plan
+        .files
+        .iter()
+        .find(|f| f.reason == Some(fm_api::cleanup::StayReason::Keeper))
+        .unwrap();
+    assert!(
+        !out.contains(&format!("  {}: ", keeper.path)),
+        "a keeper is not skipped: {out}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

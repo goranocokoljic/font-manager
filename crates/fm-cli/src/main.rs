@@ -45,7 +45,8 @@ fn main() -> ExitCode {
                 .into();
         }
     };
-    fm_cli::run(api.as_ref(), link, &cli, &mut out, &mut err).into()
+    let mut input = io::stdin().lock();
+    fm_cli::run_with_input(api.as_ref(), link, &cli, &mut input, &mut out, &mut err).into()
 }
 
 /// A usage error clap found, printed as `fm` prints errors.

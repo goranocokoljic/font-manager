@@ -798,7 +798,12 @@ fn doctor_finds_exactly_the_copied_file_and_the_truncated_file_and_changes_nothi
     let out = home.fm(&["doctor"]);
     assert_eq!(code(&out), 5, "{}", text(&out.stderr));
     let printed = text(&out.stdout);
-    for line in ["Duplicates: 1", "Problems: 1", "Conflicts: 0"] {
+    for line in [
+        "Duplicates: 1",
+        "Problems: 1",
+        "Conflicts: 0",
+        "Duplicate sets: 1. Clean them up with fm duplicates",
+    ] {
         assert!(printed.contains(line), "{line}: {printed}");
     }
     for path in [&original, &copy, &truncated] {
@@ -819,6 +824,12 @@ fn doctor_exits_0_on_a_clean_library_and_an_empty_one() {
     assert_eq!(
         v,
         serde_json::json!({ "duplicates": [], "problems": [], "conflicts": [] })
+    );
+
+    let printed = text(&home.fm(&["doctor"]).stdout);
+    assert!(
+        !printed.contains("fm duplicates"),
+        "no set, no line: {printed}"
     );
 
     let out = Home::new("doctor-empty").fm(&["doctor"]);
@@ -896,4 +907,307 @@ fn completions_refuses_an_unknown_shell() {
     let home = Home::new("completions-bad");
     let out = home.fm(&["completions", "tcsh"]);
     assert_eq!(code(&out), 2, "{}", text(&out.stderr));
+}
+
+impl Home {
+    /// `fm <args>` with `input` on stdin.
+    fn fm_input(&self, input: &str, args: &[&str]) -> Output {
+        use std::io::Write as _;
+        use std::process::Stdio;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_fm"))
+            .args(args)
+            .env("FM_HOME", &self.0)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("fm runs");
+        child
+            .stdin
+            .take()
+            .expect("stdin")
+            .write_all(input.as_bytes())
+            .expect("answer");
+        child.wait_with_output().expect("fm ends")
+    }
+}
+
+/// Copies the font files of `from` into `to` (not the license texts).
+fn copy_fonts(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("folder");
+    for entry in std::fs::read_dir(from).expect("read dir") {
+        let path = entry.expect("entry").path();
+        if path.extension().is_some_and(|e| e != "txt") {
+            std::fs::copy(&path, to.join(path.file_name().expect("name"))).expect("copy");
+        }
+    }
+}
+
+/// The fonts copied into `Fonts A` and again into `Fonts B` (six identical
+/// sets and one folder pair), and Bebas Neue alone in `Lone`.
+const TWICE: [&str; 6] = [
+    "barlow",
+    "barlowcondensed",
+    "barlowsemicondensed",
+    "economica",
+    "exo",
+    "jost",
+];
+
+/// A scanned library: `Fonts A` and `Fonts B` hold the same six files,
+/// `Lone` one file with no copy.
+fn duplicates_home(label: &str) -> (Home, PathBuf) {
+    let home = Home::new(label);
+    let library = home.0.join("Library");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts/google-repo");
+    for folder in TWICE {
+        copy_fonts(&fixtures.join(folder), &library.join("Fonts A"));
+    }
+    copy_fonts(&library.join("Fonts A"), &library.join("Fonts B"));
+    copy_fonts(&fixtures.join("bebasneue"), &library.join("Lone"));
+    home.scan(&library);
+    (home, library)
+}
+
+/// Every recommendation sentence of the sets, as the API carries them.
+fn sentences(sets: &Value) -> Vec<String> {
+    let mut out = Vec::new();
+    for set in sets.as_array().expect("sets") {
+        let rec = &set["recommendation"];
+        for k in rec["keep"].as_array().into_iter().flatten() {
+            out.push(k["sentence"].as_str().expect("sentence").to_owned());
+        }
+        for r in rec["remove"].as_array().into_iter().flatten() {
+            out.push(
+                r["reason"]["sentence"]
+                    .as_str()
+                    .expect("sentence")
+                    .to_owned(),
+            );
+        }
+    }
+    out.retain(|s| !s.is_empty());
+    out
+}
+
+/// The font files under `dir` with their bytes: [`tree`] without the
+/// sidecars, which a hide writes so another machine sees it (ADR 0027).
+fn font_tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut files = tree(dir);
+    files.retain(|(p, _)| !p.components().any(|c| c.as_os_str() == ".fontlibrary"));
+    files
+}
+
+/// The duplicate sets `fm --json duplicates list` prints.
+fn listed(home: &Home) -> usize {
+    json(&home.fm(&["--json", "duplicates", "list"]))
+        .as_array()
+        .map_or(0, Vec::len)
+}
+
+/// E56.9 criteria 1 and 3: list, folders, compare and plan on the core;
+/// `--json` is the API's answer, the text says the API's sentences, and
+/// none of them touches a file.
+#[test]
+fn duplicates_list_folders_compare_and_plan_run_on_the_core_and_touch_nothing() {
+    let (home, library) = duplicates_home("dup-read");
+    let files_before = tree(&library);
+    let api = home.api();
+
+    let out = home.fm(&["--json", "duplicates", "list"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let sets = json(&out);
+    let wanted = api
+        .list_duplicate_sets(fm_api::library::ListDuplicateSetsRequest {
+            page: fm_api::common::Page {
+                offset: 0,
+                limit: 500,
+            },
+            ..Default::default()
+        })
+        .expect("sets");
+    assert_eq!(sets, serde_json::to_value(&wanted.items).expect("JSON"));
+    let n = sets.as_array().expect("sets").len();
+    assert_eq!(n, TWICE.len(), "one set per copied file: {sets}");
+    assert!(
+        sets.as_array()
+            .unwrap()
+            .iter()
+            .all(|s| s["level"] == "identical")
+    );
+
+    let said = sentences(&sets);
+    assert!(!said.is_empty(), "the policy explains its keepers: {sets}");
+    let printed = text(&home.fm(&["duplicates", "list"]).stdout);
+    for sentence in &said {
+        assert!(printed.contains(sentence.as_str()), "{sentence}: {printed}");
+    }
+    assert!(
+        printed.contains(&format!("Duplicate sets: {n}")),
+        "{printed}"
+    );
+
+    let out = home.fm(&["--json", "duplicates", "list", "--level", "other-version"]);
+    assert_eq!(
+        json(&out),
+        serde_json::json!([]),
+        "the level reaches the API"
+    );
+    let barlow = library.join("Fonts A");
+    let out = home.fm(&[
+        "--json",
+        "duplicates",
+        "list",
+        "--folder",
+        barlow.to_str().unwrap(),
+    ]);
+    assert_eq!(
+        json(&out).as_array().map(Vec::len),
+        Some(n),
+        "every set has a copy there"
+    );
+    let bebas = library.join("Lone");
+    let out = home.fm(&[
+        "--json",
+        "duplicates",
+        "list",
+        "--folder",
+        bebas.to_str().unwrap(),
+    ]);
+    assert_eq!(
+        json(&out),
+        serde_json::json!([]),
+        "no set has a copy in Bebas Neue"
+    );
+
+    let out = home.fm(&["--json", "duplicates", "folders"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let pairs = json(&out);
+    assert_eq!(pairs.as_array().map(Vec::len), Some(1), "{pairs}");
+    let mut sides: Vec<PathBuf> = [&pairs[0]["a"]["path"], &pairs[0]["b"]["path"]]
+        .iter()
+        .map(|p| PathBuf::from(p.as_str().unwrap()))
+        .collect();
+    sides.sort();
+    let mut expected = vec![barlow.clone(), library.join("Fonts B")];
+    expected.sort();
+    assert_eq!(sides, expected);
+    let printed = text(&home.fm(&["duplicates", "folders"]).stdout);
+    assert!(printed.contains(&barlow.display().to_string()), "{printed}");
+    assert!(
+        printed.contains("every file is on the other side"),
+        "{printed}"
+    );
+
+    let copies = &sets[0]["copies"];
+    let (a, b) = (copies[0]["face"].to_string(), copies[1]["face"].to_string());
+    let out = home.fm(&["--json", "duplicates", "compare", &a, &b]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let wanted = api
+        .compare_copies(fm_api::library::CompareCopiesRequest {
+            a: FaceId(a.parse().unwrap()),
+            b: FaceId(b.parse().unwrap()),
+        })
+        .expect("compare");
+    assert_eq!(json(&out), serde_json::to_value(&wanted).expect("JSON"));
+    assert!(!wanted.summary.is_empty());
+    let printed = text(&home.fm(&["duplicates", "compare", &a, &b]).stdout);
+    for sentence in &wanted.summary {
+        assert!(printed.contains(sentence.as_str()), "{sentence}: {printed}");
+    }
+    let out = home.fm(&["duplicates", "compare", &a, &a]);
+    assert_eq!(code(&out), 2, "the same copy twice: {}", text(&out.stderr));
+
+    let plan_file = home.0.join("plan.json");
+    let plan_path = plan_file.to_str().unwrap();
+    let out = home.fm(&["duplicates", "plan", "--out", plan_path]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let printed = text(&out.stdout);
+    assert!(
+        printed.contains(&format!("To the trash: {n} files")),
+        "{printed}"
+    );
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(&plan_file).expect("plan file")).unwrap();
+    let files = saved["files"].as_array().expect("files");
+    assert_eq!(files.len(), 2 * n);
+    assert!(
+        files
+            .iter()
+            .all(|f| !f["sentence"].as_str().unwrap().is_empty())
+    );
+    let out = home.fm(&["duplicates", "plan", "--out", plan_path]);
+    assert_eq!(code(&out), 2, "an existing file needs --force");
+    let out = home.fm(&["duplicates", "plan", "--out", plan_path, "--force"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let printed = text(&home.fm(&["duplicates", "plan"]).stdout);
+    for f in files {
+        let sentence = f["sentence"].as_str().unwrap();
+        assert!(printed.contains(sentence), "{sentence}: {printed}");
+    }
+
+    assert_eq!(tree(&library), files_before, "the library folder changed");
+}
+
+/// E56.9 criterion 2 against the binary: `apply` prints the summary and
+/// asks; "n" changes nothing; `--yes` applies a hide plan (no file moves,
+/// so the test never fills the trash of the machine it runs on);
+/// `sessions` lists it and `undo` shows the copies again.
+#[test]
+fn duplicates_apply_asks_then_hides_and_undo_shows_the_copies_again() {
+    let (home, library) = duplicates_home("dup-apply");
+    let files_before = font_tree(&library);
+    let n = listed(&home);
+    assert_eq!(n, TWICE.len());
+    let plan_file = home.0.join("hide.json");
+    let plan_path = plan_file.to_str().unwrap();
+    let out = home.fm(&["duplicates", "plan", "--hide", "--out", plan_path]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+
+    let out = home.fm_input("n\n", &["duplicates", "apply", plan_path]);
+    assert_eq!(code(&out), 4, "{}", text(&out.stderr));
+    let printed = text(&out.stdout);
+    for line in [
+        format!("Hidden: {n} files"),
+        "To the trash: 0 files".to_owned(),
+        "Apply this plan? [y/N]".to_owned(),
+        "Nothing was changed.".to_owned(),
+    ] {
+        assert!(printed.contains(&line), "{line}: {printed}");
+    }
+    assert_eq!(listed(&home), n, "no changes nothing");
+    let out = home.fm(&["duplicates", "apply", plan_path]);
+    assert_eq!(code(&out), 4, "no answer is no");
+    assert_eq!(listed(&home), n);
+
+    let out = home.fm(&[
+        "--json",
+        "duplicates",
+        "apply",
+        plan_path,
+        "--yes",
+        "--name",
+        "Hide copies",
+    ]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let session = json(&out);
+    assert_eq!(session["name"], "Hide copies");
+    assert_eq!(session["hidden"], n as u64);
+    assert_eq!(listed(&home), 0, "the copies are hidden");
+    assert_eq!(
+        font_tree(&library),
+        files_before,
+        "hiding moves no font file"
+    );
+
+    let sessions = json(&home.fm(&["--json", "duplicates", "sessions"]));
+    assert_eq!(sessions[0]["id"], session["id"], "{sessions}");
+    let printed = text(&home.fm(&["duplicates", "sessions"]).stdout);
+    assert!(printed.contains("Hide copies"), "{printed}");
+
+    let id = session["id"].to_string();
+    let out = home.fm(&["duplicates", "undo", &id]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    assert_eq!(listed(&home), n, "undo shows the copies again");
+    assert_eq!(font_tree(&library), files_before);
 }

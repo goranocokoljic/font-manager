@@ -108,6 +108,16 @@ impl<'a> Output<'a> {
         }
     }
 
+    /// Lets `ask` write a question to stdout and read the answer; with
+    /// `--json` nothing may be written there, so a command asks only
+    /// without it.
+    pub fn ask(
+        &mut self,
+        ask: impl FnOnce(&mut dyn Write) -> io::Result<bool>,
+    ) -> io::Result<bool> {
+        ask(&mut *self.out)
+    }
+
     /// Prints a usage error clap found (`fm` with a bad argument); with
     /// `--json` as an `InvalidRequest` error, with clap's text as detail.
     pub fn usage(self, clap_text: &str) -> Exit {
@@ -559,6 +569,13 @@ pub fn doctor(api: &dyn Api, d: &Doctor, out: &mut dyn Write) -> io::Result<()> 
     for c in &d.conflicts {
         clash(api, c, out)?;
     }
+    if d.sets > 0 {
+        writeln!(
+            out,
+            "Duplicate sets: {}. Clean them up with fm duplicates (fm duplicates list, then fm duplicates plan).",
+            d.sets
+        )?;
+    }
     Ok(())
 }
 
@@ -670,7 +687,7 @@ fn yes(b: bool) -> &'static str {
 }
 
 /// An enum value as the API names it in JSON (`italic`, `ofl`).
-fn json_name<T: Serialize>(value: &T) -> String {
+pub(crate) fn json_name<T: Serialize>(value: &T) -> String {
     match serde_json::to_value(value) {
         Ok(serde_json::Value::String(s)) => s,
         Ok(other) => other.to_string(),
