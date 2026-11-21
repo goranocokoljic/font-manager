@@ -2449,7 +2449,11 @@
         "other": "{count} hidden"
       },
       "noKeeper": "Keep at least one copy.",
-      "keys": "Keys: ↑ ↓ set · 1–9 keep a copy · T, H, K outcome of the focused copy · B keep all · N not duplicates · C compare · Enter add"
+      "keys": "Keys: ↑ ↓ set · 1–9 keep a copy · T, H, K outcome of the focused copy · B keep all · N not duplicates · C compare · Enter add",
+      "compareKey": "C",
+      "notDuplicatesKey": "N",
+      "keepAllKey": "B",
+      "addKey": "Enter"
     },
     "compare": {
       "title": "{a} and {b}",

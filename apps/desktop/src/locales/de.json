@@ -2449,7 +2449,11 @@
         "other": "{count} ausgeblendet"
       },
       "noKeeper": "Behalte mindestens eine Kopie.",
-      "keys": "Tasten: ↑ ↓ Satz · 1–9 eine Kopie behalten · T, H, K Ergebnis der fokussierten Kopie · B alle behalten · N keine Duplikate · C vergleichen · Eingabe hinzufügen"
+      "keys": "Tasten: ↑ ↓ Satz · 1–9 eine Kopie behalten · T, H, K Ergebnis der fokussierten Kopie · B alle behalten · N keine Duplikate · C vergleichen · Eingabe hinzufügen",
+      "compareKey": "C",
+      "notDuplicatesKey": "N",
+      "keepAllKey": "B",
+      "addKey": "Eingabe"
     },
     "compare": {
       "title": "{a} und {b}",

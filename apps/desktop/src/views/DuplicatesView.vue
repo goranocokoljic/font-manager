@@ -13,6 +13,7 @@ import DuplicatesQueue from '../components/DuplicatesQueue.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
+import UiIconButton from '../components/ui/UiIconButton.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
 import { errorMessage, formatDate, formatNumber, t, type MessageKey } from '../i18n';
 import { fileSizeText } from '../list/columns';
@@ -446,14 +447,12 @@ onMounted(async () => {
         <ul v-if="languagePresets.length" class="chips">
           <li v-for="p in languagePresets" :key="p.code" class="language-chip">
             {{ p.name }}
-            <button
-              type="button"
-              class="remove"
-              :aria-label="t('duplicatesModule.rules.remove', { name: p.name })"
+            <UiIconButton
+              icon="close"
+              size="sm"
+              :label="t('duplicatesModule.rules.remove', { name: p.name })"
               @click="setLanguages(myLanguages.filter((c) => c !== p.code))"
-            >
-              <UiIcon name="close" />
-            </button>
+            />
           </li>
         </ul>
         <p v-else class="muted">{{ t('duplicatesModule.rules.none') }}</p>
@@ -709,20 +708,10 @@ onMounted(async () => {
   align-items: center;
   gap: var(--fm-space-1);
   height: 28px;
-  padding: 0 var(--fm-space-1) 0 var(--fm-space-3);
+  padding-block: 0;
+  padding-inline: var(--fm-space-3) var(--fm-space-1);
   border: 1px solid var(--fm-control-border);
   border-radius: 999px;
-}
-.remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 999px;
-  background-color: transparent;
-  color: var(--fm-muted);
 }
 .error {
   margin: var(--fm-space-4) var(--fm-space-8) 0;

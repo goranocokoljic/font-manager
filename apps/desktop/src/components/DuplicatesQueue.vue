@@ -449,7 +449,8 @@ onBeforeUnmount(() => observer?.disconnect());
           </p>
         </div>
         <UiButton class="outlined" aria-keyshortcuts="C" @click="store.compare()">
-          {{ t('duplicatesModule.set.compare') }} <kbd>C</kbd>
+          {{ t('duplicatesModule.set.compare') }}
+          <kbd>{{ t('duplicatesModule.set.compareKey') }}</kbd>
         </UiButton>
       </header>
       <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
@@ -494,10 +495,12 @@ onBeforeUnmount(() => observer?.disconnect());
       </section>
       <footer class="actions">
         <UiButton aria-keyshortcuts="N" @click="decide('notDuplicates')">
-          {{ t('duplicatesModule.set.notDuplicates') }} <kbd>N</kbd>
+          {{ t('duplicatesModule.set.notDuplicates') }}
+          <kbd>{{ t('duplicatesModule.set.notDuplicatesKey') }}</kbd>
         </UiButton>
         <UiButton aria-keyshortcuts="B" @click="decide('keepAll')">
-          {{ t('duplicatesModule.set.keepAll') }} <kbd>B</kbd>
+          {{ t('duplicatesModule.set.keepAll') }}
+          <kbd>{{ t('duplicatesModule.set.keepAllKey') }}</kbd>
         </UiButton>
         <span class="summary" aria-live="polite">
           <template v-if="keptCount === 0">{{ t('duplicatesModule.set.noKeeper') }}</template>
@@ -515,7 +518,7 @@ onBeforeUnmount(() => observer?.disconnect());
           :aria-disabled="keptCount === 0"
           @click="decide('copies')"
         >
-          {{ t('duplicatesModule.set.add') }} <kbd>Enter</kbd>
+          {{ t('duplicatesModule.set.add') }} <kbd>{{ t('duplicatesModule.set.addKey') }}</kbd>
         </button>
       </footer>
       <p class="keys">{{ t('duplicatesModule.set.keys') }}</p>
