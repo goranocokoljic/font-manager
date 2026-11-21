@@ -2458,7 +2458,50 @@
     "compare": {
       "title": "Compare {a} with {b}",
       "close": "Close the comparison",
-      "same": "The copies hold the same data."
+      "same": "The copies hold the same data.",
+      "first": "First copy",
+      "second": "Second copy",
+      "copyOption": "{n}. {name} · {version}",
+      "sampleLabel": "Sample text",
+      "yourSample": "Your sample",
+      "unreadable": "This copy could not be read.",
+      "notCompared": "The copies are not compared, because one of them could not be read.",
+      "locl": "locl",
+      "loclTitle": "Has localized forms (locl) for this language",
+      "inDraft": "In the plan: {choice}",
+      "choice": {
+        "keep": "keep",
+        "hide": "hide"
+      },
+      "keepThis": "Keep this one",
+      "keepThisName": "Keep this one: {name}",
+      "hideName": "Hide: {name}",
+      "keepBoth": "Keep both",
+      "containerOnly": "Only the container differs: the {a} and the {b} file hold the same font.",
+      "languages": "Languages",
+      "onlyCovers": "Only {name} covers {languages} in full.",
+      "onlyLocl": "Only {name} has localized forms (locl) for {languages}.",
+      "glyphs": "Glyphs",
+      "glyphsOnly": {
+        "one": "{count} glyph only in {name}:",
+        "other": "{count} glyphs only in {name}:"
+      },
+      "more": {
+        "one": "+{count} more",
+        "other": "+{count} more"
+      },
+      "featuresAxes": "Features and axes",
+      "featuresOnly": "Features only in {name}",
+      "axesOnly": "Axes only in {name}",
+      "metrics": "Metrics",
+      "verticalMetrics": "The vertical metrics differ: the line spacing changes.",
+      "unitsPerEm": "The units per em differ.",
+      "advanceWidths": {
+        "one": "{count} glyph has another width.",
+        "other": "{count} glyphs have another width."
+      },
+      "mayReflow": "Text set in one copy may reflow in the other.",
+      "otherData": "Glyphs, metrics, features, axes and languages are the same. Other font data differs: {tables}."
     },
     "plan": {
       "heading": "The plan",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import cases from '../../../../fixtures/duplicates/set-cases.json';
 import library from '../../../../fixtures/duplicates/mock-library.json';
-import { createMockClient } from './mock';
+import { createMockClient, mockCopyCompareCopies, mockDuplicateCopies } from './mock';
 import { duplicateSets, listDuplicateSets, versionKey, type SetFile } from './mockDuplicates';
 import type { DuplicateScope, DuplicateSet, FontFormat, Paged } from './types';
 
@@ -105,13 +105,97 @@ describe('MockApi duplicate sets (E56.1)', () => {
     expect([c.a.face, c.b.face]).toEqual([a, b]);
     expect(c.a.health).toEqual({ kind: 'ok' });
     expect(c.differences).not.toBeNull();
-    expect(c.summary).toHaveLength(1);
+    expect(c.summary.length).toBeGreaterThan(0);
     await expect(client.compareCopies({ a, b: a })).rejects.toMatchObject({
       code: 'invalidRequest',
     });
     await expect(client.compareCopies({ a, b: 999_999 })).rejects.toMatchObject({
       code: 'notFound',
     });
+  });
+});
+
+describe('MockApi copy comparison (E56.13)', () => {
+  /** The faces of the Inter copies of `?mockDuplicates=1` and of the WOFF2 copy. */
+  async function interCopies() {
+    const client = createMockClient({ copies: [...mockDuplicateCopies, ...mockCopyCompareCopies] });
+    const sets = await client.listDuplicateSets({});
+    const inter = sets.items.find((s) => s.postscriptName === 'Inter-Regular')!;
+    const legacy = sets.items.find((s) => s.postscriptName === 'LegacyGrotesk')!;
+    const at = (set: typeof inter, end: string) =>
+      set.copies.find((c) => c.path.endsWith(end))!.face!;
+    return {
+      client,
+      sample: at(inter, 'Inter[wght].ttf'),
+      old: at(inter, 'Old/Inter-Regular.ttf'),
+      older: at(inter, 'Older/Inter-Regular.ttf'),
+      woff2: at(inter, 'Inter-Regular.woff2'),
+      legacy: legacy.copies.map((c) => c.face!),
+    };
+  }
+
+  it('names a language and its glyphs one copy lacks, each side with its own coverage', async () => {
+    const { client, sample, older } = await interCopies();
+    const c = await client.compareCopies({ a: sample, b: older });
+    expect(c.a.languages).toContain('sr-Cyrl');
+    expect(c.b.languages).not.toContain('sr-Cyrl');
+    expect(c.b.languages).toContain('en');
+    const d = c.differences!;
+    expect(d.languagesLost).toEqual(['sr-Cyrl']);
+    expect(d.languagesGained).toEqual([]);
+    expect(d.glyphsRemoved.count).toBe(30);
+    expect(d.glyphsRemoved.codePoints).toHaveLength(d.glyphsRemoved.first.length);
+    expect(String.fromCodePoint(d.glyphsRemoved.codePoints![0]!)).toBe('а');
+    expect(d.mayReflow).toBe(false);
+    expect(c.summary[0]).toBe(
+      'The first copy covers Serbian (Cyrillic) in full; the second does not.',
+    );
+    // The other way round it is gained.
+    const back = await client.compareCopies({ a: older, b: sample });
+    expect(back.differences!.languagesGained).toEqual(['sr-Cyrl']);
+  });
+
+  it('names locl on one side only and changed metrics with the reflow', async () => {
+    const { client, sample, old } = await interCopies();
+    const c = await client.compareCopies({ a: sample, b: old });
+    const d = c.differences!;
+    expect(c.a.locl).toEqual(['sr-Cyrl']);
+    expect(c.b.locl).toEqual([]);
+    expect(d.loclLost).toEqual(['sr-Cyrl']);
+    expect(d.languagesLost).toEqual([]);
+    expect(d.verticalMetricsChanged).toBe(true);
+    expect(d.advanceWidthsChanged).toBe(14);
+    expect(d.mayReflow).toBe(true);
+    expect(d.containerOnly).toBe(false);
+    expect(c.summary).toContain('Text set in one copy may reflow in the other.');
+  });
+
+  it('says only the container differs for the same font in another format, and not otherwise', async () => {
+    const { client, sample, woff2, older } = await interCopies();
+    const c = await client.compareCopies({ a: sample, b: woff2 });
+    expect(c.differences!.containerOnly).toBe(true);
+    expect(c.summary).toEqual([
+      'Only the container differs: both files hold the same font (TTF and WOFF2).',
+    ]);
+    // Another format with other glyphs is not a container-only pair.
+    const other = await client.compareCopies({ a: woff2, b: older });
+    expect(other.differences!.containerOnly).toBe(false);
+  });
+
+  it('gives the broken side its reason and no differences', async () => {
+    const { client, legacy } = await interCopies();
+    const [first, second] = legacy;
+    const c = await client.compareCopies({ a: first!, b: second! });
+    const broken = [c.a, c.b].find((s) => s.health.kind === 'broken')!;
+    expect(broken.health).toEqual({
+      kind: 'broken',
+      reason: "The file is truncated: the 'glyf' table ends before its declared length.",
+    });
+    expect(broken.languages).toEqual([]);
+    expect(c.differences).toBeNull();
+    expect(c.summary[0]).toMatch(
+      /could not be read, so the copies are not compared: The file is truncated/,
+    );
   });
 });
 

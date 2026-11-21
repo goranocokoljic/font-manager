@@ -47,6 +47,31 @@ describe('the duplicates store', () => {
     });
   });
 
+  it('compares the keeper by default, or the two copies the user picked (E56.13)', async () => {
+    const store = useDuplicatesStore();
+    await store.reload(0);
+    await store.compare();
+    expect(store.comparison?.a.path).toBe('/Users/demo/Fonts/Inter/Inter[wght].ttf');
+    expect(store.comparison?.b.path).toBe('/Users/demo/Fonts/Old/Inter-Regular.ttf');
+    await store.compare(
+      '/Users/demo/Fonts/Inter/Inter[wght].ttf',
+      '/Users/demo/Fonts/Older/Inter-Regular.ttf',
+    );
+    expect(store.comparison?.a.path).toBe('/Users/demo/Fonts/Older/Inter-Regular.ttf');
+    expect(store.comparison?.b.path).toBe('/Users/demo/Fonts/Inter/Inter[wght].ttf');
+    expect(store.comparison?.differences?.languagesGained).toEqual(['sr-Cyrl']);
+    // The same copy twice compares it with another one, never with itself.
+    await store.compare(
+      '/Users/demo/Fonts/Older/Inter-Regular.ttf',
+      '/Users/demo/Fonts/Older/Inter-Regular.ttf',
+    );
+    expect(store.comparison?.a.path).toBe('/Users/demo/Fonts/Older/Inter-Regular.ttf');
+    expect(store.comparison?.b.path).not.toBe('/Users/demo/Fonts/Older/Inter-Regular.ttf');
+    // A new set closes the comparison.
+    await store.select(1);
+    expect(store.comparison).toBeNull();
+  });
+
   it('sends a decision to the API and shows the set that took its place', async () => {
     const store = useDuplicatesStore();
     await store.reload(0);

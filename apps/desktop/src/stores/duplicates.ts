@@ -364,11 +364,14 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     await reload(0);
   }
 
-  /** Compares the keeper with `other` (or the first other copy) through the API. */
-  async function compare(other?: string): Promise<void> {
+  /**
+   * Compares `first` (else the keeper) with `other` (else the first other copy) through
+   * the API (E56.13: the user picks both copies of the set).
+   */
+  async function compare(other?: string, first?: string): Promise<void> {
     const set = current.value;
     if (!set) return;
-    const keep = set.copies.find((c) => c.path === keeper.value) ?? set.copies[0];
+    const keep = set.copies.find((c) => c.path === (first ?? keeper.value)) ?? set.copies[0];
     const with_ =
       set.copies.find((c) => c.path === other && c.path !== keep?.path) ??
       set.copies.find((c) => c.path !== keep?.path);

@@ -4713,6 +4713,43 @@ fn the_mock_compares_two_faces_by_characters_features_and_axes() {
 }
 
 #[test]
+fn the_mock_comparison_names_each_side_s_languages_and_what_one_loses() {
+    use fm_api::library::CompareCopiesRequest;
+    let mock = api();
+    // Every pair of sample faces: the differences are the sides' sets apart.
+    let ids: Vec<FaceId> = (1..=12).map(FaceId).collect();
+    let mut seen_loss = false;
+    for &a in &ids {
+        for &b in &ids {
+            let Ok(c) = mock.compare_copies(CompareCopiesRequest { a, b }) else {
+                continue;
+            };
+            let d = c.differences.expect("the mock reads both sides");
+            // As fm-core: the differences are sorted, the sides in preset order.
+            let apart = |x: &[String], y: &[String]| -> Vec<String> {
+                let mut out: Vec<String> = x.iter().filter(|l| !y.contains(l)).cloned().collect();
+                out.sort();
+                out
+            };
+            assert_eq!(d.languages_lost, apart(&c.a.languages, &c.b.languages));
+            assert_eq!(d.languages_gained, apart(&c.b.languages, &c.a.languages));
+            assert_eq!(d.locl_lost, apart(&c.a.locl, &c.b.locl));
+            assert_eq!(d.locl_gained, apart(&c.b.locl, &c.a.locl));
+            assert_eq!(
+                d.glyphs_removed.code_points.len(),
+                d.glyphs_removed.first.len()
+            );
+            if d.locl_lost == ["sr-Cyrl"] && d.languages_lost.contains(&"sr-Cyrl".to_owned()) {
+                seen_loss = true;
+                assert!(d.glyphs_removed.count > 0);
+                assert!(d.glyphs_removed.code_points.iter().all(Option::is_some));
+            }
+        }
+    }
+    assert!(seen_loss, "a sample face with Cyrillic against one without");
+}
+
+#[test]
 fn the_mock_previews_a_keeper_policy_without_saving_it() {
     use fm_api::library::{KeeperPolicy, KeeperRule, PreviewKeeperPolicyRequest};
     use fm_api::settings::{MyLanguagesStatus, SettingsService};

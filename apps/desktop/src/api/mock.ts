@@ -144,6 +144,9 @@ import {
   type Tag,
   type TagId,
   type Target,
+  type CopyComparison,
+  type CopyDifferences,
+  type FontFormat,
   type TextBlock,
   type VirtualStyle,
   type WebUse,
@@ -789,7 +792,35 @@ const MOCK_LANGUAGES: [string, string][] = [
 /** The character sets by the scripts that pick them: built once, not per face per search. */
 const SCRIPT_CHARS = new Map<string, Set<string>>();
 
+/**
+ * What a mock copy's file holds unlike the sample face it copies (E56.13): the sample
+ * has no font files, so `compareCopies` and the coverage read these instead.
+ */
+export interface MockCopyHint {
+  /** Characters the copy lacks. */
+  lacks?: string;
+  /** The copy has no `locl` forms. */
+  noLocl?: boolean;
+  /** The vertical metrics and this many advance widths differ from the sample's. */
+  metrics?: number;
+  /** The file cannot be read: the reason, as fm-core's `Health::Broken`. */
+  broken?: string;
+}
+
+/** The hint of each copied face, set when the mock copies it. */
+const COPY_HINTS = new WeakMap<FaceDetail, MockCopyHint>();
+
 function mockChars(f: FaceDetail): Set<string> {
+  const lacks = COPY_HINTS.get(f)?.lacks;
+  if (lacks) {
+    const all = new Set(ownChars(f));
+    for (const c of lacks) all.delete(c);
+    return all;
+  }
+  return ownChars(f);
+}
+
+function ownChars(f: FaceDetail): Set<string> {
   const own = mockWall().chars.get(f.face.family);
   if (own) return own;
   const cyrl = f.scripts.includes('cyrl');
@@ -890,10 +921,165 @@ export function mockLanguageCoverage(f: FaceDetail, codes: string[]): CoverageRe
       covered: letters.length - missing.length,
       total: letters.length,
       missing,
-      hasLocl: code === 'sr-Cyrl' && has.has('б'),
+      hasLocl: code === 'sr-Cyrl' && has.has('б') && !COPY_HINTS.get(f)?.noLocl,
     };
   });
   return { face: f.face.id, complete: all.length === 0, missing: all, languages };
+}
+
+/** The English list fm-core writes: `a`, `a and b`, `a, b and c`. */
+const englishList = (items: string[]) =>
+  items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+
+/** The format names fm-core's comparison sentences use. */
+const FORMAT_NAMES: Partial<Record<FontFormat, string>> = {
+  ttf: 'TTF',
+  otf: 'OTF',
+  woff: 'WOFF',
+  woff2: 'WOFF2',
+  ttc: 'TTC',
+  otc: 'OTC',
+};
+
+/**
+ * Two copies compared as fm-core's `copy_diff::compare` answers (E56.2, E56.13): the
+ * sample has no font files, so the characters, `locl`, features and axes are the
+ * faces' and the metrics and a broken file come from the copies' hints
+ * (`MockCopyHint`); two files of one font that differ in nothing else differ in the
+ * container when their formats do. The sentences are fm-core's.
+ */
+export function mockCompareCopies(a: FaceDetail, b: FaceDetail): CopyComparison {
+  const codes = MOCK_PRESETS.map((p) => p[0]);
+  const hint = (f: FaceDetail) => COPY_HINTS.get(f) ?? {};
+  const side = (f: FaceDetail) => {
+    const broken = hint(f).broken;
+    const cov = broken ? [] : mockLanguageCoverage(f, codes).languages;
+    return {
+      face: f.face.id,
+      path: f.path,
+      format: f.face.format,
+      health: broken ? { kind: 'broken' as const, reason: broken } : { kind: 'ok' as const },
+      languages: cov.filter((l) => l.covered === l.total).map((l) => l.code),
+      locl: cov.filter((l) => l.hasLocl).map((l) => l.code),
+    };
+  };
+  const [sa, sb] = [side(a), side(b)];
+  const unreadable = (
+    [
+      ['first', sa],
+      ['second', sb],
+    ] as const
+  ).flatMap(([which, s]) =>
+    s.health.kind === 'ok'
+      ? []
+      : [
+          `The ${which} copy (${s.path}) could not be read, so the copies are not compared: ${s.health.reason}`,
+        ],
+  );
+  if (unreadable.length) return { a: sa, b: sb, differences: null, summary: unreadable };
+  const apart = (x: string[], y: string[]) => x.filter((t) => !y.includes(t)).sort();
+  const only = (x: FaceDetail, y: FaceDetail) => {
+    const theirs = mockChars(y);
+    const chars = [...mockChars(x)]
+      .filter((c) => !theirs.has(c))
+      .sort((p, q) => (p.codePointAt(0) ?? 0) - (q.codePointAt(0) ?? 0));
+    const first = chars.slice(0, 10);
+    return {
+      count: chars.length,
+      first: first.map(
+        (c) => `${c} (U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')})`,
+      ),
+      codePoints: first.map((c) => c.codePointAt(0) ?? null),
+    };
+  };
+  const features = (f: FaceDetail) => f.features.map((x) => x.tag);
+  const axes = (f: FaceDetail) => f.axes.map((x) => x.tag);
+  const [ma, mb] = [hint(a).metrics ?? 0, hint(b).metrics ?? 0];
+  const metrics = ma !== mb;
+  const widths = metrics ? Math.max(ma, mb) : 0;
+  const loclGained = apart(sb.locl, sa.locl);
+  const loclLost = apart(sa.locl, sb.locl);
+  const d: CopyDifferences = {
+    languagesGained: apart(sb.languages, sa.languages),
+    languagesLost: apart(sa.languages, sb.languages),
+    loclGained,
+    loclLost,
+    glyphsAdded: only(b, a),
+    glyphsRemoved: only(a, b),
+    featuresAdded: apart(features(b), features(a)),
+    featuresRemoved: apart(features(a), features(b)),
+    axesAdded: apart(axes(b), axes(a)),
+    axesRemoved: apart(axes(a), axes(b)),
+    verticalMetricsChanged: metrics,
+    unitsPerEmChanged: false,
+    advanceWidthsChanged: widths,
+    mayReflow: metrics,
+    containerOnly: false,
+    tablesChanged: [],
+  };
+  const glyphs = d.glyphsAdded.count + d.glyphsRemoved.count > 0;
+  const locl = loclGained.length + loclLost.length > 0;
+  const fontData =
+    glyphs ||
+    locl ||
+    metrics ||
+    [d.featuresAdded, d.featuresRemoved, d.axesAdded, d.axesRemoved].some((x) => x.length > 0);
+  const sameFile = a.hash === b.hash && a.face.format === b.face.format;
+  if (!fontData && !sameFile) {
+    if (a.face.format !== b.face.format) d.containerOnly = true;
+    else d.tablesChanged = ['name'];
+  } else {
+    d.tablesChanged = [
+      ...new Set([
+        ...(glyphs ? ['cmap', 'glyf', 'hmtx'] : []),
+        ...(locl ? ['GSUB'] : []),
+        ...(metrics ? ['OS/2', 'hhea', 'hmtx'] : []),
+      ]),
+    ].sort();
+  }
+  const name = (code: string) => MOCK_PRESETS.find((p) => p[0] === code)?.[1] ?? code;
+  const names = (list: string[]) => englishList(list.map(name));
+  const format = (f: FontFormat | null) => (f && FORMAT_NAMES[f]) || 'another format';
+  const out: string[] = [];
+  if (d.containerOnly) {
+    out.push(
+      `Only the container differs: both files hold the same font (${format(sa.format)} and ${format(sb.format)}).`,
+    );
+    return { a: sa, b: sb, differences: d, summary: out };
+  }
+  if (d.languagesGained.length)
+    out.push(`The second copy covers ${names(d.languagesGained)} in full; the first does not.`);
+  if (d.languagesLost.length)
+    out.push(`The first copy covers ${names(d.languagesLost)} in full; the second does not.`);
+  if (loclGained.length)
+    out.push(`Only the second copy has localized forms (locl) for ${names(loclGained)}.`);
+  if (loclLost.length)
+    out.push(`Only the first copy has localized forms (locl) for ${names(loclLost)}.`);
+  const glyphLine = (c: CopyDifferences['glyphsAdded'], verb: string) =>
+    `The second copy ${verb} ${c.count} ${c.count === 1 ? 'glyph' : 'glyphs'}, the first: ${englishList(c.first)}.`;
+  if (d.glyphsAdded.count) out.push(glyphLine(d.glyphsAdded, 'adds'));
+  if (d.glyphsRemoved.count) out.push(glyphLine(d.glyphsRemoved, 'lacks'));
+  const lists: [string[], string][] = [
+    [d.featuresAdded, 'OpenType features only the second copy has'],
+    [d.featuresRemoved, 'OpenType features only the first copy has'],
+    [d.axesAdded, 'Variation axes only the second copy has'],
+    [d.axesRemoved, 'Variation axes only the first copy has'],
+  ];
+  for (const [items, what] of lists) if (items.length) out.push(`${what}: ${englishList(items)}.`);
+  if (metrics) {
+    out.push('The vertical metrics differ, so the line spacing changes.');
+    out.push(
+      `The advance widths of ${widths} ${widths === 1 ? 'glyph' : 'glyphs'} both copies have differ.`,
+    );
+    out.push('Text set in one copy may reflow in the other.');
+  }
+  if (!out.length)
+    out.push(
+      d.tablesChanged.length
+        ? `The glyphs, metrics, features, axes and languages are the same; other font data differs (${englishList(d.tablesChanged)}).`
+        : 'The two copies hold the same font data.',
+    );
+  return { a: sa, b: sb, differences: d, summary: out };
 }
 
 /**
@@ -1231,7 +1417,16 @@ export interface MockOptions {
    * Other files of a sample face's font (E56.1), as the Rust mock's `add_copy` (no
    * `hash`: the same file) and `add_file_of` (another hash, and a version when given).
    */
-  copies?: { face: FaceId; path: string; hash: string | null; version: string | null }[];
+  copies?: {
+    face: FaceId;
+    path: string;
+    hash: string | null;
+    version: string | null;
+    /** Another format than the sample face's (E56.13). */
+    format?: FontFormat;
+    /** What the copy's file holds unlike the sample face (E56.13). */
+    compare?: MockCopyHint;
+  }[];
   /** Sidecar conflicts waiting for the user (none by default); each is a Problems entry too. */
   sidecarConflicts?: SidecarConflict[];
   /** Project sets (none by default). */
@@ -1346,18 +1541,42 @@ export interface MockOptions {
  */
 export const mockDuplicateCopies: NonNullable<MockOptions['copies']> = [
   { face: 6, path: '/Users/demo/Downloads/JetBrainsMono-Regular.ttf', hash: null, version: null },
-  { face: 1, path: '/Users/demo/Fonts/Old/Inter-Regular.ttf', hash: '1f00d', version: null },
+  // Compared with the sample's Inter (E56.13): other metrics and no `locl`.
+  {
+    face: 1,
+    path: '/Users/demo/Fonts/Old/Inter-Regular.ttf',
+    hash: '1f00d',
+    version: null,
+    compare: { metrics: 14, noLocl: true },
+  },
+  // Without Cyrillic, so it does not cover Serbian (Cyrillic).
   {
     face: 1,
     path: '/Users/demo/Fonts/Older/Inter-Regular.ttf',
     hash: '2beef',
     version: 'Version 0.9',
+    compare: { lacks: 'абвгдђежзијклљмнњопрстћуфхцчџш' },
   },
   {
     face: 7,
     path: '/Users/demo/Backup/legacy/LEGGR___.PFB',
     hash: '3cafe',
     version: 'Version 1.000',
+    compare: { broken: "The file is truncated: the 'glyf' table ends before its declared length." },
+  },
+];
+
+/**
+ * With `?mockCopyCompare=1` (E56.13): the sample's Inter once more as a WOFF2 of the
+ * same version, a pair whose only difference is the container.
+ */
+export const mockCopyCompareCopies: NonNullable<MockOptions['copies']> = [
+  {
+    face: 1,
+    path: '/Users/demo/Fonts/Web/Inter-Regular.woff2',
+    hash: '4f00d',
+    version: 'Version 1.000',
+    format: 'woff2',
   },
 ];
 
@@ -3180,6 +3399,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     copy.path = c.path;
     if (c.hash != null) copy.hash = c.hash;
     if (c.version != null) copy.version = c.version;
+    if (c.format) copy.face.format = c.format;
+    if (c.compare) COPY_HINTS.set(copy, c.compare);
     faces.push(copy);
   }
   // The files the library shows, as fm-core reads them for the duplicate sets: one
@@ -4995,55 +5216,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!a) throw notFound(req.a);
       const b = find(req.b);
       if (!b) throw notFound(req.b);
-      // As fm_api::mock: the sample has no files, so only characters,
-      // features and axes are compared.
-      const side = (f: FaceDetail) => ({
-        face: f.face.id,
-        path: f.path,
-        format: f.face.format,
-        health: { kind: 'ok' as const },
-      });
-      const only = (x: FaceDetail, y: FaceDetail) => {
-        const theirs = mockChars(y);
-        const chars = [...mockChars(x)]
-          .filter((c) => !theirs.has(c))
-          .sort((p, q) => (p.codePointAt(0) ?? 0) - (q.codePointAt(0) ?? 0));
-        return {
-          count: chars.length,
-          first: chars
-            .slice(0, 10)
-            .map(
-              (c) =>
-                `${c} (U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')})`,
-            ),
-        };
-      };
-      const tags = (x: string[], y: string[]) => x.filter((t) => !y.includes(t));
-      const features = (f: FaceDetail) => f.features.map((x) => x.tag);
-      const axes = (f: FaceDetail) => f.axes.map((x) => x.tag);
-      return {
-        a: side(a),
-        b: side(b),
-        differences: {
-          languagesGained: [],
-          languagesLost: [],
-          glyphsAdded: only(b, a),
-          glyphsRemoved: only(a, b),
-          featuresAdded: tags(features(b), features(a)),
-          featuresRemoved: tags(features(a), features(b)),
-          axesAdded: tags(axes(b), axes(a)),
-          axesRemoved: tags(axes(a), axes(b)),
-          verticalMetricsChanged: false,
-          unitsPerEmChanged: false,
-          advanceWidthsChanged: 0,
-          mayReflow: false,
-          containerOnly: false,
-          tablesChanged: [],
-        },
-        summary: [
-          'The sample library has no font files: only characters, features and axes are compared.',
-        ],
-      };
+      return mockCompareCopies(a, b);
     },
     keepCopy: async (req) => {
       // The rule of `KeepCopyRequest::check`: only a copy listed with the keeper moves.
@@ -5817,7 +5990,15 @@ export const mockClient: FmClient = createMockClient({
       }),
   // `?mockDuplicates=1` adds copies for the Duplicates module (E56.11): JetBrains Mono
   // twice as the same file, Inter in three versions, Legacy Grotesk twice in one version.
-  ...(countFromUrl('mockDuplicates', 1) ? { copies: mockDuplicateCopies } : {}),
+  // `?mockCopyCompare=1` adds Inter as a WOFF2 of the same version (E56.13).
+  ...(countFromUrl('mockDuplicates', 1)
+    ? {
+        copies: [
+          ...mockDuplicateCopies,
+          ...(countFromUrl('mockCopyCompare', 1) ? mockCopyCompareCopies : []),
+        ],
+      }
+    : {}),
   // `?mockFolderPairs=1` adds three folders that hold the same sample fonts (E56.12): a
   // contained pair, a partial pair and a system font folder that can only be kept.
   // `=2` adds 20 archive folders with Sample 1–5, for a few hundred pairs.

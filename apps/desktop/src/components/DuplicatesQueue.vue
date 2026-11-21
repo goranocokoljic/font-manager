@@ -9,7 +9,9 @@
 // that copy and send the others that may leave to the trash; T, H, K the outcome of the
 // copy with the focus (else the last one chosen by number); B keep all; N not
 // duplicates; C compare two copies; Enter add to the plan and go on. When a set leaves
-// the queue the focus goes to the row now in its place, never to the page.
+// the queue the focus goes to the row now in its place, never to the page. The
+// comparison (E56.13) takes the cards' place; Escape closes it and gives the focus back
+// to the Compare button.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type {
   CopyChoice,
@@ -24,6 +26,7 @@ import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { fadeIn } from '../motion/fadeIn';
 import { useDuplicatesStore, type QueueChip } from '../stores/duplicates';
 import { useSourcesStore } from '../stores/sources';
+import DuplicateCompare from './DuplicateCompare.vue';
 import DuplicateCopyCard from './DuplicateCopyCard.vue';
 import UiButton from './ui/UiButton.vue';
 import UiEmptyState from './ui/UiEmptyState.vue';
@@ -280,12 +283,12 @@ function onRowKey(e: KeyboardEvent, index: number): void {
   }
 }
 
-const compareTitle = computed(() => {
-  const c = store.comparison;
-  if (!c) return '';
-  const name = (p: string) => p.split(/[\\/]/).pop() ?? p;
-  return t('duplicatesModule.compare.title', { a: name(c.a.path), b: name(c.b.path) });
-});
+const compareButton = ref<InstanceType<typeof UiButton> | null>(null);
+async function closeComparison(): Promise<void> {
+  store.comparison = null;
+  await nextTick();
+  (compareButton.value?.$el as HTMLElement | undefined)?.focus();
+}
 
 onMounted(() => {
   measure();
@@ -437,13 +440,36 @@ onBeforeUnmount(() => observer?.disconnect());
             {{ t('duplicatesModule.set.position', { n: store.cursor + 1, total: count }) }}
           </p>
         </div>
-        <UiButton class="outlined" aria-keyshortcuts="C" @click="store.compare()">
+        <UiButton
+          ref="compareButton"
+          class="outlined"
+          aria-keyshortcuts="C"
+          @click="store.compare()"
+        >
           {{ t('duplicatesModule.set.compare') }}
           <kbd>{{ t('duplicatesModule.set.compareKey') }}</kbd>
         </UiButton>
       </header>
       <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
-      <div class="cards">
+      <DuplicateCompare
+        v-if="store.comparison"
+        :key="`${store.comparison.a.path}|${store.comparison.b.path}`"
+        :set="set"
+        :comparison="store.comparison"
+        :languages="languages"
+        :presets="store.presets"
+        :sample="sample"
+        :choices="store.choices"
+        :keeper="store.keeper"
+        :fixed="store.fixed"
+        :trash="trash"
+        @pick="(a, b) => store.compare(b, a)"
+        @keep-only="store.keepOnly"
+        @choose="store.choose"
+        @decide="decide"
+        @close="closeComparison"
+      />
+      <div v-else class="cards">
         <div
           v-for="(copy, i) in set.copies"
           :key="copy.path"
@@ -465,32 +491,18 @@ onBeforeUnmount(() => observer?.disconnect());
           />
         </div>
       </div>
-      <section
-        v-if="store.comparison"
-        class="comparison"
-        :aria-label="compareTitle"
-        data-testid="copy-comparison"
-      >
-        <header class="comparison-head">
-          <h3>{{ compareTitle }}</h3>
-          <UiButton @click="store.comparison = null">{{
-            t('duplicatesModule.compare.close')
-          }}</UiButton>
-        </header>
-        <ul v-if="store.comparison.summary.length">
-          <li v-for="line in store.comparison.summary" :key="line">{{ line }}</li>
-        </ul>
-        <p v-else>{{ t('duplicatesModule.compare.same') }}</p>
-      </section>
       <footer class="actions">
-        <UiButton aria-keyshortcuts="N" @click="decide('notDuplicates')">
-          {{ t('duplicatesModule.set.notDuplicates') }}
-          <kbd>{{ t('duplicatesModule.set.notDuplicatesKey') }}</kbd>
-        </UiButton>
-        <UiButton aria-keyshortcuts="B" @click="decide('keepAll')">
-          {{ t('duplicatesModule.set.keepAll') }}
-          <kbd>{{ t('duplicatesModule.set.keepAllKey') }}</kbd>
-        </UiButton>
+        <!-- The comparison offers these two itself, as Keep both and Not duplicates. -->
+        <template v-if="!store.comparison">
+          <UiButton aria-keyshortcuts="N" @click="decide('notDuplicates')">
+            {{ t('duplicatesModule.set.notDuplicates') }}
+            <kbd>{{ t('duplicatesModule.set.notDuplicatesKey') }}</kbd>
+          </UiButton>
+          <UiButton aria-keyshortcuts="B" @click="decide('keepAll')">
+            {{ t('duplicatesModule.set.keepAll') }}
+            <kbd>{{ t('duplicatesModule.set.keepAllKey') }}</kbd>
+          </UiButton>
+        </template>
         <span class="summary" aria-live="polite">
           <template v-if="keptCount === 0">{{ t('duplicatesModule.set.noKeeper') }}</template>
           <template v-else>
@@ -693,21 +705,6 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: var(--fm-space-3);
-}
-.comparison {
-  padding: var(--fm-space-3) var(--fm-space-4);
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-lg);
-  background-color: var(--fm-surface);
-}
-.comparison-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.comparison-head h3 {
-  margin: 0;
-  font-size: var(--fm-text-md);
 }
 .actions {
   display: flex;

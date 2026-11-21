@@ -434,3 +434,76 @@ fn axes_added_and_removed_are_named_both_ways() {
     assert_eq!(diff(&back).axes_added, ["wght"]);
     assert_eq!(diff(&back).axes_removed, ["TEST"]);
 }
+
+/// Asap has `locl` forms for Romanian, Turkish, Polish and Catalan (E3.7).
+const LOCL_FONT: &str = "google-static/asap/Asap_Condensed-ExtraLightItalic.ttf";
+
+#[test]
+fn each_side_carries_its_languages_and_locl_and_a_locl_only_on_one_side_is_named() {
+    let dir = TempDir::new("copy-diff-locl");
+    let with = fixture(LOCL_FONT);
+    let mut sfnt = source(LOCL_FONT);
+    sfnt.tables.retain(|t| &t.tag != b"GSUB");
+    let without = write_sfnt(&dir, "no-gsub.ttf", &sfnt);
+    let c = compare(&target(1, &with, 0), &target(2, &without, 0));
+    assert!(c.a.locl.iter().any(|l| l == "ro"), "{:?}", c.a.locl);
+    assert!(c.b.locl.is_empty(), "{:?}", c.b.locl);
+    // The same characters: both sides cover the same presets, Romanian included.
+    assert!(
+        c.a.languages.iter().any(|l| l == "ro"),
+        "{:?}",
+        c.a.languages
+    );
+    assert_eq!(c.a.languages, c.b.languages);
+    let d = diff(&c);
+    assert!(d.locl_lost.iter().any(|l| l == "ro"), "{:?}", d.locl_lost);
+    assert!(d.locl_gained.is_empty(), "{:?}", d.locl_gained);
+    assert!(d.languages_lost.is_empty() && d.languages_gained.is_empty());
+    assert!(
+        c.summary.iter().any(|s| s
+            .starts_with("Only the first copy has localized forms (locl) for")
+            && s.contains("Romanian")),
+        "{:?}",
+        c.summary
+    );
+    // The other way round it is gained.
+    let back = compare(&target(2, &without, 0), &target(1, &with, 0));
+    assert!(diff(&back).locl_gained.iter().any(|l| l == "ro"));
+    assert!(diff(&back).locl_lost.is_empty());
+    // A copy with locl on both sides names none.
+    let same = compare(&target(1, &with, 0), &target(2, &with, 0));
+    assert!(diff(&same).locl_gained.is_empty() && diff(&same).locl_lost.is_empty());
+    assert!(
+        !same.summary.iter().any(|s| s.contains("locl")),
+        "{:?}",
+        same.summary
+    );
+}
+
+#[test]
+fn glyph_changes_carry_the_character_of_each_named_glyph() {
+    let dir = TempDir::new("copy-diff-code-points");
+    let c = compare(&target(1, &fixture(FONT), 0), &target(2, &older(&dir), 0));
+    let removed = &diff(&c).glyphs_removed;
+    assert_eq!(removed.code_points.len(), removed.first.len());
+    assert_eq!(removed.code_points[0], Some(0x0100));
+    assert_eq!(
+        GlyphKey::Name("a.alt".to_owned()).code_point(),
+        None,
+        "a glyph known by name has no character"
+    );
+}
+
+#[test]
+fn a_side_that_cannot_be_read_has_no_languages_while_the_other_keeps_its_own() {
+    let c = compare(
+        &target(1, &fixture(FONT), 0),
+        &target(2, &fixture(TRUNCATED), 0),
+    );
+    assert!(
+        c.a.languages.iter().any(|l| l == "vi"),
+        "{:?}",
+        c.a.languages
+    );
+    assert!(c.b.languages.is_empty() && c.b.locl.is_empty());
+}
