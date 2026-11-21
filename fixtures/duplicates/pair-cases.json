@@ -672,5 +672,62 @@
       ],
       "total": 2
     }
+  },
+  {
+    "name": "a library folder inside a source stops the climb and is protected",
+    "roots": [{"path": "/x", "kind": "sourceRoot"}, {"path": "/x/a/lib", "kind": "libraryFolder"}],
+    "request": {},
+    "files": [
+      {"path": "/x/a/lib/L0.ttf", "hash": "l0", "format": "ttf", "source": 2, "kind": "libraryFolder", "faces": [{"face": 1, "name": "L0", "version": "Version 1.0"}]},
+      {"path": "/x/b/lib/L0.ttf", "hash": "l0", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 2, "name": "L0", "version": "Version 1.0"}]},
+      {"path": "/x/a/lib/L1.ttf", "hash": "l1", "format": "ttf", "source": 2, "kind": "libraryFolder", "faces": [{"face": 3, "name": "L1", "version": "Version 1.0"}]},
+      {"path": "/x/b/lib/L1.ttf", "hash": "l1", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 4, "name": "L1", "version": "Version 1.0"}]},
+      {"path": "/x/a/lib/L2.ttf", "hash": "l2", "format": "ttf", "source": 2, "kind": "libraryFolder", "faces": [{"face": 5, "name": "L2", "version": "Version 1.0"}]},
+      {"path": "/x/b/lib/L2.ttf", "hash": "l2", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 6, "name": "L2", "version": "Version 1.0"}]},
+      {"path": "/x/a/lib/L3.ttf", "hash": "l3", "format": "ttf", "source": 2, "kind": "libraryFolder", "faces": [{"face": 7, "name": "L3", "version": "Version 1.0"}]},
+      {"path": "/x/b/lib/L3.ttf", "hash": "l3", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 8, "name": "L3", "version": "Version 1.0"}]},
+      {"path": "/x/a/lib/L4.ttf", "hash": "l4", "format": "ttf", "source": 2, "kind": "libraryFolder", "faces": [{"face": 9, "name": "L4", "version": "Version 1.0"}]},
+      {"path": "/x/b/lib/L4.ttf", "hash": "l4", "format": "ttf", "source": 1, "kind": "watched", "faces": [{"face": 10, "name": "L4", "version": "Version 1.0"}]}
+    ],
+    "pairs": {
+      "items": [
+        {
+          "a": {
+            "path": "/x/a/lib",
+            "fontFiles": 5,
+            "size": 5000,
+            "shared": {
+              "identical": 5,
+              "sameVersion": 0,
+              "otherVersion": 0
+            },
+            "sharedSize": 5000,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "contained": true,
+            "protected": "libraryFolder"
+          },
+          "b": {
+            "path": "/x/b/lib",
+            "fontFiles": 5,
+            "size": 5000,
+            "shared": {
+              "identical": 5,
+              "sameVersion": 0,
+              "otherVersion": 0
+            },
+            "sharedSize": 5000,
+            "identicalSize": 5000,
+            "onlyHere": 0,
+            "otherFiles": 0,
+            "contained": true,
+            "protected": null
+          },
+          "frees": 5000
+        }
+      ],
+      "total": 1
+    }
   }
 ]

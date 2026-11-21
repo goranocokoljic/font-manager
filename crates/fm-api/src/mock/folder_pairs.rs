@@ -171,9 +171,10 @@ impl<'a> Pairs<'a> {
     }
 
     /// Why `dir` can never be the removed side, if it cannot: a system font
-    /// folder or a folder inside one, or a root itself; a side holding a
+    /// folder or a folder inside one, a root itself, or a folder that holds
+    /// a root (outside `other`, when `dir` holds `other`); a side holding a
     /// system copy counts as a system folder.
-    fn protected(&self, dir: &Path, fonts: &[usize]) -> Option<ProtectedFolder> {
+    fn protected(&self, dir: &Path, other: &Path, fonts: &[usize]) -> Option<ProtectedFolder> {
         let system = self
             .roots
             .iter()
@@ -182,7 +183,19 @@ impl<'a> Pairs<'a> {
         if system {
             return Some(ProtectedFolder::SystemFolder);
         }
-        self.roots.iter().find(|r| r.path == dir).map(|r| r.kind)
+        let held = |r: &&Root| {
+            r.path.starts_with(dir) && !(other.starts_with(dir) && r.path.starts_with(other))
+        };
+        self.roots
+            .iter()
+            .find(|r| r.path == dir)
+            .or_else(|| self.roots.iter().find(held))
+            .map(|r| r.kind)
+    }
+
+    /// Whether `dir` is a root: a pair climbs no higher than a root.
+    fn is_root(&self, dir: &Path) -> bool {
+        self.roots.iter().any(|r| r.path == dir)
     }
 
     /// The pair `(a, b)` climbed as far as it stays contained.
@@ -193,6 +206,8 @@ impl<'a> Pairs<'a> {
         }
         while let (Some(pa), Some(pb)) = (a.parent(), b.parent()) {
             if a.file_name() != b.file_name()
+                || self.is_root(&a)
+                || self.is_root(&b)
                 || pa == pb
                 || pa.starts_with(pb)
                 || pb.starts_with(pa)
@@ -298,8 +313,8 @@ impl<'a> Pairs<'a> {
     /// The pair of `a` and `b`, `a` first.
     pub(super) fn pair(&self, a: &Path, b: &Path) -> FolderPair {
         let (xs, ys) = (self.side(a, b), self.side(b, a));
-        let side_a = self.side_of(a, &xs, &self.matched(&xs, &ys));
-        let side_b = self.side_of(b, &ys, &self.matched(&ys, &xs));
+        let side_a = self.side_of(a, b, &xs, &self.matched(&xs, &ys));
+        let side_b = self.side_of(b, a, &ys, &self.matched(&ys, &xs));
         let smaller = if (side_b.size, side_b.font_files) < (side_a.size, side_a.font_files) {
             &side_b
         } else {
@@ -312,7 +327,7 @@ impl<'a> Pairs<'a> {
         }
     }
 
-    fn side_of(&self, dir: &Path, fonts: &[usize], m: &Matched) -> FolderPairSide {
+    fn side_of(&self, dir: &Path, other: &Path, fonts: &[usize], m: &Matched) -> FolderPairSide {
         let size = |i: usize| self.fonts[i].file.size;
         let mut shared = SharedCounts::default();
         let (mut total, mut shared_size, mut identical_size) = (0_u32, 0_u32, 0_u32);
@@ -340,7 +355,7 @@ impl<'a> Pairs<'a> {
             shared_size,
             identical_size,
             other_files: 0,
-            protected: self.protected(dir, fonts),
+            protected: self.protected(dir, other, fonts),
         }
     }
 

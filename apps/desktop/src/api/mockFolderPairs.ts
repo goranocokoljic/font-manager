@@ -139,13 +139,25 @@ class Pairs {
     return this.roots.some((r) => startsWith(d, parts(r.path)));
   }
 
-  protectedOf(dir: string, fonts: number[]): ProtectedFolder | null {
+  protectedOf(dir: string, other: string, fonts: number[]): ProtectedFolder | null {
     const d = parts(dir);
+    const o = parts(other);
     const system =
       this.roots.some((r) => r.kind === 'systemFolder' && startsWith(d, parts(r.path))) ||
       fonts.some((i) => this.fonts[i].file.system);
     if (system) return 'systemFolder';
-    return this.roots.find((r) => same(parts(r.path), d))?.kind ?? null;
+    const held = (r: PairRoot) => {
+      const rp = parts(r.path);
+      return startsWith(rp, d) && !(startsWith(o, d) && startsWith(rp, o));
+    };
+    return (
+      this.roots.find((r) => same(parts(r.path), d))?.kind ?? this.roots.find(held)?.kind ?? null
+    );
+  }
+
+  isRoot(dir: string) {
+    const d = parts(dir);
+    return this.roots.some((r) => same(parts(r.path), d));
   }
 
   climb(a: string, b: string): [string, string, boolean] {
@@ -158,6 +170,8 @@ class Pairs {
       const [qa, qb] = [parts(pa), parts(pb)];
       if (
         nameOf(a) !== nameOf(b) ||
+        this.isRoot(a) ||
+        this.isRoot(b) ||
         same(qa, qb) ||
         startsWith(qa, qb) ||
         startsWith(qb, qa) ||
@@ -245,13 +259,18 @@ class Pairs {
   pair(a: string, b: string): FolderPair {
     const xs = this.side(a, b);
     const ys = this.side(b, a);
-    const sa = this.sideOf(a, xs, this.matched(xs, ys));
-    const sb = this.sideOf(b, ys, this.matched(ys, xs));
+    const sa = this.sideOf(a, b, xs, this.matched(xs, ys));
+    const sb = this.sideOf(b, a, ys, this.matched(ys, xs));
     const bSmaller = sb.size < sa.size || (sb.size === sa.size && sb.fontFiles < sa.fontFiles);
     return { a: sa, b: sb, frees: (bSmaller ? sb : sa).identicalSize };
   }
 
-  sideOf(dir: string, fonts: number[], m: { at: number; copy: Copy }[]): FolderPairSide {
+  sideOf(
+    dir: string,
+    other: string,
+    fonts: number[],
+    m: { at: number; copy: Copy }[],
+  ): FolderPairSide {
     const shared: SharedCounts = { identical: 0, sameVersion: 0, otherVersion: 0 };
     let [total, sharedSize, identicalSize] = [0, 0, 0];
     for (const { at, copy } of m) {
@@ -276,7 +295,7 @@ class Pairs {
       onlyHere: fontFiles - shared.identical - shared.sameVersion - shared.otherVersion,
       otherFiles: 0,
       contained: fontFiles > 0 && shared.identical === fontFiles,
-      protected: this.protectedOf(dir, fonts),
+      protected: this.protectedOf(dir, other, fonts),
     };
   }
 

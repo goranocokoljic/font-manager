@@ -496,3 +496,50 @@ fn files_that_are_not_fonts_are_counted_from_the_folder() {
     assert_eq!(count_other_files(&dir.path().join("gone"), &a, 0), 0);
     assert!(a.join("readme.txt").exists(), "nothing is touched");
 }
+
+#[test]
+fn a_root_inside_a_source_stops_the_climb_and_is_never_removed() {
+    let (files, roots) = case("a library folder inside a source stops the climb and is protected");
+    let pairs = all_pairs(&files, &roots);
+    assert_eq!(pairs.len(), 1, "{pairs:#?}");
+    assert_eq!(
+        pairs[0].a.path,
+        p("/x/a/lib"),
+        "no climb past the library folder"
+    );
+    assert_eq!(pairs[0].a.protected, Some(ProtectedFolder::LibraryFolder));
+    let policy = KeeperPolicy::default();
+    let err = plan(
+        &files,
+        &roots,
+        "/x/a/lib",
+        "/x/b/lib",
+        PairSide::B,
+        false,
+        &policy,
+    )
+    .unwrap_err();
+    assert!(err.message.contains("the library folder"), "{err:?}");
+    // A folder that holds the library folder is not removed as a whole either.
+    let err = plan(&files, &roots, "/x/a", "/x/b", PairSide::B, false, &policy).unwrap_err();
+    assert!(err.message.contains("the library folder"), "{err:?}");
+    let kept = plan(
+        &files,
+        &roots,
+        "/x/a/lib",
+        "/x/b/lib",
+        PairSide::A,
+        false,
+        &policy,
+    )
+    .unwrap();
+    assert_eq!(kept.remove.len(), 5, "the library folder is the kept side");
+}
+
+#[test]
+fn a_side_that_holds_a_source_root_is_never_removed() {
+    let (files, roots) = case("a copied tree is one pair at its top, not one per subfolder");
+    let policy = KeeperPolicy::default();
+    let err = plan(&files, &roots, "/", "/lib", PairSide::B, false, &policy).unwrap_err();
+    assert!(err.message.contains("a folder you added"), "{err:?}");
+}
