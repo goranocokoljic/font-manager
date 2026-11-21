@@ -1,0 +1,19 @@
+{
+  "id": "a-long-job-must-read-activation-again-just-before-it-moves-a",
+  "title": "A long job must read activation again just before it moves a file, under the index lock",
+  "category": "user-files",
+  "rule": "When a job that runs without the index lock (a background apply, a long batch) decides from a snapshot whether a file is active, read the activation again just before the move and do the move while holding the same lock the ActivationManager takes. Drop the lock only around calls that take it themselves (an activation move callback), then lock and read again. Otherwise a copy the user activates while the job runs is trashed while still registered (rule 3). Test it by activating a not-yet-processed copy from a mid-job hook and asserting it is skipped, still on disk and still active.",
+  "rationale": "E56.7 (#667): apply read FILE_ACTIVE once at the start and trashed later without the lock, so a copy activated during the apply went to the trash with its registration left behind.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    667
+  ],
+  "file_globs": [
+    "crates/fm-core/src/resolve/**",
+    "crates/fm-core/src/activation.rs"
+  ],
+  "first_seen": "2026-11-21T05:39:44.184Z",
+  "last_seen": "2026-11-21T05:39:44.184Z"
+}
