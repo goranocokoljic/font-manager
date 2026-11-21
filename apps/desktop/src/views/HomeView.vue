@@ -63,6 +63,7 @@ import { ALL_FONTS_VIEW, listPreview, usePreviewStore } from '../stores/preview'
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useQuickLookStore } from '../stores/quickLook';
 import { useCatalogsStore } from '../stores/catalogs';
+import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
 import { useSimilarStore } from '../stores/similar';
@@ -310,7 +311,29 @@ const quickTargets = computed(() => {
 });
 
 // Getters: the palette shows the titles in the language chosen now.
+// "Show the copies of <family>" (E56.15): the selected font's sets in the Duplicates module.
+const dupes = useDuplicateSummaryStore();
+const selectedFamily = computed(() => selection.detail?.face ?? null);
+const selectedCopies = computed(() => dupes.of(selectedFamily.value?.family));
+
 useActions([
+  {
+    id: 'duplicates.family',
+    get title() {
+      return t('duplicatesModule.commands.showCopies', {
+        name: selectedFamily.value?.familyName ?? '',
+      });
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => selectedCopies.value !== undefined,
+    run: () =>
+      router.push({
+        name: 'duplicates',
+        query: { section: 'sets', family: String(selectedFamily.value?.family ?? '') },
+      }),
+  },
   {
     id: ACTIONS.quickCollection,
     get title() {

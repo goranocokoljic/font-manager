@@ -484,6 +484,29 @@ impl Index {
             .map(|first| (FamilyId(first.id), first.family.clone())))
     }
 
+    /// The family of each visible face of `faces`, as search groups it
+    /// (E56.15); a face that is not visible is left out. One pass over the
+    /// rows, however many faces are asked for.
+    pub fn families_of(&self, faces: &[FaceId]) -> FmResult<HashMap<FaceId, FamilyId>> {
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let mut first: HashMap<&str, u32> = HashMap::new();
+        for r in &cache.rows {
+            first.entry(r.family_key.as_str()).or_insert(r.id);
+        }
+        let wanted: std::collections::HashSet<u32> = faces.iter().map(|f| f.0).collect();
+        Ok(cache
+            .rows
+            .iter()
+            .filter(|r| wanted.contains(&r.id))
+            .filter_map(|r| {
+                first
+                    .get(r.family_key.as_str())
+                    .map(|&id| (FaceId(r.id), FamilyId(id)))
+            })
+            .collect())
+    }
+
     /// Reads the searchable rows again when the database changed since.
     fn refresh_search_cache(&self) -> FmResult<()> {
         let data_version: i64 = self

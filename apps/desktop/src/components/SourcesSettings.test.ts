@@ -280,10 +280,18 @@ describe('Settings › Sources (E50.13)', () => {
       { kind: 'duplicateFace', face: 2, path: '/c.otf', other: '/d.otf', message: 'x' },
       { kind: 'broken', face: null, path: '/e.otf', other: null, message: 'x' },
     ]);
+    // Duplicates are the Duplicates module's (E56.15): not counted as problems, and a line of
+    // their own links to the module.
+    vi.spyOn(client, 'duplicateSummary').mockResolvedValue({ fonts: 2, copies: 4, families: [] });
     const counted = await mountSources();
     const text = counted.wrapper.get('[data-testid="sources-problems"]').text();
-    expect(text).toContain('3 problems');
-    expect(text).toContain('2 duplicates, 1 broken file');
+    expect(text).toContain('1 problem');
+    expect(text).toContain('1 broken file');
+    expect(text).not.toContain('duplicate');
+    await flushPromises();
+    const dupes = counted.wrapper.get('[data-testid="sources-duplicates"]');
+    expect(dupes.text()).toContain('2 fonts have more than one copy');
+    expect(dupes.get('a').attributes('href')).toContain('/duplicates');
     counted.wrapper.unmount();
 
     vi.spyOn(client, 'listProblems').mockResolvedValue([]);

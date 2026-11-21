@@ -10,12 +10,15 @@
 //!   until a plan is applied. It is stored by the service (fm-core keeps it
 //!   in the index), so it survives leaving the module and a restart.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::cleanup::{CleanupAction, CleanupPlan, CleanupScope, StayReason};
+use crate::cleanup::{
+    CleanupAction, CleanupKeeper, CleanupPlan, CleanupScope, DuplicateAnswer, PlanCleanupRequest,
+    PlannedAnswer, RemoveAs, StayReason,
+};
 use crate::common::Timestamp;
 use crate::library::{DuplicateLevel, DuplicateScope, DuplicateSet, FolderPair};
 use crate::settings::MyLanguagesStatus;
@@ -354,6 +357,321 @@ impl CleanupDraft {
             CleanupDraftUpdate::Clear => *self = Self::default(),
         }
         Ok(())
+    }
+}
+
+/// Plan the cleanup draft ([`crate::LibraryService::plan_cleanup_draft`],
+/// E56.15).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanDraftRequest {
+    /// Move the activation of an active copy of an identical set to the
+    /// kept copy ([`crate::cleanup::PlanCleanupRequest::move_activations`]).
+    #[serde(default)]
+    pub move_activations: bool,
+}
+
+/// What of the draft a plan holds (E56.15). Applying the plan takes these
+/// decisions out of the draft ([`CleanupDraft::take_planned`]); a decision
+/// the plan could not hold (its set is gone, a folder pair is no pair any
+/// more) stays in the draft.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedDraft {
+    /// The identical sets were in the plan.
+    #[serde(default)]
+    pub identical: bool,
+    /// The sets whose decision the plan holds.
+    #[serde(default)]
+    pub sets: Vec<String>,
+    /// The folder pairs the plan holds.
+    #[serde(default)]
+    pub pairs: Vec<DraftPair>,
+}
+
+impl CleanupDraft {
+    /// Takes out of the draft what `planned` holds; a decision made after
+    /// the plan stays.
+    pub fn take_planned(&mut self, planned: &PlannedDraft) {
+        if planned.identical {
+            self.identical = false;
+        }
+        self.decisions.retain(|d| !planned.sets.contains(&d.set));
+        self.pairs.retain(|p| !planned.pairs.contains(p));
+    }
+}
+
+const KEPT_BY_CHOICE: &str = "Stays: you chose to keep this copy.";
+const KEPT_FOR_ANOTHER: &str = "Stays: another file of this plan leaves for it, so it is kept.";
+
+/// Plans `draft` as one plan (E56.15); every implementation of
+/// [`crate::LibraryService::plan_cleanup_draft`] uses this. `sets` are the
+/// duplicate sets of the library as listed now; `plan` plans one request
+/// ([`crate::LibraryService::plan_cleanup`]).
+///
+/// - The identical sets (when in) and the sets with a choice per copy are
+///   one plan of their ids: each such set keeps the first copy its decision
+///   keeps, so the guard and every reason to stay still apply; then a copy
+///   the user kept stays, and a copy the user chose to hide is hidden
+///   instead of trashed.
+/// - Each folder pair is planned as its own scope and adds the files the
+///   first part does not hold.
+/// - A file that leaves while another leaving file of the plan names it as
+///   the copy kept for it stays (`keptByOtherSet`), so the parts never
+///   remove each other's keepers.
+/// - "Keep both" and "not duplicates" move nothing: they are the plan's
+///   [`CleanupPlan::answers`], recorded when it is applied. An answered set
+///   is out of the identical sets and out of every folder pair.
+pub fn plan_draft(
+    draft: &CleanupDraft,
+    sets: &[DuplicateSet],
+    req: &PlanDraftRequest,
+    plan: impl Fn(PlanCleanupRequest) -> ApiResult<CleanupPlan>,
+) -> ApiResult<CleanupPlan> {
+    let by_id: HashMap<&str, &DuplicateSet> = sets.iter().map(|s| (s.id.as_str(), s)).collect();
+    let mut ids: Vec<String> = Vec::new();
+    let mut keepers: Vec<CleanupKeeper> = Vec::new();
+    // The user's choice per (set, copy); a copy not named stays.
+    let mut chosen: HashMap<(String, String), CopyChoice> = HashMap::new();
+    let mut by_choice: HashSet<String> = HashSet::new();
+    let mut planned = PlannedDraft::default();
+    let mut answers: Vec<PlannedAnswer> = Vec::new();
+    // The sets answered "keep both" or "not duplicates": none of their copies
+    // leaves, whatever else of the draft covers them.
+    let mut answered: HashSet<String> = HashSet::new();
+    if draft.identical {
+        planned.identical = true;
+        ids.extend(
+            sets.iter()
+                .filter(|s| s.level == DuplicateLevel::Identical)
+                .map(|s| s.id.clone()),
+        );
+    }
+    for d in &draft.decisions {
+        let Some(set) = by_id.get(d.set.as_str()) else {
+            continue;
+        };
+        if d.decision.check(set).is_err() {
+            continue;
+        }
+        match &d.decision {
+            SetDecision::Copies { copies } => {
+                let choice = |path: &str| {
+                    copies
+                        .iter()
+                        .find(|c| c.path == path)
+                        .map_or(CopyChoice::Keep, |c| c.choice)
+                };
+                let Some(keep) = set
+                    .copies
+                    .iter()
+                    .find(|c| choice(&c.path) == CopyChoice::Keep)
+                else {
+                    continue;
+                };
+                keepers.push(CleanupKeeper {
+                    set: set.id.clone(),
+                    keep: keep.path.clone(),
+                });
+                for c in &set.copies {
+                    chosen.insert((set.id.clone(), c.path.clone()), choice(&c.path));
+                }
+                by_choice.insert(set.id.clone());
+                if !ids.contains(&set.id) {
+                    ids.push(set.id.clone());
+                }
+            }
+            SetDecision::KeepAll | SetDecision::NotDuplicates => {
+                answered.insert(set.id.clone());
+                answers.push(PlannedAnswer {
+                    set: set.id.clone(),
+                    postscript_name: set.postscript_name.clone(),
+                    answer: if d.decision == SetDecision::KeepAll {
+                        DuplicateAnswer::KeepBoth
+                    } else {
+                        DuplicateAnswer::NotDuplicates
+                    },
+                });
+            }
+        }
+        planned.sets.push(set.id.clone());
+    }
+    ids.retain(|id| !answered.contains(id));
+    let mut out = plan(PlanCleanupRequest {
+        scope: CleanupScope::Sets { ids },
+        keepers,
+        remove_as: RemoveAs::Trash,
+        move_activations: req.move_activations,
+    })?;
+    // The user's choices per copy.
+    for f in &mut out.files {
+        if !by_choice.contains(&f.set) {
+            continue;
+        }
+        match chosen
+            .get(&(f.set.clone(), f.path.clone()))
+            .copied()
+            .unwrap_or(CopyChoice::Keep)
+        {
+            CopyChoice::Keep if f.action != CleanupAction::Stays => {
+                f.action = CleanupAction::Stays;
+                f.reason = Some(StayReason::Keeper);
+                KEPT_BY_CHOICE.clone_into(&mut f.sentence);
+                if let Some(m) = &mut f.activation {
+                    m.planned = false;
+                }
+            }
+            CopyChoice::Hide if f.action == CleanupAction::Trash => {
+                f.action = CleanupAction::Hide;
+                if let Some(rest) = f.sentence.strip_prefix("Goes to the trash") {
+                    f.sentence = format!("Is hidden{rest}");
+                }
+            }
+            _ => {}
+        }
+    }
+    // The folder pairs, each its own scope.
+    for p in &draft.pairs {
+        let Ok(part) = plan(PlanCleanupRequest {
+            scope: CleanupScope::FolderPair {
+                keep: p.keep.clone(),
+                remove: p.remove.clone(),
+                other_levels: false,
+            },
+            move_activations: req.move_activations,
+            ..Default::default()
+        }) else {
+            continue;
+        };
+        let have: HashSet<String> = out.files.iter().map(|f| f.path.clone()).collect();
+        out.files.extend(
+            part.files
+                .into_iter()
+                .filter(|f| !have.contains(&f.path) && !answered.contains(&f.set)),
+        );
+        for c in part.conflicts {
+            if !out.conflicts.contains(&c) {
+                out.conflicts.push(c);
+            }
+        }
+        out.sets = out.sets.saturating_add(part.sets);
+        planned.pairs.push(p.clone());
+    }
+    // No part removes a copy another part keeps for its file.
+    loop {
+        let kept: HashSet<String> = out
+            .files
+            .iter()
+            .filter(|f| f.action != CleanupAction::Stays)
+            .flat_map(|f| f.kept.iter().chain(f.also_kept.iter()).cloned())
+            .collect();
+        let mut changed = false;
+        for f in &mut out.files {
+            if f.action != CleanupAction::Stays && kept.contains(&f.path) {
+                f.action = CleanupAction::Stays;
+                f.reason = Some(StayReason::KeptByOtherSet);
+                KEPT_FOR_ANOTHER.clone_into(&mut f.sentence);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    // The conflicts of the copies that still leave; the bytes they free.
+    let leaving: HashSet<crate::FaceId> = out
+        .files
+        .iter()
+        .filter(|f| f.action != CleanupAction::Stays)
+        .flat_map(|f| f.faces.iter().copied())
+        .collect();
+    out.conflicts
+        .retain(|c| leaving.contains(&c.other_face) || leaving.contains(&c.default_from));
+    out.frees = out
+        .files
+        .iter()
+        .filter(|f| f.action == CleanupAction::Trash)
+        .fold(0u32, |sum, f| sum.saturating_add(f.size));
+    out.answers = answers;
+    out.draft = Some(planned);
+    Ok(out)
+}
+
+/// The duplicates of a scope, counted for the ways into the module
+/// ([`crate::LibraryService::duplicate_summary`], E56.15): the sidebar row,
+/// the notice after a scan, the marks on a family.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateSummaryRequest {
+    /// The files to look at; the whole library by default.
+    #[serde(default)]
+    pub scope: DuplicateScope,
+}
+
+/// What [`DuplicateSummaryRequest`] answers.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateSummary {
+    /// Fonts with more than one copy: the duplicate sets with a copy in the
+    /// scope.
+    pub fonts: u32,
+    /// The files in the scope that are a copy in one of those sets.
+    pub copies: u32,
+    /// The families with a face in one of those sets, by family id.
+    pub families: Vec<FamilyCopies>,
+}
+
+/// One family's duplicates (E56.15).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyCopies {
+    /// The family.
+    pub family: crate::FamilyId,
+    /// The most copies one of its fonts has ("3 copies").
+    pub copies: u32,
+    /// Its duplicate sets, by id.
+    pub sets: Vec<String>,
+}
+
+impl DuplicateSummary {
+    /// Counts `sets` (the sets listed for the scope); `in_scope` says whether
+    /// a file is in the scope, `family_of` the family of a face. Every
+    /// implementation of [`crate::LibraryService::duplicate_summary`] uses
+    /// this.
+    pub fn from_sets(
+        sets: &[DuplicateSet],
+        in_scope: impl Fn(&str) -> bool,
+        family_of: impl Fn(crate::FaceId) -> Option<crate::FamilyId>,
+    ) -> Self {
+        let mut paths: HashSet<&str> = HashSet::new();
+        let mut families: BTreeMap<crate::FamilyId, FamilyCopies> = BTreeMap::new();
+        for s in sets {
+            let count = u32::try_from(s.copies.len()).unwrap_or(u32::MAX);
+            let mut seen: HashSet<crate::FamilyId> = HashSet::new();
+            for c in &s.copies {
+                if in_scope(&c.path) {
+                    paths.insert(&c.path);
+                }
+                let Some(family) = c.face.and_then(&family_of) else {
+                    continue;
+                };
+                if !seen.insert(family) {
+                    continue;
+                }
+                let entry = families.entry(family).or_insert_with(|| FamilyCopies {
+                    family,
+                    copies: 0,
+                    sets: Vec::new(),
+                });
+                entry.copies = entry.copies.max(count);
+                entry.sets.push(s.id.clone());
+            }
+        }
+        Self {
+            fonts: u32::try_from(sets.len()).unwrap_or(u32::MAX),
+            copies: u32::try_from(paths.len()).unwrap_or(u32::MAX),
+            families: families.into_values().collect(),
+        }
     }
 }
 
@@ -748,6 +1066,8 @@ mod tests {
             conflicts: Vec::new(),
             frees: 200,
             my_languages: MyLanguagesStatus::NotSet,
+            answers: Vec::new(),
+            draft: None,
         };
         let o = DuplicatesOverview::from_plan(&plan);
         assert_eq!(o.fonts, 4);
@@ -819,5 +1139,337 @@ mod tests {
         // A keeper with nothing to remove is no recommendation to act on.
         assert!(!filter(RecommendationFilter::HasRecommendation).matches(&keeper, &none));
         assert!(!filter(RecommendationFilter::HasRecommendation).matches(&keep_both, &none));
+    }
+
+    // E56.15: the draft as one plan.
+
+    fn decision(set: &str, decision: SetDecision) -> DraftDecision {
+        DraftDecision {
+            set: set.to_owned(),
+            level: DuplicateLevel::OtherVersion,
+            postscript_name: None,
+            decision,
+            at: "t0".to_owned(),
+        }
+    }
+
+    fn named(id: &str, paths: &[&str]) -> DuplicateSet {
+        DuplicateSet {
+            id: id.to_owned(),
+            copies: paths.iter().map(|p| copy(p, false)).collect(),
+            ..set()
+        }
+    }
+
+    /// A plan as the services make one: the keeper the request names (else
+    /// the first copy) stays, every other copy goes to the trash. A folder
+    /// pair removes `<remove>/A.otf` for `<keep>/A.otf`.
+    fn fake_plan(sets: Vec<DuplicateSet>) -> impl Fn(PlanCleanupRequest) -> ApiResult<CleanupPlan> {
+        move |req| {
+            let mut files = Vec::new();
+            if let CleanupScope::Sets { ids } = &req.scope {
+                for id in ids {
+                    let s = sets.iter().find(|s| &s.id == id).unwrap();
+                    let keep = req
+                        .keepers
+                        .iter()
+                        .find(|k| &k.set == id)
+                        .map_or(s.copies[0].path.clone(), |k| k.keep.clone());
+                    for c in &s.copies {
+                        let mut f = file(&c.path, id, s.level, CleanupAction::Trash, None);
+                        f.kept = Some(keep.clone());
+                        if c.path == keep {
+                            f.action = CleanupAction::Stays;
+                            f.reason = Some(StayReason::Keeper);
+                        } else {
+                            f.sentence = "Goes to the trash; A.otf stays.".to_owned();
+                        }
+                        files.push(f);
+                    }
+                }
+            }
+            if let CleanupScope::FolderPair { keep, remove, .. } = &req.scope {
+                let mut f = file(
+                    &format!("{remove}/A.otf"),
+                    "name:A",
+                    DuplicateLevel::Identical,
+                    CleanupAction::Trash,
+                    None,
+                );
+                f.kept = Some(format!("{keep}/A.otf"));
+                files.push(f);
+            }
+            Ok(CleanupPlan {
+                version: CLEANUP_PLAN_VERSION,
+                planned_at: "t0".to_owned(),
+                request: req,
+                sets: 1,
+                files,
+                conflicts: Vec::new(),
+                frees: 0,
+                my_languages: MyLanguagesStatus::NotSet,
+                answers: Vec::new(),
+                draft: None,
+            })
+        }
+    }
+
+    fn choose(path: &str, choice: CopyChoice) -> CopyDecision {
+        CopyDecision {
+            path: path.to_owned(),
+            choice,
+        }
+    }
+
+    fn draft_pair(keep: &str, remove: &str) -> DraftPair {
+        DraftPair {
+            keep: keep.into(),
+            remove: remove.into(),
+            identical: 1,
+            identical_size: 10,
+            at: "t0".into(),
+        }
+    }
+
+    #[test]
+    fn the_draft_plans_each_copy_as_the_user_chose_and_answers_the_rest() {
+        let a = named("name:A", &["/a/A.otf", "/b/A.otf", "/c/A.otf", "/d/A.otf"]);
+        let b = named("name:B", &["/a/B.otf", "/b/B.otf"]);
+        let draft = CleanupDraft {
+            identical: false,
+            decisions: vec![
+                decision(
+                    "name:A",
+                    SetDecision::Copies {
+                        copies: vec![
+                            choose("/a/A.otf", CopyChoice::Trash),
+                            choose("/b/A.otf", CopyChoice::Keep),
+                            choose("/c/A.otf", CopyChoice::Hide),
+                            // /d/A.otf is not named: it stays.
+                        ],
+                    },
+                ),
+                decision("name:B", SetDecision::KeepAll),
+                decision("name:Gone", SetDecision::NotDuplicates),
+            ],
+            pairs: Vec::new(),
+        };
+        let sets = vec![a, b];
+        let plan = plan_draft(
+            &draft,
+            &sets,
+            &PlanDraftRequest::default(),
+            fake_plan(sets.clone()),
+        )
+        .unwrap();
+        assert_eq!(
+            plan.request.keepers,
+            vec![CleanupKeeper {
+                set: "name:A".into(),
+                keep: "/b/A.otf".into()
+            }]
+        );
+        let action = |p: &str| {
+            plan.files
+                .iter()
+                .find(|f| f.path == p)
+                .map(|f| (f.action, f.reason))
+        };
+        assert_eq!(action("/a/A.otf"), Some((CleanupAction::Trash, None)));
+        assert_eq!(
+            action("/b/A.otf"),
+            Some((CleanupAction::Stays, Some(StayReason::Keeper)))
+        );
+        assert_eq!(action("/c/A.otf"), Some((CleanupAction::Hide, None)));
+        assert_eq!(
+            action("/d/A.otf"),
+            Some((CleanupAction::Stays, Some(StayReason::Keeper))),
+            "a copy not named stays"
+        );
+        let hidden = plan.files.iter().find(|f| f.path == "/c/A.otf").unwrap();
+        assert!(
+            hidden.sentence.starts_with("Is hidden"),
+            "{}",
+            hidden.sentence
+        );
+        assert_eq!(plan.frees, 100, "only the trashed copy frees space");
+        assert_eq!(
+            plan.answers,
+            vec![PlannedAnswer {
+                set: "name:B".into(),
+                postscript_name: Some("A".into()),
+                answer: DuplicateAnswer::KeepBoth
+            }]
+        );
+        let planned = plan.draft.unwrap();
+        assert_eq!(
+            planned.sets,
+            vec!["name:A".to_owned(), "name:B".to_owned()],
+            "a set that is gone stays in the draft"
+        );
+        assert!(!planned.identical);
+    }
+
+    #[test]
+    fn an_answered_set_loses_no_copy_to_the_identical_sets_or_a_folder_pair() {
+        // The family queue lists identical sets too, so one can be answered
+        // "keep both" while the identical copies are in the plan; a folder
+        // pair can cover an answered set as well.
+        let same = DuplicateSet {
+            level: DuplicateLevel::Identical,
+            ..named("identical:h", &["/a/S.otf", "/b/S.otf"])
+        };
+        let other = DuplicateSet {
+            level: DuplicateLevel::Identical,
+            ..named("identical:k", &["/a/K.otf", "/b/K.otf"])
+        };
+        let draft = CleanupDraft {
+            identical: true,
+            decisions: vec![
+                decision("identical:h", SetDecision::KeepAll),
+                decision("name:A", SetDecision::NotDuplicates),
+            ],
+            pairs: vec![draft_pair("/z", "/a")],
+        };
+        let sets = vec![same, other, named("name:A", &["/a/A.otf", "/z/A.otf"])];
+        let plan = plan_draft(
+            &draft,
+            &sets,
+            &PlanDraftRequest::default(),
+            fake_plan(sets.clone()),
+        )
+        .unwrap();
+        let leaving: Vec<&str> = plan.leaving().map(|f| f.path.as_str()).collect();
+        assert_eq!(
+            leaving,
+            vec!["/b/K.otf"],
+            "only the unanswered identical set loses a copy"
+        );
+        assert!(
+            plan.files
+                .iter()
+                .all(|f| f.set != "identical:h" && f.set != "name:A"),
+            "an answered set has no row"
+        );
+        assert_eq!(
+            plan.request.scope,
+            CleanupScope::Sets {
+                ids: vec!["identical:k".into()]
+            }
+        );
+        assert_eq!(plan.answers.len(), 2);
+        let planned = plan.draft.unwrap();
+        assert!(planned.identical);
+        assert_eq!(planned.pairs.len(), 1);
+    }
+
+    #[test]
+    fn a_folder_pair_never_removes_the_copy_the_sets_keep() {
+        let a = named("name:A", &["/a/A.otf", "/z/A.otf"]);
+        let draft = CleanupDraft {
+            identical: false,
+            decisions: vec![decision(
+                "name:A",
+                SetDecision::Copies {
+                    copies: vec![
+                        choose("/a/A.otf", CopyChoice::Keep),
+                        choose("/z/A.otf", CopyChoice::Trash),
+                    ],
+                },
+            )],
+            pairs: vec![draft_pair("/z", "/a")],
+        };
+        let sets = vec![a];
+        let plan = plan_draft(
+            &draft,
+            &sets,
+            &PlanDraftRequest::default(),
+            fake_plan(sets.clone()),
+        )
+        .unwrap();
+        // The sets part keeps /a/A.otf; the pair would remove it. The file is
+        // in the plan once, as the sets part planned it.
+        let rows: Vec<_> = plan.files.iter().filter(|f| f.path == "/a/A.otf").collect();
+        assert_eq!(rows.len(), 1, "a file is in the plan once");
+        assert_eq!(rows[0].action, CleanupAction::Stays);
+        assert!(plan.check().is_ok());
+        assert_eq!(plan.draft.unwrap().pairs.len(), 1);
+    }
+
+    #[test]
+    fn a_part_that_would_remove_another_parts_keeper_keeps_it() {
+        // Two pairs: the first removes /a for /b, the second /b for /a.
+        let draft = CleanupDraft {
+            identical: false,
+            decisions: Vec::new(),
+            pairs: vec![draft_pair("/b", "/a"), draft_pair("/a", "/b")],
+        };
+        let plan = plan_draft(
+            &draft,
+            &[],
+            &PlanDraftRequest::default(),
+            fake_plan(Vec::new()),
+        )
+        .unwrap();
+        let leaving: Vec<&str> = plan.leaving().map(|f| f.path.as_str()).collect();
+        assert!(
+            leaving.is_empty(),
+            "each is the other one's keeper: {leaving:?}"
+        );
+        assert!(
+            plan.files
+                .iter()
+                .all(|f| f.reason == Some(StayReason::KeptByOtherSet))
+        );
+    }
+
+    #[test]
+    fn applying_takes_out_of_the_draft_only_what_the_plan_held() {
+        let mut draft = CleanupDraft {
+            identical: true,
+            decisions: vec![
+                decision("name:A", SetDecision::KeepAll),
+                decision("name:B", SetDecision::KeepAll),
+            ],
+            pairs: vec![draft_pair("/b", "/a")],
+        };
+        draft.take_planned(&PlannedDraft {
+            identical: true,
+            sets: vec!["name:A".into()],
+            pairs: Vec::new(),
+        });
+        assert!(!draft.identical);
+        assert_eq!(draft.decided(), HashSet::from(["name:B".to_owned()]));
+        assert_eq!(draft.pairs.len(), 1, "a pair decided after the plan stays");
+    }
+
+    #[test]
+    fn the_summary_counts_fonts_copies_in_scope_and_families() {
+        let mut a = named("name:A", &["/a/A.otf", "/b/A.otf", "/c/A.otf"]);
+        for (i, c) in (1u32..).zip(a.copies.iter_mut()) {
+            c.face = Some(FaceId(i));
+        }
+        let mut b = named("name:B", &["/a/B.otf", "/b/B.otf"]);
+        b.copies[0].face = Some(FaceId(10));
+        let families = HashMap::from([
+            (FaceId(1), crate::FamilyId(1)),
+            (FaceId(2), crate::FamilyId(1)),
+            (FaceId(10), crate::FamilyId(1)),
+        ]);
+        let s = DuplicateSummary::from_sets(
+            &[a, b],
+            |p| p.starts_with("/a/") || p.starts_with("/b/"),
+            |f| families.get(&f).copied(),
+        );
+        assert_eq!(s.fonts, 2);
+        assert_eq!(s.copies, 4, "the copy in /c is outside the scope");
+        assert_eq!(
+            s.families,
+            vec![FamilyCopies {
+                family: crate::FamilyId(1),
+                copies: 3,
+                sets: vec!["name:A".into(), "name:B".into()]
+            }]
+        );
     }
 }

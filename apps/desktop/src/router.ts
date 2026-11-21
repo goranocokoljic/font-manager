@@ -12,7 +12,13 @@ export const routes: RouteRecordRaw[] = [
   { path: '/family/:id', name: 'family', component: FamilyView },
   { path: '/settings', name: 'settings', component: SettingsView },
   { path: '/conflicts', name: 'conflicts', component: ConflictsView },
-  { path: '/problems', name: 'problems', component: ProblemsView },
+  {
+    path: '/problems',
+    name: 'problems',
+    component: ProblemsView,
+    // Duplicates left the Problems view for their module (E56.15): the old link opens it.
+    beforeEnter: (to) => (to.query.kind === 'duplicates' ? { name: 'duplicates' } : true),
+  },
   { path: '/studio', name: 'studio', component: StudioView },
   { path: '/duplicates', name: 'duplicates', component: DuplicatesView },
   { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -89,6 +89,11 @@ export interface QueueFilter {
   recommendation: RecommendationFilter | null;
   format: FontFormat | null;
   scope: DuplicateScope;
+  /**
+   * Only these sets, at every level (E56.15: the copies of one family, from its "N copies"
+   * mark); null for the whole queue.
+   */
+  ids?: string[] | null;
 }
 
 /** The level chips of the queue. */
@@ -173,7 +178,9 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
       scope: f.scope,
       page: { offset, limit: QUEUE_PAGE },
       filter: {
-        levels: f.level ? [f.level] : QUEUE_LEVELS,
+        // A family's sets are listed at every level, identical ones too.
+        levels: f.level ? [f.level] : f.ids ? [] : QUEUE_LEVELS,
+        ids: f.ids ?? [],
         format: f.format,
         recommendation: f.recommendation,
         undecided: true,

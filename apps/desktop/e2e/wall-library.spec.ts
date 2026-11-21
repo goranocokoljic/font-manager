@@ -77,16 +77,16 @@ test('?mockLibrary=wall serves the 60-family wall (E40.2)', async ({ page }) => 
   await expect.poll(() => names(page)).toEqual(['Zeyada']);
 });
 
-test('?mockLibrary=wall shows its 3 duplicates and 2 broken files in Problems', async ({
+test('?mockLibrary=wall shows its 2 broken files in Problems, its duplicates not', async ({
   page,
 }) => {
   await page.goto('/?mockLibrary=wall#/problems');
   const table = page.getByRole('table', { name: 'Problems' });
   const kinds = table.locator('tbody tr td:first-child');
-  await expect(kinds.filter({ hasText: /^Duplicates$/ })).toHaveCount(3);
   await expect(kinds.filter({ hasText: /^Broken files$/ })).toHaveCount(2);
-  for (const name of ['Montserrat-Regular', 'Poppins-Regular', 'JetBrainsMono-Regular', 'Agdasima'])
-    await expect(table.getByText(name).first()).toBeVisible();
+  // Its 3 duplicates are the Duplicates module's (E56.15), not rows of this table.
+  await expect(kinds.filter({ hasText: /^Duplicates$/ })).toHaveCount(0);
+  await expect(table.getByText('Agdasima').first()).toBeVisible();
   // The small library's own entries are gone.
   await expect(table.getByText('Quarto-Bold')).toHaveCount(0);
 });

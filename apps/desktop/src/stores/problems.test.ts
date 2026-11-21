@@ -47,11 +47,14 @@ const ALL_KINDS: ProblemKind[] = [
 ];
 
 describe('problem groups', () => {
-  it('put every kind in exactly one group', () => {
-    for (const kind of ALL_KINDS) {
+  it('put every kind in exactly one group, the duplicate kinds in none', () => {
+    // Duplicates are the Duplicates module's (E56.15).
+    const listed = ALL_KINDS.filter((k) => k !== 'duplicateFile' && k !== 'duplicateFace');
+    for (const kind of listed) {
       expect(PROBLEM_GROUPS.filter((g) => g.kinds.includes(kind))).toHaveLength(1);
     }
-    expect(PROBLEM_GROUPS.flatMap((g) => g.kinds).sort()).toEqual([...ALL_KINDS].sort());
+    expect(PROBLEM_GROUPS.flatMap((g) => g.kinds).sort()).toEqual([...listed].sort());
+    expect(groupOf('duplicateFile')).toBeUndefined();
     expect(groupOf('unsupported')?.label).toBe('Legacy formats');
     expect(problemGroup('nope')).toBeUndefined();
   });
@@ -70,9 +73,9 @@ describe('problems store', () => {
       'duplicateFile',
       'sidecarConflict',
     ]);
-    expect(store.total).toBe(5);
+    // A duplicate is the Duplicates module's (E56.15): listed by the API, counted in no group.
+    expect(store.total).toBe(4);
     expect(store.counts).toEqual({
-      duplicates: 1,
       broken: 1,
       legacy: 1,
       sidecar: 1,
@@ -87,11 +90,9 @@ describe('problems store', () => {
     expect(store.inGroup('legacy').map((p) => p.path)).toEqual([
       '/Users/demo/Fonts/legacy/LEGGR___.PFB',
     ]);
-    expect(store.inGroup('duplicates').map((p) => p.other)).toEqual([
-      '/Users/demo/Fonts/Quarto-Regular.otf',
-    ]);
     expect(store.inGroup('library')).toEqual([]);
-    expect(store.inGroup(undefined)).toHaveLength(5);
+    expect(store.inGroup(undefined)).toHaveLength(4);
+    expect(store.inGroup(undefined).some((p) => p.kind === 'duplicateFile')).toBe(false);
   });
 
   it('reads the list again on library, scan and activation events', async () => {
@@ -127,7 +128,7 @@ describe('problems store', () => {
     setClient({ ...client, listProblems: () => Promise.reject(failure) });
     await store.refresh();
     expect(store.error).toEqual(failure);
-    expect(store.total).toBe(5);
+    expect(store.total).toBe(4);
   });
 });
 
@@ -164,7 +165,6 @@ describe('keep this one', () => {
     expect(toasts.toast?.message).toBe('Moved 1 copy to the trash.');
     expect(toasts.toast?.action?.label).toBe('Undo');
     expect(store.duplicates).toEqual([]);
-    expect(store.counts.duplicates).toBe(0);
     expect(store.history).toHaveLength(1);
 
     vi.advanceTimersByTime(TOAST_MS - 1);
@@ -181,7 +181,6 @@ describe('keep this one', () => {
     await vi.waitFor(() => expect(store.history[0]?.undone).toBe(true));
     expect(toasts.toast).toBeNull();
     expect(store.duplicates).toHaveLength(1);
-    expect(store.counts.duplicates).toBe(1);
   });
 
   it('keeps the undo toast when the Problems view closes', async () => {

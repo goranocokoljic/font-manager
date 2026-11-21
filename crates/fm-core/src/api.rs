@@ -1228,6 +1228,20 @@ impl LibraryService for CoreApi {
         Ok(fm_api::cleanup_draft::DuplicatesOverview::from_plan(&plan))
     }
 
+    fn plan_cleanup_draft(
+        &self,
+        req: fm_api::cleanup_draft::PlanDraftRequest,
+    ) -> ApiResult<fm_api::cleanup::CleanupPlan> {
+        self.cleanup_plan_draft(&req)
+    }
+
+    fn duplicate_summary(
+        &self,
+        req: fm_api::cleanup_draft::DuplicateSummaryRequest,
+    ) -> ApiResult<fm_api::cleanup_draft::DuplicateSummary> {
+        self.cleanup_summary(&req)
+    }
+
     fn get_cleanup_draft(&self) -> ApiResult<fm_api::cleanup_draft::CleanupDraft> {
         Ok(self.lock().cleanup_draft()?)
     }

@@ -111,6 +111,7 @@ describe('the duplicates store', () => {
           format: 'type1',
           recommendation: null,
           undecided: true,
+          ids: [],
         },
         sort: 'name',
       }),

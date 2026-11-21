@@ -1041,6 +1041,24 @@ async fn duplicates_overview(
     call(&state, move |api| api.duplicates_overview(req)).await
 }
 
+/// Plans the cleanup draft as one plan; touches nothing (E56.15).
+#[tauri::command]
+async fn plan_cleanup_draft(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup_draft::PlanDraftRequest,
+) -> ApiResult<fm_api::cleanup::CleanupPlan> {
+    call(&state, move |api| api.plan_cleanup_draft(req)).await
+}
+
+/// The duplicates of a scope, counted, for the ways into the module (E56.15).
+#[tauri::command]
+async fn duplicate_summary(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup_draft::DuplicateSummaryRequest,
+) -> ApiResult<fm_api::cleanup_draft::DuplicateSummary> {
+    call(&state, move |api| api.duplicate_summary(req)).await
+}
+
 /// The decisions collected for the next cleanup plan (E56.11).
 #[tauri::command]
 async fn get_cleanup_draft(
@@ -1938,6 +1956,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             cancel_cleanup,
             list_cleanup_sessions,
             duplicates_overview,
+            plan_cleanup_draft,
+            duplicate_summary,
             get_cleanup_draft,
             update_cleanup_draft,
             undo_cleanup_session,

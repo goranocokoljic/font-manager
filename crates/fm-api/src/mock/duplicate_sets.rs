@@ -96,7 +96,7 @@ pub(super) fn list_with(
 }
 
 /// Whether `file` is in `scope`.
-fn in_scope(file: &SetFile, scope: &DuplicateScope) -> bool {
+pub(super) fn in_scope(file: &SetFile, scope: &DuplicateScope) -> bool {
     match scope {
         DuplicateScope::Library => true,
         DuplicateScope::Source { source } => file.source == *source,

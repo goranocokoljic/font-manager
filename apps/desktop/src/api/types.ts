@@ -689,6 +689,18 @@ export type CleanupPlan = {
 	frees: number,
 	/**  Whether my languages were set; `NotSet` means the guard did nothing. */
 	myLanguages: MyLanguagesStatus,
+	/**
+	 *  The sets the draft answered "keep both" or "not duplicates"
+	 *  (E56.15): applying the plan records each answer (E56.8). Empty for a
+	 *  plan of a scope.
+	 */
+	answers?: PlannedAnswer[],
+	/**
+	 *  What of the cleanup draft this plan holds, when it was planned from
+	 *  the draft ([`crate::LibraryService::plan_cleanup_draft`]): applying it
+	 *  takes those decisions out of the draft.
+	 */
+	draft?: PlannedDraft | null,
 };
 
 /**  Which duplicate sets a cleanup plans. */
@@ -1667,6 +1679,11 @@ export type DuplicateSetFilter = {
 	 *  through.
 	 */
 	undecided?: boolean,
+	/**
+	 *  Only the sets with these ids (E56.15: the copies of one family);
+	 *  every set when empty.
+	 */
+	ids?: string[],
 };
 
 /**  The order of a duplicate set listing (E56.11). */
@@ -1677,6 +1694,29 @@ export type DuplicateSetSort =
 "frees" | 
 /**  The most copies first, then by name. */
 "copies";
+
+/**  What [`DuplicateSummaryRequest`] answers. */
+export type DuplicateSummary = {
+	/**
+	 *  Fonts with more than one copy: the duplicate sets with a copy in the
+	 *  scope.
+	 */
+	fonts: number,
+	/**  The files in the scope that are a copy in one of those sets. */
+	copies: number,
+	/**  The families with a face in one of those sets, by family id. */
+	families: FamilyCopies[],
+};
+
+/**
+ *  The duplicates of a scope, counted for the ways into the module
+ *  ([`crate::LibraryService::duplicate_summary`], E56.15): the sidebar row,
+ *  the notice after a scan, the marks on a family.
+ */
+export type DuplicateSummaryRequest = {
+	/**  The files to look at; the whole library by default. */
+	scope?: DuplicateScope,
+};
 
 /**
  *  What a cleanup of a scope would do with the saved policy, counted
@@ -2124,6 +2164,16 @@ export type FamilyActivation =
 "partial" | 
 /**  Every face is active. */
 "active";
+
+/**  One family's duplicates (E56.15). */
+export type FamilyCopies = {
+	/**  The family. */
+	family: FamilyId,
+	/**  The most copies one of its fonts has ("3 copies"). */
+	copies: number,
+	/**  Its duplicate sets, by id. */
+	sets: string[],
+};
 
 /**  One family in the results, with the faces that matched. */
 export type FamilyHit = {
@@ -4151,6 +4201,43 @@ export type PlanCleanupRequest = {
 	 *  kept copy, so that copy can leave too. Off: an active copy stays.
 	 */
 	moveActivations?: boolean,
+};
+
+/**
+ *  Plan the cleanup draft ([`crate::LibraryService::plan_cleanup_draft`],
+ *  E56.15).
+ */
+export type PlanDraftRequest = {
+	/**
+	 *  Move the activation of an active copy of an identical set to the
+	 *  kept copy ([`crate::cleanup::PlanCleanupRequest::move_activations`]).
+	 */
+	moveActivations?: boolean,
+};
+
+/**  A set the draft answered without moving a file (E56.15). */
+export type PlannedAnswer = {
+	/**  The set id. */
+	set: string,
+	/**  The set's PostScript name, when it has one, for display. */
+	postscriptName: string | null,
+	/**  The answer applying records. */
+	answer: DuplicateAnswer,
+};
+
+/**
+ *  What of the draft a plan holds (E56.15). Applying the plan takes these
+ *  decisions out of the draft ([`CleanupDraft::take_planned`]); a decision
+ *  the plan could not hold (its set is gone, a folder pair is no pair any
+ *  more) stays in the draft.
+ */
+export type PlannedDraft = {
+	/**  The identical sets were in the plan. */
+	identical?: boolean,
+	/**  The sets whose decision the plan holds. */
+	sets?: string[],
+	/**  The folder pairs the plan holds. */
+	pairs?: DraftPair[],
 };
 
 /**  The operating system the app runs on. */

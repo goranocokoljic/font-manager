@@ -116,6 +116,8 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("list_cleanup_sessions", String::new()),
         ("undo_cleanup_session", r#"{"session":1}"#.into()),
         ("duplicates_overview", "{}".into()),
+        ("plan_cleanup_draft", "{}".into()),
+        ("duplicate_summary", "{}".into()),
         ("get_cleanup_draft", String::new()),
         (
             "update_cleanup_draft",

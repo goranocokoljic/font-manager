@@ -60,7 +60,7 @@ impl Trash for BreaksTheLog {
 }
 
 /// The fixture files that get a copy in `zcopy/`, one set each.
-const COPIED: &[&str] = &[
+pub(super) const COPIED: &[&str] = &[
     "bebasneue/BebasNeue-Regular.ttf",
     "barlow/Barlow-BoldItalic.ttf",
     "archivo/Archivo-Bold.woff2",
@@ -68,7 +68,7 @@ const COPIED: &[&str] = &[
 
 /// A library with `copies` copies of each [`COPIED`] file in `zcopy/<n>/`,
 /// scanned, its trash a folder.
-fn library(label: &str, copies: usize, trash: Arc<dyn Trash>) -> (Lib, Vec<PathBuf>) {
+pub(super) fn library(label: &str, copies: usize, trash: Arc<dyn Trash>) -> (Lib, Vec<PathBuf>) {
     let lib = Lib::new(label);
     let mut made = Vec::new();
     for n in 0..copies {
@@ -108,7 +108,7 @@ fn zcopy_plan(lib: &Lib) -> CleanupPlan {
 }
 
 /// Applies `req` and returns the job's events up to its last one.
-fn apply(lib: &Lib, req: ApplyCleanupRequest) -> (fm_api::JobId, Vec<Event>) {
+pub(super) fn apply(lib: &Lib, req: ApplyCleanupRequest) -> (fm_api::JobId, Vec<Event>) {
     let rx = lib.api.subscribe();
     let job = lib.api.apply_cleanup(req).expect("apply");
     (job, until_finished(&rx, job))
@@ -136,7 +136,7 @@ fn until_finished(rx: &Receiver<Event>, job: fm_api::JobId) -> Vec<Event> {
     }
 }
 
-fn session(lib: &Lib, events: &[Event]) -> CleanupSession {
+pub(super) fn session(lib: &Lib, events: &[Event]) -> CleanupSession {
     let id = events
         .iter()
         .find_map(|e| match e {

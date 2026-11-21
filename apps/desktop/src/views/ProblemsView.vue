@@ -1,54 +1,37 @@
 <script setup lang="ts">
-// The Problems view: duplicates, broken files, legacy formats, sidecar and
-// activation conflicts in one list, filtered by group. The filter is in the URL
-// (`#/problems?kind=duplicates`), so the sidebar links open it filtered.
-// Duplicates are resolved here (E8.3): "Keep this one" shows the dry run, asks
-// once, moves the other copies to the trash and offers undo in the app toast; the
-// history below the list undoes any earlier action. Sidecar conflicts (E28.1) are
-// resolved here too: each shows both values with "Keep mine" and "Use theirs".
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+// The Problems view: broken files, legacy formats, sidecar and activation conflicts
+// in one list, filtered by group. The filter is in the URL (`#/problems?kind=legacy`),
+// so the sidebar links open it filtered. Duplicates are the Duplicates module's
+// (E56.15): one line counts the fonts with more than one copy and opens the module,
+// and the old link `#/problems?kind=duplicates` opens the module (router.ts). Sidecar
+// conflicts (E28.1) are resolved here: each shows both values with "Keep mine" and
+// "Use theirs".
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import type { SidecarField } from '../api/types';
-import { errorMessage, formatDate, t } from '../i18n';
-import UiBadge from '../components/ui/UiBadge.vue';
+import { errorMessage, t } from '../i18n';
 import UiButton from '../components/ui/UiButton.vue';
 import { useCommandsStore } from '../stores/commands';
+import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import {
   PROBLEM_GROUPS,
   groupOf,
   problemGroup,
-  resolutionSummary as summary,
   useProblemsStore,
   type ProblemGroupId,
 } from '../stores/problems';
 
 const store = useProblemsStore();
+const dupes = useDuplicateSummaryStore();
 const commands = useCommandsStore();
 const route = useRoute();
 const router = useRouter();
 
 const filter = computed(() => problemGroup(route.query.kind)?.id);
 const rows = computed(() => store.inGroup(filter.value));
-const showDuplicates = computed(
-  () =>
-    (filter.value === undefined || filter.value === 'duplicates') && store.duplicates.length > 0,
-);
 const showSidecar = computed(
   () =>
     (filter.value === undefined || filter.value === 'sidecar') && store.sidecarConflicts.length > 0,
-);
-const planned = computed(() => store.plan?.moves.filter((m) => m.status === 'planned') ?? []);
-const notMoving = computed(() => store.plan?.moves.filter((m) => m.status !== 'planned') ?? []);
-
-// The confirm dialog takes the focus, so Enter confirms and Escape cancels.
-const confirmButton = ref<HTMLButtonElement | null>(null);
-watch(
-  () => store.plan,
-  async (p) => {
-    if (!p) return;
-    await nextTick();
-    confirmButton.value?.focus();
-  },
 );
 
 function setFilter(group: ProblemGroupId | undefined): void {
@@ -62,8 +45,7 @@ function close(): void {
 function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape' && !commands.open && !e.defaultPrevented) {
     e.preventDefault();
-    if (store.plan) store.cancelPlan();
-    else close();
+    close();
   }
 }
 
@@ -71,6 +53,7 @@ function onKey(e: KeyboardEvent): void {
 const title = ref<HTMLHeadingElement | null>(null);
 onMounted(() => {
   title.value?.focus();
+  void dupes.start();
   return store.load();
 });
 onBeforeUnmount(() => store.stop());
@@ -78,12 +61,6 @@ onBeforeUnmount(() => store.stop());
 /** The name of a sidecar conflict's field, in the UI's language. */
 function fieldName(field: SidecarField): string {
   return t(`problems.sidecar.fields.${field}`);
-}
-
-/** When an action happened, in the UI's locale; the API's text if it is not a date. */
-function when(at: string): string {
-  const d = new Date(at);
-  return Number.isNaN(d.getTime()) ? at : formatDate(d);
 }
 </script>
 
@@ -111,6 +88,12 @@ function when(at: string): string {
           {{ g.label }} <span class="n">{{ store.counts[g.id] }}</span>
         </UiButton>
       </div>
+      <p v-if="dupes.fonts > 0" class="duplicates" data-testid="problems-duplicates">
+        {{ t('problems.duplicatesLine', { count: dupes.fonts }) }}
+        <RouterLink :to="{ name: 'duplicates' }" class="link">{{
+          t('problems.openDuplicates')
+        }}</RouterLink>
+      </p>
       <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
       <p v-else-if="store.loaded && !rows.length" class="note">
         {{ filter ? t('problems.noneOfKind') : t('problems.none') }}
@@ -137,7 +120,7 @@ function when(at: string): string {
       <section v-if="showSidecar" aria-labelledby="sidecar-title" class="section">
         <h2 id="sidecar-title" class="h2">{{ t('problems.sidecar.title') }}</h2>
         <p class="note">{{ t('problems.sidecar.note') }}</p>
-        <p v-if="store.actionError && !showDuplicates" role="alert" class="error">
+        <p v-if="store.actionError" role="alert" class="error">
           {{ errorMessage(store.actionError) }}
         </p>
         <div
@@ -186,111 +169,7 @@ function when(at: string): string {
           </div>
         </div>
       </section>
-
-      <section v-if="showDuplicates" aria-labelledby="duplicates-title" class="section">
-        <h2 id="duplicates-title" class="h2">{{ t('problems.duplicates.title') }}</h2>
-        <p class="note">{{ t('problems.duplicates.note') }}</p>
-        <p v-if="store.actionError" role="alert" class="error">
-          {{ errorMessage(store.actionError) }}
-        </p>
-        <div
-          v-for="(g, gi) in store.duplicates"
-          :key="`${gi}-${g.copies[0]?.path}`"
-          role="group"
-          :aria-label="g.postscriptName ?? t('problems.duplicates.identicalFiles')"
-          class="group"
-        >
-          <h3 class="h3">
-            {{ g.postscriptName ?? t('problems.duplicates.identicalFiles') }}
-            <span class="muted">{{
-              t(g.kind === 'exact' ? 'problems.duplicates.exact' : 'problems.duplicates.similar')
-            }}</span>
-          </h3>
-          <ul class="copies">
-            <li v-for="c in g.copies" :key="c.path" class="copy">
-              <span class="path">{{ c.path }}</span>
-              <span v-if="c.version" class="muted">{{ c.version }}</span>
-              <UiBadge v-if="c.keep">{{ t('problems.duplicates.recommended') }}</UiBadge>
-              <UiButton
-                :aria-label="t('problems.duplicates.keepLabel', { path: c.path })"
-                @click="store.planKeep(g, c.path)"
-              >
-                {{ t('problems.duplicates.keep') }}
-              </UiButton>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section v-if="store.history.length" aria-labelledby="history-title" class="section">
-        <h2 id="history-title" class="h2">{{ t('problems.history.title') }}</h2>
-        <table aria-labelledby="history-title" class="table">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('problems.history.when') }}</th>
-              <th scope="col">{{ t('problems.history.kept') }}</th>
-              <th scope="col">{{ t('problems.history.what') }}</th>
-              <th scope="col">
-                <span class="sr-only">{{ t('common.undo') }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in store.history" :key="r.id ?? r.at">
-              <td>{{ when(r.at) }}</td>
-              <td class="path">{{ r.kept }}</td>
-              <td>{{ summary(r) }}</td>
-              <td>
-                <UiButton
-                  v-if="!r.undone && r.id !== null"
-                  :aria-label="t('problems.history.undoLabel', { summary: summary(r) })"
-                  @click="store.undo(r.id)"
-                >
-                  {{ t('common.undo') }}
-                </UiButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
     </main>
-
-    <div
-      v-if="store.plan"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="plan-title"
-      class="dialog"
-    >
-      <h2 id="plan-title" class="h2">
-        {{ t('problems.plan.title', { count: planned.length }) }}
-      </h2>
-      <p class="note">
-        {{ t('problems.plan.keeping') }} <span class="path">{{ store.plan.kept }}</span>
-      </p>
-      <ul v-if="planned.length" :aria-label="t('problems.plan.willMove')" class="copies">
-        <li v-for="m in planned" :key="m.path" class="path">{{ m.path }}</li>
-      </ul>
-      <ul v-if="notMoving.length" :aria-label="t('problems.plan.willStay')" class="copies">
-        <li v-for="m in notMoving" :key="m.path">
-          <span class="path">{{ m.path }}</span> — {{ m.message }}
-        </li>
-      </ul>
-      <div class="actions">
-        <UiButton @click="store.cancelPlan()">
-          {{ t('common.cancel') }}
-        </UiButton>
-        <button
-          ref="confirmButton"
-          type="button"
-          class="button primary"
-          :disabled="!planned.length"
-          @click="store.confirmPlan()"
-        >
-          {{ t('problems.plan.confirm') }}
-        </button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -317,6 +196,18 @@ function when(at: string): string {
   flex: 1;
   padding: 16px 24px;
   overflow-y: auto;
+}
+.duplicates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.link {
+  color: var(--fm-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .filters {
   display: flex;

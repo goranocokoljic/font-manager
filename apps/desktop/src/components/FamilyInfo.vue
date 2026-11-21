@@ -2,11 +2,13 @@
 // The Info section of the family page (E42.8): four groups in a two-column grid. Design (who made
 // it, when, its class, axes, named styles, what the font says about itself), Licence (what the
 // licence lets the user do, from fm-core's LicenseInfo.permissions, and the user's own record),
-// Files (format, where it is, when it came in, health) and Metrics (the face's vertical metrics
+// Files (format, where it is, when it came in, health; its copies with "Decide which to keep",
+// E56.15) and Metrics (the face's vertical metrics
 // with an "Hxg" specimen drawn on them). Names, hash, vendor and tables are in the rail's
 // "Technical details" (FamilyTechnical).
 import { computed, ref } from 'vue';
-import type { Axis, FaceDetail, FamilySummary } from '../api/types';
+import { RouterLink, type RouteLocationRaw } from 'vue-router';
+import type { Axis, FaceDetail, FamilyCopies, FamilySummary } from '../api/types';
 import { formatNumber, t } from '../i18n';
 import { dateText, fileSizeText } from '../list/columns';
 import { SPECIMEN_TEXT, metricsSpecimen, xHeightRatio } from '../preview/metricsSpecimen';
@@ -25,6 +27,10 @@ const props = defineProps<{
   designer?: string | null;
   /** How the hero draws the face: family, variations, features. */
   faceStyle?: Record<string, string | undefined>;
+  /** The family's duplicates, when it has copies (E56.15): one line under Files. */
+  copies?: FamilyCopies;
+  /** Where "Decide which to keep" goes: the family's sets in the Duplicates module. */
+  copiesRoute?: RouteLocationRaw;
 }>();
 
 const DASH = '—';
@@ -169,6 +175,15 @@ const xHeight = computed(() => {
         <dd data-testid="info-added">{{ added || DASH }}</dd>
         <dt>{{ t('family.info.health') }}</dt>
         <dd><HealthBadge :health="d.face.health" /></dd>
+        <template v-if="props.copies && props.copiesRoute">
+          <dt>{{ t('family.info.copies') }}</dt>
+          <dd data-testid="info-copies">
+            {{ t('duplicatesModule.mark.copies', { count: props.copies.copies }) }} ·
+            <RouterLink :to="props.copiesRoute" class="decide">{{
+              t('family.info.decide')
+            }}</RouterLink>
+          </dd>
+        </template>
       </dl>
     </section>
 
@@ -325,5 +340,10 @@ dd {
 }
 .values {
   grid-template-columns: auto auto;
+}
+.decide {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

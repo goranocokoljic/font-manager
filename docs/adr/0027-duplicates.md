@@ -325,8 +325,24 @@ budgeted, because it is the OS's (the Recycle Bin's `IFileOperation`, the
 Finder's trash) and cannot be made faster here.
 
 The mocks plan as the core does without an index or a disk: the E8.1
-keeper rule (`choose_keeper`), no language guard, no metadata conflicts;
-they apply at once, so their job cannot be cancelled.
+keeper rule (`choose_keeper`) and no language guard. The Rust mock has no
+metadata conflicts and applies at once. The TypeScript mock (E56.15) has
+rating and notes conflicts (`?mockConflict=1`) and, with
+`?mockCleanupStep=<ms>`, applies one file per step, so the browser tests
+see the progress events and can cancel between files.
+
+**The draft as one plan (E56.15).** The draft holds a choice per copy,
+which one `PlanCleanupRequest` cannot carry. `fm_api::cleanup_draft::plan_draft`
+turns it into one `CleanupPlan`, in one place for fm-core and both mocks:
+the decided sets are planned with the first copy the user kept as keeper,
+then the copies the user kept stay (`keeper`), hidden copies get `hide`,
+each folder pair adds only the files not yet planned, and a file that is
+the keeper of another leaving row stays (`keptByOtherSet`). "Keep both" and
+"not duplicates" become `plan.answers`; the apply records them with the
+moves, and what was planned leaves the draft (`plan.draft`). The ways into
+the module (the sidebar row, the "N copies" marks, the scan notice) read
+`duplicate_summary`: the fonts with copies, and per family the most copies
+of one font.
 
 **Two outcomes that touch no file (E56.8).** *Hide* takes a copy out of
 the library and leaves its file where it is. *These are not duplicates* and

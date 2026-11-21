@@ -14,6 +14,7 @@ use fm_api::cleanup::{
     MetadataField, MetadataValue, PlanCleanupRequest, ShowHiddenRequest, TakeBackDecisionRequest,
     UndoCleanupRequest,
 };
+use fm_api::cleanup_draft::{DuplicateSummary, DuplicateSummaryRequest, PlanDraftRequest};
 use fm_api::event::Event;
 use fm_api::library::DuplicateScope;
 use fm_api::{ActivationService, ApiError, ApiResult, FaceId, JobId};
@@ -179,12 +180,78 @@ impl CoreApi {
             conflicts,
             frees,
             my_languages: planned.my_languages,
+            answers: Vec::new(),
+            draft: None,
         })
+    }
+
+    /// Plans the stored draft as one plan (E56.15).
+    pub(super) fn cleanup_plan_draft(&self, req: &PlanDraftRequest) -> ApiResult<CleanupPlan> {
+        let (draft, sets) = {
+            let index = self.lock();
+            let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+            let decided = index.decided_keys()?;
+            let sets = crate::duplicate_sets::sets_with(&files, &DuplicateScope::Library, &decided);
+            (index.cleanup_draft()?, sets)
+        };
+        fm_api::cleanup_draft::plan_draft(&draft, &sets, req, |r| self.cleanup_plan(r))
+    }
+
+    /// The duplicates of a scope, counted, without a plan (E56.15).
+    pub(super) fn cleanup_summary(
+        &self,
+        req: &DuplicateSummaryRequest,
+    ) -> ApiResult<DuplicateSummary> {
+        let index = self.lock();
+        if let DuplicateScope::Source { source } = req.scope
+            && !index.sources()?.iter().any(|s| s.id == source)
+        {
+            return Err(ApiError::not_found(format!("Source {source}")));
+        }
+        let files = index.duplicate_set_files(&crate::duplicate_sets::system_folders())?;
+        let decided = index.decided_keys()?;
+        let sets = crate::duplicate_sets::sets_with(&files, &req.scope, &decided);
+        let faces: Vec<FaceId> = sets
+            .iter()
+            .flat_map(|s| s.copies.iter().filter_map(|c| c.face))
+            .collect();
+        let families = index.families_of(&faces)?;
+        drop(index);
+        let by_path: HashMap<&str, &crate::duplicate_sets::SetFile> =
+            files.iter().map(|f| (f.path.as_str(), f)).collect();
+        Ok(DuplicateSummary::from_sets(
+            &sets,
+            |p| {
+                by_path
+                    .get(p)
+                    .is_some_and(|f| crate::duplicate_sets::in_scope(f, &req.scope))
+            },
+            |f| families.get(&f).copied(),
+        ))
     }
 
     pub(super) fn cleanup_apply(&self, req: ApplyCleanupRequest) -> ApiResult<JobId> {
         let resolver = self.resolver()?.clone();
         resolver.check_cleanup(&req)?;
+        // A plan of the draft (E56.15): its answers are recorded, and what it
+        // holds leaves the draft, before any file moves.
+        for a in &req.plan.answers {
+            let answered = self.decision_make(DecideSetRequest {
+                set: a.set.clone(),
+                answer: a.answer,
+            });
+            if let Err(e) = answered
+                && e.code != fm_api::ErrorCode::NotFound
+            {
+                return Err(e);
+            }
+        }
+        if let Some(planned) = &req.plan.draft {
+            let index = self.lock();
+            let mut draft = index.cleanup_draft()?;
+            draft.take_planned(planned);
+            index.set_cleanup_draft(&draft)?;
+        }
         let job = JobId(
             self.next_job
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed),

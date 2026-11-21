@@ -22,6 +22,7 @@ import {
 import {
   decisionKey,
   duplicateSets,
+  inScope,
   listDuplicateSets,
   setKey,
   type SetFile,
@@ -33,7 +34,13 @@ import {
   type PairRoot,
 } from './mockFolderPairs';
 import { mockPlanCleanup } from './mockCleanup';
-import { applyDraftUpdate, overviewFromPlan } from './mockCleanupDraft';
+import {
+  applyDraftUpdate,
+  overviewFromPlan,
+  planDraft,
+  summaryFromSets,
+  takePlanned,
+} from './mockCleanupDraft';
 import {
   API_VERSION,
   type ActivationMode,
@@ -155,6 +162,10 @@ import {
   DocumentFontsCheck,
   DocumentFormat,
   ThemeDefinition,
+  CleanupFile,
+  MetadataConflict,
+  MetadataField,
+  MetadataValue,
 } from './types';
 
 /** The mock's glyph trait catalog (E49.5): one enum and one scalar trait, no face measured. */
@@ -1413,6 +1424,19 @@ export interface MockOptions {
   library?: 'small' | 'wall';
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
   scanStepMs?: number;
+  /**
+   * Delay between the files of an applied cleanup, in ms (E56.15). At 0 (the default)
+   * the apply is done at once, as the Rust mock does; above 0 it runs file by file, so
+   * its progress shows and `cancelCleanup` stops it between two files, as fm-core does.
+   */
+  cleanupStepMs?: number;
+  /**
+   * Paths (or parts of them) whose undo fails, as when the trash was emptied (E56.15): the
+   * session keeps the file as `failed` with a message, so History shows it cannot come back.
+   */
+  undoFails?: string[];
+  /** Ratings of sample faces from the start (none by default), e.g. for a metadata conflict. */
+  ratings?: Partial<Record<FaceId, number>>;
   /** Sources after the sample ones (`mockMoreSources`: a cloud and a missing folder). */
   moreSources?: Source[];
   /** Extra families after the sample ones, for long lists (e2e). */
@@ -1438,6 +1462,8 @@ export interface MockOptions {
     format?: FontFormat;
     /** What the copy's file holds unlike the sample face (E56.13). */
     compare?: MockCopyHint;
+    /** The copy's own rating (E56.15: a metadata conflict with the kept copy). */
+    rating?: number;
   }[];
   /** Sidecar conflicts waiting for the user (none by default); each is a Problems entry too. */
   sidecarConflicts?: SidecarConflict[];
@@ -3352,6 +3378,44 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const hidden: HiddenCopy[] = [];
   // Sets answered "not duplicates" or "keep both", oldest first (E56.8).
   const decisions: DuplicateDecision[] = [];
+  /** The cleanups still running (E56.15), by job: cancelled ones stop at the next file. */
+  const runningCleanups = new Map<JobId, { cancelled: boolean }>();
+  /**
+   * The metadata conflicts of the copies a plan removes (E56.15; fm-core reads them with
+   * `merge_plan`, E56.5): a rating or notes the kept copy and a leaving copy both hold
+   * with different values. The kept copy's value is the default.
+   */
+  const conflictsOf = (files: CleanupFile[]): MetadataConflict[] => {
+    const out: MetadataConflict[] = [];
+    const first = (path: string | null) => faces.find((f) => f.path === path);
+    for (const f of files) {
+      if (f.action === 'stays' || !f.kept) continue;
+      const kept = first(f.kept);
+      const other = first(f.path);
+      if (!kept || !other) continue;
+      const add = (field: MetadataField, mine: MetadataValue, theirs: MetadataValue) => {
+        if (out.some((c) => c.keptFace === kept.face.id && c.field === field)) return;
+        out.push({
+          set: f.set,
+          keptFace: kept.face.id,
+          field,
+          defaultFrom: kept.face.id,
+          default: mine,
+          otherFace: other.face.id,
+          other: theirs,
+        });
+      };
+      if (kept.rating != null && other.rating != null && kept.rating !== other.rating)
+        add(
+          'rating',
+          { kind: 'rating', stars: kept.rating },
+          { kind: 'rating', stars: other.rating },
+        );
+      if (kept.notes && other.notes && kept.notes !== other.notes)
+        add('notes', { kind: 'notes', text: kept.notes }, { kind: 'notes', text: other.notes });
+    }
+    return out;
+  };
   const decided = () => new Set(decisions.map((d) => decisionKey(d.set, d.hashes)));
   // Sidecar conflicts (E28.1): each is listed in Problems until resolved.
   const sidecarConflicts: SidecarConflict[] = structuredClone(options.sidecarConflicts ?? []);
@@ -3414,7 +3478,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     if (c.version != null) copy.version = c.version;
     if (c.format) copy.face.format = c.format;
     if (c.compare) COPY_HINTS.set(copy, c.compare);
+    if (c.rating != null) copy.rating = c.rating;
     faces.push(copy);
+  }
+  for (const [id, stars] of Object.entries(options.ratings ?? {})) {
+    const f = faces.find((x) => x.face.id === Number(id));
+    if (f && stars != null) f.rating = stars;
   }
   // The files the library shows, as fm-core reads them for the duplicate sets: one
   // per path, its faces in collection order. Every sample face is in source 1.
@@ -5292,7 +5361,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         request: req,
         sets: planned.sets,
         files: planned.files,
-        conflicts: [],
+        conflicts: conflictsOf(planned.files),
         frees: planned.files
           .filter((f) => f.action === 'trash')
           .reduce((sum, f) => Math.min(sum + f.size, 0xffffffff), 0),
@@ -5303,12 +5372,38 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const plan = req.plan;
       if (plan.version !== 1)
         throw invalid('This plan was made by another version of Font Fu. Plan the cleanup again.');
-      if ((req.choices ?? []).length)
-        throw invalid('A choice names a value that is not a conflict of this plan.');
+      const choices = req.choices ?? [];
+      for (const c of choices)
+        if (
+          !plan.conflicts.some(
+            (x) => x.keptFace === c.keptFace && x.field === c.field && x.otherFace === c.take,
+          )
+        )
+          throw invalid('A choice names a value that is not a conflict of this plan.');
+      // A plan of the draft (E56.15): its answers are recorded, and what it holds leaves
+      // the draft, before any file moves.
+      for (const a of plan.answers ?? [])
+        await client.decideDuplicateSet({ set: a.set, answer: a.answer }).catch((e: ApiError) => {
+          if (e.code !== 'notFound') throw e;
+        });
+      if (plan.draft) {
+        cleanupDraft = takePlanned(cleanupDraft, plan.draft);
+        options.settingsStorage?.setItem(MOCK_DRAFT_KEY, JSON.stringify(cleanupDraft));
+      }
+      // The values the user took in the conflicts go to the kept faces (E56.5).
+      for (const c of choices) {
+        const conflict = plan.conflicts.find(
+          (x) => x.keptFace === c.keptFace && x.field === c.field && x.otherFace === c.take,
+        )!;
+        const kept = faces.find((x) => x.face.id === c.keptFace);
+        if (!kept) continue;
+        if (conflict.other.kind === 'rating') kept.rating = conflict.other.stars;
+        if (conflict.other.kind === 'notes') kept.notes = conflict.other.text;
+      }
       const job = ++nextId;
       const id = ++nextId;
       const leaving = plan.files.filter((f) => f.action !== 'stays');
-      const done: CleanupSession['files'] = leaving.map((f) => {
+      const moveOne = (f: CleanupFile): CleanupSession['files'][number] => {
         const mine = faces.filter((x) => x.path === f.path);
         const hash = mine[0]?.hash;
         const isActive = mine.some((x) => active.has(x.face.id));
@@ -5350,55 +5445,108 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message,
           removedAs,
         };
-      });
-      const out = done.filter((f) => f.status === 'trashed');
-      const moved = out.filter((f) => f.removedAs !== 'hide');
-      sessions.unshift({
+      };
+      const session: CleanupSession = {
         id,
         name: req.name?.trim() || 'Cleanup of 2026-10-16',
         at: '2026-10-16T09:00:00Z',
         kind: 'cleanup',
         cancelled: false,
-        running: false,
+        running: true,
         undone: false,
-        sets: new Set(done.map((f) => f.set)).size,
-        trashed: moved.length,
-        frees: moved.reduce((sum, f) => sum + (f.size ?? 0), 0),
-        files: done,
-        hidden: out.length - moved.length,
-      });
-      done.forEach((f, i) =>
+        sets: 0,
+        trashed: 0,
+        frees: 0,
+        files: [],
+        hidden: 0,
+      };
+      sessions.unshift(session);
+      const count = () => {
+        const out = session.files.filter((f) => f.status === 'trashed');
+        const moved = out.filter((f) => f.removedAs !== 'hide');
+        session.sets = new Set(session.files.map((f) => f.set)).size;
+        session.trashed = moved.length;
+        session.frees = moved.reduce((sum, f) => sum + (f.size ?? 0), 0);
+        session.hidden = out.length - moved.length;
+      };
+      const state = { cancelled: false };
+      runningCleanups.set(job, state);
+      const finish = () => {
+        runningCleanups.delete(job);
+        session.running = false;
+        session.cancelled = state.cancelled;
+        count();
+        if (session.files.some((f) => f.status === 'trashed'))
+          emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
+        emit({
+          type: 'cleanupProgress',
+          job,
+          session: id,
+          done: session.files.length,
+          total: leaving.length,
+          path: null,
+          finished: true,
+          cancelled: state.cancelled,
+        });
+      };
+      const step = (i: number) => {
+        if (i >= leaving.length || state.cancelled) return finish();
+        const f = leaving[i]!;
+        session.files.push(moveOne(f));
+        count();
         emit({
           type: 'cleanupProgress',
           job,
           session: id,
           done: i + 1,
-          total: done.length,
+          total: leaving.length,
           path: f.path,
           finished: false,
           cancelled: false,
-        }),
-      );
-      if (out.length)
-        emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
-      emit({
-        type: 'cleanupProgress',
-        job,
-        session: id,
-        done: done.length,
-        total: done.length,
-        path: null,
-        finished: true,
-        cancelled: false,
-      });
+        });
+        if (stepMs > 0) setTimeout(() => step(i + 1), stepMs);
+        else step(i + 1);
+      };
+      const stepMs = options.cleanupStepMs ?? 0;
+      // The job is returned before its first event, as fm-core's thread does.
+      if (stepMs > 0) setTimeout(() => step(0), stepMs);
+      else step(0);
       return job;
     },
     cancelCleanup: async (job) => {
-      throw { code: 'notFound' as const, message: `Cleanup ${job} was not found.`, detail: null };
+      const running = runningCleanups.get(job);
+      if (!running)
+        throw { code: 'notFound' as const, message: `Cleanup ${job} was not found.`, detail: null };
+      running.cancelled = true;
     },
     // As the Rust mock (E56.11): the overview counts the mock's plan of the scope.
     duplicatesOverview: async (req) =>
       overviewFromPlan(await client.planCleanup({ scope: req.scope ?? { kind: 'library' } })),
+    // As fm-core (E56.15): the draft is planned by `plan_draft`'s rule over the mock's plan.
+    planCleanupDraft: async (req) =>
+      planDraft(cleanupDraft, duplicateSets(setFiles(), { kind: 'library' }, decided()), req, (r) =>
+        client.planCleanup(r),
+      ),
+    duplicateSummary: async (req) => {
+      const scope = req.scope ?? { kind: 'library' as const };
+      if (scope.kind === 'source' && !sources.some((s) => s.id === scope.source))
+        throw {
+          code: 'notFound' as const,
+          message: `Source ${scope.source} was not found.`,
+          detail: null,
+        };
+      const files = setFiles();
+      const byPath = new Map(files.map((f) => [f.path, f]));
+      const familyOf = new Map(faces.map((f) => [f.face.id, f.face.family]));
+      return summaryFromSets(
+        duplicateSets(files, scope, decided()),
+        (p) => {
+          const f = byPath.get(p);
+          return f != null && inScope(f, scope);
+        },
+        (face) => familyOf.get(face),
+      );
+    },
     getCleanupDraft: async () => structuredClone(cleanupDraft),
     updateCleanupDraft: async (update) => {
       const all = duplicateSets(setFiles(), { kind: 'library' }, decided());
@@ -5461,6 +5609,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           throw invalid(`${p} is not a file of this session.`);
       for (const f of s.files)
         if (f.status === 'trashed' && (!paths.length || paths.includes(f.path))) {
+          if (options.undoFails?.some((part) => f.path.includes(part))) {
+            f.status = 'failed';
+            f.message = 'The trash was emptied, so this file cannot come back.';
+            continue;
+          }
           trashed.delete(f.path);
           hidden.splice(0, hidden.length, ...hidden.filter((h) => h.path !== f.path));
           f.status = 'restored';
@@ -5910,6 +6063,13 @@ function countFromUrl(name: string, max: number): number {
   return Number.isInteger(n) && n > 0 ? Math.min(n, max) : 0;
 }
 
+/** A text option from the page URL, before the hash, as a list of one (e2e). */
+function textFromUrl(name: string): string[] {
+  if (typeof location === 'undefined') return [];
+  const v = new URLSearchParams(location.search).get(name)?.trim();
+  return v ? [v] : [];
+}
+
 /** The tab's session storage, where there is one (not in Node). */
 function sessionStorageOf(): Storage | undefined {
   try {
@@ -6005,14 +6165,27 @@ export const mockClient: FmClient = createMockClient({
   // `?mockDuplicates=1` adds copies for the Duplicates module (E56.11): JetBrains Mono
   // twice as the same file, Inter in three versions, Legacy Grotesk twice in one version.
   // `?mockCopyCompare=1` adds Inter as a WOFF2 of the same version (E56.13).
+  // `?mockConflict=1` rates the sample Inter 5 stars and its older copy 3 (E56.15), so a
+  // plan of the Inter set shows a metadata conflict.
   ...(countFromUrl('mockDuplicates', 1)
     ? {
         copies: [
-          ...mockDuplicateCopies,
+          ...mockDuplicateCopies.map((c) =>
+            countFromUrl('mockConflict', 1) && c.path.includes('/Fonts/Old/')
+              ? { ...c, rating: 3 }
+              : c,
+          ),
           ...(countFromUrl('mockCopyCompare', 1) ? mockCopyCompareCopies : []),
         ],
+        ratings: countFromUrl('mockConflict', 1) ? { 1: 5 } : {},
       }
     : {}),
+  // `?mockCleanupStep=<ms>` applies a cleanup file by file, so its progress and Cancel
+  // show (E56.15).
+  cleanupStepMs: countFromUrl('mockCleanupStep', 5000),
+  // `?mockUndoFail=Older` makes the undo of every file whose path holds "Older" fail, as
+  // when the trash was emptied, so History shows a file that cannot come back (E56.15).
+  undoFails: textFromUrl('mockUndoFail'),
   // `?mockFolderPairs=1` adds three folders that hold the same sample fonts (E56.12): a
   // contained pair, a partial pair and a system font folder that can only be kept.
   // `=2` adds 20 archive folders with Sample 1–5, for a few hundred pairs.

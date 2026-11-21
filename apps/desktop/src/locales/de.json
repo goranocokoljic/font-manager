@@ -1501,7 +1501,12 @@
       "systemTitle": "Systemschriften",
       "systemNote": "In der Bibliothek gezeigt, schreibgeschützt — die App schreibt nie in Systemordner.",
       "show": "Zeigen",
-      "showSystemLabel": "Systemschriften in der Bibliothek zeigen"
+      "showSystemLabel": "Systemschriften in der Bibliothek zeigen",
+      "duplicates": {
+        "one": "{count} Schrift hat mehr als eine Kopie",
+        "other": "{count} Schriften haben mehr als eine Kopie"
+      },
+      "openDuplicates": "Duplikate öffnen"
     },
     "activation": {
       "modeLegend": "Die Schaltfläche „Aktivieren“ aktiviert Schriften",
@@ -1792,7 +1797,9 @@
       "xHeightRatio": "{value} ({ratio})",
       "ascender": "Oberlänge",
       "descender": "Unterlänge",
-      "axisRange": "{name} {min}–{max}"
+      "axisRange": "{name} {min}–{max}",
+      "copies": "Kopien",
+      "decide": "Entscheiden, was bleibt"
     }
   },
   "studio": {
@@ -1975,7 +1982,12 @@
         "familyNotes": "Familiennotizen",
         "familyLicense": "Lizenz"
       }
-    }
+    },
+    "duplicatesLine": {
+      "one": "{count} Schrift hat mehr als eine Kopie.",
+      "other": "{count} Schriften haben mehr als eine Kopie."
+    },
+    "openDuplicates": "Duplikate öffnen"
   },
   "sources": {
     "title": "Quellen",
@@ -2001,7 +2013,12 @@
     "resume": "Fortsetzen",
     "resumeLabel": "{name} fortsetzen",
     "removeLabel": "{name} aus der Bibliothek entfernen",
-    "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
+    "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind.",
+    "duplicates": "Duplikate",
+    "duplicatesCount": {
+      "one": "{count} Schrift hat Kopien",
+      "other": "{count} Schriften haben Kopien"
+    }
   },
   "catalogs": {
     "offShort": "aus",
@@ -2309,7 +2326,8 @@
       "plan": "Plan",
       "history": "Verlauf",
       "hidden": "Ausgeblendete Kopien",
-      "rules": "Sprachen und Regeln"
+      "rules": "Sprachen und Regeln",
+      "decisions": "Gemerkte Entscheidungen"
     },
     "languages": {
       "heading": "Meine Sprachen",
@@ -2405,7 +2423,12 @@
         "sameVersion": "Gleiche Version",
         "otherVersion": "Andere Version",
         "formatsDiffer": "Gleiche Version · {formats}"
-      }
+      },
+      "family": {
+        "one": "Die Kopien einer Familie: {count} Satz",
+        "other": "Die Kopien einer Familie: {count} Sätze"
+      },
+      "allSets": "Alle Sätze zeigen"
     },
     "set": {
       "region": "Duplikatsatz {name}",
@@ -2530,18 +2553,139 @@
       "pairLine": {
         "one": "{keep} behalten: {count} identische Kopie in {remove} geht",
         "other": "{keep} behalten: {count} identische Kopien in {remove} gehen"
-      }
+      },
+      "review": "Was der Plan tut",
+      "planning": "Plan wird erstellt …",
+      "trashGroup": {
+        "one": "{count} Datei kommt in den {trash}",
+        "other": "{count} Dateien kommen in den {trash}"
+      },
+      "hideGroup": {
+        "one": "{count} Datei wird ausgeblendet",
+        "other": "{count} Dateien werden ausgeblendet"
+      },
+      "hideNote": "Eine ausgeblendete Datei bleibt, wo sie ist.",
+      "stayGroup": {
+        "one": "{count} Datei bleibt",
+        "other": "{count} Dateien bleiben"
+      },
+      "stays": {
+        "keeper": "Die Kopien, die du behältst",
+        "myLanguages": "Die einzige Kopie für eine deiner Sprachen",
+        "keepBoth": "Alle Kopien bleiben",
+        "lastCopy": "Die letzte Kopie einer Schrift",
+        "active": "Aktive Kopien",
+        "system": "In einem Systemschriftordner",
+        "keptByOtherSet": "Für eine andere Schrift in derselben Datei behalten",
+        "notThere": "Nicht mehr vorhanden",
+        "outsideScope": "Außerhalb des Ordners, den du aufräumst",
+        "onlyHere": "Keine Kopie im behaltenen Ordner",
+        "otherLevel": "Eine andere Version im behaltenen Ordner"
+      },
+      "answers": {
+        "one": "{count} Satz ist beantwortet, keine Datei wird bewegt",
+        "other": "{count} Sätze sind beantwortet, keine Datei wird bewegt"
+      },
+      "answersNote": "Gemerkt, damit sie nicht wieder erscheinen.",
+      "conflicts": "Unterschiedliche Werte",
+      "conflictsNote": "Eine Kopie, die geht, hat einen anderen Wert als die Kopie, die du behältst. Der Wert der behaltenen Kopie bleibt, außer du übernimmst den anderen.",
+      "field": {
+        "rating": "Bewertung",
+        "license": "Lizenz",
+        "notes": "Notizen"
+      },
+      "stars": {
+        "one": "{count} Stern",
+        "other": "{count} Sterne"
+      },
+      "seats": {
+        "one": "{count} Platz",
+        "other": "{count} Plätze"
+      },
+      "noLicense": "Keine Lizenz",
+      "keepValue": "{value} behalten",
+      "takeValue": "{value} aus {file} übernehmen",
+      "frees": "Gibt {size} frei",
+      "applyTrash": {
+        "one": "{count} Datei in den {trash} legen",
+        "other": "{count} Dateien in den {trash} legen"
+      },
+      "applyBoth": "{trashed} in den {trash} legen und {hidden} ausblenden",
+      "applyHide": "{hidden} ausblenden",
+      "applyAnswers": {
+        "one": "{count} Antwort merken",
+        "other": "{count} Antworten merken"
+      },
+      "progressLabel": "Der Plan wird ausgeführt",
+      "progress": "{done} von {total} Dateien",
+      "cancel": "Abbrechen",
+      "cancelling": "Hält nach dieser Datei an …",
+      "resultLabel": "Was das Aufräumen getan hat",
+      "doneTitle": "Fertig.",
+      "cancelledTitle": "Abgebrochen.",
+      "cancelledNote": "Die Dateien nach der zuletzt erledigten bleiben, wo sie sind.",
+      "moved": {
+        "one": "{count} Datei in den {trash} gelegt",
+        "other": "{count} Dateien in den {trash} gelegt"
+      },
+      "hiddenCount": {
+        "one": "{count} Datei ausgeblendet",
+        "other": "{count} Dateien ausgeblendet"
+      },
+      "skipped": {
+        "one": "{count} Datei nicht bewegt",
+        "other": "{count} Dateien nicht bewegt"
+      },
+      "undo": "Rückgängig",
+      "undoLabel": "{name} rückgängig machen",
+      "seeHistory": "Im Verlauf ansehen"
     },
     "history": {
       "empty": "Noch keine Bereinigung.",
       "files": {
         "one": "{count} Datei",
         "other": "{count} Dateien"
-      }
+      },
+      "sets": {
+        "one": "{count} Schrift",
+        "other": "{count} Schriften"
+      },
+      "trashed": {
+        "one": "{count} im {trash}",
+        "other": "{count} im {trash}"
+      },
+      "hidden": {
+        "one": "{count} ausgeblendet",
+        "other": "{count} ausgeblendet"
+      },
+      "running": "Läuft",
+      "undone": "Rückgängig gemacht",
+      "cancelled": "Abgebrochen",
+      "status": {
+        "planned": "Geplant",
+        "trashed": "Im {trash}",
+        "restored": "Zurückgelegt",
+        "skipped": "Nicht bewegt",
+        "failed": "Kann nicht zurück"
+      },
+      "hiddenStatus": {
+        "trashed": "Ausgeblendet",
+        "restored": "Wieder sichtbar"
+      },
+      "undoSession": "Alles rückgängig",
+      "undoSessionLabel": "{name} ganz rückgängig machen",
+      "undoFile": "Zurücklegen",
+      "undoFileLabel": "{file} zurücklegen",
+      "retry": "Erneut versuchen"
     },
     "hidden": {
       "empty": "Keine ausgeblendeten Kopien.",
-      "body": "Eine ausgeblendete Kopie bleibt, wo sie ist, und verlässt die Bibliothek."
+      "body": "Eine ausgeblendete Kopie bleibt, wo sie ist, und verlässt die Bibliothek.",
+      "at": "Ausgeblendet {date}",
+      "kept": "{file} bleibt",
+      "otherFile": "An diesem Pfad liegt jetzt eine andere Datei.",
+      "show": "Wieder zeigen",
+      "showLabel": "{file} wieder zeigen"
     },
     "folders": {
       "heading": "Ordner mit denselben Schriften",
@@ -2675,11 +2819,45 @@
       "unsaved": "Noch nicht gespeichert",
       "saved": "Die Regeln sind gespeichert.",
       "defaultLoaded": "Die Standardregeln sind geladen. Speichern Sie, um sie zu behalten."
+    },
+    "commands": {
+      "find": "Duplikate finden",
+      "showCopies": "Kopien von {name} zeigen"
+    },
+    "mark": {
+      "copies": {
+        "one": "{count} Kopie",
+        "other": "{count} Kopien"
+      },
+      "title": "Kopien von {name} zeigen"
+    },
+    "decisions": {
+      "answer": {
+        "keepBoth": "Beide behalten",
+        "notDuplicates": "Keine Duplikate"
+      },
+      "outdated": "Eine Kopie hat sich seitdem geändert: der Satz erscheint wieder.",
+      "takeBackLabel": "Antwort zu {name} zurücknehmen",
+      "empty": "Keine gemerkten Entscheidungen.",
+      "body": "Ein Satz, den du mit „beide behalten“ oder „keine Duplikate“ beantwortest, erscheint nicht wieder."
     }
   },
   "reorder": {
     "move": "{name} verschieben",
     "hint": "Ziehen oder mit den Pfeiltasten nach oben und unten verschieben",
     "moved": "{name} steht jetzt an Stelle {position} von {count}."
+  },
+  "duplicatesNotice": {
+    "label": "Kopien gefunden",
+    "added": {
+      "one": "{folder} hinzugefügt · {count} Schrift",
+      "other": "{folder} hinzugefügt · {count} Schriften"
+    },
+    "copies": {
+      "one": "{count} Datei ist eine Kopie einer Schrift, die du hast",
+      "other": "{count} Dateien sind Kopien von Schriften, die du hast"
+    },
+    "review": "Ansehen",
+    "dismiss": "Schließen"
   }
 }

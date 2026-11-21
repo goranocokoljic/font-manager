@@ -6,7 +6,7 @@
 // store, so the page keeps the face it shows selected: the `?face=` of the route, else the
 // family's first.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import ActivationDot from '../components/ActivationDot.vue';
 import FamilyCharacters from '../components/FamilyCharacters.vue';
 import FamilyFeatures from '../components/FamilyFeatures.vue';
@@ -51,6 +51,7 @@ import { useFeaturesStore } from '../stores/features';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
+import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useSimilarStore } from '../stores/similar';
 import { useTaggingStore } from '../stores/tagging';
@@ -227,7 +228,27 @@ function findSimilar(): void {
   void back();
 }
 
+// The family's duplicates (E56.15): the "N copies" mark, the line under Info › Files and
+// "Show the copies of <family>" in the command palette open its sets in the module.
+const dupes = useDuplicateSummaryStore();
+const copies = computed(() => dupes.of(page.summary?.id));
+const copiesRoute = computed(() => ({
+  name: 'duplicates',
+  query: { section: 'sets', family: String(page.summary?.id ?? '') },
+}));
+
 useActions([
+  {
+    id: 'duplicates.family',
+    get title() {
+      return t('duplicatesModule.commands.showCopies', { name: page.summary?.name ?? '' });
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => copies.value !== undefined,
+    run: () => router.push(copiesRoute.value),
+  },
   {
     id: 'family.back',
     get title() {
@@ -417,6 +438,15 @@ onBeforeUnmount(() => {
             <h1 ref="title" class="name" tabindex="-1">{{ page.summary?.name }}</h1>
             <p v-if="page.summary" class="meta" data-testid="family-meta">
               <span v-for="part in metaParts" :key="part" class="meta-part">{{ part }}</span>
+              <!-- "2 copies" beside the style count (E56.15): opens this font's sets. -->
+              <RouterLink
+                v-if="copies"
+                :to="copiesRoute"
+                class="meta-part copies"
+                data-testid="family-copies"
+                :aria-label="t('duplicatesModule.mark.title', { name: page.summary.name })"
+                >{{ t('duplicatesModule.mark.copies', { count: copies.copies }) }}</RouterLink
+              >
               <span class="state" :data-state="page.summary.activation">
                 <ActivationDot
                   :state="familyDotState(page.summary)"
@@ -511,6 +541,8 @@ onBeforeUnmount(() => {
                       :year="page.detail?.year ?? null"
                       :designer="page.detail?.designer ?? null"
                       :face-style="specimenStyle"
+                      :copies="copies"
+                      :copies-route="copiesRoute"
                     />
                     <!-- The user's own part of the face: palettes, tags, rating, notes. -->
                     <InspectorInfo part="yours" class="yours" />
@@ -740,5 +772,10 @@ html.fm-family-stepping::view-transition-old(fm-family-content),
 html.fm-family-stepping::view-transition-new(fm-family-content) {
   animation-duration: var(--fm-motion-move);
   animation-timing-function: var(--fm-ease);
+}
+.meta .copies {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

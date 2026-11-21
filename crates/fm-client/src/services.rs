@@ -70,6 +70,8 @@ service!(LibraryService {
     list_cleanup_sessions() -> Vec<CleanupSession>;
     undo_cleanup_session(req: UndoCleanupRequest) -> CleanupSession;
     duplicates_overview(req: DuplicatesOverviewRequest) -> DuplicatesOverview;
+    plan_cleanup_draft(req: PlanDraftRequest) -> CleanupPlan;
+    duplicate_summary(req: DuplicateSummaryRequest) -> DuplicateSummary;
     get_cleanup_draft() -> CleanupDraft;
     update_cleanup_draft(update: CleanupDraftUpdate) -> CleanupDraft;
     list_hidden_copies() -> Vec<HiddenCopy>;

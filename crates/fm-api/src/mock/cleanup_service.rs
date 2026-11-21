@@ -115,6 +115,8 @@ impl MockApi {
             conflicts: Vec::new(),
             frees,
             my_languages: languages,
+            answers: Vec::new(),
+            draft: None,
         })
     }
 
@@ -124,6 +126,22 @@ impl MockApi {
             return Err(ApiError::invalid(
                 "A choice names a value that is not a conflict of this plan.",
             ));
+        }
+        // A plan of the draft (E56.15): its answers are recorded, and what it
+        // holds leaves the draft.
+        for a in &req.plan.answers {
+            let answered = self.mock_decide_set(DecideSetRequest {
+                set: a.set.clone(),
+                answer: a.answer,
+            });
+            if let Err(e) = answered
+                && e.code != crate::ErrorCode::NotFound
+            {
+                return Err(e);
+            }
+        }
+        if let Some(planned) = &req.plan.draft {
+            self.state().cleanup_draft.take_planned(planned);
         }
         let mut st = self.state();
         st.mutations.push("apply_cleanup");

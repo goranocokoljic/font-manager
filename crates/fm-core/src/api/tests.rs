@@ -8292,6 +8292,7 @@ fn a_search_for_faces_lists_only_those_faces() {
 
 mod cleanup;
 mod cleanup_draft;
+mod cleanup_plan_draft;
 mod folder_pairs;
 mod keeper_policy;
 mod my_languages;

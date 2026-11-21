@@ -1,0 +1,20 @@
+{
+  "id": "an-answer-that-moves-nothing-must-win-over-every-other-part-",
+  "title": "An answer that moves nothing must win over every other part of a combined plan",
+  "category": "data-integrity",
+  "rule": "When one plan is built from several parts of a draft (per-item decisions, a bulk 'all identical copies' switch, folder pairs), an item the user answered with 'keep' ('keep both', 'not duplicates', 'skip') must be removed from every other part before that part is planned, and from every part's rows after it: collect the answered ids first, filter the bulk id list and each part's rows by them. Test it with a draft where the answered item is also covered by the bulk switch and by a folder pair, and assert none of its files leaves.",
+  "rationale": "E56.15 (#675): plan_draft put every identical set into the plan when the identical switch was on and merged folder-pair rows by path only, so a set answered 'keep both' through the family queue still had its copies sent to the trash while the answer was recorded.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    675
+  ],
+  "file_globs": [
+    "crates/fm-api/src/cleanup_draft.rs",
+    "crates/fm-core/src/cleanup*.rs",
+    "apps/desktop/src/api/mockCleanupDraft.ts"
+  ],
+  "first_seen": "2026-11-21T21:34:10.315Z",
+  "last_seen": "2026-11-21T21:34:10.315Z"
+}

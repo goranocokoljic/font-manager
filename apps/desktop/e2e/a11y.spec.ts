@@ -213,6 +213,29 @@ test('every interactive element of the Duplicates module has a name', async ({ p
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+test('every interactive element of the plan, History and the kept lists has a name', async ({
+  page,
+}) => {
+  // E56.15: a plan with a conflict, the result of an apply, and the session in History.
+  await open(page, '/duplicates?section=sets', '?mockDuplicates=1&mockConflict=1');
+  await page.getByRole('button', { name: /^Add to plan and go on/ }).click();
+  await open(page, '/duplicates?section=plan', '?mockDuplicates=1&mockConflict=1');
+  await expect(page.getByTestId('plan-conflicts')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  await page.getByTestId('plan-apply').click();
+  await expect(page.getByTestId('plan-result')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  await open(page, '/duplicates?section=history', '?mockDuplicates=1&mockConflict=1');
+  await expect(page.getByTestId('duplicates-history')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  await open(page, '/duplicates?section=hidden', '?mockDuplicates=1');
+  await expect(page.getByTestId('duplicates-hidden')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  await open(page, '/duplicates?section=decisions', '?mockDuplicates=1');
+  await expect(page.getByTestId('duplicates-decisions')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) => {
   await open(page);
   await expect(page.getByRole('treeitem').first()).toBeVisible();

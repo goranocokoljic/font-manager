@@ -2602,6 +2602,42 @@ impl LibraryService for MockApi {
         Ok(crate::cleanup_draft::DuplicatesOverview::from_plan(&plan))
     }
 
+    fn plan_cleanup_draft(
+        &self,
+        req: crate::cleanup_draft::PlanDraftRequest,
+    ) -> ApiResult<crate::cleanup::CleanupPlan> {
+        let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        let sets =
+            duplicate_sets::sets_with(&files, &DuplicateScope::Library, &self.decided_keys());
+        let draft = self.state().cleanup_draft.clone();
+        crate::cleanup_draft::plan_draft(&draft, &sets, &req, |r| self.mock_plan_cleanup(r))
+    }
+
+    fn duplicate_summary(
+        &self,
+        req: crate::cleanup_draft::DuplicateSummaryRequest,
+    ) -> ApiResult<crate::cleanup_draft::DuplicateSummary> {
+        let files = self.duplicate_set_files(&req.scope)?;
+        let sets = duplicate_sets::sets_with(&files, &req.scope, &self.decided_keys());
+        let by_path: HashMap<&str, &duplicate_sets::SetFile> =
+            files.iter().map(|f| (f.path.as_str(), f)).collect();
+        let family: HashMap<FaceId, FamilyId> = self
+            .state()
+            .faces
+            .iter()
+            .map(|f| (f.detail.face.id, f.detail.face.family))
+            .collect();
+        Ok(crate::cleanup_draft::DuplicateSummary::from_sets(
+            &sets,
+            |p| {
+                by_path
+                    .get(p)
+                    .is_some_and(|f| duplicate_sets::in_scope(f, &req.scope))
+            },
+            |f| family.get(&f).copied(),
+        ))
+    }
+
     fn get_cleanup_draft(&self) -> ApiResult<crate::cleanup_draft::CleanupDraft> {
         Ok(self.state().cleanup_draft.clone())
     }
