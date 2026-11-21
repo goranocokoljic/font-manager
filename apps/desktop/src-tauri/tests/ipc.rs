@@ -760,6 +760,15 @@ fn the_duplicates_overview_and_the_cleanup_draft_round_trip() {
         serde_json::json!({ "req": { "filter": { "undecided": true } } }),
     );
     assert_eq!(queue["total"], 0, "a decided set leaves the queue");
+    // E56.15: the draft as one plan, and the counts of the ways in.
+    let plan = call("plan_cleanup_draft", serde_json::json!({ "req": {} }));
+    assert_eq!(plan["answers"][0]["set"], set);
+    assert_eq!(plan["answers"][0]["answer"], "notDuplicates");
+    assert_eq!(plan["draft"]["sets"][0], set);
+    let summary = call("duplicate_summary", serde_json::json!({ "req": {} }));
+    assert_eq!(summary["fonts"], 1);
+    assert_eq!(summary["copies"], 2);
+    assert_eq!(summary["families"].as_array().map(Vec::len), Some(1));
 }
 
 #[test]

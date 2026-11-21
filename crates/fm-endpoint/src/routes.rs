@@ -99,6 +99,8 @@ routes! {
     list_cleanup_sessions(),
     undo_cleanup_session(req),
     duplicates_overview(req),
+    plan_cleanup_draft(req),
+    duplicate_summary(req),
     get_cleanup_draft(),
     update_cleanup_draft(update),
     list_hidden_copies(),

@@ -107,6 +107,9 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; undo_cleanup_session, json!({ "session": 999 }));
     same!(seen, d, c; duplicates_overview, json!({}));
     same!(seen, d, c; duplicates_overview, json!({ "scope": { "kind": "source", "source": 999 } }));
+    same!(seen, d, c; plan_cleanup_draft, json!({}));
+    same!(seen, d, c; duplicate_summary, json!({}));
+    same!(seen, d, c; duplicate_summary, json!({ "scope": { "kind": "source", "source": 999 } }));
     same!(seen, d, c; get_cleanup_draft);
     same!(seen, d, c; update_cleanup_draft, json!({ "kind": "identical", "include": false }));
     same!(seen, d, c; update_cleanup_draft, json!({ "kind": "decide", "set": "name:Nope", "decision": { "kind": "keepAll" } }));

@@ -1047,6 +1047,10 @@ pub struct DuplicateSetFilter {
     /// through.
     #[serde(default)]
     pub undecided: bool,
+    /// Only the sets with these ids (E56.15: the copies of one family);
+    /// every set when empty.
+    #[serde(default)]
+    pub ids: Vec<String>,
 }
 
 impl DuplicateSetFilter {
@@ -1072,6 +1076,7 @@ impl DuplicateSetFilter {
                 })
             })
             && !(self.undecided && decided.contains(&set.id))
+            && (self.ids.is_empty() || self.ids.contains(&set.id))
     }
 }
 
@@ -2441,6 +2446,23 @@ pub trait LibraryService {
         &self,
         req: crate::cleanup_draft::DuplicatesOverviewRequest,
     ) -> ApiResult<crate::cleanup_draft::DuplicatesOverview>;
+    /// Plans the cleanup draft as one plan (E56.15,
+    /// [`crate::cleanup_draft::plan_draft`]): the identical sets when in,
+    /// the choices per copy, the folder pairs, and the answers "keep both"
+    /// and "not duplicates". Touches nothing; applying the plan
+    /// ([`Self::apply_cleanup`]) takes what it holds out of the draft.
+    fn plan_cleanup_draft(
+        &self,
+        req: crate::cleanup_draft::PlanDraftRequest,
+    ) -> ApiResult<crate::cleanup::CleanupPlan>;
+    /// The duplicates of a scope, counted (E56.15): the fonts with more
+    /// than one copy, the files in the scope that are copies, and the
+    /// families with copies. Lighter than [`Self::duplicates_overview`]: it
+    /// plans nothing. A `source` scope that does not exist is `NotFound`.
+    fn duplicate_summary(
+        &self,
+        req: crate::cleanup_draft::DuplicateSummaryRequest,
+    ) -> ApiResult<crate::cleanup_draft::DuplicateSummary>;
     /// The decisions collected for the next cleanup plan (E56.11), as
     /// stored: they survive a restart. Touches no file.
     fn get_cleanup_draft(&self) -> ApiResult<crate::cleanup_draft::CleanupDraft>;

@@ -292,6 +292,28 @@ pub struct CleanupPlan {
     pub frees: u32,
     /// Whether my languages were set; `NotSet` means the guard did nothing.
     pub my_languages: MyLanguagesStatus,
+    /// The sets the draft answered "keep both" or "not duplicates"
+    /// (E56.15): applying the plan records each answer (E56.8). Empty for a
+    /// plan of a scope.
+    #[serde(default)]
+    pub answers: Vec<PlannedAnswer>,
+    /// What of the cleanup draft this plan holds, when it was planned from
+    /// the draft ([`crate::LibraryService::plan_cleanup_draft`]): applying it
+    /// takes those decisions out of the draft.
+    #[serde(default)]
+    pub draft: Option<crate::cleanup_draft::PlannedDraft>,
+}
+
+/// A set the draft answered without moving a file (E56.15).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedAnswer {
+    /// The set id.
+    pub set: String,
+    /// The set's PostScript name, when it has one, for display.
+    pub postscript_name: Option<String>,
+    /// The answer applying records.
+    pub answer: DuplicateAnswer,
 }
 
 impl CleanupPlan {
@@ -599,6 +621,8 @@ mod tests {
             conflicts: Vec::new(),
             frees: 1,
             my_languages: MyLanguagesStatus::NotSet,
+            answers: Vec::new(),
+            draft: None,
         };
         assert!(plan.check().is_ok());
         let text = serde_json::to_string(&plan).unwrap();
@@ -644,6 +668,8 @@ mod tests {
             conflicts: Vec::new(),
             frees: 20,
             my_languages: MyLanguagesStatus::NotSet,
+            answers: Vec::new(),
+            draft: None,
         };
         let s = plan.summary();
         assert_eq!((s.sets, s.trash, s.hide, s.kept, s.frees), (2, 2, 1, 1, 20));
