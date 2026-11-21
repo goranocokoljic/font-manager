@@ -136,7 +136,8 @@ const list = computed(() => cleanup.sessions ?? []);
   align-items: center;
   justify-content: space-between;
   gap: var(--fm-space-4);
-  padding: var(--fm-space-2) var(--fm-space-4) var(--fm-space-2) var(--fm-space-2);
+  padding-block: var(--fm-space-2);
+  padding-inline: var(--fm-space-2) var(--fm-space-4);
 }
 .toggle {
   display: flex;
@@ -162,7 +163,8 @@ const list = computed(() => cleanup.sessions ?? []);
 }
 .files {
   margin: 0;
-  padding: 0 var(--fm-space-4) var(--fm-space-3) var(--fm-space-8);
+  padding-block: 0 var(--fm-space-3);
+  padding-inline: var(--fm-space-8) var(--fm-space-4);
   list-style: none;
 }
 .file {
