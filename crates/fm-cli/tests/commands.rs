@@ -1461,3 +1461,148 @@ fn duplicates_list_is_the_api_answer_and_doctor_names_it() {
         "the JSON keeps its shape"
     );
 }
+
+/// The scope `fm --json duplicates plan <flags>` sent, as the plan echoes it.
+fn planned_scope(api: &MockApi, flags: &[&str]) -> Value {
+    let mut args = vec!["--json", "duplicates", "plan"];
+    args.extend_from_slice(flags);
+    let (exit, out, err) = fm_on(api, &args);
+    assert_eq!(exit, Exit::Success, "{flags:?}: {err}");
+    json(&out)["request"]["scope"].clone()
+}
+
+/// An absolute path as `fm` sends it: made absolute against the working
+/// folder, as the CLI does.
+fn abs(path: &str) -> String {
+    std::path::absolute(path).unwrap().display().to_string()
+}
+
+/// E56.9 criterion 1 (review TST-1): each scope flag of `fm duplicates
+/// plan` reaches the API as its own scope, the kept folder as `keep` and
+/// the removed one as `remove`.
+#[test]
+fn duplicates_plan_sends_each_scope_flag_as_its_scope() {
+    let (api, _) = with_copy();
+    assert_eq!(
+        planned_scope(&api, &[]),
+        serde_json::json!({ "kind": "library" })
+    );
+    assert_eq!(
+        planned_scope(&api, &["--source", "1"]),
+        serde_json::json!({ "kind": "source", "source": 1 })
+    );
+    assert_eq!(
+        planned_scope(&api, &["--folder", "/Users/demo/Downloads"]),
+        serde_json::json!({ "kind": "folder", "path": abs("/Users/demo/Downloads") })
+    );
+    let set = api
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap()
+        .items[0]
+        .id
+        .clone();
+    assert_eq!(
+        planned_scope(&api, &["--set", &set]),
+        serde_json::json!({ "kind": "sets", "ids": [set] })
+    );
+    let (exit, _, err) = fm_on(&api, &["duplicates", "plan", "--set", "name:Nothing"]);
+    assert_eq!(exit, Exit::Usage, "the set ids reach the API: {err}");
+    assert_eq!(
+        planned_scope(
+            &api,
+            &[
+                "--keep-folder",
+                "/Users/demo/Fonts",
+                "--remove-folder",
+                "/Users/demo/Downloads",
+            ]
+        ),
+        serde_json::json!({
+            "kind": "folderPair",
+            "keep": abs("/Users/demo/Fonts"),
+            "remove": abs("/Users/demo/Downloads"),
+            "otherLevels": false
+        })
+    );
+    let other = planned_scope(
+        &api,
+        &[
+            "--keep-folder",
+            "/k",
+            "--remove-folder",
+            "/r",
+            "--other-levels",
+        ],
+    );
+    assert_eq!(other["otherLevels"], true, "{other}");
+    let (_, out, _) = fm_on(&api, &["--json", "duplicates", "plan", "--hide"]);
+    assert_eq!(json(&out)["request"]["removeAs"], "hide");
+}
+
+/// E56.9 criterion 2 (review TST-2): the summary `apply` asks with names
+/// every file that stays for another reason than being the keeper, with
+/// the API's sentence, and the space the trash frees.
+#[test]
+fn duplicates_apply_summary_lists_the_skipped_files_and_the_space_freed() {
+    use fm_api::activation::{ActivateRequest, ConflictPolicy, Target};
+    let (api, _) = with_copy();
+    let (_, out, _) = fm_on(&api, &["--json", "duplicates", "plan"]);
+    let trashing: fm_api::cleanup::CleanupPlan = serde_json::from_str(&out).unwrap();
+    assert!(
+        trashing.frees > 1_000,
+        "the mock copy has a size: {}",
+        trashing.frees
+    );
+    let dir = std::env::temp_dir().join(format!("fm-cli-dup-skip-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("plan.json");
+    let path = file.to_str().unwrap();
+    fm_on(&api, &["duplicates", "plan", "--out", path]);
+    let (_, out, _) = fm_input(&api, "n\n", &["duplicates", "apply", path]);
+    let frees = format!("{:.0} KB", f64::from(trashing.frees) / 1_000.0);
+    assert!(
+        out.contains(&format!("To the trash: 1 files, frees {frees}")),
+        "{out}"
+    );
+    assert!(out.contains("Skipped: 0 files"), "{out}");
+
+    // The leaving copy is active: it stays, and the summary says why.
+    let leaving = trashing.leaving().next().unwrap();
+    api.activate(ActivateRequest {
+        target: Target::Faces {
+            faces: leaving.faces.clone(),
+        },
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::KeepExisting,
+    })
+    .unwrap();
+    let (exit, _, err) = fm_on(&api, &["duplicates", "plan", "--out", path, "--force"]);
+    assert_eq!(exit, Exit::Success, "{err}");
+    let plan: fm_api::cleanup::CleanupPlan =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let stayed: Vec<&fm_api::cleanup::CleanupFile> = plan
+        .files
+        .iter()
+        .filter(|f| f.reason == Some(fm_api::cleanup::StayReason::Active))
+        .collect();
+    assert_eq!(stayed.len(), 1, "{plan:#?}");
+    assert!(!stayed[0].sentence.is_empty());
+    let (exit, out, _) = fm_input(&api, "n\n", &["duplicates", "apply", path]);
+    assert_eq!(exit, Exit::Refused);
+    assert!(out.contains("To the trash: 0 files"), "{out}");
+    assert!(out.contains("Skipped: 1 files"), "{out}");
+    assert!(
+        out.contains(&format!("  {}: {}", stayed[0].path, stayed[0].sentence)),
+        "the skipped file with its reason: {out}"
+    );
+    let keeper = plan
+        .files
+        .iter()
+        .find(|f| f.reason == Some(fm_api::cleanup::StayReason::Keeper))
+        .unwrap();
+    assert!(
+        !out.contains(&format!("  {}: ", keeper.path)),
+        "a keeper is not skipped: {out}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
