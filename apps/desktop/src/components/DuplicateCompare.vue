@@ -549,7 +549,7 @@ function onKey(e: KeyboardEvent): void {
 .chip[aria-pressed='true'] {
   border-color: var(--fm-accent);
   background-color: var(--fm-accent);
-  color: var(--fm-on-accent, #fff);
+  color: var(--fm-on-accent);
 }
 .halves {
   display: grid;
@@ -613,7 +613,7 @@ function onKey(e: KeyboardEvent): void {
   margin: 0;
   padding-block: var(--fm-space-2);
   padding-inline: var(--fm-space-3);
-  border-inline-start: 3px solid var(--fm-danger, var(--fm-accent));
+  border-inline-start: 3px solid var(--fm-danger);
   background-color: var(--fm-surface);
 }
 .broken strong {
@@ -690,14 +690,14 @@ function onKey(e: KeyboardEvent): void {
   min-height: 44px;
   padding-inline: var(--fm-space-1);
   border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md, 6px);
+  border-radius: var(--fm-radius-md);
 }
 .glyph {
   font-size: 24px;
 }
 .glyph-name,
 .glyphs .more {
-  font-family: var(--fm-font-ui, inherit);
+  font-family: var(--fm-font-ui);
   font-size: var(--fm-text-xs);
   color: var(--fm-muted);
 }
