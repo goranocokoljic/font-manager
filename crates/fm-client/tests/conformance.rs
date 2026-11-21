@@ -92,6 +92,10 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; preview_keeper_policy, json!({ "policy": {} }));
     same!(seen, d, c; preview_keeper_policy, json!({ "scope": { "kind": "source", "source": 999 }, "policy": {} }));
     same!(seen, d, c; preview_keeper_policy, json!({ "policy": { "preferredFolders": ["relative"] } }));
+    same!(seen, d, c; list_folder_pairs, json!({}));
+    same!(seen, d, c; list_folder_pairs, json!({ "scope": { "kind": "source", "source": 999 } }));
+    same!(seen, d, c; list_folder_pair_files, json!({ "a": "/Users", "b": "/Library" }));
+    same!(seen, d, c; list_folder_pair_files, json!({ "a": "/Users", "b": "/Users" }));
     same!(seen, d, c; keep_copy, json!({ "keep": "/a.ttf", "trash": [], "dryRun": true }));
     same!(seen, d, c; list_resolutions);
     same!(seen, d, c; undo_resolution, json!(1));

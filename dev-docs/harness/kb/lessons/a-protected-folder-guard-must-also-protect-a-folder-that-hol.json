@@ -1,0 +1,22 @@
+{
+  "id": "a-protected-folder-guard-must-also-protect-a-folder-that-hol",
+  "title": "A protected-folder guard must also protect a folder that holds a protected root",
+  "category": "user-files",
+  "rule": "When a folder (a source root, the library folder, a system font folder) can be kept but never removed as a whole, check the side that would be removed for three things: it is the protected folder, it lies inside one, or it holds one. Sources can nest, because add_source accepts a parent of an existing source, so a folder below one source root can be another root. Anything that rolls folders up to their parents (climbing a contained pair, summing a tree) must stop at a root and never report a parent that hides it. Test it with a root nested inside another source: one test where the parent is the removed side and is refused, and one where the nested root is the kept side and is allowed.",
+  "rationale": "E56.6 (#666): the protection matched roots only by equality and the climb went past any folder under a root. A library folder nested in a watched source climbed to its parent, lost its protected mark, and the folder-pair plan would have removed its files.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    666
+  ],
+  "file_globs": [
+    "crates/fm-core/src/folder_pairs.rs",
+    "crates/fm-core/src/folder_pairs/**",
+    "crates/fm-core/src/duplicate_sets.rs",
+    "crates/fm-core/src/resolve/**",
+    "crates/fm-api/src/mock/**"
+  ],
+  "first_seen": "2026-11-21T02:09:52.933Z",
+  "last_seen": "2026-11-21T02:09:52.933Z"
+}

@@ -59,6 +59,10 @@ import type {
   CopyComparison,
   KeeperPolicyPreview,
   PreviewKeeperPolicyRequest,
+  FolderPair,
+  FolderPairFile,
+  ListFolderPairFilesRequest,
+  ListFolderPairsRequest,
   Event,
   FaceDetail,
   FaceId,
@@ -373,6 +377,10 @@ export interface FmClient {
   compareCopies(req: CompareCopiesRequest): Promise<CopyComparison>;
   /** What a keeper policy would do over a scope, without saving it (E56.4). */
   previewKeeperPolicy(req: PreviewKeeperPolicyRequest): Promise<KeeperPolicyPreview>;
+  /** One page of the folder pairs that share copies, most freed bytes first (E56.6). */
+  listFolderPairs(req: ListFolderPairsRequest): Promise<Paged<FolderPair>>;
+  /** One page of the font files of two folders, each with its best copy on the other side (E56.6). */
+  listFolderPairFiles(req: ListFolderPairFilesRequest): Promise<Paged<FolderPairFile>>;
   /** "Keep this one": moves the other copies to the OS trash; `dryRun` only plans. */
   keepCopy(req: KeepCopyRequest): Promise<Resolution>;
   /** The "Keep this one" actions, newest first (the Problems history). */
@@ -581,6 +589,8 @@ export const tauriClient: FmClient = {
   listDuplicateSets: (req) => invoke<Paged<DuplicateSet>>('list_duplicate_sets', { req }),
   compareCopies: (req) => invoke<CopyComparison>('compare_copies', { req }),
   previewKeeperPolicy: (req) => invoke<KeeperPolicyPreview>('preview_keeper_policy', { req }),
+  listFolderPairs: (req) => invoke<Paged<FolderPair>>('list_folder_pairs', { req }),
+  listFolderPairFiles: (req) => invoke<Paged<FolderPairFile>>('list_folder_pair_files', { req }),
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),

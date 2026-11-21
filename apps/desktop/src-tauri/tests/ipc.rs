@@ -692,6 +692,45 @@ fn a_keeper_policy_preview_round_trips() {
 }
 
 #[test]
+fn folder_pairs_and_their_files_round_trip() {
+    let mock = MockApi::new();
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";
+    mock.add_copy(FaceId(3), copy).unwrap();
+    let (_app, webview) = app_on(setup(mock_builder(), Arc::new(mock))).unwrap();
+    let call = |cmd: &str, args: serde_json::Value| -> serde_json::Value {
+        send(&webview, cmd, args)
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let none = call("list_folder_pairs", serde_json::json!({ "req": {} }));
+    assert_eq!(none["total"], 0, "one shared file is below the threshold");
+    let pairs = call(
+        "list_folder_pairs",
+        serde_json::json!({ "req": { "minShared": 1 } }),
+    );
+    assert_eq!(pairs["total"], 1);
+    let pair = &pairs["items"][0];
+    let downloads = if pair["a"]["path"] == "/Users/demo/Downloads" {
+        "a"
+    } else {
+        "b"
+    };
+    assert_eq!(pair[downloads]["contained"], true);
+    assert_eq!(pair[downloads]["shared"]["identical"], 1);
+    let files = call(
+        "list_folder_pair_files",
+        serde_json::json!({ "req": {
+            "a": pair["a"]["path"], "b": pair["b"]["path"], "side": downloads,
+        } }),
+    );
+    assert_eq!(files["total"], 1);
+    assert_eq!(files["items"][0]["path"], copy);
+    assert_eq!(files["items"][0]["level"], "identical");
+}
+
+#[test]
 fn keep_this_one_round_trips_dry_run_keep_history_and_undo() {
     let mock = MockApi::new();
     let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";

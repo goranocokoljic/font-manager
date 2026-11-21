@@ -46,13 +46,15 @@ use crate::library::{
     AddSourceRequest, AppInfo, CompareCopiesRequest, ComparedCopy, CopyComparison, CopyDifferences,
     DragFiles, DragFilesRequest, DuplicateCopy, DuplicateGroup, DuplicateKind, DuplicateScope,
     DuplicateSet, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary,
-    FileDragSupport, FontMatch, FontMatches, FontNames, FontSwitchPayload, GlyphBlock, GlyphBounds,
-    GlyphChange, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
-    ImportMode, KeepCopyRequest, KeeperPolicyPreview, LicenseInfo, LicensePermissions,
-    LicensePermissionsSource, LicenseType, ListDuplicateSetsRequest, ListFamiliesRequest,
-    OpenLicense, Platform, PreviewKeeperPolicyRequest, Problem, ProblemKind, Resolution,
-    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
-    SidecarConflict, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    FileDragSupport, FolderPair, FolderPairFile, FontMatch, FontMatches, FontNames,
+    FontSwitchPayload, GlyphBlock, GlyphBounds, GlyphChange, GlyphDetail, GlyphInfo, GlyphPage,
+    GlyphRequest, GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, KeeperPolicyPreview,
+    LicenseInfo, LicensePermissions, LicensePermissionsSource, LicenseType,
+    ListDuplicateSetsRequest, ListFamiliesRequest, ListFolderPairFilesRequest,
+    ListFolderPairsRequest, OpenLicense, Platform, PreviewKeeperPolicyRequest, Problem,
+    ProblemKind, ProtectedFolder, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest,
+    ScanRequest, SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
+    TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     COLLECTION_COLORS, Collection, CollectionDropCount, CollectionFacesRequest,
@@ -284,6 +286,7 @@ fn allowance(target: &Supports) -> usize {
 }
 
 mod duplicate_sets;
+mod folder_pairs;
 
 /// The largest page a list returns.
 const MAX_PAGE: u32 = 500;
@@ -1743,6 +1746,23 @@ impl MockApi {
         }
         Ok(files)
     }
+
+    /// The sources' folders, as fm-core reads them (E56.6); the mock has no
+    /// system font folders of its own beyond its system source.
+    fn folder_roots(&self) -> Vec<folder_pairs::Root> {
+        self.state()
+            .sources
+            .iter()
+            .map(|s| folder_pairs::Root {
+                path: std::path::PathBuf::from(&s.path),
+                kind: match s.kind {
+                    SourceKind::Watched => ProtectedFolder::SourceRoot,
+                    SourceKind::System => ProtectedFolder::SystemFolder,
+                    SourceKind::LibraryFolder => ProtectedFolder::LibraryFolder,
+                },
+            })
+            .collect()
+    }
 }
 
 impl LibraryService for MockApi {
@@ -2107,6 +2127,19 @@ impl LibraryService for MockApi {
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
         let files = self.duplicate_set_files(&req.scope)?;
         Ok(duplicate_sets::list(&files, &req))
+    }
+
+    fn list_folder_pairs(&self, req: ListFolderPairsRequest) -> ApiResult<Paged<FolderPair>> {
+        let files = self.duplicate_set_files(&req.scope)?;
+        Ok(folder_pairs::list(&files, &self.folder_roots(), &req))
+    }
+
+    fn list_folder_pair_files(
+        &self,
+        req: ListFolderPairFilesRequest,
+    ) -> ApiResult<Paged<FolderPairFile>> {
+        let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        folder_pairs::list_files(&files, &self.folder_roots(), &req)
     }
 
     /// The mock has no facts of the copies (no index), so it answers as the

@@ -26,9 +26,10 @@ use fm_api::layout::{
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, CompareCopiesRequest, CopyComparison, DragFiles, DragFilesRequest,
-    DuplicateGroup, DuplicateSet, FaceDetail, Family, FamilySummary, FontSwitchPayload,
-    GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest, KeepCopyRequest,
-    KeeperPolicyPreview, LibraryService, ListDuplicateSetsRequest, ListFamiliesRequest,
+    DuplicateGroup, DuplicateSet, FaceDetail, Family, FamilySummary, FolderPair, FolderPairFile,
+    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
+    KeepCopyRequest, KeeperPolicyPreview, LibraryService, ListDuplicateSetsRequest,
+    ListFamiliesRequest, ListFolderPairFilesRequest, ListFolderPairsRequest,
     PreviewKeeperPolicyRequest, Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest,
     SetSourcePausedRequest, SidecarConflict, Source,
 };
@@ -967,6 +968,25 @@ async fn preview_keeper_policy(
     call(&state, move |api| api.preview_keeper_policy(req)).await
 }
 
+/// One page of the folder pairs that share copies (E56.6).
+#[tauri::command]
+async fn list_folder_pairs(
+    state: State<'_, AppState>,
+    req: ListFolderPairsRequest,
+) -> ApiResult<Paged<FolderPair>> {
+    call(&state, move |api| api.list_folder_pairs(req)).await
+}
+
+/// One page of the font files of two folders, each with its best copy on
+/// the other side (E56.6).
+#[tauri::command]
+async fn list_folder_pair_files(
+    state: State<'_, AppState>,
+    req: ListFolderPairFilesRequest,
+) -> ApiResult<Paged<FolderPairFile>> {
+    call(&state, move |api| api.list_folder_pair_files(req)).await
+}
+
 /// "Keep this one": moves the other copies to the OS trash, or with
 /// `dryRun` only says what would move.
 #[tauri::command]
@@ -1755,6 +1775,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_duplicate_sets,
             compare_copies,
             preview_keeper_policy,
+            list_folder_pairs,
+            list_folder_pair_files,
             keep_copy,
             list_resolutions,
             undo_resolution,

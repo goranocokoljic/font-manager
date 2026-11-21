@@ -96,6 +96,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("list_duplicate_sets", "{}".into()),
         ("compare_copies", r#"{"a":1,"b":2}"#.into()),
         ("preview_keeper_policy", r#"{"policy":{}}"#.into()),
+        ("list_folder_pairs", "{}".into()),
+        (
+            "list_folder_pair_files",
+            r#"{"a":"/Users","b":"/Library"}"#.into(),
+        ),
         (
             "keep_copy",
             r#"{"keep":"/a.ttf","trash":[],"dryRun":true}"#.into(),

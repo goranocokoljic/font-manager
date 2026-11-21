@@ -2004,6 +2004,75 @@ export type Filters = {
 	activatedWithinDays?: number | null,
 };
 
+/**
+ *  Two folders that share copies (E56.6). `a` is the side whose path sorts
+ *  first.
+ */
+export type FolderPair = {
+	/**  One side. */
+	a: FolderPairSide,
+	/**  The other side. */
+	b: FolderPairSide,
+	/**
+	 *  The bytes that removing the smaller side's identical copies would
+	 *  free; pairs are ordered by it, most first.
+	 */
+	frees: number,
+};
+
+/**  One font file of a folder pair, with its best copy on the other side. */
+export type FolderPairFile = {
+	/**  Absolute file path. */
+	path: string,
+	/**  The side it is on. */
+	side: PairSide,
+	/**  Size in bytes. */
+	size: number,
+	/**
+	 *  The level of its best copy on the other side; `None` when it has
+	 *  none (only here).
+	 */
+	level: DuplicateLevel | null,
+	/**  That copy's path, the first by path at that level. */
+	copy: string | null,
+};
+
+/**
+ *  One side of a folder pair: a folder with its subfolders, without the
+ *  other side when one holds the other.
+ */
+export type FolderPairSide = {
+	/**  Absolute folder path. */
+	path: string,
+	/**  The font files the library shows in it. */
+	fontFiles: number,
+	/**  Their size in bytes (saturating). */
+	size: number,
+	/**  Its font files with a copy on the other side, by level. */
+	shared: SharedCounts,
+	/**
+	 *  The size in bytes of its font files with a copy on the other side
+	 *  (saturating).
+	 */
+	sharedSize: number,
+	/**
+	 *  The size in bytes of its font files with an identical copy on the
+	 *  other side (saturating): what removing them would free.
+	 */
+	identicalSize: number,
+	/**  Its font files with no copy on the other side. */
+	onlyHere: number,
+	/**
+	 *  Files in it the library does not show as fonts (not fonts, or not
+	 *  read); counted, never touched. The mocks have no files: 0.
+	 */
+	otherFiles: number,
+	/**  Every font file has an identical copy on the other side. */
+	contained: boolean,
+	/**  Set when the folder can be the kept side, never the removed side. */
+	protected: ProtectedFolder | null,
+};
+
 /**  The file format of a font. */
 export type FontFormat = 
 /**  TrueType outlines (`.ttf`). */
@@ -3088,6 +3157,45 @@ export type ListFamiliesRequest = {
 	collection?: CollectionId | null,
 };
 
+/**
+ *  One page of the font files of two folders
+ *  ([`LibraryService::list_folder_pair_files`]).
+ */
+export type ListFolderPairFilesRequest = {
+	/**  One folder, absolute. */
+	a: string,
+	/**  The other folder, absolute. */
+	b: string,
+	/**  Only the files of this side; both sides when `None`. */
+	side?: PairSide | null,
+	/**
+	 *  Only the files with no copy on the other side: what treating the
+	 *  folders as the same would lose.
+	 */
+	onlyHere?: boolean,
+	/**  The window into the files. */
+	page?: Page,
+};
+
+/**
+ *  One page of the folder pairs that share copies
+ *  ([`LibraryService::list_folder_pairs`]).
+ */
+export type ListFolderPairsRequest = {
+	/**
+	 *  The folders to look at; the whole library by default. A pair is
+	 *  listed when one of its sides is in the scope.
+	 */
+	scope?: DuplicateScope,
+	/**
+	 *  The fewest shared font files a pair needs to be listed;
+	 *  [`FOLDER_PAIR_MIN_SHARED`] when `None`. A value of 0 counts as 1.
+	 */
+	minShared?: number | null,
+	/**  The window into the pairs. */
+	page?: Page,
+};
+
 /**  Import a set file (E28.2). */
 export type LoadSetFileRequest = {
 	/**  Absolute path of the set file. */
@@ -3377,6 +3485,13 @@ export type Paged<T> = {
 	total: number,
 };
 
+/**  A side of a folder pair. */
+export type PairSide = 
+/**  The side named `a`. */
+"a" | 
+/**  The side named `b`. */
+"b";
+
 /**  Faces that pair well with this one (E23.4). */
 export type PairingRequest = {
 	/**
@@ -3585,6 +3700,18 @@ export type ProjectSet = {
 	/**  The faces. */
 	faces: FaceId[],
 };
+
+/**
+ *  Why a folder can be the kept side of a pair and never the removed side
+ *  as a whole (E56.6).
+ */
+export type ProtectedFolder = 
+/**  The folder is the root of a source the user added. */
+"sourceRoot" | 
+/**  The folder is, or is inside, a system font folder (rule 4). */
+"systemFolder" | 
+/**  The folder is the library folder. */
+"libraryFolder";
 
 /**
  *  The Quick Collection (E13.3): one list of faces the user gathers while
@@ -4199,6 +4326,19 @@ export type SetupStep =
  *  the automatic check is off and the step was never answered or skipped.
  */
 "updates";
+
+/**
+ *  Font files of one side that have a copy on the other side, by the best
+ *  level of that copy.
+ */
+export type SharedCounts = {
+	/**  Files with an identical copy (same hash). */
+	identical: number,
+	/**  Files with a copy of the same PostScript name and version. */
+	sameVersion: number,
+	/**  Files with a copy of the same PostScript name in another version. */
+	otherVersion: number,
+};
 
 /**  The shortlist for a brief. */
 export type Shortlist = {
