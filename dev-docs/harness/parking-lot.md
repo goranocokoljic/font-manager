@@ -582,3 +582,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E56.14 #674] apps/desktop/src/views/DuplicatesView.vue:81 — the `myLanguages`/`languagePresets` computeds are repeated in DuplicatesRules.vue:27; identical today, could drift.
 - [E56.14 #674] apps/desktop/src/stores/settings.ts:96 — settings have no change Event, so a keeper policy changed by the CLI or MCP while the rules page is open is not reloaded and Save restores the old one.
 - [E56.14 #674] apps/desktop/src/components/DuplicatesRules.vue:205 — removing a language chip (or a format or folder row) removes the focused button and focus falls to body; the chip pattern came from DuplicatesView.vue.
+- [E56.15 #675] apps/desktop/src/stores/problems.ts:140 — the store still loads `listDuplicates`/`listResolutions` and keeps `planKeep`/`confirmPlan` with no UI caller left after ProblemsView lost its duplicates section.
+- [E56.15 #675] apps/desktop/src/components/DuplicatesNotice.vue:19 — a near copy of UpdateNotice.vue:18-30 (giveBack/dismiss and card styles); same behavior today, could drift.
+- [E56.15 #675] apps/desktop/src/api/mock.ts — after a failed undo the mock marks the session `undone`, where fm-core keeps it not undone (crates/fm-core/src/resolve/cleanup.rs:645).
+- [E56.15 #675] apps/desktop/src/api/mock.ts — the mock's undo acts only on `trashed` files, so "Try again" on a `failed` History row does nothing in browser mode.

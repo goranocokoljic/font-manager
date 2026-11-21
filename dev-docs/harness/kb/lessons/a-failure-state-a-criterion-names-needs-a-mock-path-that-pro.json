@@ -1,0 +1,20 @@
+{
+  "id": "a-failure-state-a-criterion-names-needs-a-mock-path-that-pro",
+  "title": "A failure state a criterion names needs a mock path that produces it",
+  "category": "testing",
+  "rule": "When an acceptance criterion asks the UI to show a failure (a file that cannot come back, a scan error, a refused activation), make the MockApi able to produce that state on demand (an option and a `?mock…=` URL parameter) and add a Playwright check that reaches it and asserts the visible text. A mock that only ever succeeds leaves the failure row untested, and it can regress to a bare or wrong label with every test green.",
+  "rationale": "E56.15 (#675): History's 'Cannot come back — <reason>' row (criterion 3) had no test because the TypeScript mock's undo always restored every file.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    675
+  ],
+  "file_globs": [
+    "apps/desktop/src/api/mock.ts",
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/e2e/**/*.spec.ts"
+  ],
+  "first_seen": "2026-11-21T21:34:10.315Z",
+  "last_seen": "2026-11-21T21:34:10.315Z"
+}
