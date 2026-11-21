@@ -323,6 +323,62 @@ impl CleanupPlan {
             .iter()
             .filter(|f| f.action != CleanupAction::Stays)
     }
+
+    /// What applying the plan would do, counted (E56.9): the CLI asks with
+    /// it and MCP answers it, so the counting rule is one.
+    pub fn summary(&self) -> CleanupSummary {
+        let mut s = CleanupSummary {
+            sets: self.sets,
+            frees: self.frees,
+            ..CleanupSummary::default()
+        };
+        for f in &self.files {
+            match (f.action, f.reason) {
+                (CleanupAction::Trash, _) => s.trash = s.trash.saturating_add(1),
+                (CleanupAction::Hide, _) => s.hide = s.hide.saturating_add(1),
+                (CleanupAction::Stays, None | Some(StayReason::Keeper)) => {
+                    s.kept = s.kept.saturating_add(1);
+                }
+                (CleanupAction::Stays, Some(reason)) => {
+                    match s.skipped.iter_mut().find(|c| c.reason == reason) {
+                        Some(c) => c.files = c.files.saturating_add(1),
+                        None => s.skipped.push(SkippedCount { reason, files: 1 }),
+                    }
+                }
+            }
+        }
+        s.skipped.sort_by_key(|c| std::cmp::Reverse(c.files));
+        s
+    }
+}
+
+/// A plan counted ([`CleanupPlan::summary`]).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupSummary {
+    /// The sets planned.
+    pub sets: u32,
+    /// Files that go to the OS trash.
+    pub trash: u32,
+    /// Files that are hidden; they stay where they are.
+    pub hide: u32,
+    /// Files kept as their set's keeper.
+    pub kept: u32,
+    /// Files that stay for another reason than being the keeper, by
+    /// reason, most files first.
+    pub skipped: Vec<SkippedCount>,
+    /// The bytes the trashed files free (saturating).
+    pub frees: u32,
+}
+
+/// How many files of a plan stay for one reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedCount {
+    /// The reason.
+    pub reason: StayReason,
+    /// The files.
+    pub files: u32,
 }
 
 /// Apply a plan ([`crate::LibraryService::apply_cleanup`]).
@@ -553,6 +609,57 @@ mod tests {
         plan.files.pop();
         plan.version = 2;
         assert!(plan.check().is_err());
+    }
+
+    #[test]
+    fn a_summary_counts_each_action_and_each_reason_to_stay() {
+        let file = |path: &str, action: CleanupAction, reason: Option<StayReason>| CleanupFile {
+            path: path.into(),
+            size: 10,
+            hash: "00".into(),
+            faces: vec![FaceId(1)],
+            set: "name:A".into(),
+            level: DuplicateLevel::OtherVersion,
+            action,
+            reason,
+            kept: Some("/k.ttf".into()),
+            also_kept: Vec::new(),
+            sentence: String::new(),
+            activation: None,
+        };
+        let plan = CleanupPlan {
+            version: CLEANUP_PLAN_VERSION,
+            planned_at: "2026-11-21T00:00:00Z".into(),
+            request: PlanCleanupRequest::default(),
+            sets: 2,
+            files: vec![
+                file("/k.ttf", CleanupAction::Stays, Some(StayReason::Keeper)),
+                file("/a.ttf", CleanupAction::Trash, None),
+                file("/b.ttf", CleanupAction::Trash, None),
+                file("/c.ttf", CleanupAction::Hide, None),
+                file("/d.ttf", CleanupAction::Stays, Some(StayReason::Active)),
+                file("/e.ttf", CleanupAction::Stays, Some(StayReason::System)),
+                file("/f.ttf", CleanupAction::Stays, Some(StayReason::System)),
+            ],
+            conflicts: Vec::new(),
+            frees: 20,
+            my_languages: MyLanguagesStatus::NotSet,
+        };
+        let s = plan.summary();
+        assert_eq!((s.sets, s.trash, s.hide, s.kept, s.frees), (2, 2, 1, 1, 20));
+        assert_eq!(
+            s.skipped,
+            [
+                SkippedCount {
+                    reason: StayReason::System,
+                    files: 2
+                },
+                SkippedCount {
+                    reason: StayReason::Active,
+                    files: 1
+                }
+            ]
+        );
     }
 
     #[test]
