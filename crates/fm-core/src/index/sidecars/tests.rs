@@ -1596,7 +1596,7 @@ fn a_declared_license_is_mirrored_to_the_sidecar_and_read_back_by_a_teammate() {
     let mut m = Machine::new(tmp.path());
     m.declare("Inter-Bold", &desktop_license(tmp.path()));
     let on_disk = m.sidecar("Inter");
-    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    assert_eq!(on_disk.version, crate::sidecar::LICENSE_VERSION);
     assert_eq!(
         on_disk.family_license(),
         Some(&crate::sidecar::License {
@@ -1651,7 +1651,7 @@ fn a_license_and_notes_share_the_family_entry_and_keep_their_own_history() {
     let on_disk = m.sidecar("Inter");
     assert_eq!(on_disk.family_notes(), None);
     assert!(on_disk.family_license().is_some());
-    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    assert_eq!(on_disk.version, crate::sidecar::LICENSE_VERSION);
 }
 
 #[test]

@@ -752,6 +752,65 @@ ALTER TABLE resolution_move ADD COLUMN size INTEGER;
 ALTER TABLE resolution_merge ADD COLUMN set_id TEXT;
 ";
 
+/// Two outcomes that touch no file (E56.8, ADR 0027, `index/hidden.rs`).
+///
+/// - `hidden_copy`: a copy hidden from the library, known by its path and
+///   the hash of its file. The triggers keep `font_file.gone = 1` for the
+///   file at that path while it has that hash, whatever writes the row (a
+///   scan, a rescan, a rebuild), so every library, search and activation
+///   query, which already leaves gone files out, leaves it out too. When
+///   another file is at the path (another hash), the row is dropped: that
+///   file is shown, and its faces are marked for their sidecar. A rebuild
+///   clears the hash (`NULL`), which drops nothing. `resolution_id` is the
+///   session that hid it, `NULL` for one read from a sidecar.
+/// - `resolution_move.hidden`: the file of a session was hidden, not
+///   trashed; `status = 'trashed'` then means hidden.
+/// - `duplicate_decision`: a set answered "not duplicates" or "keep both",
+///   for exactly its files: `hashes` is their hashes, hex, sorted, joined
+///   by commas. The set is left out while its files have those hashes.
+const V29: &str = r"
+CREATE TABLE hidden_copy (
+    path           TEXT    NOT NULL PRIMARY KEY,
+    hash           BLOB    NOT NULL,
+    at             TEXT    NOT NULL,
+    resolution_id  INTEGER REFERENCES resolution (id) ON DELETE SET NULL,
+    set_id         TEXT,
+    kept           TEXT
+);
+ALTER TABLE resolution_move ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1));
+CREATE TABLE duplicate_decision (
+    id      INTEGER PRIMARY KEY,
+    set_id  TEXT NOT NULL,
+    hashes  TEXT NOT NULL,
+    answer  TEXT NOT NULL CHECK (answer IN ('notDuplicates', 'keepBoth')),
+    at      TEXT NOT NULL,
+    UNIQUE (set_id, hashes)
+);
+CREATE TRIGGER hidden_copy_stays_hidden AFTER UPDATE OF gone, hash ON font_file
+WHEN new.gone = 0 AND new.hash IS NOT NULL
+ AND EXISTS (SELECT 1 FROM hidden_copy WHERE path = new.path AND hash = new.hash)
+BEGIN
+    UPDATE font_file SET gone = 1 WHERE id = new.id;
+END;
+CREATE TRIGGER hidden_copy_inserted_hidden AFTER INSERT ON font_file
+WHEN new.gone = 0 AND new.hash IS NOT NULL
+ AND EXISTS (SELECT 1 FROM hidden_copy WHERE path = new.path AND hash = new.hash)
+BEGIN
+    UPDATE font_file SET gone = 1 WHERE id = new.id;
+END;
+CREATE TRIGGER hidden_copy_other_file AFTER UPDATE OF hash ON font_file
+WHEN new.hash IS NOT NULL
+ AND EXISTS (SELECT 1 FROM hidden_copy WHERE path = new.path AND hash <> new.hash)
+BEGIN
+    DELETE FROM hidden_copy WHERE path = new.path AND hash <> new.hash;
+    INSERT INTO sidecar_dirty (face_id) SELECT id FROM face
+    WHERE file_id = new.id AND id NOT IN (SELECT face_id FROM sidecar_dirty);
+END;
+CREATE TRIGGER hidden_copy_hide AFTER INSERT ON hidden_copy BEGIN
+    UPDATE font_file SET gone = 1 WHERE path = new.path AND hash = new.hash AND gone = 0;
+END;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -759,7 +818,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
-    V22, V23, V24, V25, V26, V27, V28,
+    V22, V23, V24, V25, V26, V27, V28, V29,
 ];
 
 /// The schema version this build writes.
@@ -777,6 +836,7 @@ pub(crate) const TABLES: &[&str] = &[
     "collection_face",
     "comparison",
     "comparison_face",
+    "duplicate_decision",
     "face",
     "face_fingerprint",
     "face_fts",
@@ -791,6 +851,7 @@ pub(crate) const TABLES: &[&str] = &[
     "glyph_descriptor",
     "glyph_trait_stamp",
     "glyph_traits",
+    "hidden_copy",
     "index_meta",
     "last_session",
     "project_set",

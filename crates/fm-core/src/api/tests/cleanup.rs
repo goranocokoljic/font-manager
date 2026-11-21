@@ -662,16 +662,8 @@ fn the_library_change_is_one_event_per_batch_not_per_file() {
     );
 }
 
-#[test]
-fn a_hidden_copy_is_planned_but_not_applied_yet() {
-    let dir = TempDir::new("api-cleanup-hide-trash");
-    let (lib, _) = library(
-        "api-cleanup-hide",
-        1,
-        Arc::new(MockTrash::new(dir.path().join("trash"))),
-    );
-    let plan = lib
-        .api
+fn hide_plan(lib: &Lib) -> CleanupPlan {
+    lib.api
         .plan_cleanup(fm_api::cleanup::PlanCleanupRequest {
             scope: CleanupScope::Folder {
                 path: lib.root.join("zcopy").display().to_string(),
@@ -679,18 +671,309 @@ fn a_hidden_copy_is_planned_but_not_applied_yet() {
             remove_as: RemoveAs::Hide,
             ..Default::default()
         })
-        .expect("plan");
+        .expect("plan")
+}
+
+/// The faces a search for `query` finds.
+fn found(lib: &Lib, query: &str) -> Vec<FaceId> {
+    lib.api
+        .search(SearchRequest {
+            query: query.into(),
+            ..SearchRequest::default()
+        })
+        .expect("search")
+        .families
+        .into_iter()
+        .flat_map(|h| h.faces)
+        .collect()
+}
+
+fn sets_total(lib: &Lib) -> u32 {
+    lib.api
+        .list_duplicate_sets(fm_api::library::ListDuplicateSetsRequest::default())
+        .expect("sets")
+        .total
+}
+
+/// E56.8: a hidden copy stays where it is and leaves the library, search
+/// and the duplicate sets, across a rescan; it carries its metadata to the
+/// kept copy as a move does; showing it one by one or by session takes the
+/// merge back as an undo does.
+#[test]
+fn a_hidden_copy_leaves_the_library_and_shows_again_with_its_merge_taken_back() {
+    use fm_api::OrganizationService;
+    use fm_api::organization::UserMetaUpdate;
+    let dir = TempDir::new("api-cleanup-hide-trash");
+    let (lib, made) = library(
+        "api-cleanup-hide",
+        1,
+        Arc::new(MockTrash::new(dir.path().join("trash"))),
+    );
+    let plan = hide_plan(&lib);
     assert!(plan.leaving().all(|f| f.action == CleanupAction::Hide));
     assert_eq!(plan.frees, 0, "hiding frees no space");
+    let face_of = |p: &Path| {
+        plan.files
+            .iter()
+            .find(|f| Path::new(&f.path) == p)
+            .expect("row")
+            .faces[0]
+    };
+    let copy = face_of(&made[0]);
+    let kept = face_of(&lib.root.join(COPIED[0]));
+    lib.api
+        .update_user_meta(UserMetaUpdate {
+            faces: vec![copy],
+            favorite: Some(true),
+            rating: None,
+            notes: None,
+        })
+        .expect("favorite on the copy");
+    assert!(found(&lib, "bebas").contains(&copy));
+    assert_eq!(sets_total(&lib), 3);
+
+    let (_, events) = apply(
+        &lib,
+        ApplyCleanupRequest {
+            plan: hide_plan(&lib),
+            name: Some("Hide the copies".into()),
+            choices: Vec::new(),
+        },
+    );
+    let s = session(&lib, &events);
+    assert_eq!((s.hidden, s.trashed, s.frees), (3, 0, 0), "{s:#?}");
+    assert!(
+        s.files.iter().all(|f| f.removed_as == RemoveAs::Hide),
+        "{s:#?}"
+    );
+    assert!(
+        made.iter().all(|p| p.is_file()),
+        "a hidden file stays where it is"
+    );
+    assert!(!found(&lib, "bebas").contains(&copy), "it leaves search");
+    assert!(found(&lib, "bebas").contains(&kept));
+    assert_eq!(sets_total(&lib), 0, "its sets are gone with it");
+    assert!(
+        lib.api.get_face(kept).expect("kept").favorite,
+        "the merge ran"
+    );
+    let hidden = lib.api.list_hidden_copies().expect("hidden");
+    assert_eq!(hidden.len(), 3, "{hidden:#?}");
+    assert!(
+        hidden
+            .iter()
+            .all(|h| h.session == Some(s.id) && h.in_effect)
+    );
+
+    // A scan finds the files again and leaves them hidden.
+    lib.scan(None, false);
+    assert!(
+        !found(&lib, "bebas").contains(&copy),
+        "hidden across a scan"
+    );
+    assert_eq!(sets_total(&lib), 0);
+
+    // Shown one by one: the merge of its set is taken back.
+    let shown = lib
+        .api
+        .show_hidden_copies(fm_api::cleanup::ShowHiddenRequest {
+            paths: vec![made[0].display().to_string()],
+        })
+        .expect("show");
+    assert_eq!(shown.len(), 1);
+    assert!(found(&lib, "bebas").contains(&copy), "shown again");
+    assert!(
+        !lib.api.get_face(kept).expect("kept").favorite,
+        "merge taken back"
+    );
+    assert!(
+        lib.api.get_face(copy).expect("copy").favorite,
+        "the copy kept its own"
+    );
+    assert_eq!(sets_total(&lib), 1);
+    assert_eq!(lib.api.list_hidden_copies().expect("hidden").len(), 2);
     let err = lib
         .api
-        .apply_cleanup(ApplyCleanupRequest {
+        .show_hidden_copies(fm_api::cleanup::ShowHiddenRequest {
+            paths: vec![made[0].display().to_string()],
+        })
+        .unwrap_err();
+    assert_eq!(
+        err.code,
+        ErrorCode::InvalidRequest,
+        "it is not hidden any more"
+    );
+
+    // The rest by session.
+    let s = lib
+        .api
+        .undo_cleanup_session(UndoCleanupRequest {
+            session: s.id,
+            paths: Vec::new(),
+        })
+        .expect("undo");
+    assert!(s.undone, "{s:#?}");
+    assert_eq!(s.hidden, 0);
+    assert!(lib.api.list_hidden_copies().expect("hidden").is_empty());
+    assert_eq!(sets_total(&lib), 3);
+}
+
+/// E56.8: a copy activated after the plan is refused with the message of a
+/// move (rule 3), and a different file at a hidden path is shown again.
+#[test]
+fn an_active_copy_is_not_hidden_and_a_changed_file_is_shown_again() {
+    let dir = TempDir::new("api-cleanup-hide-active-trash");
+    let (lib, made) = library(
+        "api-cleanup-hide-active",
+        1,
+        Arc::new(MockTrash::new(dir.path().join("trash"))),
+    );
+    let plan = hide_plan(&lib);
+    let face_of = |p: &Path| {
+        plan.files
+            .iter()
+            .find(|f| Path::new(&f.path) == p)
+            .expect("row")
+            .faces[0]
+    };
+    let active = face_of(&made[1]);
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces {
+                faces: vec![active],
+            },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::KeepExisting,
+        })
+        .expect("activate");
+    let (_, events) = apply(
+        &lib,
+        ApplyCleanupRequest {
             plan,
             name: None,
             choices: Vec::new(),
+        },
+    );
+    let s = session(&lib, &events);
+    let row = s
+        .files
+        .iter()
+        .find(|f| Path::new(&f.path) == made[1])
+        .expect("row");
+    assert_eq!(row.status, TrashMoveStatus::Skipped);
+    assert_eq!(
+        row.message.as_deref(),
+        Some(crate::resolve::ACTIVE_COPY),
+        "the same message as a move"
+    );
+    assert_eq!(status(&s, &made[0]), TrashMoveStatus::Trashed);
+    let hidden = lib.api.list_hidden_copies().expect("hidden");
+    assert_eq!(hidden.len(), 2, "{hidden:#?}");
+
+    // Another file at a hidden path: it is shown, and no longer hidden.
+    let other = lib.root.join(COPIED[1]);
+    std::fs::copy(&other, &made[0]).expect("another file at the path");
+    lib.scan(None, true);
+    let hidden = lib.api.list_hidden_copies().expect("hidden");
+    assert!(
+        hidden.iter().all(|h| Path::new(&h.path) != made[0]),
+        "{hidden:#?}"
+    );
+    let files: Vec<String> = lib
+        .api
+        .list_duplicate_sets(fm_api::library::ListDuplicateSetsRequest::default())
+        .expect("sets")
+        .items
+        .into_iter()
+        .flat_map(|s| s.copies.into_iter().map(|c| c.path))
+        .collect();
+    assert!(
+        files.contains(&made[0].display().to_string()),
+        "the new file is in the library: {files:#?}"
+    );
+}
+
+/// E56.8: a set answered "keep both" is neither listed nor counted nor
+/// planned, and comes back when a new copy joins it; the answer can be
+/// taken back.
+#[test]
+fn a_set_answered_keep_both_is_left_out_until_a_new_copy_joins_it() {
+    use fm_api::cleanup::{DecideSetRequest, DuplicateAnswer, TakeBackDecisionRequest};
+    let dir = TempDir::new("api-cleanup-decide-trash");
+    let (lib, _) = library(
+        "api-cleanup-decide",
+        1,
+        Arc::new(MockTrash::new(dir.path().join("trash"))),
+    );
+    let sets = lib
+        .api
+        .list_duplicate_sets(fm_api::library::ListDuplicateSetsRequest::default())
+        .expect("sets")
+        .items;
+    let bebas = sets
+        .iter()
+        .find(|s| s.copies.iter().any(|c| c.path.contains("BebasNeue")))
+        .expect("the Bebas set")
+        .id
+        .clone();
+    let decision = lib
+        .api
+        .decide_duplicate_set(DecideSetRequest {
+            set: bebas.clone(),
+            answer: DuplicateAnswer::KeepBoth,
+        })
+        .expect("decide");
+    assert_eq!(decision.files.len(), 2, "{decision:#?}");
+    assert_eq!(sets_total(&lib), 2, "not counted");
+    let plan = zcopy_plan(&lib);
+    assert!(
+        plan.files.iter().all(|f| f.set != bebas),
+        "not planned: {plan:#?}"
+    );
+    let listed = lib.api.list_duplicate_decisions().expect("decisions");
+    assert_eq!(listed.len(), 1);
+    assert!(!listed[0].outdated);
+    // Answering a set that is not listed (it was answered) is NotFound.
+    let err = lib
+        .api
+        .decide_duplicate_set(DecideSetRequest {
+            set: bebas.clone(),
+            answer: DuplicateAnswer::NotDuplicates,
         })
         .unwrap_err();
-    assert_eq!(err.code, ErrorCode::Unsupported);
+    assert_eq!(err.code, ErrorCode::NotFound);
+
+    // A new copy joins the set: it is listed again, the answer outdated.
+    let third = lib.root.join("zcopy").join("third");
+    std::fs::create_dir_all(&third).expect("folder");
+    std::fs::copy(
+        lib.root.join(COPIED[0]),
+        third.join("BebasNeue-Regular.ttf"),
+    )
+    .expect("copy");
+    lib.scan(None, true);
+    assert_eq!(sets_total(&lib), 3, "the set is back");
+    let listed = lib.api.list_duplicate_decisions().expect("decisions");
+    assert!(listed[0].outdated, "{listed:#?}");
+
+    lib.api
+        .take_back_duplicate_decision(TakeBackDecisionRequest {
+            decision: decision.id,
+        })
+        .expect("take back");
+    assert!(
+        lib.api
+            .list_duplicate_decisions()
+            .expect("decisions")
+            .is_empty()
+    );
+    let err = lib
+        .api
+        .take_back_duplicate_decision(TakeBackDecisionRequest {
+            decision: decision.id,
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
 
 /// The budget of ADR 0027: a plan of a thousand files of the reference

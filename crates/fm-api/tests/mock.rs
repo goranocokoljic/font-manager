@@ -2046,6 +2046,96 @@ fn a_cleanup_applies_as_a_named_session_and_undo_brings_each_file_back() {
 }
 
 #[test]
+fn a_hidden_copy_leaves_the_library_and_an_answered_set_is_not_listed() {
+    use fm_api::cleanup::{
+        ApplyCleanupRequest, DecideSetRequest, DuplicateAnswer, PlanCleanupRequest, RemoveAs,
+        SessionKind, ShowHiddenRequest, TakeBackDecisionRequest,
+    };
+    let (api, _, _) = with_copy();
+    let sets = |api: &Arc<dyn Api>| {
+        api.list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .unwrap()
+            .total
+    };
+    assert_eq!(sets(&api), 1);
+
+    // Hide: the file stays, the copy leaves every list.
+    let plan = api
+        .plan_cleanup(PlanCleanupRequest {
+            remove_as: RemoveAs::Hide,
+            ..Default::default()
+        })
+        .unwrap();
+    let leaving: Vec<String> = plan.leaving().map(|f| f.path.clone()).collect();
+    assert_eq!(leaving.len(), 1, "{plan:#?}");
+    api.apply_cleanup(ApplyCleanupRequest {
+        plan,
+        name: None,
+        choices: Vec::new(),
+    })
+    .unwrap();
+    let hidden = api.list_hidden_copies().unwrap();
+    assert_eq!(hidden.len(), 1);
+    assert_eq!(hidden[0].path, leaving[0]);
+    assert_eq!(api.list_duplicates().unwrap(), [], "the copy is hidden");
+    let session = api
+        .list_cleanup_sessions()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.kind == SessionKind::Cleanup)
+        .expect("listed");
+    assert_eq!((session.hidden, session.trashed), (1, 0), "{session:#?}");
+    assert_eq!(session.files[0].removed_as, RemoveAs::Hide);
+
+    // Show it again; a second show is refused.
+    let shown = api
+        .show_hidden_copies(ShowHiddenRequest {
+            paths: leaving.clone(),
+        })
+        .unwrap();
+    assert_eq!(shown.len(), 1);
+    assert_eq!(api.list_hidden_copies().unwrap(), []);
+    assert_eq!(api.list_duplicates().unwrap().len(), 1, "the copy is back");
+    let err = api
+        .show_hidden_copies(ShowHiddenRequest { paths: leaving })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+
+    // Keep both: the set is not listed until the answer is taken back.
+    let set = api
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap()
+        .items
+        .remove(0);
+    let decision = api
+        .decide_duplicate_set(DecideSetRequest {
+            set: set.id.clone(),
+            answer: DuplicateAnswer::KeepBoth,
+        })
+        .unwrap();
+    assert_eq!(decision.files.len(), 2, "{decision:#?}");
+    assert_eq!(sets(&api), 0);
+    assert_eq!(api.list_duplicate_decisions().unwrap().len(), 1);
+    let err = api
+        .decide_duplicate_set(DecideSetRequest {
+            set: set.id,
+            answer: DuplicateAnswer::NotDuplicates,
+        })
+        .unwrap_err();
+    assert_eq!(
+        err.code,
+        ErrorCode::NotFound,
+        "an answered set is not listed"
+    );
+    api.take_back_duplicate_decision(TakeBackDecisionRequest {
+        decision: decision.id,
+    })
+    .unwrap();
+    assert_eq!(api.list_duplicate_decisions().unwrap(), []);
+    assert_eq!(sets(&api), 1);
+}
+
+#[test]
 fn keep_this_one_trashes_the_other_copy_and_undo_brings_it_back() {
     let (api, original, copy) = with_copy();
     assert_eq!(api.list_duplicates().unwrap().len(), 1);

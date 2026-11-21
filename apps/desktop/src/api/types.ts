@@ -690,6 +690,11 @@ export type CleanupSession = {
 	frees: number,
 	/**  Its files, in the order they were done. */
 	files: SessionFile[],
+	/**
+	 *  The files that are hidden now (E56.8): they stay where they are and
+	 *  free nothing.
+	 */
+	hidden?: number,
 };
 
 /**
@@ -1092,6 +1097,17 @@ export type DeactivateRequest = {
 	except?: Target | null,
 };
 
+/**  Answer a duplicate set ([`crate::LibraryService::decide_duplicate_set`]). */
+export type DecideSetRequest = {
+	/**  The set id ([`crate::library::DuplicateSet::id`]). */
+	set: string,
+	/**  The answer. */
+	answer: DuplicateAnswer,
+};
+
+/**  A duplicate set answered "not duplicates" or "keep both" (E56.8). */
+export type DecisionId = number;
+
 /**  How much space the lists use. */
 export type Density = 
 /**  Room to breathe. */
@@ -1325,6 +1341,13 @@ export type DropCounts = {
 	tags: TagDropCount[],
 };
 
+/**  The answer to a set that is not to be cleaned up (E56.8). */
+export type DuplicateAnswer = 
+/**  The files are not duplicates of each other. */
+"notDuplicates" | 
+/**  They are, and the user keeps every copy. */
+"keepBoth";
+
 /**  One file of a duplicate group. */
 export type DuplicateCopy = {
 	/**  Absolute file path. */
@@ -1346,6 +1369,34 @@ export type DuplicateCopy = {
 	inLibraryFolder: boolean,
 	/**  The recommended keeper of the group. */
 	keep: boolean,
+};
+
+/**
+ *  A remembered answer to a duplicate set (E56.8). It holds for exactly
+ *  the files it names, by hash: when one of them changes or another copy
+ *  joins the set, the set is listed again.
+ */
+export type DuplicateDecision = {
+	/**  The decision, to take it back. */
+	id: DecisionId,
+	/**  The set id. */
+	set: string,
+	/**  The answer. */
+	answer: DuplicateAnswer,
+	/**
+	 *  The blake3 hash of each copy of the set when it was answered, hex,
+	 *  sorted; identical copies repeat theirs.
+	 */
+	hashes: string[],
+	/**  The library files that have one of those hashes now, sorted. */
+	files: string[],
+	/**  When it was answered. */
+	at: string,
+	/**
+	 *  The set no longer has exactly these files (one changed, another
+	 *  copy joined): it is listed again.
+	 */
+	outdated: boolean,
 };
 
 /**  Files that hold the same font. The recommended keeper comes first. */
@@ -2731,6 +2782,36 @@ export type Health =
 { kind: "broken"; reason: string } | 
 /**  Recognized but not supported for activation (Type 1, bitmap). */
 { kind: "unsupported"; reason: string };
+
+/**
+ *  A copy hidden from the library (E56.8): its file stays where it is, its
+ *  faces leave the library, search and activation lists. It is known by its
+ *  path and hash: another file at that path is shown again.
+ */
+export type HiddenCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  blake3 hash of the file that was hidden, hex. */
+	hash: string,
+	/**  When it was hidden here, or read from a sidecar. */
+	at: string,
+	/**
+	 *  The session that hid it; `None` when it came from a sidecar (another
+	 *  machine, a rebuilt index).
+	 */
+	session: ResolutionId | null,
+	/**  The set it left, when known. */
+	set: string | null,
+	/**  The copy kept for it, when known. */
+	kept: string | null,
+	/**  Its family, for display; `None` when the index holds no face of it. */
+	family: string | null,
+	/**
+	 *  The file at the path is the one that was hidden: it is out of the
+	 *  library now. False when no such file is indexed (yet).
+	 */
+	inEffect: boolean,
+};
 
 /**
  *  Faces that look like the text in an image (E33.1): a screenshot of a line
@@ -4357,10 +4438,15 @@ export type SessionFile = {
 	kept: string,
 	/**  Its size in bytes, when known. */
 	size: number | null,
-	/**  What happened to it. */
+	/**
+	 *  What happened to it. For a hidden file (`removed_as: hide`),
+	 *  `trashed` means it is hidden and `restored` that it is shown again.
+	 */
 	status: TrashMoveStatus,
 	/**  Why it was skipped or failed, in one sentence. */
 	message: string | null,
+	/**  How it left the library: the trash, or hidden (E56.8). */
+	removedAs?: RemoveAs,
 };
 
 /**  Where a session came from. */
@@ -4641,6 +4727,16 @@ export type SharedCounts = {
 export type Shortlist = {
 	/**  Best first. */
 	candidates: Candidate[],
+};
+
+/**
+ *  Show hidden copies again, one by one
+ *  ([`crate::LibraryService::show_hidden_copies`]). A whole session is
+ *  shown again by [`crate::LibraryService::undo_cleanup_session`].
+ */
+export type ShowHiddenRequest = {
+	/**  The hidden copies' paths. */
+	paths: string[],
 };
 
 /**
@@ -4969,6 +5065,12 @@ export type TagFacesRequest = {
 /**  A free-form tag. */
 export type TagId = number;
 
+/**  Take a decision back ([`crate::LibraryService::take_back_duplicate_decision`]). */
+export type TakeBackDecisionRequest = {
+	/**  The decision. */
+	decision: DecisionId,
+};
+
 /**  What to act on. */
 export type Target = 
 /**  These faces. */
@@ -5097,7 +5199,8 @@ export type TrashMoveStatus =
 
 /**
  *  Undo a session whole or some of its files
- *  ([`crate::LibraryService::undo_cleanup_session`]).
+ *  ([`crate::LibraryService::undo_cleanup_session`]). A hidden file is
+ *  shown again; its merge is taken back as a trashed file's is.
  */
 export type UndoCleanupRequest = {
 	/**  The session. */

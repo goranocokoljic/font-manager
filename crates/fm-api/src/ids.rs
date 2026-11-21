@@ -44,4 +44,6 @@ id!(
     ComparisonId,
     /// A sidecar value another machine set that differs from this one's.
     SidecarConflictId,
+    /// A duplicate set answered "not duplicates" or "keep both" (E56.8).
+    DecisionId,
 );

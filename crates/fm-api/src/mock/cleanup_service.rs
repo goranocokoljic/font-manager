@@ -2,18 +2,20 @@
 //! apply at once on the caller's thread, sessions in memory. "Keep this one"
 //! actions are sessions of one set, as in fm-core.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use super::{ACTIVE_COPY, MOCK_NOW, MockApi, cleanup, duplicate_sets};
 use crate::activation::ActivationMode;
 use crate::cleanup::{
     ApplyCleanupRequest, CLEANUP_PLAN_VERSION, CleanupAction, CleanupFile, CleanupPlan,
-    CleanupScope, CleanupSession, PlanCleanupRequest, SessionFile, SessionKind, UndoCleanupRequest,
+    CleanupScope, CleanupSession, DecideSetRequest, DuplicateDecision, HiddenCopy,
+    PlanCleanupRequest, RemoveAs, SessionFile, SessionKind, ShowHiddenRequest, UndoCleanupRequest,
+    decision_key,
 };
 use crate::event::Event;
 use crate::library::{DuplicateScope, Resolution, TrashMoveStatus};
 use crate::settings::MyLanguagesStatus;
-use crate::{ApiError, ApiResult, ErrorCode, FaceId, JobId, ResolutionId, SourceId};
+use crate::{ApiError, ApiResult, DecisionId, FaceId, JobId, ResolutionId, SourceId};
 
 /// A "Keep this one" action as a session of one set: the name fm-core
 /// gives it, its copies with the kept copy.
@@ -47,8 +49,10 @@ pub(super) fn resolution_session(r: &Resolution) -> CleanupSession {
                 size: None,
                 status: m.status,
                 message: m.message.clone(),
+                removed_as: RemoveAs::Trash,
             })
             .collect(),
+        hidden: 0,
     }
 }
 
@@ -60,7 +64,7 @@ fn count(n: usize) -> u32 {
 fn trashed(files: &[SessionFile]) -> (u32, u32) {
     let t: Vec<&SessionFile> = files
         .iter()
-        .filter(|f| f.status == TrashMoveStatus::Trashed)
+        .filter(|f| f.status == TrashMoveStatus::Trashed && f.removed_as == RemoveAs::Trash)
         .collect();
     (
         count(t.len()),
@@ -76,7 +80,7 @@ impl MockApi {
             _ => DuplicateScope::Library,
         };
         let files = self.duplicate_set_files(&scope)?;
-        let all = duplicate_sets::sets(&files, &DuplicateScope::Library);
+        let all = duplicate_sets::sets_with(&files, &DuplicateScope::Library, &self.decided_keys());
         let source_of: HashMap<&str, SourceId> =
             files.iter().map(|f| (f.path.as_str(), f.source)).collect();
         let in_scope = |path: &str| match &req.scope {
@@ -116,17 +120,6 @@ impl MockApi {
 
     pub(super) fn mock_apply_cleanup(&self, req: ApplyCleanupRequest) -> ApiResult<JobId> {
         req.plan.check()?;
-        if req
-            .plan
-            .files
-            .iter()
-            .any(|f| f.action == CleanupAction::Hide)
-        {
-            return Err(ApiError::new(
-                ErrorCode::Unsupported,
-                "Hiding a copy is not available yet. Plan the cleanup with the trash.",
-            ));
-        }
         if !req.choices.is_empty() {
             return Err(ApiError::invalid(
                 "A choice names a value that is not a conflict of this plan.",
@@ -172,8 +165,22 @@ impl MockApi {
                 removed.extend(faces);
                 (TrashMoveStatus::Trashed, None)
             };
+            let hide = f.action == CleanupAction::Hide;
             if status == TrashMoveStatus::Trashed {
                 st.trashed.insert(f.path.clone());
+                if hide {
+                    st.hidden.retain(|h| h.path != f.path);
+                    st.hidden.push(HiddenCopy {
+                        path: f.path.clone(),
+                        hash: f.hash.clone(),
+                        at: MOCK_NOW.to_owned(),
+                        session: Some(session),
+                        set: Some(f.set.clone()),
+                        kept: f.kept.clone(),
+                        family: None,
+                        in_effect: true,
+                    });
+                }
             }
             out.push(SessionFile {
                 path: f.path.clone(),
@@ -182,6 +189,11 @@ impl MockApi {
                 size: Some(f.size),
                 status,
                 message: message.map(str::to_owned),
+                removed_as: if hide {
+                    RemoveAs::Hide
+                } else {
+                    RemoveAs::Trash
+                },
             });
             st.emit(Event::CleanupProgress {
                 job,
@@ -213,6 +225,7 @@ impl MockApi {
             sets,
             trashed: moved,
             frees,
+            hidden: hidden_count(&out),
             files: out,
         });
         if !removed.is_empty() {
@@ -298,6 +311,7 @@ impl MockApi {
                     && f.status == TrashMoveStatus::Trashed
                 {
                     st.trashed.remove(&f.path);
+                    st.hidden.retain(|h| h.path != f.path);
                     back.push(f.path.clone());
                     f.status = TrashMoveStatus::Restored;
                 }
@@ -305,7 +319,8 @@ impl MockApi {
             let (moved, frees) = trashed(&session.files);
             session.trashed = moved;
             session.frees = frees;
-            session.undone = moved == 0;
+            session.hidden = hidden_count(&session.files);
+            session.undone = moved == 0 && session.hidden == 0;
             st.sessions[i] = session.clone();
             session
         };
@@ -325,5 +340,103 @@ impl MockApi {
             });
         }
         Ok(answer)
+    }
+}
+
+/// The files of `files` hidden now.
+fn hidden_count(files: &[SessionFile]) -> u32 {
+    count(
+        files
+            .iter()
+            .filter(|f| f.status == TrashMoveStatus::Trashed && f.removed_as == RemoveAs::Hide)
+            .count(),
+    )
+}
+
+impl MockApi {
+    /// The keys of the sets answered "not duplicates" or "keep both".
+    pub(super) fn decided_keys(&self) -> HashSet<String> {
+        self.state()
+            .decisions
+            .iter()
+            .map(|d| decision_key(&d.set, &d.hashes))
+            .collect()
+    }
+
+    pub(super) fn mock_show_hidden(&self, req: ShowHiddenRequest) -> ApiResult<Vec<HiddenCopy>> {
+        let shown: Vec<HiddenCopy> = {
+            let st = self.state();
+            req.paths
+                .iter()
+                .map(|p| {
+                    st.hidden
+                        .iter()
+                        .find(|h| h.path == *p)
+                        .cloned()
+                        .ok_or_else(|| ApiError::invalid(format!("{p} is not a hidden copy.")))
+                })
+                .collect::<ApiResult<_>>()?
+        };
+        for h in &shown {
+            if let Some(session) = h.session {
+                self.mock_undo_cleanup_session(UndoCleanupRequest {
+                    session,
+                    paths: vec![h.path.clone()],
+                })?;
+            }
+            let mut st = self.state();
+            st.hidden.retain(|x| x.path != h.path);
+            st.trashed.remove(&h.path);
+        }
+        Ok(shown)
+    }
+
+    pub(super) fn mock_decide_set(&self, req: DecideSetRequest) -> ApiResult<DuplicateDecision> {
+        let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        let sets =
+            duplicate_sets::sets_with(&files, &DuplicateScope::Library, &self.decided_keys());
+        let set = sets
+            .iter()
+            .find(|s| s.id == req.set)
+            .ok_or_else(|| ApiError::not_found(format!("Duplicate set {}", req.set)))?;
+        // One hash per copy: a new identical copy changes the answer's key.
+        let mut hashes: Vec<String> = set.copies.iter().map(|c| c.hash.clone()).collect();
+        hashes.sort();
+        let mut paths: Vec<String> = set.copies.iter().map(|c| c.path.clone()).collect();
+        paths.sort();
+        paths.dedup();
+        let mut st = self.state();
+        st.mutations.push("decide_duplicate_set");
+        let decision = DuplicateDecision {
+            id: DecisionId(st.next()),
+            set: set.id.clone(),
+            answer: req.answer,
+            hashes,
+            files: paths,
+            at: MOCK_NOW.to_owned(),
+            outdated: false,
+        };
+        st.decisions.push(decision.clone());
+        Ok(decision)
+    }
+
+    pub(super) fn mock_list_decisions(&self) -> ApiResult<Vec<DuplicateDecision>> {
+        let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        let current: HashSet<String> = duplicate_sets::sets(&files, &DuplicateScope::Library)
+            .iter()
+            .map(duplicate_sets::set_key)
+            .collect();
+        let mut out = self.state().decisions.clone();
+        out.reverse();
+        for d in &mut out {
+            d.outdated = !current.contains(&decision_key(&d.set, &d.hashes));
+            d.files = files
+                .iter()
+                .filter(|f| d.hashes.contains(&f.hash))
+                .map(|f| f.path.clone())
+                .collect();
+            d.files.sort();
+        }
+        Ok(out)
     }
 }

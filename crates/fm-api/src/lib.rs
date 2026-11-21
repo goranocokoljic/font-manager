@@ -48,8 +48,8 @@ pub use error::{ApiError, ApiResult, ErrorCode};
 pub use event::{Event, EventSource};
 pub use export::ExportService;
 pub use ids::{
-    CollectionId, ComparisonId, FaceId, FamilyId, JobId, ResolutionId, SetId, SidecarConflictId,
-    SourceId, TagId, VirtualStyleId,
+    CollectionId, ComparisonId, DecisionId, FaceId, FamilyId, JobId, ResolutionId, SetId,
+    SidecarConflictId, SourceId, TagId, VirtualStyleId,
 };
 pub use layout::LayoutService;
 pub use library::LibraryService;
@@ -180,6 +180,11 @@ pub fn types() -> specta::Types {
         cleanup::ApplyCleanupRequest,
         cleanup::CleanupSession,
         cleanup::UndoCleanupRequest,
+        cleanup::HiddenCopy,
+        cleanup::ShowHiddenRequest,
+        cleanup::DecideSetRequest,
+        cleanup::DuplicateDecision,
+        cleanup::TakeBackDecisionRequest,
         library::SidecarConflict,
         library::SidecarField,
         library::ConflictSide,

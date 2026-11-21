@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use fm_api::SourceId;
-use fm_api::cleanup::{CleanupKeeper, CleanupScope, PlanCleanupRequest, RemoveAs};
+use fm_api::cleanup::{CleanupKeeper, CleanupScope, DuplicateAnswer, PlanCleanupRequest, RemoveAs};
 
 use super::*;
 use crate::duplicate_sets::SetFace;
@@ -67,6 +67,7 @@ struct World {
     active: HashMap<String, ActivationMode>,
     gone: Vec<String>,
     languages: Vec<String>,
+    decided: HashMap<String, DuplicateAnswer>,
 }
 
 impl World {
@@ -113,6 +114,7 @@ impl World {
             active,
             gone: vec!["/lib/z/H.ttf".to_owned()],
             languages: vec!["de".to_owned(), "sr".to_owned()],
+            decided: HashMap::new(),
         }
     }
 
@@ -135,6 +137,7 @@ impl World {
             my_languages: &self.languages,
             names: &names,
             exists: &exists,
+            decided: &self.decided,
         };
         plan(&ctx, req)
     }
