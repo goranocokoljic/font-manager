@@ -302,7 +302,9 @@ impl DuplicateResolver {
                 .flat_map(|f| f.faces.iter().copied())
                 .collect();
             let set = [(set, moves, merge)];
-            match self.lock().write_session_sets(session, &set) {
+            // Bound first: the index lock is let go before `abort` takes it.
+            let written = self.lock().write_session_sets(session, &set);
+            match written {
                 Ok(m) => merged |= m,
                 Err(e) => {
                     self.end_batch(&mut removed, &mut merged);

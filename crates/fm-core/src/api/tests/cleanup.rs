@@ -35,6 +35,30 @@ impl Trash for GateTrash {
     }
 }
 
+/// A trash that moves like [`MockTrash`], then breaks the session log as a
+/// full disk would, once the index it should break is known.
+#[derive(Debug)]
+struct BreaksTheLog {
+    inner: MockTrash,
+    db: Mutex<Option<PathBuf>>,
+}
+
+impl Trash for BreaksTheLog {
+    fn trash(&self, path: &Path) -> Result<Trashed, TrashError> {
+        let item = self.inner.trash(path)?;
+        if let Some(db) = lock(&self.db).as_ref() {
+            let conn = rusqlite::Connection::open(db).expect("open the index");
+            conn.execute_batch("DROP TABLE IF EXISTS resolution_move")
+                .expect("break the log");
+        }
+        Ok(item)
+    }
+
+    fn restore(&self, item: &Trashed) -> Result<(), TrashError> {
+        self.inner.restore(item)
+    }
+}
+
 /// The fixture files that get a copy in `zcopy/`, one set each.
 const COPIED: &[&str] = &[
     "bebasneue/BebasNeue-Regular.ttf",
@@ -557,6 +581,51 @@ fn each_set_is_logged_at_once_and_a_copy_activated_meanwhile_stays() {
     assert!(
         active.contains(&first) && active.contains(&late),
         "{active:?}"
+    );
+}
+
+#[test]
+fn a_set_whose_log_cannot_be_written_comes_back_and_the_apply_ends() {
+    let dir = TempDir::new("api-cleanup-nolog-trash");
+    let trash = Arc::new(BreaksTheLog {
+        inner: MockTrash::new(dir.path().join("trash")),
+        db: Mutex::new(None),
+    });
+    let (lib, made) = library("api-cleanup-nolog", 1, Arc::clone(&trash) as Arc<dyn Trash>);
+    let plan = zcopy_plan(&lib);
+    *lock(&trash.db) = Some(lib.paths.data.join(INDEX_FILE));
+
+    let resolver = lib.api.resolver().expect("resolver").clone();
+    let job = fm_api::JobId(9001);
+    resolver.register_cleanup(job);
+    // On its own thread: a lock taken twice would hang that thread, and the
+    // test fails on the wait instead of hanging too.
+    let (done, ended) = channel();
+    let applying = resolver.clone();
+    std::thread::spawn(move || {
+        let mover =
+            |_: &[FaceId], _: &[FaceId], _: ActivationMode| -> Result<(), String> { Ok(()) };
+        let result = applying.apply_cleanup(
+            job,
+            &ApplyCleanupRequest {
+                plan,
+                name: None,
+                choices: Vec::new(),
+            },
+            &mover,
+        );
+        let _ = done.send(result);
+    });
+    let result = ended.recv_timeout(WAIT).expect("the apply ended");
+    assert_eq!(
+        result.expect_err("the log cannot be written").code,
+        ErrorCode::Io
+    );
+    assert!(made.iter().all(|p| p.is_file()), "every moved copy is back");
+    assert_eq!(
+        resolver.cancel_cleanup(job).unwrap_err().code,
+        ErrorCode::NotFound,
+        "the job ended"
     );
 }
 
