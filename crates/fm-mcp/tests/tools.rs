@@ -1,5 +1,5 @@
 //! The MCP tools (E27.2, E27.3, E27.4) over `MockApi`: an rmcp client,
-//! connected in process, lists the seventeen tools and calls every one of
+//! connected in process, lists the twenty-one tools and calls every one of
 //! them; results are the API's JSON without font bytes (the preview tools: a
 //! PNG and a caption), API errors are tool errors, and the mutating tools are
 //! refused until the user grants them (E27.6), a workflow until every grant
@@ -14,6 +14,8 @@ use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use fm_api::activation::{ActivateRequest, ActivationMode, ConflictPolicy, Target};
+use fm_api::common::Page;
+use fm_api::library::ListDuplicateSetsRequest;
 use fm_api::mock::MockApi;
 use fm_api::organization::CreateCollectionRequest;
 use fm_api::search::{PairingRequest, SimilarRequest};
@@ -47,7 +49,7 @@ async fn face_of(client: &Client, query: &str) -> u32 {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_rmcp_client_lists_the_seventeen_tools_with_object_schemas() {
+async fn an_rmcp_client_lists_the_twenty_one_tools_with_object_schemas() {
     let (_api, client) = mock(Arc::new(AllowAll)).await;
     let tools = client.list_all_tools().await.expect("tools/list");
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
@@ -742,5 +744,88 @@ async fn search_fonts_takes_glyph_traits_as_text_or_objects() {
         let e = client.err("search_fonts", args.clone()).await;
         assert_eq!(e.code, ErrorCode::InvalidRequest, "{args}");
     }
+    client.close().await;
+}
+
+/// E56.9 criterion 4: the duplicates tools answer the API's JSON over a
+/// library with one copied file; `plan_cleanup` plans, says where the user
+/// applies it, and changes nothing; no tool applies a cleanup.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_duplicates_tools_list_compare_and_plan_but_never_apply() {
+    let api = Arc::new(MockApi::new());
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";
+    api.add_copy(FaceId(3), copy).expect("copy");
+    let dyn_api: Arc<dyn Api> = api.clone();
+    let client = connect(McpServer::with_gate(dyn_api, Arc::new(AllowAll))).await;
+
+    let sets = client.ok("list_duplicate_sets", json!({})).await;
+    let wanted = serde_json::to_value(
+        api.list_duplicate_sets(ListDuplicateSetsRequest {
+            page: Page {
+                offset: 0,
+                limit: 20,
+            },
+            ..ListDuplicateSetsRequest::default()
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(sets, wanted, "the API's answer unchanged");
+    assert_eq!(sets["total"], 1, "{sets}");
+    let copies = sets["items"][0]["copies"].as_array().expect("copies");
+    let faces: Vec<u64> = copies.iter().filter_map(|c| c["face"].as_u64()).collect();
+    assert_eq!(faces.len(), 2, "{sets}");
+
+    let none = client
+        .ok("list_duplicate_sets", json!({ "levels": ["otherVersion"] }))
+        .await;
+    assert_eq!(none["total"], 0, "the level filter reaches the API: {none}");
+    let e = client
+        .err(
+            "list_duplicate_sets",
+            json!({ "source_id": 1, "folder": "/x" }),
+        )
+        .await;
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+
+    let pairs = client
+        .ok("list_folder_pairs", json!({ "min_shared": 1 }))
+        .await;
+    assert!(
+        pairs["items"].is_array() && pairs["total"].is_u64(),
+        "{pairs}"
+    );
+
+    let compared = client
+        .ok("compare_copies", json!({ "a": faces[0], "b": faces[1] }))
+        .await;
+    assert_eq!(compared["a"]["face"], faces[0]);
+    assert!(compared["summary"].is_array(), "{compared}");
+
+    let before = api.list_cleanup_sessions().unwrap();
+    let planned = client.ok("plan_cleanup", json!({})).await;
+    assert_eq!(planned["summary"]["trash"], 1, "{planned}");
+    assert_eq!(planned["plan"]["files"].as_array().map(Vec::len), Some(2));
+    let apply = planned["apply"].as_str().expect("where to apply");
+    assert!(apply.contains("fm duplicates apply"), "{apply}");
+    assert!(apply.contains("Font Fu"), "{apply}");
+    assert_eq!(
+        api.list_cleanup_sessions().unwrap(),
+        before,
+        "a plan applies nothing"
+    );
+    assert_eq!(
+        api.list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .unwrap()
+            .total,
+        1,
+        "the copy is still in the library"
+    );
+
+    let hidden = client.ok("plan_cleanup", json!({ "hide": true })).await;
+    assert_eq!(hidden["summary"]["hide"], 1, "{hidden}");
+
+    let tools = client.list_all_tools().await.expect("tools/list");
+    assert!(tools.iter().all(|t| !t.name.contains("apply")));
     client.close().await;
 }

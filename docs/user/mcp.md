@@ -77,6 +77,8 @@ Searching and reading are always allowed when the switch is on:
 | `check_coverage`, `find_similar`, `get_pairings`, `get_license` | Language coverage, similar fonts, pairings, the license of a family |
 | `render_preview`, `compare_preview` | Render a text in one face, or in several faces side by side, as an image |
 | `pick_fonts_for_brief` | Read a brief such as "a calm bilingual brand" and suggest up to 5 families, with a reason for each |
+| `list_duplicate_sets`, `list_folder_pairs`, `compare_copies` | List your duplicate fonts with the copy to keep and why, list folders that hold the same fonts, and show what differs between two copies |
+| `plan_cleanup` | Plan a cleanup of duplicates. The plan changes nothing. No tool applies it: you apply it in Font Fu, or with `fm duplicates apply` |
 
 The assistant can also read a font, a collection or a set as a resource (`font://<id>`,
 `collection://<id>`, `set://<id>`), and use two ready prompts: **Choose fonts for a
