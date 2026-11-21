@@ -1,0 +1,19 @@
+{
+  "id": "undoing-a-state-a-job-sets-before-its-log-row-must-not-depen",
+  "title": "Undoing a state a job sets before its log row must not depend on that row",
+  "category": "data-integrity",
+  "rule": "When a job applies a state that takes a user's file out of view (hide, gone flag, exclusion) before it writes the undo log row for that unit, the way back (show, undo one file) must also work when the log row is missing: check whether the log names the item and, if not, reverse the state directly instead of returning 'not a file of this session'. Refuse with Busy only while the job is still running. Test it by deleting the log row after the apply (as a crash would leave it) and asserting the item can still be brought back and the library event fires.",
+  "rationale": "E56.8 (#668): apply_file wrote the hidden_copy row at once, but the resolution_move row only after the whole set; show_hidden_copies went through undo_session, which rejected a path the session did not name, so a crash in that window left a copy hidden for good.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    668
+  ],
+  "file_globs": [
+    "crates/fm-core/src/resolve/**",
+    "crates/fm-core/src/index/**"
+  ],
+  "first_seen": "2026-11-21T09:10:55.470Z",
+  "last_seen": "2026-11-21T09:10:55.470Z"
+}
