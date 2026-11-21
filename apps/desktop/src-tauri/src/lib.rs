@@ -1067,6 +1067,49 @@ async fn undo_cleanup_session(
     call(&state, move |api| api.undo_cleanup_session(req)).await
 }
 
+/// The copies hidden from the library (E56.8).
+#[tauri::command]
+async fn list_hidden_copies(
+    state: State<'_, AppState>,
+) -> ApiResult<Vec<fm_api::cleanup::HiddenCopy>> {
+    call(&state, move |api| api.list_hidden_copies()).await
+}
+
+/// Shows hidden copies again, one by one.
+#[tauri::command]
+async fn show_hidden_copies(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup::ShowHiddenRequest,
+) -> ApiResult<Vec<fm_api::cleanup::HiddenCopy>> {
+    call(&state, move |api| api.show_hidden_copies(req)).await
+}
+
+/// Answers a duplicate set "not duplicates" or "keep both".
+#[tauri::command]
+async fn decide_duplicate_set(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup::DecideSetRequest,
+) -> ApiResult<fm_api::cleanup::DuplicateDecision> {
+    call(&state, move |api| api.decide_duplicate_set(req)).await
+}
+
+/// The remembered answers to duplicate sets, newest first.
+#[tauri::command]
+async fn list_duplicate_decisions(
+    state: State<'_, AppState>,
+) -> ApiResult<Vec<fm_api::cleanup::DuplicateDecision>> {
+    call(&state, move |api| api.list_duplicate_decisions()).await
+}
+
+/// Takes an answer to a duplicate set back.
+#[tauri::command]
+async fn take_back_duplicate_decision(
+    state: State<'_, AppState>,
+    req: fm_api::cleanup::TakeBackDecisionRequest,
+) -> ApiResult<()> {
+    call(&state, move |api| api.take_back_duplicate_decision(req)).await
+}
+
 /// Puts the copies of a "Keep this one" action back from the trash.
 #[tauri::command]
 async fn undo_resolution(
@@ -1855,6 +1898,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_cleanup_draft,
             update_cleanup_draft,
             undo_cleanup_session,
+            list_hidden_copies,
+            show_hidden_copies,
+            decide_duplicate_set,
+            list_duplicate_decisions,
+            take_back_duplicate_decision,
             list_sidecar_conflicts,
             resolve_sidecar_conflict,
             list_sources,

@@ -77,14 +77,22 @@ pub(super) fn version_key(version: Option<&str>) -> Option<Vec<Part>> {
 /// The most sets one page holds.
 const MAX_PAGE: u32 = 500;
 
-/// The page `req` asks for of the sets among `files`; `decided` holds the
-/// sets the cleanup draft has a decision for.
-pub(super) fn list(
+/// The page `req` asks for of the sets among `files`.
+/// Without the sets answered for exactly their files (`decided`, E56.8),
+/// as fm-core leaves them out; filtered and sorted as `DuplicateSet::page`,
+/// where `drafted` holds the sets the cleanup draft has a decision for (E56.11).
+pub(super) fn list_with(
     files: &[SetFile],
     req: &ListDuplicateSetsRequest,
-    decided: &std::collections::HashSet<String>,
+    decided: &HashSet<String>,
+    drafted: &HashSet<String>,
 ) -> Paged<DuplicateSet> {
-    DuplicateSet::page(sets(files, &req.scope), req, decided, MAX_PAGE)
+    DuplicateSet::page(
+        sets_with(files, &req.scope, decided),
+        req,
+        drafted,
+        MAX_PAGE,
+    )
 }
 
 /// Whether `file` is in `scope`.
@@ -108,6 +116,21 @@ struct Draft {
 /// Every duplicate set among `files` with a copy in `scope`, sets by
 /// PostScript name (case-insensitive, then exact, then id), copies by path.
 pub(super) fn sets(files: &[SetFile], scope: &DuplicateScope) -> Vec<DuplicateSet> {
+    sets_with(files, scope, &HashSet::new())
+}
+
+/// The key a decision about `set` is remembered by (E56.8).
+pub(super) fn set_key(set: &DuplicateSet) -> String {
+    let hashes: Vec<String> = set.copies.iter().map(|c| c.hash.clone()).collect();
+    crate::cleanup::decision_key(&set.id, &hashes)
+}
+
+/// [`sets`] without the sets whose key is in `decided` (E56.8).
+pub(super) fn sets_with(
+    files: &[SetFile],
+    scope: &DuplicateScope,
+    decided: &HashSet<String>,
+) -> Vec<DuplicateSet> {
     // Name sets: one per PostScript name, the first face of each file.
     let mut by_name: BTreeMap<&str, Vec<(usize, usize)>> = BTreeMap::new();
     for (fi, file) in files.iter().enumerate() {
@@ -164,6 +187,16 @@ pub(super) fn sets(files: &[SetFile], scope: &DuplicateScope) -> Vec<DuplicateSe
                 .into_iter()
                 .map(|fi| (fi, first(fi).or((!files[fi].faces.is_empty()).then_some(0))))
                 .collect(),
+        });
+    }
+    if !decided.is_empty() {
+        drafts.retain(|d| {
+            let hashes: Vec<String> = d
+                .members
+                .iter()
+                .map(|&(fi, _)| files[fi].hash.clone())
+                .collect();
+            !decided.contains(&crate::cleanup::decision_key(&d.id, &hashes))
         });
     }
     // The sets each file takes part in.
@@ -277,6 +310,8 @@ mod tests {
         name: String,
         #[serde(default)]
         scope: DuplicateScope,
+        #[serde(default)]
+        decided: HashSet<String>,
         files: Vec<CaseFile>,
         sets: Value,
     }
@@ -329,7 +364,7 @@ mod tests {
                         .collect(),
                 })
                 .collect();
-            let got: Value = sets(&files, &case.scope)
+            let got: Value = sets_with(&files, &case.scope, &case.decided)
                 .iter()
                 .map(|s| {
                     json!({

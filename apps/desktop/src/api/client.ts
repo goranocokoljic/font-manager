@@ -126,6 +126,11 @@ import type {
   DuplicatesOverview,
   DuplicatesOverviewRequest,
   UndoCleanupRequest,
+  HiddenCopy,
+  ShowHiddenRequest,
+  DecideSetRequest,
+  DuplicateDecision,
+  TakeBackDecisionRequest,
   ResolveSidecarConflictRequest,
   SampleText,
   SampleTextRequest,
@@ -412,6 +417,16 @@ export interface FmClient {
   getCleanupDraft(): Promise<CleanupDraft>;
   /** Changes the draft plan and returns it; touches no file (E56.11). */
   updateCleanupDraft(update: CleanupDraftUpdate): Promise<CleanupDraft>;
+  /** The copies hidden from the library (E56.8); their files stay where they are. */
+  listHiddenCopies(): Promise<HiddenCopy[]>;
+  /** Shows hidden copies again one by one; a whole session is `undoCleanupSession`. */
+  showHiddenCopies(req: ShowHiddenRequest): Promise<HiddenCopy[]>;
+  /** Answers a duplicate set "not duplicates" or "keep both" for exactly its files. */
+  decideDuplicateSet(req: DecideSetRequest): Promise<DuplicateDecision>;
+  /** The remembered answers to duplicate sets, newest first. */
+  listDuplicateDecisions(): Promise<DuplicateDecision[]>;
+  /** Takes an answer back; its set is listed again. */
+  takeBackDuplicateDecision(req: TakeBackDecisionRequest): Promise<void>;
   /** Sidecar values another computer set differently, oldest first (E28.1). */
   listSidecarConflicts(): Promise<SidecarConflict[]>;
   /** Keeps one value of a sidecar conflict; the other computer takes it. */
@@ -627,6 +642,11 @@ export const tauriClient: FmClient = {
   duplicatesOverview: (req) => invoke<DuplicatesOverview>('duplicates_overview', { req }),
   getCleanupDraft: () => invoke<CleanupDraft>('get_cleanup_draft'),
   updateCleanupDraft: (update) => invoke<CleanupDraft>('update_cleanup_draft', { update }),
+  listHiddenCopies: () => invoke<HiddenCopy[]>('list_hidden_copies'),
+  showHiddenCopies: (req) => invoke<HiddenCopy[]>('show_hidden_copies', { req }),
+  decideDuplicateSet: (req) => invoke<DuplicateDecision>('decide_duplicate_set', { req }),
+  listDuplicateDecisions: () => invoke<DuplicateDecision[]>('list_duplicate_decisions'),
+  takeBackDuplicateDecision: (req) => invoke<void>('take_back_duplicate_decision', { req }),
   listSidecarConflicts: () => invoke<SidecarConflict[]>('list_sidecar_conflicts'),
   resolveSidecarConflict: (req) => invoke<void>('resolve_sidecar_conflict', { req }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),

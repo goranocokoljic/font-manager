@@ -21,8 +21,8 @@ use std::path::Path;
 
 use fm_api::activation::ActivationMode;
 use fm_api::cleanup::{
-    ActivationMove, CleanupAction, CleanupFile, CleanupScope, PlanCleanupRequest, RemoveAs,
-    StayReason,
+    ActivationMove, CleanupAction, CleanupFile, CleanupScope, DuplicateAnswer, PlanCleanupRequest,
+    RemoveAs, StayReason,
 };
 use fm_api::library::{
     CopyFacts, DuplicateLevel, DuplicateScope, DuplicateSet, KeeperOutcome, KeeperPolicy,
@@ -31,7 +31,7 @@ use fm_api::library::{
 use fm_api::settings::MyLanguagesStatus;
 use fm_api::{ApiError, ApiResult, FaceId};
 
-use crate::duplicate_sets::{SetFile, in_scope, sets};
+use crate::duplicate_sets::{SetFile, in_scope, set_key, sets, sets_with};
 use crate::folder_pairs::Root;
 use crate::folder_pairs::plan::{PairPlanRequest, PairStay, PolicyInput, removals};
 use crate::keeper_policy::{Candidate, HeldFont, LanguageNames, holdings, recommend};
@@ -54,6 +54,10 @@ pub struct PlanContext<'a> {
     pub names: &'a LanguageNames,
     /// Whether a file is still on disk.
     pub exists: &'a dyn Fn(&str) -> bool,
+    /// The sets answered "not duplicates" or "keep both" (E56.8), by key
+    /// ([`fm_api::cleanup::decision_key`]): they are not planned, and a
+    /// folder pair never removes one of their copies.
+    pub decided: &'a HashMap<String, DuplicateAnswer>,
 }
 
 impl std::fmt::Debug for PlanContext<'_> {
@@ -251,6 +255,16 @@ fn stay_sentence(reason: StayReason, identical: bool) -> String {
     }
 }
 
+/// Why a copy of a set the user answered stays (E56.8).
+fn answered_sentence(answer: DuplicateAnswer) -> String {
+    match answer {
+        DuplicateAnswer::NotDuplicates => {
+            "Stays: you answered that these files are not duplicates.".to_owned()
+        }
+        DuplicateAnswer::KeepBoth => "Stays: you chose to keep every copy of this set.".to_owned(),
+    }
+}
+
 /// Plans `req` over `ctx`. `InvalidRequest` for a set id that is not a set,
 /// a keeper that is not a copy of its set, or a folder pair whose removed
 /// side is protected.
@@ -270,7 +284,8 @@ pub fn plan(ctx: &PlanContext<'_>, req: &PlanCleanupRequest) -> ApiResult<Planne
             }
         });
     }
-    let mut all = sets(ctx.files, &DuplicateScope::Library);
+    let decided: HashSet<String> = ctx.decided.keys().cloned().collect();
+    let mut all = sets_with(ctx.files, &DuplicateScope::Library, &decided);
     let by_path: HashMap<&str, &SetFile> = ctx.files.iter().map(|f| (f.path.as_str(), f)).collect();
     let scope_of = |path: &str| -> bool {
         let Some(file) = by_path.get(path) else {
@@ -484,6 +499,11 @@ fn plan_pair(
     };
     let answer = removals(ctx.files, ctx.roots, &pair, &policy)?;
     let all = sets(ctx.files, &DuplicateScope::Library);
+    // The answer the user gave a set, when they did (E56.8).
+    let answered: HashMap<&str, DuplicateAnswer> = all
+        .iter()
+        .filter_map(|s| ctx.decided.get(&set_key(s)).map(|a| (s.id.as_str(), *a)))
+        .collect();
     let by_path: HashMap<&str, &SetFile> = ctx.files.iter().map(|f| (f.path.as_str(), f)).collect();
     // The set that holds both the file and the copy kept for it.
     let set_of = |path: &str, kept: Option<&str>| -> (String, DuplicateLevel) {
@@ -536,7 +556,10 @@ fn plan_pair(
             RemoveAs::Hide => (CleanupAction::Hide, "Is hidden"),
         };
         let leave_sentence = format!("{verb}; {kept} stays in {keep}.");
-        if !(ctx.exists)(&r.path) {
+        if let Some(&answer) = answered.get(row.set.as_str()) {
+            row.reason = Some(StayReason::KeepBoth);
+            row.sentence = answered_sentence(answer);
+        } else if !(ctx.exists)(&r.path) {
             row.reason = Some(StayReason::NotThere);
             row.sentence = stay_sentence(StayReason::NotThere, identical);
         } else if let Some(&mode) = ctx.active.get(&r.path) {

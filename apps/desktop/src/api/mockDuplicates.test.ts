@@ -40,7 +40,8 @@ describe('MockApi duplicate sets (E56.1)', () => {
       const scope = ((c as { scope?: DuplicateScope }).scope ?? {
         kind: 'library',
       }) as DuplicateScope;
-      expect(summary(duplicateSets(files, scope)), c.name).toEqual(c.sets);
+      const decided = new Set((c as { decided?: string[] }).decided ?? []);
+      expect(summary(duplicateSets(files, scope, decided)), c.name).toEqual(c.sets);
     }
   });
 
@@ -142,5 +143,44 @@ describe('MockApi keeper policy (E56.4)', () => {
     await expect(
       client.previewKeeperPolicy({ scope: { kind: 'source', source: 999 }, policy: {} }),
     ).rejects.toMatchObject({ code: 'notFound' });
+  });
+});
+
+describe('MockApi hidden copies and answered sets (E56.8)', () => {
+  it('leaves an answered set out until it is taken back', async () => {
+    const client = createMockClient({ copies: library.copies });
+    const before = await client.listDuplicateSets({});
+    const set = before.items[0]!;
+    const d = await client.decideDuplicateSet({ set: set.id, answer: 'keepBoth' });
+    expect(d.hashes.length).toBe(set.copies.length);
+    expect((await client.listDuplicateSets({})).total).toBe(before.total - 1);
+    expect((await client.listDuplicateDecisions())[0]!.outdated).toBe(false);
+    await expect(
+      client.decideDuplicateSet({ set: set.id, answer: 'keepBoth' }),
+    ).rejects.toMatchObject({
+      code: 'notFound',
+    });
+    await client.takeBackDuplicateDecision({ decision: d.id });
+    expect((await client.listDuplicateSets({})).total).toBe(before.total);
+    expect(await client.listDuplicateDecisions()).toEqual([]);
+  });
+
+  it('hides a copy, lists it, and shows it again', async () => {
+    const client = createMockClient({ copies: library.copies });
+    const plan = await client.planCleanup({ removeAs: 'hide' });
+    const leaving = plan.files.filter((f) => f.action === 'hide');
+    expect(leaving.length).toBeGreaterThan(0);
+    await client.applyCleanup({ plan });
+    const hidden = await client.listHiddenCopies();
+    expect(hidden.map((h) => h.path).sort()).toEqual(leaving.map((f) => f.path).sort());
+    const session = (await client.listCleanupSessions())[0]!;
+    expect(session.hidden).toBe(leaving.length);
+    expect(session.trashed).toBe(0);
+    const shown = await client.showHiddenCopies({ paths: [hidden[0]!.path] });
+    expect(shown[0]!.path).toBe(hidden[0]!.path);
+    expect((await client.listHiddenCopies()).length).toBe(hidden.length - 1);
+    await expect(client.showHiddenCopies({ paths: [hidden[0]!.path] })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
   });
 });

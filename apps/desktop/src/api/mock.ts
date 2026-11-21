@@ -19,7 +19,13 @@ import {
   wallProblems,
   type WallLibrary,
 } from './mockWall';
-import { duplicateSets, listDuplicateSets, type SetFile } from './mockDuplicates';
+import {
+  decisionKey,
+  duplicateSets,
+  listDuplicateSets,
+  setKey,
+  type SetFile,
+} from './mockDuplicates';
 import { listFolderPairFiles, listFolderPairs, type PairRoot } from './mockFolderPairs';
 import { mockPlanCleanup } from './mockCleanup';
 import { applyDraftUpdate, overviewFromPlan } from './mockCleanupDraft';
@@ -108,6 +114,9 @@ import {
   type Problem,
   type Resolution,
   type CleanupSession,
+  type DuplicateDecision,
+  type HiddenCopy,
+  type RemoveAs,
   type RuleGroup,
   type SidecarConflict,
   type ProjectSet,
@@ -3049,6 +3058,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const resolutions: Resolution[] = [];
   // Applied cleanup plans, newest first (E56.7).
   const sessions: CleanupSession[] = [];
+  // Copies a cleanup hid (E56.8); their paths are in `trashed` too, so they
+  // leave every list, as in the Rust mock.
+  const hidden: HiddenCopy[] = [];
+  // Sets answered "not duplicates" or "keep both", oldest first (E56.8).
+  const decisions: DuplicateDecision[] = [];
+  const decided = () => new Set(decisions.map((d) => decisionKey(d.set, d.hashes)));
   // Sidecar conflicts (E28.1): each is listed in Problems until resolved.
   const sidecarConflicts: SidecarConflict[] = structuredClone(options.sidecarConflicts ?? []);
   const duplicates = (): DuplicateGroup[] =>
@@ -4876,8 +4891,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: `Source ${scope.source} was not found.`,
           detail: null,
         };
-      const decided = new Set((cleanupDraft.decisions ?? []).map((d) => d.set));
-      return structuredClone(listDuplicateSets(setFiles(), req, decided));
+      const drafted = new Set((cleanupDraft.decisions ?? []).map((d) => d.set));
+      return structuredClone(listDuplicateSets(setFiles(), req, decided(), drafted));
     },
     // As the Rust mock (E56.6): the sources' folders are the roots, and
     // there are no files on disk, so no side has other files.
@@ -4908,7 +4923,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       if (relativeFolder(req.policy))
         throw invalid('Choose each preferred folder with its full path.');
-      const sets = duplicateSets(setFiles(), scope);
+      const sets = duplicateSets(setFiles(), scope, decided());
       return {
         sets: sets.length,
         withKeeper: sets.filter((s) => s.copies.some((c) => !c.system)).length,
@@ -5012,7 +5027,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: null,
         };
       const files = setFiles();
-      const all = duplicateSets(files, { kind: 'library' });
+      const all = duplicateSets(files, { kind: 'library' }, decided());
       const activeFiles = new Map<string, ActivationMode>();
       for (const f of faces) {
         const mode = active.get(f.face.id);
@@ -5044,12 +5059,6 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const plan = req.plan;
       if (plan.version !== 1)
         throw invalid('This plan was made by another version of Font Fu. Plan the cleanup again.');
-      if (plan.files.some((f) => f.action === 'hide'))
-        throw {
-          code: 'unsupported' as const,
-          message: 'Hiding a copy is not available yet. Plan the cleanup with the trash.',
-          detail: null,
-        };
       if ((req.choices ?? []).length)
         throw invalid('A choice names a value that is not a conflict of this plan.');
       const job = ++nextId;
@@ -5073,10 +5082,33 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         } else {
           trashed.add(f.path);
           mine.forEach((x) => active.delete(x.face.id));
+          if (f.action === 'hide') {
+            hidden.splice(0, hidden.length, ...hidden.filter((h) => h.path !== f.path));
+            hidden.push({
+              path: f.path,
+              hash: f.hash,
+              at: '2026-10-16T09:00:00Z',
+              session: id,
+              set: f.set,
+              kept: f.kept,
+              family: null,
+              inEffect: true,
+            });
+          }
         }
-        return { path: f.path, set: f.set, kept: f.kept ?? '', size: f.size, status, message };
+        const removedAs: RemoveAs = f.action === 'hide' ? 'hide' : 'trash';
+        return {
+          path: f.path,
+          set: f.set,
+          kept: f.kept ?? '',
+          size: f.size,
+          status,
+          message,
+          removedAs,
+        };
       });
-      const moved = done.filter((f) => f.status === 'trashed');
+      const out = done.filter((f) => f.status === 'trashed');
+      const moved = out.filter((f) => f.removedAs !== 'hide');
       sessions.unshift({
         id,
         name: req.name?.trim() || 'Cleanup of 2026-10-16',
@@ -5089,6 +5121,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         trashed: moved.length,
         frees: moved.reduce((sum, f) => sum + (f.size ?? 0), 0),
         files: done,
+        hidden: out.length - moved.length,
       });
       done.forEach((f, i) =>
         emit({
@@ -5102,7 +5135,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           cancelled: false,
         }),
       );
-      if (moved.length)
+      if (out.length)
         emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
       emit({
         type: 'cleanupProgress',
@@ -5124,7 +5157,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       overviewFromPlan(await client.planCleanup({ scope: req.scope ?? { kind: 'library' } })),
     getCleanupDraft: async () => structuredClone(cleanupDraft),
     updateCleanupDraft: async (update) => {
-      const all = duplicateSets(setFiles(), { kind: 'library' });
+      const all = duplicateSets(setFiles(), { kind: 'library' }, decided());
       cleanupDraft = applyDraftUpdate(cleanupDraft, update, MOCK_NOW, (id) =>
         all.find((s) => s.id === id),
       );
@@ -5181,14 +5214,82 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       for (const f of s.files)
         if (f.status === 'trashed' && (!paths.length || paths.includes(f.path))) {
           trashed.delete(f.path);
+          hidden.splice(0, hidden.length, ...hidden.filter((h) => h.path !== f.path));
           f.status = 'restored';
         }
-      const left = s.files.filter((f) => f.status === 'trashed');
+      const out = s.files.filter((f) => f.status === 'trashed');
+      const left = out.filter((f) => f.removedAs !== 'hide');
       s.trashed = left.length;
       s.frees = left.reduce((sum, f) => sum + (f.size ?? 0), 0);
-      s.undone = left.length === 0;
+      s.hidden = out.length - left.length;
+      s.undone = out.length === 0;
       emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
       return structuredClone(s);
+    },
+    listHiddenCopies: async () =>
+      structuredClone(
+        hidden.slice().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+      ),
+    showHiddenCopies: async (req) => {
+      const shown = req.paths.map((p) => {
+        const h = hidden.find((x) => x.path === p);
+        if (!h) throw invalid(`${p} is not a hidden copy.`);
+        return structuredClone(h);
+      });
+      for (const h of shown) {
+        if (h.session != null)
+          await client.undoCleanupSession({ session: h.session, paths: [h.path] });
+        hidden.splice(0, hidden.length, ...hidden.filter((x) => x.path !== h.path));
+        trashed.delete(h.path);
+      }
+      return shown;
+    },
+    decideDuplicateSet: async (req) => {
+      const set = duplicateSets(setFiles(), { kind: 'library' }, decided()).find(
+        (s) => s.id === req.set,
+      );
+      if (!set)
+        throw {
+          code: 'notFound' as const,
+          message: `Duplicate set ${req.set} was not found.`,
+          detail: null,
+        };
+      const decision: DuplicateDecision = {
+        id: ++nextId,
+        set: set.id,
+        answer: req.answer,
+        hashes: set.copies.map((c) => c.hash).sort(),
+        files: [...new Set(set.copies.map((c) => c.path))].sort(),
+        at: '2026-10-16T09:00:00Z',
+        outdated: false,
+      };
+      decisions.push(decision);
+      return structuredClone(decision);
+    },
+    listDuplicateDecisions: async () => {
+      const files = setFiles();
+      const current = new Set(duplicateSets(files, { kind: 'library' }).map(setKey));
+      return decisions
+        .slice()
+        .reverse()
+        .map((d) => ({
+          ...structuredClone(d),
+          outdated: !current.has(decisionKey(d.set, d.hashes)),
+          files: files
+            .filter((f) => d.hashes.includes(f.hash))
+            .map((f) => f.path)
+            .sort(),
+        }));
+    },
+    takeBackDuplicateDecision: async (req) => {
+      const i = decisions.findIndex((d) => d.id === req.decision);
+      if (i < 0)
+        throw {
+          code: 'notFound' as const,
+          message: `Decision ${req.decision} was not found.`,
+          detail: null,
+        };
+      decisions.splice(i, 1);
     },
     listSidecarConflicts: async () => structuredClone(sidecarConflicts),
     resolveSidecarConflict: async (req) => {

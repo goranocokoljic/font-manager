@@ -51,7 +51,7 @@
 //! taken into the history of the next write ([`absorb`]), so the machine that
 //! wrote it sees that its version was read and takes the result.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use fm_api::library::LicenseType;
 use serde::{Deserialize, Serialize};
@@ -67,12 +67,17 @@ pub const SIDECAR_DIR: &str = ".fontlibrary";
 ///
 /// Version 2 adds `pins` (virtual styles, E10.2), version 3 the family's
 /// notes (`familyMeta`, E13.5), version 4 its declared license
-/// (`familyMeta.license`, E15.2). A file is written with the lowest version
-/// its content needs, so an older build, which ignores fields it does not
-/// know, leaves a file it cannot hold alone instead of rewriting it without
-/// them; a file with neither stays [`PLAIN_VERSION`], so older builds still
-/// merge it.
-pub const SIDECAR_VERSION: u32 = 4;
+/// (`familyMeta.license`, E15.2), version 5 the hidden copies and the
+/// answered duplicate sets (`duplicates`, E56.8). A file is written with
+/// the lowest version its content needs, so an older build, which ignores
+/// fields it does not know, leaves a file it cannot hold alone instead of
+/// rewriting it without them; a file with neither stays [`PLAIN_VERSION`],
+/// so older builds still merge it.
+pub const SIDECAR_VERSION: u32 = 5;
+
+/// The format version of a sidecar with a declared license and no
+/// duplicates entries.
+pub const LICENSE_VERSION: u32 = 4;
 
 /// The format version of a sidecar with family notes and no declared
 /// license.
@@ -114,9 +119,122 @@ pub struct Sidecar {
     /// The family's own metadata (E13.5); absent when none is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub family_meta: Option<FamilyEntry>,
+    /// The copies hidden and the duplicate sets answered (E56.8); absent
+    /// when there are none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duplicates: Option<Duplicates>,
     /// Ids of the file's last versions, newest first ([`next_file_history`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<String>,
+}
+
+/// A copy hidden from the library (E56.8): the file relative to the
+/// source, with `/` separators, and the blake3 hash it had, hex.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HiddenEntry {
+    /// The file, relative to the source.
+    pub file: String,
+    /// Its hash, hex.
+    pub hash: String,
+}
+
+/// A duplicate set answered "not duplicates" or "keep both" (E56.8), for
+/// exactly the files with these hashes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionEntry {
+    /// The set id.
+    pub set: String,
+    /// `notDuplicates` or `keepBoth`.
+    pub answer: String,
+    /// The hash of each copy, hex, sorted; identical copies repeat theirs.
+    pub hashes: Vec<String>,
+}
+
+impl DecisionEntry {
+    /// What the entry is known by: the set and its hashes.
+    pub fn key(&self) -> (String, Vec<String>) {
+        (self.set.clone(), self.hashes.clone())
+    }
+}
+
+/// The duplicates entries of a family's sidecar (E56.8). They merge as
+/// sets, as tags do ([`merge_duplicates`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Duplicates {
+    /// The copies hidden.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden: Vec<HiddenEntry>,
+    /// The sets answered.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decisions: Vec<DecisionEntry>,
+}
+
+impl Duplicates {
+    /// Neither a hidden copy nor a decision.
+    pub fn is_empty(&self) -> bool {
+        self.hidden.is_empty() && self.decisions.is_empty()
+    }
+
+    /// Sorted, without repeats (one decision per set and hashes), so equal
+    /// content is equal JSON.
+    pub fn normalize(&mut self) {
+        self.hidden.sort();
+        self.hidden.dedup();
+        for d in &mut self.decisions {
+            d.hashes.sort();
+        }
+        self.decisions.sort();
+        self.decisions.dedup_by_key(|d| d.key());
+    }
+}
+
+/// The three-way merge of the duplicates entries: each one is an item of a
+/// set, kept when both sides have it or when the side that has it added it
+/// (it is not in `base`). So what one side added is added and what one side
+/// removed, and the other left alone, is removed. Without a common
+/// ancestor (`base` is `None`: a new machine, a rebuilt index, a file that
+/// does not descend from this machine's) nothing is taken for a removal:
+/// the entries of both sides are kept. A decision both sides hold keeps
+/// `local`'s answer.
+pub fn merge_duplicates(
+    base: Option<&Duplicates>,
+    local: &Duplicates,
+    disk: &Duplicates,
+) -> Duplicates {
+    let empty = Duplicates::default();
+    let base = base.unwrap_or(&empty);
+    let keep = |in_local: bool, in_disk: bool, in_base: bool| {
+        (in_local && in_disk) || ((in_local || in_disk) && !in_base)
+    };
+    let set = |d: &Duplicates| -> BTreeSet<HiddenEntry> { d.hidden.iter().cloned().collect() };
+    let (bh, lh, dh) = (set(base), set(local), set(disk));
+    let hidden = lh
+        .union(&dh)
+        .filter(|h| keep(lh.contains(*h), dh.contains(*h), bh.contains(*h)))
+        .cloned()
+        .collect();
+    let map = |d: &Duplicates| -> BTreeMap<(String, Vec<String>), DecisionEntry> {
+        d.decisions.iter().map(|e| (e.key(), e.clone())).collect()
+    };
+    let (bd, ld, dd) = (map(base), map(local), map(disk));
+    let keys: BTreeSet<&(String, Vec<String>)> = ld.keys().chain(dd.keys()).collect();
+    let decisions = keys
+        .into_iter()
+        .filter(|k| {
+            keep(
+                ld.contains_key(*k),
+                dd.contains_key(*k),
+                bd.contains_key(*k),
+            )
+        })
+        .filter_map(|k| ld.get(k).or_else(|| dd.get(k)).cloned())
+        .collect();
+    let mut out = Duplicates { hidden, decisions };
+    out.normalize();
+    out
 }
 
 impl Sidecar {
@@ -127,6 +245,7 @@ impl Sidecar {
             family: family.into(),
             faces: Vec::new(),
             family_meta: None,
+            duplicates: None,
             history: Vec::new(),
         }
     }
@@ -157,12 +276,18 @@ impl Sidecar {
             .family_meta
             .take()
             .filter(|f| f.notes.is_some() || f.license.is_some());
+        if let Some(d) = &mut self.duplicates {
+            d.normalize();
+        }
+        self.duplicates = self.duplicates.take().filter(|d| !d.is_empty());
         let licensed = self
             .family_meta
             .as_ref()
             .is_some_and(|f| f.license.is_some());
-        self.version = if licensed {
+        self.version = if self.duplicates.is_some() {
             SIDECAR_VERSION
+        } else if licensed {
+            LICENSE_VERSION
         } else if self.family_meta.is_some() {
             FAMILY_NOTES_VERSION
         } else if self.faces.iter().any(|f| !f.meta.pins.is_empty()) {
@@ -194,6 +319,10 @@ impl Sidecar {
 
 /// What reading a sidecar's text found.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "read once per folder and taken apart at once; a box buys nothing"
+)]
 pub enum Parsed {
     /// A sidecar this build can merge and rewrite.
     Sidecar(Sidecar),
@@ -746,10 +875,12 @@ pub fn next_file_history(next: &Sidecar, prior: Option<&Sidecar>) -> Vec<String>
         return prior.history.clone();
     }
     let history = prior.map(|p| p.history.as_slice()).unwrap_or_default();
-    // A file without family notes hashes its faces alone, as before E13.5.
-    match &next.family_meta {
-        None => extend(&next.faces, history),
-        Some(family) => extend(&(&next.faces, family), history),
+    // A file without family notes hashes its faces alone, as before E13.5;
+    // one without duplicates entries as before E56.8.
+    match (&next.family_meta, &next.duplicates) {
+        (None, None) => extend(&next.faces, history),
+        (Some(family), None) => extend(&(&next.faces, family), history),
+        (family, Some(d)) => extend(&(&next.faces, family, d), history),
     }
 }
 
@@ -764,7 +895,7 @@ pub fn descends(base: &Sidecar, disk: &Sidecar) -> bool {
 
 /// Whether two files hold the same entries, the family's included.
 fn same_entries(a: &Sidecar, b: &Sidecar) -> bool {
-    a.faces == b.faces && a.family_meta == b.family_meta
+    a.faces == b.faces && a.family_meta == b.family_meta && a.duplicates == b.duplicates
 }
 
 /// `history` with the id of a new version holding `content` first. The id

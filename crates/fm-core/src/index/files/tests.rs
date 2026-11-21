@@ -1285,7 +1285,8 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
         // descriptors (V24) too.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(
-            "DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
+            "DROP TRIGGER hidden_copy_stays_hidden; DROP TRIGGER hidden_copy_inserted_hidden; DROP TRIGGER hidden_copy_other_file; DROP TABLE hidden_copy; DROP TABLE duplicate_decision; ALTER TABLE resolution_move DROP COLUMN hidden;
+             DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
              ALTER TABLE collection DROP COLUMN color;
              DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;
@@ -1369,7 +1370,8 @@ fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
         // `face.parsed`); a tag and a rating on one of them.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(&format!(
-            "DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
+            "DROP TRIGGER hidden_copy_stays_hidden; DROP TRIGGER hidden_copy_inserted_hidden; DROP TRIGGER hidden_copy_other_file; DROP TABLE hidden_copy; DROP TABLE duplicate_decision; ALTER TABLE resolution_move DROP COLUMN hidden;
+             DROP TABLE glyph_descriptor; DROP TABLE glyph_trait_stamp; DROP TABLE glyph_traits;
              ALTER TABLE collection DROP COLUMN color;
              DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;

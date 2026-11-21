@@ -35,6 +35,7 @@ mod files;
 mod font_names;
 mod glyph_descriptors;
 mod glyph_traits;
+mod hidden;
 mod languages;
 mod license_inventory;
 mod metadata_merge;

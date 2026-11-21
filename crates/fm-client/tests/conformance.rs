@@ -110,6 +110,11 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; get_cleanup_draft);
     same!(seen, d, c; update_cleanup_draft, json!({ "kind": "identical", "include": false }));
     same!(seen, d, c; update_cleanup_draft, json!({ "kind": "decide", "set": "name:Nope", "decision": { "kind": "keepAll" } }));
+    same!(seen, d, c; list_hidden_copies);
+    same!(seen, d, c; show_hidden_copies, json!({ "paths": ["/nope.ttf"] }));
+    same!(seen, d, c; decide_duplicate_set, json!({ "set": "name:Nope", "answer": "keepBoth" }));
+    same!(seen, d, c; list_duplicate_decisions);
+    same!(seen, d, c; take_back_duplicate_decision, json!({ "decision": 999 }));
     same!(seen, d, c; list_sidecar_conflicts);
     same!(seen, d, c; resolve_sidecar_conflict, json!({ "id": 1, "keep": "mine" }));
     same!(seen, d, c; list_glyphs, json!({ "face": 1 }));

@@ -125,7 +125,18 @@ pub const MAX_PAGE: u32 = 500;
 
 /// The page `req` asks for of the sets among `files`.
 pub fn list(files: &[SetFile], req: &ListDuplicateSetsRequest) -> Paged<DuplicateSet> {
-    let all = sets(files, &req.scope);
+    list_with(files, req, &HashSet::new())
+}
+
+/// [`list`] without the sets answered "not duplicates" or "keep both" for
+/// exactly their files (`decided`, E56.8): they are neither listed nor
+/// counted.
+pub fn list_with(
+    files: &[SetFile],
+    req: &ListDuplicateSetsRequest,
+    decided: &HashSet<String>,
+) -> Paged<DuplicateSet> {
+    let all = sets_with(files, &req.scope, decided);
     let total = u32::try_from(all.len()).unwrap_or(u32::MAX);
     Paged {
         items: all
@@ -158,6 +169,35 @@ struct Draft {
 /// Every duplicate set among `files` with a copy in `scope`, sets by
 /// PostScript name (case-insensitive, then exact, then id), copies by path.
 pub fn sets(files: &[SetFile], scope: &DuplicateScope) -> Vec<DuplicateSet> {
+    sets_with(files, scope, &HashSet::new())
+}
+
+/// The key ([`fm_api::cleanup::decision_key`]) a decision about the set
+/// `id` with the files `members` is remembered by.
+fn draft_key(files: &[SetFile], id: &str, members: &[(usize, Option<usize>)]) -> String {
+    let hashes: Vec<String> = members
+        .iter()
+        .map(|&(fi, _)| files[fi].hash.clone())
+        .collect();
+    fm_api::cleanup::decision_key(id, &hashes)
+}
+
+/// The key a decision about `set` is remembered by: its id and its copies'
+/// hashes.
+pub fn set_key(set: &DuplicateSet) -> String {
+    let hashes: Vec<String> = set.copies.iter().map(|c| c.hash.clone()).collect();
+    fm_api::cleanup::decision_key(&set.id, &hashes)
+}
+
+/// [`sets`] without the sets whose key is in `decided`: answered "not
+/// duplicates" or "keep both" for exactly these files (E56.8). A set that
+/// gained a copy, or one of whose files changed, has another key, so it is
+/// listed again.
+pub fn sets_with(
+    files: &[SetFile],
+    scope: &DuplicateScope,
+    decided: &HashSet<String>,
+) -> Vec<DuplicateSet> {
     // Name sets: one per PostScript name, the first face of each file.
     let mut by_name: BTreeMap<&str, Vec<(usize, usize)>> = BTreeMap::new();
     for (fi, file) in files.iter().enumerate() {
@@ -215,6 +255,9 @@ pub fn sets(files: &[SetFile], scope: &DuplicateScope) -> Vec<DuplicateSet> {
                 .map(|fi| (fi, first(fi).or((!files[fi].faces.is_empty()).then_some(0))))
                 .collect(),
         });
+    }
+    if !decided.is_empty() {
+        drafts.retain(|d| !decided.contains(&draft_key(files, &d.id, &d.members)));
     }
     // The sets each file takes part in.
     let mut sets_of: BTreeMap<usize, Vec<&str>> = BTreeMap::new();

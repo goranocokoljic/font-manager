@@ -230,8 +230,8 @@ fn malformed_and_newer_sidecars_are_not_parsed_as_sidecars() {
         Parsed::Unreadable(_)
     ));
     assert_eq!(
-        parse(r#"{"version": 5, "faces": "anything"}"#),
-        Parsed::Newer(5)
+        parse(r#"{"version": 6, "faces": "anything"}"#),
+        Parsed::Newer(6)
     );
 }
 
@@ -497,7 +497,7 @@ fn a_sidecar_with_a_declared_license_is_version_4_and_reads_back() {
         None,
     ));
     sidecar.normalize();
-    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    assert_eq!(sidecar.version, LICENSE_VERSION);
     assert_eq!(
         sidecar.family_license(),
         Some(&license(LicenseType::PersonalOnly, Some(0)))
@@ -588,4 +588,72 @@ fn a_change_of_the_license_is_a_new_file_version() {
     theirs.history = next_file_history(&theirs, Some(&ours));
     assert_ne!(theirs.history, ours.history);
     assert!(descends(&ours, &theirs));
+}
+
+fn dups(hidden: &[&str], decisions: &[&str]) -> Duplicates {
+    let mut d = Duplicates {
+        hidden: hidden
+            .iter()
+            .map(|f| HiddenEntry {
+                file: (*f).to_owned(),
+                hash: "aa".into(),
+            })
+            .collect(),
+        decisions: decisions
+            .iter()
+            .map(|s| DecisionEntry {
+                set: (*s).to_owned(),
+                answer: "keepBoth".into(),
+                hashes: vec!["b".into(), "a".into()],
+            })
+            .collect(),
+    };
+    d.normalize();
+    d
+}
+
+/// E56.8: hidden copies and decisions merge as sets: what one side added
+/// is added, what one side removed (the other left alone) is removed, and
+/// without a common ancestor nothing is taken for a removal.
+#[test]
+fn duplicates_entries_merge_as_sets() {
+    let base = dups(&["a.ttf", "b.ttf"], &["name:A"]);
+    // Here "c" was hidden and "a" shown again; there "d" was hidden and
+    // the decision taken back.
+    let local = dups(&["b.ttf", "c.ttf"], &["name:A"]);
+    let disk = dups(&["a.ttf", "b.ttf", "d.ttf"], &[]);
+    let merged = merge_duplicates(Some(&base), &local, &disk);
+    assert_eq!(merged, dups(&["b.ttf", "c.ttf", "d.ttf"], &[]));
+    // Without an ancestor both sides' entries are kept.
+    let merged = merge_duplicates(None, &local, &disk);
+    assert_eq!(
+        merged,
+        dups(&["a.ttf", "b.ttf", "c.ttf", "d.ttf"], &["name:A"])
+    );
+}
+
+/// E56.8: a sidecar with duplicates entries is format 5, so an older build
+/// reads it as newer and leaves it alone; without them the format stays.
+#[test]
+fn duplicates_entries_need_format_5_and_hashes_keep_their_repeats() {
+    let mut sidecar = Sidecar::new("Inter");
+    sidecar.duplicates = Some(Duplicates::default());
+    sidecar.normalize();
+    assert_eq!(sidecar.duplicates, None, "empty entries are none");
+    assert_eq!(sidecar.version, PLAIN_VERSION);
+    let mut d = dups(&[], &["identical:aa"]);
+    d.decisions[0].hashes = vec!["aa".into(), "aa".into()];
+    sidecar.duplicates = Some(d);
+    sidecar.normalize();
+    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    assert_eq!(
+        sidecar.duplicates.as_ref().expect("dups").decisions[0].hashes,
+        ["aa", "aa"],
+        "two identical copies are two hashes"
+    );
+    let text = sidecar.to_json();
+    match parse(&text) {
+        Parsed::Sidecar(back) => assert_eq!(back, sidecar),
+        other => panic!("{other:?}"),
+    }
 }

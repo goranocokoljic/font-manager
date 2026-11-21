@@ -2046,6 +2046,96 @@ fn a_cleanup_applies_as_a_named_session_and_undo_brings_each_file_back() {
 }
 
 #[test]
+fn a_hidden_copy_leaves_the_library_and_an_answered_set_is_not_listed() {
+    use fm_api::cleanup::{
+        ApplyCleanupRequest, DecideSetRequest, DuplicateAnswer, PlanCleanupRequest, RemoveAs,
+        SessionKind, ShowHiddenRequest, TakeBackDecisionRequest,
+    };
+    let (api, _, _) = with_copy();
+    let sets = |api: &Arc<dyn Api>| {
+        api.list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .unwrap()
+            .total
+    };
+    assert_eq!(sets(&api), 1);
+
+    // Hide: the file stays, the copy leaves every list.
+    let plan = api
+        .plan_cleanup(PlanCleanupRequest {
+            remove_as: RemoveAs::Hide,
+            ..Default::default()
+        })
+        .unwrap();
+    let leaving: Vec<String> = plan.leaving().map(|f| f.path.clone()).collect();
+    assert_eq!(leaving.len(), 1, "{plan:#?}");
+    api.apply_cleanup(ApplyCleanupRequest {
+        plan,
+        name: None,
+        choices: Vec::new(),
+    })
+    .unwrap();
+    let hidden = api.list_hidden_copies().unwrap();
+    assert_eq!(hidden.len(), 1);
+    assert_eq!(hidden[0].path, leaving[0]);
+    assert_eq!(api.list_duplicates().unwrap(), [], "the copy is hidden");
+    let session = api
+        .list_cleanup_sessions()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.kind == SessionKind::Cleanup)
+        .expect("listed");
+    assert_eq!((session.hidden, session.trashed), (1, 0), "{session:#?}");
+    assert_eq!(session.files[0].removed_as, RemoveAs::Hide);
+
+    // Show it again; a second show is refused.
+    let shown = api
+        .show_hidden_copies(ShowHiddenRequest {
+            paths: leaving.clone(),
+        })
+        .unwrap();
+    assert_eq!(shown.len(), 1);
+    assert_eq!(api.list_hidden_copies().unwrap(), []);
+    assert_eq!(api.list_duplicates().unwrap().len(), 1, "the copy is back");
+    let err = api
+        .show_hidden_copies(ShowHiddenRequest { paths: leaving })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+
+    // Keep both: the set is not listed until the answer is taken back.
+    let set = api
+        .list_duplicate_sets(ListDuplicateSetsRequest::default())
+        .unwrap()
+        .items
+        .remove(0);
+    let decision = api
+        .decide_duplicate_set(DecideSetRequest {
+            set: set.id.clone(),
+            answer: DuplicateAnswer::KeepBoth,
+        })
+        .unwrap();
+    assert_eq!(decision.files.len(), 2, "{decision:#?}");
+    assert_eq!(sets(&api), 0);
+    assert_eq!(api.list_duplicate_decisions().unwrap().len(), 1);
+    let err = api
+        .decide_duplicate_set(DecideSetRequest {
+            set: set.id,
+            answer: DuplicateAnswer::NotDuplicates,
+        })
+        .unwrap_err();
+    assert_eq!(
+        err.code,
+        ErrorCode::NotFound,
+        "an answered set is not listed"
+    );
+    api.take_back_duplicate_decision(TakeBackDecisionRequest {
+        decision: decision.id,
+    })
+    .unwrap();
+    assert_eq!(api.list_duplicate_decisions().unwrap(), []);
+    assert_eq!(sets(&api), 1);
+}
+
+#[test]
 fn keep_this_one_trashes_the_other_copy_and_undo_brings_it_back() {
     let (api, original, copy) = with_copy();
     assert_eq!(api.list_duplicates().unwrap().len(), 1);
@@ -4495,6 +4585,37 @@ fn the_mock_filters_sorts_and_leaves_decided_sets_out_of_the_queue() {
     assert_eq!(overview.fonts, 2);
     assert_eq!(overview.identical.sets, 1);
     assert_eq!(overview.other_version.files, 2);
+}
+
+#[test]
+fn a_set_answered_for_good_is_neither_queued_nor_drafted() {
+    use fm_api::cleanup::{DecideSetRequest, DuplicateAnswer};
+    use fm_api::cleanup_draft::{CleanupDraftUpdate, SetDecision};
+    let (mock, _) = with_duplicate_files();
+    let ids = |mock: &MockApi| -> Vec<String> {
+        mock.list_duplicate_sets(ListDuplicateSetsRequest::default())
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|s| s.id)
+            .collect()
+    };
+    assert!(ids(&mock).contains(&"name:Inter-Regular".to_owned()));
+    // E56.8 remembers the answer; E56.11's queue and draft both honor it.
+    mock.decide_duplicate_set(DecideSetRequest {
+        set: "name:Inter-Regular".into(),
+        answer: DuplicateAnswer::KeepBoth,
+    })
+    .unwrap();
+    assert!(!ids(&mock).contains(&"name:Inter-Regular".to_owned()));
+    let err = mock
+        .update_cleanup_draft(CleanupDraftUpdate::Decide {
+            set: "name:Inter-Regular".into(),
+            decision: SetDecision::KeepAll,
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    assert!(mock.get_cleanup_draft().unwrap().decisions.is_empty());
 }
 
 #[test]

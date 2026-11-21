@@ -624,6 +624,11 @@ struct State {
     sessions: Vec<crate::cleanup::CleanupSession>,
     /// The Duplicates module's draft plan (E56.11), in memory.
     cleanup_draft: crate::cleanup_draft::CleanupDraft,
+    /// Copies hidden by a cleanup, by path (E56.8); their paths are in
+    /// `trashed` too, so they leave every list.
+    hidden: Vec<crate::cleanup::HiddenCopy>,
+    /// Sets answered "not duplicates" or "keep both", newest last (E56.8).
+    decisions: Vec<crate::cleanup::DuplicateDecision>,
     /// Sidecar conflicts waiting for the user, oldest first (E28.1).
     sidecar_conflicts: Vec<SidecarConflict>,
     /// The layout template files, in the order they were made.
@@ -1119,6 +1124,8 @@ impl State {
             resolutions: Vec::new(),
             sessions: Vec::new(),
             cleanup_draft: crate::cleanup_draft::CleanupDraft::default(),
+            hidden: Vec::new(),
+            decisions: Vec::new(),
             sidecar_conflicts: Vec::new(),
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
@@ -2134,8 +2141,9 @@ impl LibraryService for MockApi {
 
     fn list_duplicate_sets(&self, req: ListDuplicateSetsRequest) -> ApiResult<Paged<DuplicateSet>> {
         let files = self.duplicate_set_files(&req.scope)?;
-        let decided = self.state().cleanup_draft.decided();
-        Ok(duplicate_sets::list(&files, &req, &decided))
+        let decided = self.decided_keys();
+        let drafted = self.state().cleanup_draft.decided();
+        Ok(duplicate_sets::list_with(&files, &req, &decided, &drafted))
     }
 
     fn list_folder_pairs(&self, req: ListFolderPairsRequest) -> ApiResult<Paged<FolderPair>> {
@@ -2161,7 +2169,7 @@ impl LibraryService for MockApi {
     ) -> ApiResult<KeeperPolicyPreview> {
         req.policy.check()?;
         let files = self.duplicate_set_files(&req.scope)?;
-        let sets = duplicate_sets::sets(&files, &req.scope);
+        let sets = duplicate_sets::sets_with(&files, &req.scope, &self.decided_keys());
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         Ok(KeeperPolicyPreview {
             sets: count(sets.len()),
@@ -2574,13 +2582,56 @@ impl LibraryService for MockApi {
         update: crate::cleanup_draft::CleanupDraftUpdate,
     ) -> ApiResult<crate::cleanup_draft::CleanupDraft> {
         let files = self.duplicate_set_files(&DuplicateScope::Library)?;
+        // A set answered for good (E56.8) is not listed, so it is not decided again.
+        let answered = self.decided_keys();
         let mut st = self.state();
         st.cleanup_draft.apply(update, MOCK_NOW.to_owned(), |id| {
-            Ok(duplicate_sets::sets(&files, &DuplicateScope::Library)
-                .into_iter()
-                .find(|s| s.id == id))
+            Ok(
+                duplicate_sets::sets_with(&files, &DuplicateScope::Library, &answered)
+                    .into_iter()
+                    .find(|s| s.id == id),
+            )
         })?;
         Ok(st.cleanup_draft.clone())
+    }
+
+    fn list_hidden_copies(&self) -> ApiResult<Vec<crate::cleanup::HiddenCopy>> {
+        let mut out = self.state().hidden.clone();
+        out.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(out)
+    }
+
+    fn show_hidden_copies(
+        &self,
+        req: crate::cleanup::ShowHiddenRequest,
+    ) -> ApiResult<Vec<crate::cleanup::HiddenCopy>> {
+        self.mock_show_hidden(req)
+    }
+
+    fn decide_duplicate_set(
+        &self,
+        req: crate::cleanup::DecideSetRequest,
+    ) -> ApiResult<crate::cleanup::DuplicateDecision> {
+        self.mock_decide_set(req)
+    }
+
+    fn list_duplicate_decisions(&self) -> ApiResult<Vec<crate::cleanup::DuplicateDecision>> {
+        self.mock_list_decisions()
+    }
+
+    fn take_back_duplicate_decision(
+        &self,
+        req: crate::cleanup::TakeBackDecisionRequest,
+    ) -> ApiResult<()> {
+        let mut st = self.state();
+        let i = st
+            .decisions
+            .iter()
+            .position(|d| d.id == req.decision)
+            .ok_or_else(|| ApiError::not_found(format!("Decision {}", req.decision)))?;
+        st.mutations.push("take_back_duplicate_decision");
+        st.decisions.remove(i);
+        Ok(())
     }
 
     fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {

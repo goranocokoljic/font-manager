@@ -272,8 +272,7 @@ the trashed files free; it can be saved as JSON and applied later.
 library file on disk, not a system copy, its set's kept copy still there,
 not active unless the plan moves its activation, and the **plan's hash**
 (blake3 of the bytes): a file that changed is skipped and reported.
-Hiding (`removeAs: hide`) is planned now and applied by E56.8; until then
-`apply_cleanup` refuses a plan with a hidden copy (`Unsupported`).
+Hiding (`removeAs: hide`) is applied as E56.8 says below.
 
 **Applying.** `apply_cleanup` returns a job at once and runs on its own
 thread; progress is `Event::CleanupProgress` (one new variant: `done` of
@@ -316,6 +315,38 @@ Finder's trash) and cannot be made faster here.
 The mocks plan as the core does without an index or a disk: the E8.1
 keeper rule (`choose_keeper`), no language guard, no metadata conflicts;
 they apply at once, so their job cannot be cancelled.
+
+**Two outcomes that touch no file (E56.8).** *Hide* takes a copy out of
+the library and leaves its file where it is. *These are not duplicates* and
+*keep both* answer a set, so it is not listed again.
+
+- A hidden copy is a row in `hidden_copy` (schema V29): its path, the
+  blake3 hash of its bytes, when, and the session that hid it. While the
+  row is there, SQLite triggers hold `font_file.gone = 1` for that path and
+  hash, so no scan, rebuild or watcher event shows the copy again, and every
+  query that already reads `gone = 0` leaves it out. Another file at the
+  path (another hash) drops the row and is listed as a new file.
+- A hide is a session move with `hidden` set: the session counts it in
+  `hidden`, not in `trashed`, and its file row has `removedAs: hide`. The
+  merge of E56.5 is done as for the trash. Undo of the session, or
+  `show_hidden_copies` for one path, shows the copy and takes the merge
+  back as undo does. An active copy is not hidden (rule 3); a file that
+  changed since the plan is skipped.
+- An answer is a row in `duplicate_decision`: the set id and the sorted
+  hashes of its copies, **one per copy, repeats kept**. The key is
+  `<set>|<hashes>`. A set whose key is answered is left out of
+  `list_duplicate_sets`, the keeper preview, the cleanup plan and the E8.1
+  groups. A new copy, even an identical one, changes the key, so the set
+  is listed again and the answer reads `outdated`. In a folder-pair plan,
+  an answered set's copies stay with the reason of the answer.
+  `take_back_duplicate_decision` lists the set again.
+- Both travel in the sidecar (format **5**): `duplicates.hidden` (file,
+  hash) and `duplicates.decisions` (set, answer, hashes). They merge as
+  sets, three ways like the other sidecar fields; a hidden entry for a path
+  that now holds another hash is dropped. A fresh index of the folder
+  reads both back. The license block keeps its own format (4).
+- The mocks keep both lists in memory and answer the same way; the case
+  file has cases with answered sets.
 
 **Out of scope.** Fonts that only look alike (another name, another foundry,
 the same design): that is similarity (E23, ADR 0023), not duplication. Files
