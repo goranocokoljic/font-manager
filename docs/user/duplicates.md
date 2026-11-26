@@ -39,7 +39,9 @@ AI assistants show the same sentence.
 
 ## In the app
 
-Open **Duplicates**. You see how many fonts have more than one copy and how much space
+Open **Duplicates** from the **File** menu. On a Mac, the **File** menu is in the menu
+bar at the top of the screen. You can also open it from the command palette (Ctrl+K,
+⌘K on a Mac): type "Find duplicates". You see how many fonts have more than one copy and how much space
 a cleanup frees. Work through the sets, or clean up two folders that hold the same
 fonts. Then apply the plan. Undo it from the list of sessions.
 

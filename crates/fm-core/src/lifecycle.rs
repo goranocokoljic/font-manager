@@ -23,6 +23,9 @@ pub const MENU_QUIT: &str = "Quit Font Fu";
 
 /// The menu item that opens Settings, in the menu bar and the tray.
 pub const MENU_SETTINGS: &str = "Settings…";
+/// The menu bar item that opens the Duplicates module (E57.10): at the top of
+/// the File menu on every OS. No ellipsis: it opens a view, not a dialog.
+pub const MENU_DUPLICATES: &str = "Duplicates";
 /// The accelerator of the menu bar's Settings item: Ctrl+, (⌘, on a Mac), the
 /// same chord the UI's keymap gives Settings.
 pub const SETTINGS_ACCELERATOR: &str = "CmdOrCtrl+,";
@@ -660,5 +663,11 @@ mod tests {
         assert_eq!(settings_menu(Os::Windows), SettingsMenu::FileMenu);
         assert_eq!(settings_menu(Os::Linux), SettingsMenu::FileMenu);
         assert_eq!(SETTINGS_ACCELERATOR, "CmdOrCtrl+,");
+    }
+
+    #[test]
+    fn the_duplicates_item_opens_a_view_so_it_has_no_ellipsis() {
+        assert_eq!(MENU_DUPLICATES, "Duplicates");
+        assert!(!MENU_DUPLICATES.ends_with('…'));
     }
 }

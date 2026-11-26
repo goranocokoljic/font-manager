@@ -168,6 +168,14 @@ describe('Settings from the native menu bar and the tray', () => {
     expect(shellNavigateHandlers.size).toBe(0);
   });
 
+  it('opens the Duplicates module when the File menu sends shell:navigate "duplicates"', async () => {
+    const { router, wrapper } = await mountWithRouter();
+    navigate('duplicates');
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('duplicates');
+    wrapper.unmount();
+  });
+
   it('ignores a route the router does not know', async () => {
     const { router, wrapper } = await mountWithRouter();
     navigate('no-such-route');

@@ -178,12 +178,21 @@ test('a hidden copy and a remembered answer can each be taken back', async ({ pa
   await expect(decisions).toContainText('No remembered decisions.');
 });
 
-test('the ways in: the sidebar row, the family mark and Info, the palette', async ({ page }) => {
+test('the ways in: the family mark and Info, the palette', async ({ page }) => {
+  // The native File menu opens the module (E57.10); the sidebar has no row for it,
+  // even while fonts have copies.
   await page.goto('/?mockDuplicates=1#/');
-  const row = page.getByTestId('sidebar-duplicates');
-  await expect(row).toContainText(/Duplicates\s*3/);
-  await row.click();
-  await expect(nav(page)).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Library' })).toBeVisible();
+  // The marks on the cards say the copies are known before the sidebar is checked.
+  await page
+    .getByRole('group', { name: 'View mode' })
+    .getByRole('button', { name: 'Grid' })
+    .click();
+  await expect(page.getByTestId('card-copies').first()).toHaveText('3 copies');
+  await expect(page.getByTestId('sidebar-duplicates')).toHaveCount(0);
+  await expect(
+    page.getByRole('navigation', { name: 'Library' }).getByText('Duplicates', { exact: true }),
+  ).toHaveCount(0);
 
   // The family page: the "N copies" mark and the line under Info › Files.
   await page.goto('/?mockDuplicates=1#/family/1?face=1');
@@ -225,10 +234,16 @@ test('the wall card marks a family with copies and opens its sets', async ({ pag
   await expect(page.getByTestId('queue-family')).toBeVisible();
 });
 
-test('without copies the sidebar row is hidden', async ({ page }) => {
+test('without copies the palette still opens the module, on its empty overview', async ({
+  page,
+}) => {
   await page.goto('/#/');
   await expect(page.getByRole('navigation', { name: 'Library' })).toBeVisible();
   await expect(page.getByTestId('sidebar-duplicates')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Find duplicates');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#\/duplicates/);
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {

@@ -46,6 +46,7 @@
     "helpMenu": "Help",
     "about": "About Font Fu",
     "settings": "Settings…",
+    "duplicates": "Duplicates",
     "fileMenu": "File",
     "helpPages": {
       "getting-started": "Getting started",
@@ -2013,12 +2014,7 @@
     "resume": "Resume",
     "resumeLabel": "Resume {name}",
     "removeLabel": "Remove {name} from the library",
-    "removeTitle": "Remove from the library. The files stay where they are.",
-    "duplicates": "Duplicates",
-    "duplicatesCount": {
-      "one": "{count} font has copies",
-      "other": "{count} fonts have copies"
-    }
+    "removeTitle": "Remove from the library. The files stay where they are."
   },
   "catalogs": {
     "offShort": "off",

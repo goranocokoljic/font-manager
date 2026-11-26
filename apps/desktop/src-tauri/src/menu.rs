@@ -1,4 +1,5 @@
-//! The Settings… item of the menu bar and the tray (E5.12). Where it goes on
+//! The Settings… item of the menu bar and the tray (E5.12), and the menu
+//! bar's Duplicates item (E57.10). Where Settings… goes on
 //! each OS comes from `fm_core::lifecycle::settings_menu`; this file only puts
 //! it there, labels it in the UI's language (`shell_text`) and tells the
 //! webview to open Settings. That message is a shell event (`shell:navigate`),
@@ -14,6 +15,8 @@ use crate::tray::{self, MAIN_WINDOW};
 
 /// The id of the menu bar's Settings… item.
 pub const MENU_ID_SETTINGS: &str = "app:settings";
+/// The id of the menu bar's Duplicates item (E57.10).
+pub const MENU_ID_DUPLICATES: &str = "app:duplicates";
 /// The id of the app's own Quit item in the menu bar (E55.9).
 pub const MENU_ID_QUIT: &str = "app:quit";
 /// The id of the File menu the shell makes where the OS menu has none (Linux).
@@ -23,6 +26,8 @@ pub const FILE_SUBMENU_ID: &str = "app:file";
 pub const SHELL_NAVIGATE: &str = "shell:navigate";
 /// The route name of Settings in the UI's router.
 pub const SETTINGS_ROUTE: &str = "settings";
+/// The route name of the Duplicates module in the UI's router.
+pub const DUPLICATES_ROUTE: &str = "duplicates";
 /// The name that asks the webview to open the update dialog (E55.7); not a
 /// route, the UI handles it before its router.
 pub const UPDATE_DIALOG: &str = "update";
@@ -78,6 +83,61 @@ pub fn add_settings_item<R: Runtime>(
         }
     }
     Ok(())
+}
+
+/// Adds Duplicates to `menu` at the top of the File menu on every OS, a
+/// separator under it (E57.10). Call it after [`add_settings_item`]: on
+/// Windows and Linux it goes above Settings…, in the File menu that holds it;
+/// on a Mac, where Settings… is in the app menu, in the OS's File menu (made
+/// after the app menu when there is none). Always enabled: with no copies the
+/// module shows its own empty overview.
+pub fn add_duplicates_item<R: Runtime>(
+    app: &AppHandle<R>,
+    menu: &Menu<R>,
+    os: Os,
+    locale: &str,
+) -> tauri::Result<()> {
+    let item = MenuItem::with_id(
+        app,
+        MENU_ID_DUPLICATES,
+        shell_text::text(locale, "shell.duplicates"),
+        true,
+        None::<&str>,
+    )?;
+    // The File menu that holds Settings… may already show the locale's
+    // title, so it is found by its item, not by "File".
+    let file = match lifecycle::settings_menu(os) {
+        SettingsMenu::FileMenu => settings_submenu(menu),
+        SettingsMenu::AppMenuAboveQuit => file_menu(menu)?,
+    };
+    let file = match file {
+        Some(file) => file,
+        None => {
+            let file = Submenu::with_id(
+                app,
+                FILE_SUBMENU_ID,
+                shell_text::text(locale, "shell.fileMenu"),
+                true,
+            )?;
+            let after_app_menu = usize::from(os == Os::MacOs && !menu.items()?.is_empty());
+            menu.insert(&file, after_app_menu)?;
+            file
+        }
+    };
+    let others = !file.items()?.is_empty();
+    file.prepend(&item)?;
+    if others {
+        file.insert(&PredefinedMenuItem::separator(app)?, 1)?;
+    }
+    Ok(())
+}
+
+/// The submenu of `menu` that holds Duplicates.
+pub fn duplicates_submenu<R: Runtime>(menu: &Menu<R>) -> Option<Submenu<R>> {
+    menu.items().ok()?.into_iter().find_map(|i| {
+        let submenu = i.as_submenu()?;
+        submenu.get(MENU_ID_DUPLICATES).map(|_| submenu.clone())
+    })
 }
 
 /// Replaces the default menu's Quit with the app's own item (E55.9), so a
@@ -151,9 +211,19 @@ pub fn settings_submenu<R: Runtime>(menu: &Menu<R>) -> Option<Submenu<R>> {
     })
 }
 
-/// Shows the menu bar's Settings… item (and the File menu that holds it on
-/// Windows and Linux) in `locale`.
+/// Shows the menu bar's Settings… and Duplicates items (and the File menu
+/// that holds them on Windows and Linux) in `locale`.
 pub fn relabel<R: Runtime>(app: &AppHandle<R>, locale: &str) {
+    if let Some(item) = app
+        .menu()
+        .as_ref()
+        .and_then(duplicates_submenu)
+        .and_then(|s| s.get(MENU_ID_DUPLICATES))
+        .and_then(|i| i.as_menuitem().cloned())
+        && let Err(e) = item.set_text(shell_text::text(locale, "shell.duplicates"))
+    {
+        tracing::warn!(error = %e, "the Duplicates menu item was not relabelled");
+    }
     let Some(submenu) = app.menu().as_ref().and_then(settings_submenu) else {
         return;
     };
@@ -186,6 +256,15 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// Shows and focuses the main window (also when it is closed to the tray),
+/// then asks it to open the Duplicates module.
+pub fn open_duplicates<R: Runtime>(app: &AppHandle<R>) {
+    tray::show_main(app);
+    if let Err(e) = app.emit_to(MAIN_WINDOW, SHELL_NAVIGATE, DUPLICATES_ROUTE) {
+        tracing::warn!(error = %e, "Duplicates could not be opened");
+    }
+}
+
 /// Shows and focuses the main window, then asks it to open the update
 /// dialog: the tray's "Update to <version>…", a user's click.
 pub fn open_update<R: Runtime>(app: &AppHandle<R>) {
@@ -195,10 +274,13 @@ pub fn open_update<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// The menu bar's events: Settings… opens Settings, a Help page opens its page.
+/// The menu bar's events: Settings… opens Settings, Duplicates the Duplicates
+/// module, a Help page opens its page.
 pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     if event.id().as_ref() == MENU_ID_SETTINGS {
         open_settings(app);
+    } else if event.id().as_ref() == MENU_ID_DUPLICATES {
+        open_duplicates(app);
     } else if event.id().as_ref() == MENU_ID_QUIT {
         crate::quit_install::quit(app);
     } else {
@@ -222,5 +304,6 @@ mod tests {
         assert_eq!(SHELL_NAVIGATE, "shell:navigate");
         assert_eq!(SETTINGS_ROUTE, "settings");
         assert_eq!(UPDATE_DIALOG, "update");
+        assert_eq!(DUPLICATES_ROUTE, "duplicates");
     }
 }

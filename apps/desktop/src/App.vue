@@ -69,7 +69,7 @@ useActions([
   })),
 ]);
 
-// Settings… in the native menu bar and the tray: the shell has already shown the
+// Settings… in the native menu bar and the tray, Duplicates in the File menu: the shell has already shown the
 // window, the UI goes to the route. Unknown names are ignored.
 let stopShellNavigate: (() => void) | undefined;
 onMounted(() => {
@@ -84,8 +84,9 @@ onMounted(() => {
 });
 onUnmounted(() => stopShellNavigate?.());
 
-// The ways into the Duplicates module (E56.15): the counts, the notice after a scan that
-// found copies, and "Find duplicates" in the command palette.
+// The ways into the Duplicates module (E56.15, E57.10): the File menu (a shell:navigate
+// "duplicates"), the notice after a scan that found copies, and "Find duplicates" in the
+// command palette.
 const duplicateSummary = useDuplicateSummaryStore();
 onMounted(() => void duplicateSummary.start());
 onUnmounted(() => void duplicateSummary.stop());
