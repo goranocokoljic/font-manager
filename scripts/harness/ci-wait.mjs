@@ -16,12 +16,14 @@
 // Required checks come from go-harness.config.json `ci.required_checks`
 // ("ci / windows" ...). A check run matches when its name equals the entry or
 // its job part ("windows"). A story is green only when ALL of them conclude
-// `success` — a Windows-only pass is not a pass.
+// `success` — a Windows-only pass is not a pass. For a light or frontend PR
+// (ci-scope.mjs) ci.yml skips the OS jobs and runs `ci.light_check` or
+// `ci.frontend_check` alone; that job's run stands in for all three.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { loadConfig, gh, ghJson, parseArgs, isMain, withLight } from './lib.mjs';
+import { loadConfig, gh, ghJson, parseArgs, isMain, withLight, standIns } from './lib.mjs';
 import { blocking, changesNative } from '../bench/lib.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -40,6 +42,25 @@ export function matchCheck(required, runs) {
 export function osOf(name) {
   const n = name.toLowerCase();
   return n.includes('windows') ? 'windows' : n.includes('mac') ? 'macos' : n.includes('linux') || n.includes('ubuntu') ? 'linux' : null;
+}
+
+/**
+ * One verdict row per required check. A stand-in run (light, frontend) runs on
+ * Linux and is named after itself, so a red frontend job goes to ci-fix as
+ * `frontend` on linux, not as three red OS jobs.
+ */
+export function verdictChecks(found) {
+  return found.map((f) => {
+    const stand = f.run?.standIn ?? null;
+    return {
+      name: stand ? `ci / ${stand}` : f.want,
+      os: stand ? 'linux' : osOf(f.want),
+      conclusion: f.run?.conclusion ?? 'missing',
+      url: f.run?.html_url ?? null,
+      id: f.run?.id ?? null,
+      ...(stand ? { stands_for: f.want } : {}),
+    };
+  });
 }
 
 /** The useful part of a job log: lines near compiler errors, failed tests and panics. */
@@ -97,8 +118,8 @@ function jobLog(id) {
 
 async function waitFor(sha, names, cfg, deadline, pr = null, opts = {}) {
   for (;;) {
-    // The light job (a PR with harness scripts and developer docs only) stands
-    // in for the OS jobs ci.yml skipped.
+    // The light or frontend job (a PR with harness scripts, developer docs or
+    // frontend code only) stands in for the OS jobs ci.yml skipped.
     const runs = withLight(checkRuns(sha, opts), names, opts.light);
     const found = names.map((n) => ({ want: n, run: matchCheck(n, runs) }));
     // No run yet and the PR conflicts with main: GitHub will never start one.
@@ -161,18 +182,16 @@ async function main() {
   if (!existsSync('.github/workflows/ci.yml')) {
     verdict = { status: 'no-ci', sha, checks: [], failed: [], bench: null, note: '.github/workflows/ci.yml does not exist (E1.2 not merged?)' };
   } else {
-    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number, { light: cfg.ci.light_check });
+    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number, { light: standIns(cfg) });
     if (found === 'conflict') {
       verdict = { status: 'conflict', sha, checks: [], failed: [], bench: null, note: 'the PR conflicts with main, so no CI runs' };
     } else if (!found) {
       verdict = { status: 'timeout', sha, checks: [], failed: [], bench: null, note: `required checks not finished after ${cfg.ci.timeout_min} min` };
     } else {
-      const checks = found.map((f) => ({
-        name: f.want, os: osOf(f.want), conclusion: f.run?.conclusion ?? 'missing', url: f.run?.html_url ?? null, id: f.run?.id ?? null,
-      }));
+      const checks = verdictChecks(found);
       const failed = checks
         .filter((c) => c.conclusion !== 'success' && c.conclusion !== 'missing' && c.id)
-        // One red light job stands for three required checks: report it once.
+        // One red stand-in job stands for three required checks: report it once.
         .filter((c, i, all) => all.findIndex((k) => k.id === c.id) === i)
         .map((c) => ({ name: c.name, os: c.os, url: c.url, excerpt: excerpt(jobLog(c.id)) }));
       const infra = failed.map((c) => infraReason(annotations(checks.find((k) => k.name === c.name).id))).find(Boolean);

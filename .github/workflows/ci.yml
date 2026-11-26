@@ -1,11 +1,17 @@
 # CI matrix: the judge for every story. A story is done only when all three
 # jobs are green — a Windows-only pass is not a pass.
 #
-# One exception, the light path: a change that touches only harness scripts and
-# developer docs (scripts/harness/ci-scope.mjs decides) cannot break the app, so
-# it runs the `light` job alone (ESLint and the script tests on Linux) and the
-# three OS jobs are skipped. go-harness reads `ci / light` in their place
-# (go-harness.config.json `ci.light_check`).
+# Two exceptions, decided by scripts/harness/ci-scope.mjs from the changed files:
+#   light    — only harness scripts and developer docs: the `light` job alone
+#              (ESLint and the script tests on Linux).
+#   frontend — only Vue/TypeScript frontend code, its tests and static files:
+#              the `frontend` job alone (lint:js, Vitest, the desktop build and
+#              Playwright on Linux, no Rust toolchain).
+# The three OS jobs and the Tauri build are skipped then. go-harness reads
+# `ci / light` or `ci / frontend` in their place (go-harness.config.json
+# `ci.light_check`, `ci.frontend_check`). A PR labelled `ci:full`, a push to
+# main from such a PR and a manual run (workflow_dispatch; the keeper starts one
+# for main) are always full.
 #
 # Check names are "windows", "macos" and "linux" (go-harness matches them as
 # `ci / windows` ... in go-harness.config.json `ci.required_checks`).
@@ -17,9 +23,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# A PR push cancels the PR's older run. Runs on main never cancel each other:
+# a frontend push must not cancel a full run, or its commits stay unproven on
+# Windows and macOS (go-harness counts them as uncovered and starts another).
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -31,7 +40,8 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  # light or full, from the changed files. Anything it cannot tell is full.
+  # light, frontend or full, from the changed files and the ci:full label.
+  # Anything it cannot tell is full.
   scope:
     name: scope
     runs-on: ubuntu-latest
@@ -71,11 +81,49 @@ jobs:
       - name: Script tests (harness, bench, release, docs, community)
         run: pnpm test:scripts
 
+  # Frontend only: what the OS jobs run for the frontend, on Linux, without Rust.
+  # The same commands as the `check` job: lint:js is the JS half of `pnpm lint`
+  # (ESLint, Prettier, the community check, vue-tsc); the desktop build is
+  # vue-tsc and vite build, as `pnpm tauri build` runs it (beforeBuildCommand).
+  frontend:
+    name: frontend
+    needs: scope
+    if: needs.scope.outputs.scope == 'frontend'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint (ESLint, Prettier, community check, vue-tsc)
+        run: pnpm lint:js
+
+      - name: Frontend and harness tests
+        run: pnpm test
+
+      - name: Desktop build (vue-tsc and vite build)
+        run: pnpm --filter @fm/desktop build
+
+      - name: Playwright browser
+        run: pnpm --filter @fm/desktop exec playwright install --with-deps chromium
+
+      - name: UI end-to-end tests (browser mode on the mock API)
+        run: pnpm test:e2e
+
   check:
     name: ${{ matrix.name }}
     needs: scope
-    # A failed scope job must not skip the judge: only an explicit "light" does.
-    if: ${{ !cancelled() && needs.scope.outputs.scope != 'light' }}
+    # A failed scope job must not skip the judge: only an explicit "light" or
+    # "frontend" does.
+    if: ${{ !cancelled() && needs.scope.outputs.scope != 'light' && needs.scope.outputs.scope != 'frontend' }}
     runs-on: ${{ matrix.os }}
     # 90, not 60: the Windows job needs ~53 min on an ordinary runner now and
     # passed 60 on a slow one (PR #569: every step ~30 % slower, cancelled

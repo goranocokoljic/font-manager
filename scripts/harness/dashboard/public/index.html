@@ -166,6 +166,8 @@ main.loading { opacity: 0.55; transition: opacity .15s; }
       <div class="card" id="card-lessons"></div>
       <div class="card" id="card-parking"></div>
     </section>
+    <div class="section-title">Full CI runs on main</div>
+    <div class="card" id="card-fullruns"></div>
   </main>
 </div>
 <div id="tooltip" aria-hidden="true"></div>
@@ -173,7 +175,7 @@ main.loading { opacity: 0.55; transition: opacity .15s; }
 <script type="module">
 import {
   STAGES, collapseStories, filterStories, scope, kpis, costByDay, mustTrend, lensRows,
-  cycleRows, stageRows, ciByOs, budgetRows, epicRows, lessonSummary, TREND_WINDOW,
+  cycleRows, stageRows, ciByOs, budgetRows, epicRows, lessonSummary, fullRunRows, TREND_WINDOW,
 } from '/stats.mjs';
 
 /* ------------------------------------------------------------------ state */
@@ -653,6 +655,20 @@ function renderParking(items) {
   card.append(h('div', { class: 'footnote' }, 'Out-of-diff review notes never become issues on their own. Triage dev-docs/harness/parking-lot.md in batches.'));
 }
 
+function renderFullRuns(keeper) {
+  const card = document.getElementById('card-fullruns');
+  card.textContent = '';
+  card.append(h('div', { class: 'card-head' }, h('h2', null, 'Full CI runs on main')));
+  const rows = fullRunRows(keeper).slice(0, 15);
+  if (!rows.length) { card.append(h('div', { class: 'empty' }, 'The keeper has not started a full run yet.')); return; }
+  const run = (r) => (r.url ? h('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.outcome) : r.outcome);
+  const commits = (r) => h('span', { style: 'word-break:break-word', title: (r.commits ?? []).map((c) => `${String(c.sha ?? '').slice(0, 7)} ${c.title ?? ''}`).join('\n') },
+    (r.commits ?? []).length ? (r.commits ?? []).map((c) => c.title || String(c.sha ?? '').slice(0, 7)).join(' · ') : '—');
+  card.append(dataTable([{ label: 'Started' }, { label: 'Commit' }, { label: 'Result' }, { label: 'Commits', num: true }, { label: 'Covered' }, { label: 'Why' }],
+    rows.map((r) => [fmtDateTime(new Date(r.ts)), String(r.sha ?? '').slice(0, 7) || '—', run(r), String((r.commits ?? []).length), commits(r), r.reason || '—'])));
+  card.append(h('div', { class: 'footnote' }, 'Frontend-only pushes run one Linux job; the keeper starts a full run (Windows, macOS, Linux) at the end of an epic or after ci.full_run_max_hours. A red one is a red main. Not affected by filters.'));
+}
+
 /* ------------------------------------------------------------------ KPIs */
 function renderKpis(k, any) {
   const v = (x) => (any ? x : '—');
@@ -711,6 +727,7 @@ function renderAll() {
   renderEpics(stories);
   renderLessons(state.data.lessons);
   renderParking(state.data.parking);
+  renderFullRuns(state.data.keeper ?? []);
 
   const f = state.data.files;
   const newest = [f.stories.mtime, f.runs.mtime, f.cycles.mtime].filter(Boolean).sort().pop();

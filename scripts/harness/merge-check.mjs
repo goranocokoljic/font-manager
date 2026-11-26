@@ -12,10 +12,14 @@
 //   sync   — conflicts with main: the sync stage merges main and resolves them
 //   human  — a merge a person must decide (excluded track, a changed fm-api type)
 //   block  — cannot merge (draft, closed)
-//   stop   — main itself is red: merge nothing until main is green again
+//   stop   — main itself is red: merge nothing until main is green again. Main is
+//            red when its newest commit's checks are red, or when the newest
+//            finished full run (three OS jobs) is red, whatever frontend-only
+//            commits came after it (main-check.mjs mainState).
 // Exit: 0 on any verdict, 3 on error.
 
-import { loadConfig, ghJson, parseArgs, isMain, withLight } from './lib.mjs';
+import { loadConfig, ghJson, parseArgs, isMain, withLight, standIns } from './lib.mjs';
+import { mainRuns, mainState } from './main-check.mjs';
 
 const TYPES_TS = 'apps/desktop/src/api/types.ts';
 
@@ -77,7 +81,11 @@ export function decide(f, cfg) {
   if (f.state === 'MERGED') return { action: 'merged', reasons: ['PR is already merged (by a human)'] };
   if (f.state !== 'OPEN') return { action: 'block', reasons: [`PR is ${f.state.toLowerCase()}`] };
   if (f.isDraft) return { action: 'block', reasons: ['PR is still a draft'] };
-  if (f.mainCi === 'failure') return { action: 'stop', reasons: [`main is red at ${f.baseSha.slice(0, 7)}; merge nothing until it is fixed`] };
+  if (f.mainCi === 'failure') {
+    const at = (f.mainRedSha ?? f.baseSha).slice(0, 7);
+    const what = f.mainRedVia === 'full' ? `the last full CI run on main is red at ${at}` : `main is red at ${at}`;
+    return { action: 'stop', reasons: [`${what}; merge nothing until it is fixed`] };
+  }
   if (f.mergeable === 'CONFLICTING') return { action: 'sync', reasons: ['the branch conflicts with main'] };
   if ((cfg.auto_merge?.exclude_tracks ?? []).includes(f.track)) reasons.push(`track ${f.track} is merged by a human`);
   if (f.removals.length && !(cfg.contract_epics ?? []).includes(f.epic)) {
@@ -103,8 +111,10 @@ function gather(pr, track, epic, cfg) {
   const cmp = ghJson(['api', `repos/{owner}/{repo}/compare/${base.sha}...${v.headRefOid}`]);
   const runs = ghJson(['api', `repos/{owner}/{repo}/commits/${base.sha}/check-runs?per_page=100`])?.check_runs ?? [];
   const required = (cfg.ci.required_checks ?? []).map((n) => n.toLowerCase().split('/').pop().trim());
-  // A commit on main that ran only the light job: it stands in for the OS jobs.
-  const mainRuns = withLight(latestPerName(runs), cfg.ci.required_checks ?? [], cfg.ci.light_check).filter((r) => required.includes(r.name.toLowerCase()) || required.includes(r.name.toLowerCase().split('/').pop().trim()));
+  // A commit on main that ran only the light or frontend job: it stands in for the OS jobs.
+  const headRuns = withLight(latestPerName(runs), cfg.ci.required_checks ?? [], standIns(cfg)).filter((r) => required.includes(r.name.toLowerCase()) || required.includes(r.name.toLowerCase().split('/').pop().trim()));
+  const state = mainState(mainRuns(cfg), cfg.ci.required_checks ?? [], standIns(cfg));
+  const fullRed = state.via === 'full';
   return {
     state: v.state,
     isDraft: v.isDraft,
@@ -112,7 +122,10 @@ function gather(pr, track, epic, cfg) {
     sha: v.headRefOid,
     baseSha: base.sha,
     behindBy: cmp.behind_by ?? 0,
-    mainCi: commitCi(mainRuns),
+    // A red full run behind frontend-only commits keeps main red.
+    mainCi: fullRed ? 'failure' : commitCi(headRuns),
+    mainRedSha: fullRed ? state.run.headSha : base.sha,
+    mainRedVia: fullRed ? 'full' : 'newest',
     // The per-file API, not `gh pr diff`: a full diff over 300 files is refused.
     removals: contractRemovals(typesPatch(pr)),
     track,

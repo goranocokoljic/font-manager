@@ -805,23 +805,25 @@ function Wait-Minutes {
     while ((Get-Date) -lt $until) { Start-Sleep -Seconds 30; Draw-Panel }
 }
 
-# Main is red. Re-run its failed jobs once per main commit (a flaky test),
-# then check every main_red.poll_min minutes. $true once main is green again;
-# $false after main_red.max_hours.
+# Main is red. Re-run its failed jobs once per run (a flaky test), then check
+# every main_red.poll_min minutes. $true once main is green again; $false after
+# main_red.max_hours. main-check.mjs says what "main" is: the newest finished
+# full run when that one is red (frontend-only commits after it prove nothing
+# on Windows and macOS), else the newest run.
 function Wait-MainGreen {
     $poll = [double]($Cfg.main_red.poll_min ?? 10)
     $deadline = (Get-Date).AddHours([double]($Cfg.main_red.max_hours ?? 6))
     $rerun = @{}
     while ((Get-Date) -lt $deadline) {
-        $run = @(gh run list --branch $Cfg.base_branch --workflow ci.yml --limit 1 --json 'databaseId,status,conclusion,headSha' 2>$null | ConvertFrom-Json) | Select-Object -First 1
-        if ($run -and $run.status -eq 'completed' -and $run.conclusion -eq 'success') {
-            Write-Log "    main is green again at $($run.headSha.Substring(0, 7))" 'Green'
+        $v = $null; try { $v = Get-MainCheck @() } catch { Write-Log "    $($_.Exception.Message)" 'Yellow' }
+        if ($v -and $v.status -eq 'green') {
+            Write-Log "    main is green again at $(([string]$v.sha).Substring(0, 7))" 'Green'
             return $true
         }
-        if ($run -and $run.status -eq 'completed' -and -not $rerun[$run.headSha]) {
-            $rerun[$run.headSha] = $true
-            Write-Log "    main is red at $($run.headSha.Substring(0, 7)): re-running its failed jobs once (flaky test?)" 'Yellow'
-            gh run rerun $run.databaseId --failed 2>&1 | Out-Null
+        if ($v -and $v.status -eq 'red' -and $v.run_id -and -not $rerun["$($v.run_id)"] -and [int]($v.attempt ?? 1) -le 1) {
+            $rerun["$($v.run_id)"] = $true
+            Write-Log "    main is red at $(([string]$v.sha).Substring(0, 7)) ($($v.via) run): re-running its failed jobs once (flaky test?)" 'Yellow'
+            gh run rerun $v.run_id --failed 2>&1 | Out-Null
         }
         Wait-Minutes $poll 'main is red; no merge until it is green'
     }
@@ -1307,6 +1309,14 @@ function Invoke-GraduationReview {
 #   3. a harness:blocked story whose block reason matches keeper.retry_blocks
 #      (GitHub hiccups, not decisions) -> remove the label once; the lane
 #      takes the story again.
+#   4. a full CI run on main (frontend-only pushes run one Linux job, so
+#      Windows and macOS see them only here): scripts/harness/full-run.mjs
+#      decides; the keeper starts `gh workflow run ci.yml --ref main` when an
+#      epic of a story merged since the last look has no workable story left,
+#      when the oldest uncovered commit is older than ci.full_run_max_hours, or
+#      when a red full run has newer commits behind it. A red one is a red
+#      main (step 1); a green one is written to keeper.jsonl (`full-run-green`)
+#      with the commits it covered, and the dashboard shows it.
 # Memory: .harness/state/keeper.json. Records: .harness/keeper.jsonl.
 # -DryRun prints what one look would do and changes nothing.
 # --------------------------------------------------------------------------
@@ -1318,7 +1328,7 @@ function Get-KeeperMemory {
     $m = $null
     if (Test-Path $keeperFile) { try { $m = Get-Content $keeperFile -Raw | ConvertFrom-Json -AsHashtable } catch { } }
     if (-not $m) { $m = @{} }
-    foreach ($k in 'rerun', 'fix', 'restart', 'unblock', 'noted') { if (-not $m[$k]) { $m[$k] = @{} } }
+    foreach ($k in 'rerun', 'fix', 'restart', 'unblock', 'noted', 'full') { if (-not $m[$k]) { $m[$k] = @{} } }
     return $m
 }
 
@@ -1531,6 +1541,11 @@ function Keep-MainGreen {
         'green'   { Write-Log "    main is green at $sha7" 'Green'; return }
         'pending' { Write-Log "    main: CI is running at $sha7" 'DarkGray'; return }
     }
+    if ($v.newer_full_running) {
+        # The keeper started a new full run after the red one (a fix landed): let it decide.
+        Write-Log "    the last full run on main is red at $sha7; a newer full run is running - waiting for it" 'Yellow'
+        return
+    }
     $why = @($v.failed | ForEach-Object { "$($_.name) " + $(if ($_.step) { "(step: $($_.step))" } else { "($($_.conclusion), no step failed)" }) }) -join ', '
     Write-Log "    main is RED at $sha7 [$($v.kind)]: $why" 'Red'
     $fix = $M.fix[$sha]
@@ -1564,6 +1579,51 @@ function Keep-MainGreen {
     $today = @($M.fix.Values | Where-Object { $_.ts -and ((Get-Date) - [datetime]$_.ts).TotalHours -lt 24 }).Count
     if ($today -ge $max) { Write-KeeperOnce $M "max-$sha7" "    main $sha7 is red, but the keeper already ran $today fixes in 24 h (keeper.max_fixes_per_day $max). A human must look."; return }
     Invoke-FixMain -Verdict $v -M $M
+}
+
+# ---- 4. full run on main ----------------------------------------------------
+
+# Epics of the stories merged since the last look (the lanes write stories.jsonl;
+# a human merge the lane saw is recorded as merged too).
+function Get-MergedEpicsSince {
+    param([datetime]$Since)
+    return @(Get-StoryRecords | Where-Object { $_.outcome -eq 'merged' -and $_.ts -and [datetime]$_.ts -gt $Since } |
+        ForEach-Object { [string]$_.epic } | Where-Object { $_ } | Select-Object -Unique)
+}
+
+function Keep-FullRun {
+    param($M)
+    $F = $M.full
+    if (-not $F.logged) { $F.logged = @{} }
+    $since = if ($F.since) { [datetime]$F.since } else { (Get-Date).AddHours(-1) }
+    $epics = Get-MergedEpicsSince $since
+    $r = Invoke-Node 'full-run.mjs' @('--epics', ($epics -join ','))
+    $v = $null; try { $v = $r.Out | ConvertFrom-Json -Depth 10 } catch { }
+    if (-not $v) { throw "full-run failed: $($r.Err.Trim())" }
+    if (-not $script:KeeperDry) { $F.since = (Get-Date).ToString('o') }   # only after a good read: a failed look asks for those epics again
+
+    # A finished full run the keeper started: written once to keeper.jsonl with
+    # the commits it covered (the dashboard shows them). A red one is a red main:
+    # Keep-MainGreen re-runs it and hands it to /fix-main.
+    $last = $v.last_full
+    if ($last -and $last.event -eq 'workflow_dispatch' -and $last.status -eq 'completed' -and -not $F.logged["$($last.run_id)"]) {
+        $started = $F.started
+        $commits = if ($started -and $started.head_sha -eq $last.sha) { @($started.commits) } else { @() }
+        $ok = $last.conclusion -eq 'success'
+        Write-Log "    full run $($last.run_id) on main $(([string]$last.sha).Substring(0, 7)) ended $($last.conclusion) ($($commits.Count) commit(s) covered)" $(if ($ok) { 'Green' } else { 'Red' })
+        Write-KeeperRecord $(if ($ok) { 'full-run-green' } else { 'full-run-red' }) @{ run = $last.run_id; sha = $last.sha; url = $last.url; conclusion = $last.conclusion; commits = $commits }
+        if (-not $script:KeeperDry) { $F.logged["$($last.run_id)"] = (Get-Date).ToString('o') }
+    }
+
+    if ($v.action -ne 'start') { Write-Log "    full run: $($v.reason)" 'DarkGray'; return }
+    $commits = @($v.uncovered | ForEach-Object { @{ sha = $_.sha; title = $_.title } })
+    Invoke-KeeperAction "start a full CI run on main: $($v.reason)" {
+        $out = gh workflow run ci.yml --ref $Cfg.base_branch 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "gh workflow run ci.yml failed: $(($out | Out-String).Trim())" }
+    }
+    if ($script:KeeperDry) { return }
+    $F.started = @{ ts = (Get-Date).ToString('o'); head_sha = $v.head_sha; reason = $v.reason; commits = $commits }
+    Write-KeeperRecord 'full-run-start' @{ sha = $v.head_sha; reason = $v.reason; commits = $commits; epics = @($v.epics_done) }
 }
 
 # ---- 3. transient blocks ----------------------------------------------------
@@ -1608,6 +1668,7 @@ function Invoke-Keeper {
             Keep-MainGreen $M
             Keep-LanesAlive $M
             Retry-TransientBlocks $M
+            Keep-FullRun $M
         } catch {
             Write-Log "    this look failed: $($_.Exception.Message)" 'Red'
             Write-KeeperRecord 'error' @{ message = $_.Exception.Message }   # visible later, not only in the tab
@@ -1633,10 +1694,16 @@ function Test-Setup {
         if ($LASTEXITCODE -ne 0) { $bad += "origin/$($Cfg.base_branch) has no $f — the workspace does not exist yet (E1.1–E1.3 are human stories)" }
     }
     $need = @('go-harness.config.json', '.claude/skills/go-cycle/SKILL.md', '.claude/commands/fm-review.md', 'scripts/harness/pick.mjs')
-    if ($Lane -eq 'keeper') { $need += '.claude/skills/fix-main/SKILL.md', 'scripts/harness/main-check.mjs' }
+    if ($Lane -eq 'keeper') { $need += '.claude/skills/fix-main/SKILL.md', 'scripts/harness/main-check.mjs', 'scripts/harness/full-run.mjs' }
     foreach ($f in $need) {
         git -C $script:Work cat-file -e "origin/$($Cfg.base_branch):$f" 2>$null
         if ($LASTEXITCODE -ne 0 -and -not $NoWorktree) { $bad += "origin/$($Cfg.base_branch) has no $f — commit and push the harness first (the lane worktree checks out main)" }
+    }
+    if (-not $bad) {
+        # The labels the harness uses (ci:full, harness:blocked ...): create the missing ones.
+        $r = Invoke-Node 'issue.mjs' @('labels')
+        if ($r.Code -ne 0) { Write-Log "    ! could not create the harness labels: $($r.Err.Trim())" 'Yellow' }
+        elseif ($r.Out.Trim()) { Write-Log "    $($r.Out.Trim())" 'DarkGray' }
     }
     return $bad
 }

@@ -7,7 +7,7 @@
 //         --port 8090 | FM_DASHBOARD_PORT
 //         --data <dir> | FM_HARNESS_DIR     (default: <repo>/.harness)
 //
-// Sources: .harness/{stories,tasks,review-cycles}.jsonl, .harness/state/*.json
+// Sources: .harness/{stories,tasks,review-cycles,keeper}.jsonl, .harness/state/*.json
 // (stories running now), dev-docs/harness/kb/lessons/*.json (review KB),
 // dev-docs/harness/parking-lot.md (parked out-of-diff notes).
 
@@ -85,8 +85,8 @@ function repoUrl() {
 }
 
 export async function buildPayload(dataDir, repoRoot = REPO) {
-  const [stories, runs, cycles] = await Promise.all(
-    ['stories.jsonl', 'tasks.jsonl', 'review-cycles.jsonl'].map((f) => readJsonl(path.join(dataDir, f))),
+  const [stories, runs, cycles, keeper] = await Promise.all(
+    ['stories.jsonl', 'tasks.jsonl', 'review-cycles.jsonl', 'keeper.jsonl'].map((f) => readJsonl(path.join(dataDir, f))),
   );
   const lanes = await readJsonDir(path.join(dataDir, 'state'), 'lane'); // state/<lane>.json
   const lessons = await readJsonDir(path.join(repoRoot, 'dev-docs', 'harness', 'kb', 'lessons'));
@@ -97,10 +97,11 @@ export async function buildPayload(dataDir, repoRoot = REPO) {
     generatedAt: new Date().toISOString(),
     dataDir,
     repoUrl: repoUrl(),
-    files: { stories: info(stories), runs: info(runs), cycles: info(cycles) },
+    files: { stories: info(stories), runs: info(runs), cycles: info(cycles), keeper: info(keeper) },
     stories: stories.rows,
     runs: runs.rows,
     cycles: cycles.rows,
+    keeper: keeper.rows,
     lanes,
     lessons,
     parking,

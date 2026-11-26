@@ -29,6 +29,8 @@ export const DEFAULT_CONFIG = {
   ci: {
     required_checks: ['ci / windows', 'ci / macos', 'ci / linux'],
     light_check: 'ci / light',
+    frontend_check: 'ci / frontend',
+    full_run_max_hours: 24,
     bench_check: 'bench / bench',
     bench_workflow: 'bench.yml',
     bench_artifact: 'bench-report',
@@ -56,21 +58,50 @@ export const DEFAULT_CONFIG = {
 };
 
 /**
- * The `light` CI job stands in for the required OS jobs. ci.yml runs it alone
- * for a PR that changes only harness scripts and developer docs (ci-scope.mjs);
- * the three OS jobs are then skipped. Returns `runs` plus a copy of the light
- * run under the name of each required job that has no run of its own, so the
- * callers keep their "every required check" logic. `key` is the field that
- * says "skipped" (`conclusion` for check runs, `state` for `gh pr checks`).
+ * Labels the harness uses. `issue.mjs labels` creates the missing ones (the
+ * lanes and the keeper run it at start), so a person finds `ci:full` in the
+ * label list before the first story needs it.
+ */
+export const HARNESS_LABELS = [
+  { name: 'harness:in-progress', color: '0E8A16', description: 'go-harness is working this story' },
+  { name: 'harness:blocked', color: 'B60205', description: 'go-harness stopped: a human must decide' },
+  { name: 'harness:human-merge', color: 'FBCA04', description: 'Green and reviewed; go-harness leaves the merge to a person' },
+  { name: 'bench', color: 'C5DEF5', description: 'Runs the bench workflow on this PR' },
+  { name: 'ci:full', color: '5319E7', description: 'Always run the three-OS CI matrix on this PR, whatever it changes' },
+];
+
+/**
+ * The jobs that stand in for the three OS jobs, from the config: `light`
+ * (harness scripts and developer docs) and `frontend` (Vue/TypeScript only).
+ * ci.yml runs at most one of them, and only when it skips the OS jobs.
+ */
+export function standIns(cfg) {
+  return [cfg?.ci?.light_check, cfg?.ci?.frontend_check].filter(Boolean);
+}
+
+/**
+ * A stand-in CI job (`light` or `frontend`, see standIns) replaces the
+ * required OS jobs. ci.yml runs one alone for a PR whose scope is light or
+ * frontend (ci-scope.mjs); the three OS jobs are then skipped. Returns `runs`
+ * plus a copy of the stand-in run under the name of each required job that has
+ * no run of its own, so the callers keep their "every required check" logic.
+ * The copy carries `standIn` (the stand-in's job name). `light` is one check
+ * name or a list; the first one that really ran stands in. `key` is the field
+ * that says "skipped" (`conclusion` for check runs, `state` for `gh pr checks`).
  */
 export function withLight(runs, required, light, key = 'conclusion') {
   const job = (n) => String(n).toLowerCase().split('/').pop().trim();
   const real = (r) => String(r[key] ?? '').toLowerCase() !== 'skipped';
-  const stand = light ? (runs ?? []).find((r) => job(r.name) === job(light) && real(r)) : null;
+  const names = (Array.isArray(light) ? light : [light]).filter(Boolean).map(job);
+  let stand = null;
+  for (const n of names) {
+    stand = (runs ?? []).find((r) => job(r.name) === n && real(r)) ?? null;
+    if (stand) break;
+  }
   if (!stand) return runs ?? [];
   const out = [...runs];
   for (const name of (required ?? []).map(job)) {
-    if (!runs.some((r) => job(r.name) === name && real(r))) out.push({ ...stand, name });
+    if (!runs.some((r) => job(r.name) === name && real(r))) out.push({ ...stand, name, standIn: job(stand.name) });
   }
   return out;
 }

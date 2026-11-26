@@ -3,13 +3,13 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   collapseStories, filterStories, scope, kpis, costByDay, mustTrend, lensRows, cycleRows, stageRows,
-  ciByOs, budgetRows, epicRows, median,
+  ciByOs, budgetRows, epicRows, median, fullRunRows,
 } from './stats.mjs';
 import { buildPayload, parseParkingLot, readJsonl } from './server.mjs';
 
@@ -115,6 +115,21 @@ describe('cost, stages, CI, budget, epics', () => {
     assert.deepEqual(epicRows(stories).map((r) => [r.epic, r.done, r.blocked]), [['E1', 1, 0], ['E2', 0, 1]]);
     assert.equal(median([3, null, 1]), 2);
   });
+
+  test('full CI runs on main: the keeper\'s starts joined with their end, newest first, with the commits covered', () => {
+    const commits = [{ sha: 'a1', title: 'E57.2 Settings' }, { sha: 'b2', title: 'E57.3 Problems' }];
+    const rows = fullRunRows([
+      { ts: '2026-11-26T10:00:00Z', action: 'full-run-start', sha: 'b2', reason: 'epic E57 has no story left', commits },
+      { ts: '2026-11-26T10:10:00Z', action: 'main-rerun', sha: 'zz' },
+      { ts: '2026-11-26T11:00:00Z', action: 'full-run-green', sha: 'b2', url: 'https://x/runs/1', commits },
+      { ts: '2026-11-27T10:00:00Z', action: 'full-run-start', sha: 'c3', reason: 'fallback', commits: [{ sha: 'c3', title: 'E58.1' }] },
+    ]);
+    assert.deepEqual(rows.map((r) => [r.sha, r.outcome, r.commits.length]), [['c3', 'running', 1], ['b2', 'green', 2]]);
+    assert.equal(rows[1].url, 'https://x/runs/1');
+    assert.equal(rows[1].reason, 'epic E57 has no story left');
+    assert.deepEqual(fullRunRows([{ ts: 't', action: 'full-run-red', sha: 'd4', commits: [] }]).map((r) => r.outcome), ['red']);
+    assert.deepEqual(fullRunRows(undefined), []);
+  });
 });
 
 describe('server data', () => {
@@ -126,12 +141,15 @@ describe('server data', () => {
       mkdirSync(join(root, 'dev-docs', 'harness', 'kb', 'lessons'), { recursive: true });
       writeFileSync(join(data, 'stories.jsonl'), JSON.stringify(story(1, 'E1.1')) + '\n{"torn":');
       writeFileSync(join(data, 'state', 'ui.json'), JSON.stringify({ issue: 64, id: 'E5.1', stage: 'review' }));
+      writeFileSync(join(data, 'keeper.jsonl'), JSON.stringify({ ts: 't', action: 'full-run-green', sha: 'b2', commits: [] }) + '\n');
       writeFileSync(join(root, 'dev-docs', 'harness', 'kb', 'lessons', 'x.json'), JSON.stringify({ id: 'x', status: 'active' }));
       writeFileSync(join(root, 'dev-docs', 'harness', 'parking-lot.md'), '# Parking lot\n\n## 2026-10-20\n- [E1.1 #1] crates/fm-core/src/a.rs:3 — old unwrap\n');
       const p = await buildPayload(data, root);
       assert.equal(p.stories.length, 1);
       assert.equal(p.files.stories.skipped, 1);
       assert.deepEqual(p.runs, []);
+      assert.deepEqual(p.keeper.map((r) => r.action), ['full-run-green']);
+      assert.equal(p.files.keeper.count, 1);
       assert.deepEqual(p.lanes, [{ lane: 'ui', issue: 64, id: 'E5.1', stage: 'review' }]);
       assert.equal(p.lessons[0].id, 'x');
       assert.deepEqual(p.parking, [{ date: '2026-10-20', story: 'E1.1 #1', note: 'crates/fm-core/src/a.rs:3 — old unwrap' }]);
@@ -139,6 +157,18 @@ describe('server data', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  test('the page script parses (a syntax error would leave every card empty)', () => {
+    const html = readFileSync(join(import.meta.dirname, 'public', 'index.html'), 'utf8');
+    const scripts = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    assert.ok(scripts.length > 0, 'the page has its module script');
+    for (const src of scripts) {
+      // The imports are module-only syntax; the rest parses as a function body.
+      const body = src.replace(/^\s*import\s[\s\S]*?from\s+['"][^'"]+['"];?/gm, '');
+      assert.doesNotThrow(() => new Function(body), 'index.html module script has a syntax error');
+    }
+    assert.match(html, /renderFullRuns\(state\.data\.keeper/, 'the full-runs card is rendered');
   });
 
   test('parking-lot lines outside the list format are ignored', () => {

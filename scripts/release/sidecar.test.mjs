@@ -80,7 +80,7 @@ describe('wiring', () => {
     const ci = read('.github', 'workflows', 'ci.yml');
     const sidecar = ci.indexOf('node scripts/release/sidecar.mjs');
     assert.ok(sidecar > 0, 'a sidecar step');
-    assert.ok(sidecar < ci.indexOf('run: pnpm lint'), 'before Lint');
+    assert.ok(sidecar < ci.search(/run: pnpm lint$/m), 'before Lint');
   });
 
   test('pnpm lint builds the sidecar before clippy', () => {

@@ -238,3 +238,24 @@ export function lessonSummary(lessons) {
   for (const l of lessons) by[l.status] = (by[l.status] ?? 0) + 1;
   return by;
 }
+
+/**
+ * The full CI runs on main the keeper started (keeper.jsonl), newest first:
+ * started, then green or red, with the commits each one covered. A start with
+ * no end record yet is "running".
+ */
+export function fullRunRows(keeper) {
+  const recs = (keeper ?? []).filter((r) => String(r.action ?? '').startsWith('full-run-'));
+  const rows = [];
+  for (const r of recs) {
+    if (r.action === 'full-run-start') {
+      rows.push({ ts: r.ts, sha: r.sha ?? null, reason: r.reason ?? '', outcome: 'running', url: null, commits: r.commits ?? [] });
+      continue;
+    }
+    const outcome = r.action === 'full-run-green' ? 'green' : 'red';
+    const open = [...rows].reverse().find((x) => x.outcome === 'running' && (!x.sha || x.sha === r.sha));
+    if (open) Object.assign(open, { outcome, url: r.url ?? null, end: r.ts, commits: (r.commits?.length ? r.commits : open.commits) });
+    else rows.push({ ts: r.ts, sha: r.sha ?? null, reason: '', outcome, url: r.url ?? null, end: r.ts, commits: r.commits ?? [] });
+  }
+  return rows.reverse();
+}

@@ -586,3 +586,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E56.15 #675] apps/desktop/src/components/DuplicatesNotice.vue:19 — a near copy of UpdateNotice.vue:18-30 (giveBack/dismiss and card styles); same behavior today, could drift.
 - [E56.15 #675] apps/desktop/src/api/mock.ts — after a failed undo the mock marks the session `undone`, where fm-core keeps it not undone (crates/fm-core/src/resolve/cleanup.rs:645).
 - [E56.15 #675] apps/desktop/src/api/mock.ts — the mock's undo acts only on `trashed` files, so "Try again" on a `failed` History row does nothing in browser mode.
+
+## 2026-11-26
+- [E57.1 #691] go-harness.ps1:838 — `harness:human-merge` (and `bench` in scripts/harness/ci-wait.mjs:149) are still created with hard-coded colors and descriptions that repeat `HARNESS_LABELS` in scripts/harness/lib.mjs.
+- [E57.1 #691] scripts/harness/epic-sync.mjs:46 — `epicOf` and full-run.mjs `epicNumber` each map an epic id to its issue number with their own title rule; they agree today but could drift.
