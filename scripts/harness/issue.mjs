@@ -6,6 +6,7 @@
 //   node scripts/harness/issue.mjs tick <n> --index 2 --evidence "test index::search::filters_by_lang; CI run 123"
 //   node scripts/harness/issue.mjs pending <n> --index 3 --note "verified locally, pending E9.1: 41 ms p95"
 //   node scripts/harness/issue.mjs block <n> --reason "CI failed 3x on macos" --tried "fixed path case; fixed CRLF"
+//   node scripts/harness/issue.mjs labels                         # create the harness labels that are missing
 //
 // `tick` flips exactly one `- [ ]` under "## Acceptance criteria" to `- [x]` and
 // posts a one-line evidence comment. It refuses an empty evidence string: a box
@@ -18,7 +19,7 @@
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gh, ghJson, parseMeta, parseCriteria, labelNames, parseArgs, isMain } from './lib.mjs';
+import { gh, ghJson, parseMeta, parseCriteria, labelNames, parseArgs, isMain, HARNESS_LABELS } from './lib.mjs';
 
 const PENDING_MARK = '_(verified locally, pending E9.1)_';
 
@@ -55,11 +56,26 @@ function comment(n, text) {
   gh(['issue', 'comment', String(n), '--body-file', '-'], { input: text });
 }
 
+/** The harness labels the repository does not have yet (pure). Existing ones are left as they are. */
+export function missingLabels(existing) {
+  const have = new Set((existing ?? []).map((l) => String(l).toLowerCase()));
+  return HARNESS_LABELS.filter((l) => !have.has(l.name.toLowerCase()));
+}
+
+function ensureLabels() {
+  const existing = ghJson(['label', 'list', '--limit', '500', '--json', 'name'])?.map((l) => l.name) ?? [];
+  for (const l of missingLabels(existing)) {
+    gh(['label', 'create', l.name, '--color', l.color, '--description', l.description], { allowFail: true });
+    console.log(`label created: ${l.name}`);
+  }
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const [cmd, num] = args._;
+  if (cmd === 'labels') { ensureLabels(); return; }
   const n = Number(num);
-  if (!cmd || !Number.isInteger(n)) throw new Error('usage: issue.mjs <meta|numeric|tick|pending|block> <issue> [...]');
+  if (!cmd || !Number.isInteger(n)) throw new Error('usage: issue.mjs <meta|numeric|tick|pending|block> <issue> [...] | issue.mjs labels');
 
   const issue = view(n);
   switch (cmd) {

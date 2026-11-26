@@ -29,7 +29,9 @@ rules do not bend here either.
 The verdict file (`--ci`) has: `sha` (the red commit), `run_id`, `url`, `kind`
 (`test` here: a step failed), `failed[]` with `name` (OS), `step`, `excerpt`
 (the log lines around the error), `last_green_sha` and `suspects[]` (the commits
-between the last green run and `sha`, oldest first).
+between the last green run and `sha`, oldest first). `via: "full"` means the red
+run is a full run (three OS jobs; often one the keeper started) with frontend-only
+commits after it: `suspects` are then every commit since the last green full run.
 
 ## Markers and sentinels (REQUIRED)
 
@@ -133,7 +135,7 @@ the failing step, why it failed) and why this fix is right. Then:
 
 ```bash
 git push -u origin HEAD
-gh pr create --base main --title "fix(main): <what>" --body-file - <<'EOF'
+gh pr create --base main --label ci:full --title "fix(main): <what>" --body-file - <<'EOF'
 Keeper fix for the red main run <url> (commit <sha7>).
 
 ## Cause
@@ -152,5 +154,10 @@ EOF
 ```
 
 Not a draft: the keeper merges it when its CI is green. You never merge.
+
+The label `ci:full` is required: the fix must prove itself on all three OS, even when it changes only frontend
+files (ci-scope.mjs would else run the short `frontend` job). The merge commit
+on main runs the full matrix too (its PR carries the label). If `gh pr create`
+refuses the label, create it first: `node scripts/harness/issue.mjs labels`.
 
 End: `GOCYCLE_OK`.

@@ -33,9 +33,12 @@
   "budget_enforced": false,
   "budget_base_usd": 20,
 
+  "_ci": "light_check / frontend_check: the job ci.yml runs alone for a light or frontend change (ci-scope.mjs); it stands in for required_checks. full_run_max_hours: the keeper starts a full run on main when the oldest commit no full run covered is older than this (0 = off; the end of an epic starts one at once).",
   "ci": {
     "required_checks": ["ci / windows", "ci / macos", "ci / linux"],
     "light_check": "ci / light",
+    "frontend_check": "ci / frontend",
+    "full_run_max_hours": 24,
     "bench_check": "bench / bench",
     "bench_workflow": "bench.yml",
     "bench_artifact": "bench-report",

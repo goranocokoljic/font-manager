@@ -13,11 +13,13 @@ as briefed in `dev-docs/HARNESS-ADAPTATION.md`.
 | `.claude/skills/go-cycle/SKILL.md` | one story, one stage: `build`, `ci-fix`, `review`, `finalize` |
 | `.claude/commands/fm-review.md` | the code review (must/should, verified, verify-mode later cycles) |
 | `scripts/harness/pick.mjs` | Definition of Ready, lane choice, ordering, overlap, dry run |
-| `scripts/harness/ci-wait.mjs` | waits for `ci / windows`, `ci / macos`, `ci / linux` (+ bench) |
-| `scripts/harness/main-check.mjs` | the keeper's facts: is `main` red, which job and step, runner or code; the state of a fix PR |
+| `scripts/harness/ci-scope.mjs` | the CI scope of a change: `light`, `frontend` or `full` (see CI scopes) |
+| `scripts/harness/ci-wait.mjs` | waits for `ci / windows`, `ci / macos`, `ci / linux` (or the `light` / `frontend` job that stands in for them) (+ bench) |
+| `scripts/harness/main-check.mjs` | the keeper's facts: is `main` red (a red full run counts over newer frontend runs), which job and step, runner or code; the state of a fix PR |
+| `scripts/harness/full-run.mjs` | the keeper's question: start a full CI run on `main` now? (see CI scopes) |
 | `scripts/harness/install-keeper.ps1` | registers the keeper as a logon task (Task Scheduler) |
 | `.claude/skills/fix-main/SKILL.md` | the keeper's agent run: fix a flaky test for good or revert the bad commit, open a PR |
-| `scripts/harness/issue.mjs` | fm-meta, criteria tick with evidence, `harness:blocked` |
+| `scripts/harness/issue.mjs` | fm-meta, criteria tick with evidence, `harness:blocked`, `labels` (creates the harness labels, `ci:full` among them, at every lane start) |
 | `scripts/harness/kb.mjs` | review knowledge base (lessons, retrieval, graduation) |
 | `scripts/harness/epic-sync.mjs` | summary comment on the epic when a story closes; closes done epics |
 | `scripts/harness/loop-check.mjs` | convergence guard after each story |
@@ -116,11 +118,10 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   `harness:blocked`. The PR conflicts with `main` (GitHub runs no CI on it) →
   `sync`. GitHub did not run the jobs at all (billing, spending limit) → the lane
   stops at once and keeps the story's state; the next run resumes it at CI.
-  A PR that changes only harness scripts and developer docs
-  (`scripts/harness/`, `dev-docs/`, `docs/adr/`, `.claude/`, `go-harness.*`,
-  `CLAUDE.md`; `scripts/harness/ci-scope.mjs`) takes the light path: ci.yml
-  runs the `light` job alone (ESLint, the script tests, Linux) and the harness
-  reads it in place of the three OS jobs (`ci.light_check`).
+  A PR that changes only harness scripts and developer docs runs the `light`
+  job alone, one that changes only frontend files runs the `frontend` job
+  alone; the harness reads that job in place of the three OS jobs (see CI
+  scopes). A red `frontend` or `light` job goes to `ci-fix` like any red job.
   Stories with numeric criteria (a number with ms, s, fps,
   MB) get the `bench` label on the CI wait before finalize; `bench-report.json`
   `pass: false` counts as red. The bench job (`.github/workflows/bench.yml`,
@@ -153,6 +154,66 @@ Later stages resume the build conversation (`claude --resume <session>`), so the
 fixer keeps the implementation intent. `.harness/notes/issue-<n>.md` is the
 memory if a cold start is needed, and the decision record reviewers read.
 
+## CI scopes
+
+`scripts/harness/ci-scope.mjs` (the `scope` job of `.github/workflows/ci.yml`)
+reads the changed files of a PR or a push to `main` and gives one of three answers:
+
+| Scope | When | ci.yml runs | The harness reads |
+|---|---|---|---|
+| `light` | every file is a harness script or a developer doc: `scripts/harness/`, `dev-docs/`, `docs/adr/`, `.claude/`, `go-harness.*`, `CLAUDE.md` | the `light` job alone: ESLint and the script tests on Linux | `ci / light` (`ci.light_check`) |
+| `frontend` | every file is under `apps/desktop/src/` (but not `src/api/types.ts`, generated from fm-api), `apps/desktop/e2e/`, `apps/desktop/public/`, or is `apps/desktop/index.html`, or is light | the `frontend` job alone (Linux, no Rust, 20 min): `pnpm lint:js`, `pnpm test`, the desktop build (`vue-tsc`, `vite build`), the Playwright browser, `pnpm test:e2e` | `ci / frontend` (`ci.frontend_check`) |
+| `full` | anything else, and everything the script cannot tell (no file list, an API error, 300+ files, a manual run) | the three OS jobs (lint, Rust tests, Vitest, e2e, Tauri build) | `ci / windows`, `ci / macos`, `ci / linux` |
+
+Never frontend: `apps/desktop/src-tauri/`, `crates/`, `Cargo.*`, any
+`package.json`, the lock file, the Vite, Playwright and TypeScript configs and
+`.github/`. A PR without native code never asks for the `bench` label, as before.
+
+**`ci:full`.** A PR labelled `ci:full` is always full, whatever it changes, and
+so is the push to `main` its merge makes. A person adds the label to force the
+matrix (then pushes, or re-runs the workflow: the scope job reads the labels
+when it runs). `/fix-main` puts it on every fix PR. `issue.mjs labels` creates it
+at every lane start.
+
+**Main follows the same scope**: a merged frontend story costs `main` one
+frontend job. Runs on `main` never cancel each other (a frontend push must not
+cancel a full run). Main's state for the merge gate and the keeper is the newest
+finished full run when that one is red, whatever frontend-only commits came
+after it; otherwise the newest commit's own checks (`main-check.mjs`).
+
+**The automatic full run.** The keeper asks `full-run.mjs` at every look and
+starts `gh workflow run ci.yml --ref main` (a manual run is always full):
+
+- at the end of an epic: a story's PR was merged since the last look, its epic
+  (read from the API) has no story left the harness can work (every sub-issue
+  is closed or carries `human` or `harness:blocked`), and `main` has commits no
+  run of the three OS jobs covered;
+- as a fallback for an epic that takes days, one that never closes, or commits
+  that belong to no epic: the oldest uncovered commit is older than
+  `ci.full_run_max_hours` (24; 0 turns the fallback off);
+- when the last full run is red and newer commits came after it (a fix may
+  have landed).
+
+Never more than one keeper run in flight, none while a run on `main` has not
+decided its scope yet, and none while every commit is covered. A red full run is
+a red `main`: the keeper re-runs the failed jobs once, then `/fix-main` gets the
+verdict file with every commit since the last green full run, and the lanes'
+merge gate stops until it is green. A green one is written to `keeper.jsonl`
+(`full-run-green`, with the commits it covered) and shown on the dashboard.
+
+**What is given up.** Between two full runs, `main` is proven on Linux only for
+frontend changes. A failure on Windows or macOS (a WebView2 or WebKit
+difference, a path in an e2e test) is found at the next full run, among the
+commits since the last one, not at the PR that caused it. The local preflight
+of a story does not change (`pnpm lint`, `cargo nextest run --workspace`,
+`pnpm test`, `pnpm gen:types` and the diff check), so Rust is still compiled
+and tested on the developer's system before every push.
+
+What it saves: a full run takes about 55 minutes on Windows and three runners;
+the frontend job is one Linux runner. Estimate from the Linux job of run
+44961078043 (the steps the frontend job keeps): about 15 minutes, 11 of them the
+end-to-end tests. The PR of E57.1 records the measured time.
+
 ## Merge gate
 
 `go-harness.config.json` → `merge`:
@@ -167,7 +228,7 @@ memory if a cold start is needed, and the decision record reviewers read.
 | sync | the branch conflicts with `main` | the `sync` stage, then CI, then the gate again |
 | human | track in `auto_merge.exclude_tracks` (empty in this repo; the default is `platform`) or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
 | block | a draft, or the merge call failed | `harness:blocked` |
-| stop | the newest commit on `main` has a failed required check (newest run per job) | re-run main's failed jobs once (a flaky test), check every `main_red.poll_min` (10) minutes; green → the gate again; still red after `main_red.max_hours` (6) → stop the lane, and the next run merges the PR |
+| stop | the newest commit on `main` has a failed required check (newest run per job), or the newest finished full run on `main` is red (whatever frontend-only commits came after it) | re-run main's failed jobs once (a flaky test), check every `main_red.poll_min` (10) minutes; green → the gate again; still red after `main_red.max_hours` (6) → stop the lane, and the next run merges the PR |
 
 Merging only a branch that is up to date with `main` and green means `main` after
 the merge is the exact tree CI just tested, even with two lanes merging. Adding to
@@ -205,6 +266,7 @@ is a third process, `./go-harness.ps1 -Lane keeper`, that looks every
 | `main` red, first time for this commit | re-runs the failed jobs once (`gh run rerun --failed`); the lanes do the same at their merge gate |
 | `main` red again, **no step failed** (job cancelled, timed out, runner never started) | a runner problem: re-runs again, once an hour; no agent |
 | `main` red again, **a step failed** | writes the verdict to `.harness/ci/main-<sha7>.json` and runs one `/fix-main` agent in `../font-manager-keeper`: it fixes the flaky test for good or reverts the bad commit and opens a PR `fix-main-<sha7>`; the keeper merges that PR itself when its three OS are green (the merge gate would refuse: `main` is red). Red again → one re-run, then a PR comment and a red log line: a human must look. At most `keeper.max_fixes_per_day` (3) |
+| `main` has commits no full run covered (`full-run.mjs`) | starts a full run (`gh workflow run ci.yml --ref main`) at the end of an epic, after `ci.full_run_max_hours` (24), or behind a red full run; logs `full-run-start`, then `full-run-green` / `full-run-red` with the commits it covered (see CI scopes) |
 | a story lane with no live process (`.harness/state/<lane>.lock` has no running PID) | starts it in a new Windows Terminal tab (or window), not more often than `keeper.lane_restart_min` (30); never while the lane's last 3 stories ended blocked (that looks systemic) |
 | a `harness:blocked` story whose block reason in `stories.jsonl` matches `keeper.retry_blocks` (GitHub hiccups: `ci-wait failed`, `CI timeout`, `could not update the branch`, `merge-check failed`) | removes the label once (twice at most per story) with a comment; the lane takes it again. Decisions (bench, `must` findings, fm-api types) are never unblocked |
 
@@ -220,7 +282,8 @@ starts the keeper one minute after every logon, in a terminal tab, and starts it
 now. `-Uninstall` removes the task. The PC must stay on; the lanes need that too.
 
 What the keeper does **not** do: pick stories, judge reviews, merge story PRs
-(the lanes' merge gate owns that), touch budgets or workflows, or unblock a
+(the lanes' merge gate owns that), touch budgets or edit workflows (it only
+starts a run of ci.yml), or unblock a
 story that waits for a decision.
 
 ## The review — why it is different from tr-harness
@@ -295,6 +358,7 @@ period, lane, outcome.
 | Review cycles | full review (cycle 1) vs verify cycles: must, should, rejected, resolved, fixed, disputed |
 | Stories | sortable table; expand a row for its stage runs, review cycles (with the per-lens split) and build phases |
 | Epics, Review KB, Parking lot | stories per epic, lesson lifecycle counts, out-of-diff notes waiting for triage |
+| Full CI runs on main | the full runs the keeper started (`keeper.jsonl`): when, why, green or red, and the commits each one covered |
 
 When a story's issue closes, `epic-sync.mjs` posts its summary line on the epic
 (lane start and end, or `-EpicSync`) and closes an epic whose stories are all closed.
