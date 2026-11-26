@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -157,6 +157,18 @@ describe('server data', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  test('the page script parses (a syntax error would leave every card empty)', () => {
+    const html = readFileSync(join(import.meta.dirname, 'public', 'index.html'), 'utf8');
+    const scripts = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    assert.ok(scripts.length > 0, 'the page has its module script');
+    for (const src of scripts) {
+      // The imports are module-only syntax; the rest parses as a function body.
+      const body = src.replace(/^\s*import\s[\s\S]*?from\s+['"][^'"]+['"];?/gm, '');
+      assert.doesNotThrow(() => new Function(body), 'index.html module script has a syntax error');
+    }
+    assert.match(html, /renderFullRuns\(state\.data\.keeper/, 'the full-runs card is rendered');
   });
 
   test('parking-lot lines outside the list format are ignored', () => {

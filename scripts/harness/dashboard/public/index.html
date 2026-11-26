@@ -662,8 +662,7 @@ function renderFullRuns(keeper) {
   const rows = fullRunRows(keeper).slice(0, 15);
   if (!rows.length) { card.append(h('div', { class: 'empty' }, 'The keeper has not started a full run yet.')); return; }
   const run = (r) => (r.url ? h('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.outcome) : r.outcome);
-  const commits = (r) => h('span', { style: 'word-break:break-word', title: (r.commits ?? []).map((c) => `${String(c.sha ?? '').slice(0, 7)} ${c.title ?? ''}`).join('
-') },
+  const commits = (r) => h('span', { style: 'word-break:break-word', title: (r.commits ?? []).map((c) => `${String(c.sha ?? '').slice(0, 7)} ${c.title ?? ''}`).join('\n') },
     (r.commits ?? []).length ? (r.commits ?? []).map((c) => c.title || String(c.sha ?? '').slice(0, 7)).join(' · ') : '—');
   card.append(dataTable([{ label: 'Started' }, { label: 'Commit' }, { label: 'Result' }, { label: 'Commits', num: true }, { label: 'Covered' }, { label: 'Why' }],
     rows.map((r) => [fmtDateTime(new Date(r.ts)), String(r.sha ?? '').slice(0, 7) || '—', run(r), String((r.commits ?? []).length), commits(r), r.reason || '—'])));
