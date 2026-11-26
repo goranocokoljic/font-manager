@@ -10,16 +10,16 @@
 // rescans a folder by itself), and the Watch switch says "Watching" or "Paused".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import type { Source, SourceId } from '../api/types';
-import { formatRelativeTime, t, type MessageKey } from '../i18n';
-import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
-import { PROBLEM_GROUPS, useProblemsStore } from '../stores/problems';
-import { useSourcesStore } from '../stores/sources';
-import UiBadge from './ui/UiBadge.vue';
-import UiButton from './ui/UiButton.vue';
-import UiIcon from './ui/UiIcon.vue';
-import UiIconButton from './ui/UiIconButton.vue';
-import UiSwitch from './ui/UiSwitch.vue';
+import type { Source, SourceId } from '../../api/types';
+import { formatRelativeTime, t, type MessageKey } from '../../i18n';
+import { useDuplicateSummaryStore } from '../../stores/duplicateSummary';
+import { PROBLEM_GROUPS, useProblemsStore } from '../../stores/problems';
+import { useSourcesStore } from '../../stores/sources';
+import UiBadge from '../ui/UiBadge.vue';
+import UiButton from '../ui/UiButton.vue';
+import UiIcon from '../ui/UiIcon.vue';
+import UiIconButton from '../ui/UiIconButton.vue';
+import UiSwitch from '../ui/UiSwitch.vue';
 
 const sources = useSourcesStore();
 const problems = useProblemsStore();
@@ -112,7 +112,9 @@ function onConfirmKey(e: KeyboardEvent, id: SourceId): void {
   <section class="sources-settings" aria-labelledby="sources-title">
     <div class="head">
       <div class="head-text">
-        <h2 id="sources-title" class="heading">{{ t('settings.sections.sources') }}</h2>
+        <h2 id="sources-title" class="heading" tabindex="-1" data-section-heading>
+          {{ t('settings.sections.sources') }}
+        </h2>
         <p class="note">{{ t('settings.sources.note') }}</p>
       </div>
       <button id="sources-add" type="button" class="primary" @click="sources.add">

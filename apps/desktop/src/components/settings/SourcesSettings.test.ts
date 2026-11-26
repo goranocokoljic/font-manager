@@ -1,10 +1,10 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import App from '../App.vue';
-import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockMoreSources, mockPickedFolders, mockWatcher } from '../api/mock';
-import { createAppRouter } from '../router';
+import App from '../../App.vue';
+import { setClient, type FmClient } from '../../api/client';
+import { createMockClient, mockMoreSources, mockPickedFolders, mockWatcher } from '../../api/mock';
+import { createAppRouter } from '../../router';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 

@@ -1,13 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setClient, type FmClient } from '../api/client';
-import { MOCK_ENDPOINT_URL, createMockClient, mockEndpointToken } from '../api/mock';
-import { setLocale } from '../i18n';
+import { setClient, type FmClient } from '../../api/client';
+import { MOCK_ENDPOINT_URL, createMockClient, mockEndpointToken } from '../../api/mock';
+import { setLocale } from '../../i18n';
 import LocalApiSettings from './LocalApiSettings.vue';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
-vi.mock('../api/clipboard', () => ({ copyText: vi.fn(() => Promise.resolve()) }));
+vi.mock('../../api/clipboard', () => ({ copyText: vi.fn(() => Promise.resolve()) }));
 
 let client: FmClient;
 
@@ -49,7 +49,7 @@ describe('Settings → Local API', () => {
   });
 
   it('copies the token, not the dots', async () => {
-    const { copyText } = await import('../api/clipboard');
+    const { copyText } = await import('../../api/clipboard');
     const w = await mountIt();
     await button(w, 'Copy token').trigger('click');
     await flushPromises();

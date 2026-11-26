@@ -216,7 +216,14 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
   and `UiChevron` exist (review 10); `UiSegmentedControl` takes icon or text segments and a `wrap`
   flag, and its track always hugs its segments (iteration 82, review 85), plus `UiFoldButton` with `components/useFolded.ts`
-  (review 35) and `UiEmptyState` (review 45); every inspector tab head is `InspectorTabHead`;
+  (review 35) and `UiEmptyState` (review 45); the Settings patterns (E57.3) are `UiChoiceCards`
+  (a radio group drawn as cards, one tab stop, arrows move the choice, one to three columns),
+  `UiSettingGroup` (a card of rows under an optional small-caps heading and note) and
+  `UiSettingRow` (title, one line, an optional mono value, one control that the row labels and
+  describes through its `control` slot props); a local copy of a choice card or a setting row
+  is a bug; every Settings section is a component of its own under `components/settings/`,
+  its head `SettingsSection` (Sources, Local API and AI assistants keep theirs);
+  every inspector tab head is `InspectorTabHead`;
   a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
   local acquire/release copy (review 50). Every number field is `UiNumberField`; a caller that
   saves listens to `commit` (Enter, blur, − / +), never to every keystroke or a timer (review 60). Every

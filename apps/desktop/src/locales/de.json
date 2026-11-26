@@ -1422,6 +1422,7 @@
   },
   "settings": {
     "title": "Einstellungen",
+    "close": "Einstellungen schließen",
     "sections": {
       "sources": "Quellen",
       "activation": "Aktivierung",
@@ -1588,6 +1589,11 @@
     "about": {
       "platformNotes": "Hinweise zur Plattform",
       "noPlatformNotes": "Auf diesem System funktioniert alles gleich."
+    },
+    "lead": {
+      "activation": "Wie die Schaltfläche „Aktivieren“ arbeitet und was mit aktiven Schriften geschieht, wenn das Fenster schließt.",
+      "appearance": "Farben und Sprache. Schriftmuster zeichnen immer in der Textfarbe des Themas auf seinem Papier.",
+      "advanced": "Grenzen und Wartung. Die Vorgaben passen zu den meisten Bibliotheken."
     }
   },
   "updates": {

@@ -2,10 +2,10 @@
 // Settings → Local API (E25.1, ADR 0015): the endpoint's address and its token,
 // masked until the user asks to see it, with Copy and Regenerate.
 import { computed, onMounted, ref } from 'vue';
-import { t } from '../i18n';
-import { useSettingsStore } from '../stores/settings';
-import CopyValue from './CopyValue.vue';
-import { useCopy } from './useCopy';
+import { t } from '../../i18n';
+import { useSettingsStore } from '../../stores/settings';
+import CopyValue from '../CopyValue.vue';
+import { useCopy } from '../useCopy';
 
 const store = useSettingsStore();
 const shown = ref(false);
@@ -35,7 +35,9 @@ async function regenerate(): Promise<void> {
 
 <template>
   <section class="local-api" aria-labelledby="local-api-title">
-    <h2 id="local-api-title" class="heading">{{ t('settings.sections.localApi') }}</h2>
+    <h2 id="local-api-title" class="heading" tabindex="-1" data-section-heading>
+      {{ t('settings.sections.localApi') }}
+    </h2>
     <p class="note">{{ t('settings.localApi.note') }}</p>
     <template v-if="info">
       <div class="field">
