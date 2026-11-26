@@ -87,4 +87,4 @@ A UI story is reviewed against its image, not against the previous screenshot. T
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17; board 13: 2026-11-18; board 14: 2026-11-20).
+Export date: 2026-11-10 (`8-letters-like.png`: 2026-11-11; `2-family-waterfall.png`: 2026-11-15; board 12: 2026-11-17; board 13: 2026-11-18; board 14: 2026-11-20; boards 15 and 16 and `14-duplicates-entry.png` again: 2026-11-26).
