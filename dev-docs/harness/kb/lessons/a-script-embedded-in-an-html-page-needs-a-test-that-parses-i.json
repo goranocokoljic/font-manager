@@ -1,0 +1,19 @@
+{
+  "id": "a-script-embedded-in-an-html-page-needs-a-test-that-parses-i",
+  "title": "A script embedded in an HTML page needs a test that parses it",
+  "category": "testing",
+  "rule": "When a change edits JavaScript inside an HTML file (an inline <script type=\"module\"> such as the harness dashboard), add or keep a test that extracts each inline script, strips the module-only import lines, and compiles the rest (new Function or node --check), so a syntax error fails the test suite. Unit tests of the imported modules do not count: the page can be dead while they pass. Check the test fails with the defect put back. Build such scripts with the Edit or Write tool, not through shell heredocs that turn an escaped \n into a real line break.",
+  "rationale": "E57.1 (#691): a heredoc wrote a raw line break into a '\n' join in dashboard/public/index.html, so the whole module script stopped parsing and no dashboard card rendered; the tests covered only stats.mjs and server.mjs.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    691
+  ],
+  "file_globs": [
+    "scripts/harness/dashboard/public/**",
+    "**/*.html"
+  ],
+  "first_seen": "2026-11-26T20:21:37.840Z",
+  "last_seen": "2026-11-26T20:21:37.840Z"
+}
