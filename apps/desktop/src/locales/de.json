@@ -46,6 +46,7 @@
     "helpMenu": "Hilfe",
     "about": "Über Font Fu",
     "settings": "Einstellungen…",
+    "duplicates": "Duplikate",
     "fileMenu": "Datei",
     "helpPages": {
       "getting-started": "Erste Schritte",
@@ -2013,12 +2014,7 @@
     "resume": "Fortsetzen",
     "resumeLabel": "{name} fortsetzen",
     "removeLabel": "{name} aus der Bibliothek entfernen",
-    "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind.",
-    "duplicates": "Duplikate",
-    "duplicatesCount": {
-      "one": "{count} Schrift hat Kopien",
-      "other": "{count} Schriften haben Kopien"
-    }
+    "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
   },
   "catalogs": {
     "offShort": "aus",

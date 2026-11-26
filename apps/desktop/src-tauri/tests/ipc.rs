@@ -1488,6 +1488,175 @@ fn the_menu_bar_holds_settings_where_each_os_keeps_it() {
     assert_eq!(item_texts(&file), ["Settings…"]);
 }
 
+// E57.10: Duplicates sits at the top of the File menu on every OS, a separator
+// under it: above Settings… on Windows and Linux, in the OS's File menu on a
+// Mac, where Settings… stays in the app menu. The same main-thread limit as
+// the Help menu test above; each OS's rule is checked on the menu the host
+// builds, and the Mac's on a bar shaped as macOS's default (app menu, File).
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_menu_bar_holds_duplicates_at_the_top_of_the_file_menu() {
+    use fm_app_lib::menu::{self, MENU_ID_DUPLICATES, MENU_ID_SETTINGS};
+    use fm_platform::Os;
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+    let (app, _webview) = app().unwrap();
+    let h = app.handle();
+
+    // Windows and Linux: Duplicates, a separator, Settings… and what follows.
+    for os in [Os::Windows, Os::Linux] {
+        for locale in ["en", "de"] {
+            let bar = Menu::default(h).unwrap();
+            let menus = bar.items().unwrap().len();
+            menu::add_settings_item(h, &bar, os, locale).unwrap();
+            let menus_with_file = bar.items().unwrap().len();
+            menu::add_duplicates_item(h, &bar, os, locale).unwrap();
+            assert_eq!(
+                bar.items().unwrap().len(),
+                menus_with_file,
+                "{os:?} {locale}: no second File menu"
+            );
+            assert!(menus_with_file <= menus + 1);
+            let file = menu::duplicates_submenu(&bar).expect("a menu holds Duplicates");
+            assert!(
+                file.get(MENU_ID_SETTINGS).is_some(),
+                "{os:?}: with Settings…"
+            );
+            let texts = item_texts(&file);
+            let (dupes, settings) = if locale == "de" {
+                ("Duplikate", "Einstellungen…")
+            } else {
+                ("Duplicates", "Settings…")
+            };
+            assert_eq!(
+                texts[..3],
+                [dupes, "---", settings],
+                "{os:?} {locale}: {texts:?}"
+            );
+            let item = file.items().unwrap()[0].as_menuitem().cloned().unwrap();
+            assert_eq!(item.id().as_ref(), MENU_ID_DUPLICATES);
+            assert!(item.is_enabled().unwrap(), "always enabled");
+            assert!(!texts[0].ends_with('…'), "it opens a view");
+        }
+    }
+
+    // A Mac: the top of File; Settings… stays above Quit in the app menu.
+    let mac = Menu::new(h).unwrap();
+    let app_menu = Submenu::with_items(
+        h,
+        "Font Fu",
+        true,
+        &[
+            &PredefinedMenuItem::about(h, None, None).unwrap(),
+            &PredefinedMenuItem::separator(h).unwrap(),
+            &MenuItem::with_id(h, "quit", "Quit Font Fu", true, None::<&str>).unwrap(),
+        ],
+    )
+    .unwrap();
+    let file = Submenu::with_items(
+        h,
+        "File",
+        true,
+        &[&PredefinedMenuItem::close_window(h, Some("Close Window")).unwrap()],
+    )
+    .unwrap();
+    mac.append_items(&[&app_menu, &file]).unwrap();
+    menu::add_settings_item(h, &mac, Os::MacOs, "en").unwrap();
+    menu::add_duplicates_item(h, &mac, Os::MacOs, "en").unwrap();
+    assert_eq!(item_texts(&file), ["Duplicates", "---", "Close Window"]);
+    let in_app_menu = item_texts(&app_menu);
+    assert!(
+        in_app_menu.contains(&"Settings…".to_owned()),
+        "{in_app_menu:?}"
+    );
+    assert!(!in_app_menu.contains(&"Duplicates".to_owned()));
+    assert_eq!(mac.items().unwrap().len(), 2, "no second File menu");
+
+    // A Mac bar without a File menu gets one, after the app menu.
+    let bare = Menu::new(h).unwrap();
+    let only_app = Submenu::with_items(
+        h,
+        "Font Fu",
+        true,
+        &[&MenuItem::with_id(h, "quit2", "Quit Font Fu", true, None::<&str>).unwrap()],
+    )
+    .unwrap();
+    bare.append(&only_app).unwrap();
+    menu::add_settings_item(h, &bare, Os::MacOs, "en").unwrap();
+    menu::add_duplicates_item(h, &bare, Os::MacOs, "en").unwrap();
+    let made = bare.items().unwrap()[1].as_submenu().cloned().unwrap();
+    assert_eq!(made.text().unwrap(), "File");
+    assert_eq!(item_texts(&made), ["Duplicates"]);
+}
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn set_shell_locale_relabels_the_duplicates_menu_item() {
+    use fm_app_lib::help;
+    use fm_app_lib::menu::{self, MENU_ID_DUPLICATES};
+
+    let (app, webview) = app_on(help::with_help_menu(setup(
+        mock_builder(),
+        Arc::new(MockApi::new()),
+    )))
+    .unwrap();
+    let text = || {
+        menu::duplicates_submenu(&app.menu().unwrap())
+            .and_then(|s| s.get(MENU_ID_DUPLICATES))
+            .and_then(|i| i.as_menuitem().cloned())
+            .expect("Duplicates is in the menu")
+            .text()
+            .unwrap()
+    };
+    assert_eq!(text(), "Duplicates");
+    for (locale, label) in [("de", "Duplikate"), ("en", "Duplicates")] {
+        send(
+            &webview,
+            "set_shell_locale",
+            serde_json::json!({ "locale": locale }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(text(), label, "{locale}");
+    }
+}
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn duplicates_in_the_menu_bar_asks_the_main_window_to_open_the_module() {
+    use fm_app_lib::menu::{self, DUPLICATES_ROUTE, MENU_ID_DUPLICATES, SHELL_NAVIGATE};
+    use tauri::menu::MenuEvent;
+
+    let (app, webview) = app().unwrap();
+    let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sink = Arc::clone(&seen);
+    webview.listen(SHELL_NAVIGATE, move |e| {
+        sink.lock().unwrap().push(e.payload().to_owned());
+    });
+    let fm_events = Arc::new(std::sync::Mutex::new(0usize));
+    let count = Arc::clone(&fm_events);
+    webview.listen(EVENT_CHANNEL, move |_| *count.lock().unwrap() += 1);
+
+    // Closed to the tray: the item shows the window again.
+    webview.hide().unwrap();
+    menu::on_menu_event(
+        app.handle(),
+        MenuEvent {
+            id: MENU_ID_DUPLICATES.into(),
+        },
+    );
+    let expected = serde_json::to_string(DUPLICATES_ROUTE).unwrap();
+    assert_eq!(*seen.lock().unwrap(), [expected]);
+    assert!(webview.is_visible().unwrap(), "the window is shown");
+    assert_eq!(
+        *fm_events.lock().unwrap(),
+        0,
+        "not the fm-api event channel"
+    );
+}
+
 // E55.9: the menu bar's Quit is the app's own item, so a quit from the menu
 // is known as the user's (an update kept for the quit installs only then).
 // Tauri's default menu is the host's: Windows has Quit at the end of File,
