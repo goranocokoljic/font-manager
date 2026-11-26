@@ -130,10 +130,14 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   style, never the red dot, and the Problems total does not include it. Layout as in Settings:
   a 232 px navigation on `--fm-surface` with "Library" to go back, then Overview, Folders,
   Sets, Plan, History and Hidden copies with their counts; at its foot the languages the user
-  works in and the link to the rules. Ways in: a "Duplicates" row in the sidebar's Sources
-  group (hidden while there are none), one notice after a scan that finds copies (the app's
-  notice, once per scan, never opening the module by itself), a quiet "N copies" mark beside a
-  family's style count plus one line under Info > Files, and two command palette entries.
+  works in and the link to the rules. Ways in (amended 26 Nov 2026): the one permanent way in
+  is "Duplicates" in the native File menu, on all three systems; the label has no ellipsis
+  because it opens a view. There is no row for it in the sidebar: the sidebar is for what is
+  used every day, a count that never goes away nags, and a row inside the Sources group
+  disappears when the group is folded. The app points to the module when there is something
+  to do: one notice after a scan that finds copies (the app's notice, once per scan, never
+  opening the module by itself), a quiet "N copies" mark beside a family's style count plus
+  one line under Info > Files, the line in the Problems view, and two command palette entries.
   **Overview** leads with the one decision that is safe in bulk (identical copies, primary
   button "Review the plan"), then the levels still to decide, then the top folder pairs.
   **Folders** shows pairs of folders with the share as a hairline bar and "Keep this side" on
@@ -162,6 +166,40 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   many recommendations change before Save. The module uses no control the rest of the app
   does not have, and no colour but the accent; a caution (metrics changed, a file that cannot
   come back) is `--fm-warning` only where a file is at risk.
+- **Settings (boards 11 and 15, E57):** one shell for all eight sections: a 232 px navigation
+  on `--fm-surface` with the title and the sections (icon and name), and beside it the panel:
+  the section's heading, one line under it, then its groups, at most 760 px wide (Sources
+  keeps its 920). No top bar: the view closes with the x icon button in the panel's top corner
+  and with Esc. A section is built from three patterns and nothing else. **Choice cards**
+  (`UiChoiceCards`) for one of a few: each card has a title, at most one line, and where it
+  helps a small figure; the chosen card carries the accent ring and the filled dot; two columns
+  for two choices, three for three short ones, one column when the lines are long (the update
+  levels). **Setting rows** (`UiSettingRow` in a `UiSettingGroup`): a card of rows, each with a
+  title, at most one line under it, an optional value in the mono face (a path, an address),
+  and exactly one control at its end: a `UiSwitch`, a `UiNumberField` with its unit after it,
+  a `UiSelect`, or one or two quiet buttons. A group may have a small-caps heading and one
+  note above it. **Cards for things**: a catalog is a card like a source card (mark, name, one
+  line, count, switch); a theme is a `ThemeCard`; the snippets for AI assistants are one block
+  with a segmented control per client, the snippet in the mono face on `--fm-surface` and
+  Copy. No native radio button, checkbox or select anywhere; a hint is always the row's or the
+  card's one line, never a paragraph between controls. A switch saves at once; a number saves
+  on `commit`. A secret (the token) is dots until Show. About opens with the logotype and the
+  version in one quiet panel; the state of updates is the title of its row. Nothing here is
+  coloured but the accent on the chosen card and the switch that is on.
+- **Close (E57.8):** a full view or a panel closes with `UiIconButton` (icon `close`) at the
+  end of its bar or in its top corner at the end of the line, named for what it closes, with
+  Esc in its tooltip where Esc closes it. A text button "Close" in a top bar or a panel head
+  is a bug. A dialog's footer keeps text buttons, and a button that ends a flow with another
+  word (Cancel, Later, Done) is not a close button.
+- **Problems (board 16, E57.9):** the shell of Settings: the navigation lists "All" and the
+  groups with their counts, a group with nothing in the muted colour. The panel's heading is
+  the count in words, then the problems grouped under small-caps headings, each group with
+  one line that says what it is. A problem is a row, never a table row: an icon tile in the
+  warning tone, the name with the kind beside it, the sentence fm-api gives, the path in the
+  mono face, and one action shown on hover and focus. A sidecar conflict shows both values
+  side by side, each with its own button. The status colour is the icon tile's only; the
+  empty state ("All good.") is neutral, never green. Duplicates are not problems: one quiet
+  line at the foot of the panel counts the fonts with copies and opens the module.
 - **Letters (match by letters, board 8, E49):** the letters in the preview field are the
   controls: a letter that has traits carries a hairline underline, a letter with a value
   chosen carries an accent underline, and the field's right edge says what to do ("click an

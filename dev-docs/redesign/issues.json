@@ -2106,6 +2106,192 @@
           ]
         }
       ]
+    },
+    {
+      "id": "E57",
+      "title": "Settings and Problems redesigned, × to close, Duplicates in the File menu, and a short CI for frontend changes",
+      "phase": 3,
+      "track": "ui",
+      "milestone": "Launch",
+      "depends": [
+        "E55",
+        "E56"
+      ],
+      "labels": [
+        "launch"
+      ],
+      "summary": "Four things. (1) Settings. Sources was redesigned in E50.13 (board 11); the other seven sections (Activation, Appearance, Online catalogs, Advanced, Local API, AI assistants, About) are still a plain form in views/SettingsView.vue (854 lines): native radio buttons and checkboxes, a label and a hint under each, and they look dull beside the rest of the app. Board 15 gives them the shell of board 11 and three patterns: choice cards for one-of-a-few choices, setting rows (a title and one line on the left, one control on the right) grouped in cards, and cards for things (catalogs as the source cards, themes as small walls, the assistant snippets as one block with a tab per client). Nothing a setting does changes; no fm-api type or request changes. (2) Closing. Full views and panels close with a text button 'Close' today; the rest of the app uses the × icon button (UiIconButton, icon `close`). The text button goes from top bars and panels; dialog footers keep theirs. (3) Problems. views/ProblemsView.vue is a row of filter buttons over a four-column table. Board 16 gives it the same shell as Settings and Duplicates: the groups with their counts on the left, the problems grouped under headings on the right, each a row that says what is wrong with the path under it, sidecar conflicts with both values side by side, and a real empty state. Duplicates are not listed there since E56.15 and stay out. (4) Duplicates' way in. E56.15 put a 'Duplicates' row into the sidebar's Sources group. That group can be folded, which hides the row, it sits low in the sidebar, and a count that never goes away nags. The row goes; 'Duplicates' is added to the native File menu on all three systems, and the notice after a scan, the 'copies' mark on a family, the line in Problems and the command palette keep pointing to the module. And one thing about how the work is done: every story waits for the three-OS job at least twice (after build and after review), the Windows job needs about 53 minutes (ci.yml), and nearly all of it compiles and tests Rust that a Vue change cannot touch. E57.1 adds a third CI scope, 'frontend', beside 'light' and 'full' (scripts/harness/ci-scope.mjs): a pull request that changes only frontend files runs one job on Linux. The keeper starts a full run on main by itself when an epic's last story is merged and at least once a day while main has commits no full run covered, and handles a red one as it handles a red main today.",
+      "stories": [
+        {
+          "id": "E57.1",
+          "title": "A short CI job for frontend-only changes, and an automatic full run on main",
+          "size": "L",
+          "track": "ops",
+          "depends": [],
+          "criteria": [
+            "`scripts/harness/ci-scope.mjs` gains a third answer, `frontend`: every changed file is under `apps/desktop/src/` (but not `apps/desktop/src/api/types.ts`, which is generated from fm-api), `apps/desktop/e2e/`, `apps/desktop/public/` or is `apps/desktop/index.html`, or is a light path; all light is still `light`; anything else is `full`, and so is everything the script cannot tell, as today. `apps/desktop/src-tauri/`, `crates/`, `Cargo.*`, any `package.json`, the lock file, the Vite, Playwright and TypeScript configs and `.github/` are never frontend. The script tests cover each case and a mixed change",
+            "a pull request labelled `ci:full` is always `full`, whatever it changes; the label is in the labels the harness creates, `/fix-main` puts it on its pull request, and go-harness.md says a person can add it to force the matrix",
+            "ci.yml gains the job `frontend` (Linux, no Rust toolchain, timeout 20 minutes) that runs only for that scope: `pnpm lint:js`, `pnpm test`, the desktop build (`vue-tsc` and `vite build`), the Playwright browser install and `pnpm test:e2e`, in the form the `check` job runs them; the three OS jobs and the Tauri build do not run for that scope",
+            "the harness reads `ci / frontend` in place of the three OS jobs when the scope is frontend, exactly as it reads `ci.light_check` for light: a new key `ci.frontend_check` in go-harness.config.json with its default in lib.mjs, used by ci-wait, merge-check and main-check; a red frontend job goes to `ci-fix` as any red job does; the bench label is not asked for (a PR without native code never blocks on bench, as today)",
+            "a push to main follows the same scope, so a merged frontend story costs main one frontend job; main's state for the merge gate is the newest finished full run on main when that one is red, whatever frontend-only commits came after it, and otherwise the newest commit's own checks",
+            "the keeper starts a full run on main by itself (`gh workflow run ci.yml --ref main`; a manual run is always `full`). The first trigger is the end of an epic: each time a story's pull request is merged, the epic of that story is read from the API, and when it has no story left that the harness can work (every sub-issue is closed, or carries `human` or `harness:blocked`) and main has commits no run of the three OS jobs covered, the run starts at once. The second is a fallback for what the first does not catch (an epic that takes days, an epic that never closes, commits that belong to no epic): the oldest uncovered commit on main is older than `ci.full_run_max_hours` (default 24; 0 turns the fallback off). Never more than one such run in flight, and none while main has no uncovered commit",
+            "a red automatic full run is a red main: the failed jobs are re-run once, then `/fix-main` gets the verdict file with every commit since the last green full run, and the lanes' merge gate stops until it is green, as the manual says for a red main today; a green one is written to the keeper's log and shown on the dashboard with the commits it covered",
+            "the local preflight of a story does not change (`pnpm lint`, `cargo nextest run --workspace`, `pnpm test`, `pnpm gen:types` and the diff check), so Rust is still compiled and tested on the developer's system before every push",
+            "go-harness.md describes the three scopes, the label, the automatic full run and what is given up: between two full runs main is proven on Linux only for frontend changes, and a failure on Windows or macOS is found at the next full run, among the commits since the last one; the PR records how long the frontend job took on this repository",
+            "this story changes `.github/`, so its own pull request runs the full matrix; the harness tests (`pnpm test:scripts`) cover the scope, the check the harness reads per scope, main's state with a red full run behind frontend commits, and when the keeper starts a run"
+          ]
+        },
+        {
+          "id": "E57.2",
+          "title": "Boards 15 and 16: exports, and the board 14 entry sheet again",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "boards 15 and 16 and the File menu panel of board 14's entry sheet are confirmed by the owner (26 Nov 2026)",
+            "dev-docs/design/redesign/ gains the exports at 2×: `15-settings-activation.png`, `15-settings-appearance.png`, `15-settings-catalogs.png`, `15-settings-advanced.png`, `15-settings-local-api.png`, `15-settings-ai-assistants.png`, `15-settings-about.png` (one per 'Export state' of `Settings.dc.html`), `16-problems.png` and `16-problems-empty.png` (the two states of `Problems.dc.html`), and `14-duplicates-entry.png` exported again (its first panel is now the File menu)",
+            "the README table of that folder lists them with their states and stories and the export date; DESIGN.md has the 'Settings (board 15)' and 'Problems (board 16)' rules and the amended ways in of Duplicates (written with this draft; the owner reads them once)"
+          ]
+        },
+        {
+          "id": "E57.3",
+          "title": "Settings: the shell of board 15 and its three building blocks",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E57.1",
+            "E57.2"
+          ],
+          "criteria": [
+            "Settings gets the shell of boards 11 and 15: a 232 px navigation on `--fm-surface` with the title and the eight sections (icon and name, the open one marked), the panel beside it with the section's heading, one line under it and its groups, at most 760 px wide; the top bar with the text 'Close' is gone and a `UiIconButton` (icon `close`, tooltip with the name and Esc) sits in the panel's top corner at the end of the line; Esc still closes",
+            "the navigation is still a vertical tab list: arrow keys move, the open section is in the URL (`#/settings?section=…`) and survives a reload, and focus goes to the section's heading when it changes",
+            "`UiChoiceCards` in `components/ui/`: a radio group drawn as cards (a title, an optional line, an optional small figure), in one, two or three columns; the chosen card has the accent ring and the filled dot; arrow keys move the choice, Space and Enter choose, one tab stop; it takes `name`, `aria-label` and a disabled state per card",
+            "`UiSettingRow` and `UiSettingGroup`: a group is a card with an optional small-caps heading and note above it; a row has a title, an optional line under it, an optional value in the mono face, and one control at its end; the row's title is the control's label and its line the control's description (`aria-describedby`), so no caller writes those ids by hand",
+            "`SettingsView.vue` becomes the shell alone: each section is a component of its own under `components/settings/`, Sources as it is; no setting changes what it does, no request to fm-api is added or changed, and every `data-testid` the existing unit and Playwright specs use stays on the element that plays the same part",
+            "no native radio button, checkbox or select is left in the sections this epic touches once E57.4 to E57.7 are merged; this story converts none of them yet, and the specs pass on the old sections inside the new shell",
+            "DESIGN.md's component list names the three new components and the rule that a local copy of a choice card or a setting row is a bug; strings in en and de; the a11y and contrast specs pass in the light and the dark theme; it matches board 15's shell within the tolerance REVIEW.md sets; a Playwright spec covers the navigation by keyboard, the reload and the × button"
+          ]
+        },
+        {
+          "id": "E57.4",
+          "title": "Settings: Activation and Appearance",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E57.3"
+          ],
+          "criteria": [
+            "Activation as on board 15: 'The Activate button activates fonts' and 'When a font has the same name as a system font or an active font' are choice cards in two columns, each card with its one line; the two activation cards carry the small figure of the board (a bar that ends at the quit, a bar that goes on); 'Reactivate on launch', 'Keep running in the tray when the window is closed' and 'Start at login' are setting rows with a `UiSwitch` under the heading 'While the app runs'",
+            "'Start at login' is not shown where fm-api reports that the system does not offer it (ADR 0011), as today; a failed change shows the existing message on its row and the switch goes back",
+            "Appearance as on board 15: the themes stay `ThemeCard`s in one row with the chosen one in the accent ring; 'Light or dark' is choice cards in three columns with the board's small figures (half and half, light, dark); Language is a setting row with the existing `UiSelect` and its hint as the row's line",
+            "every choice saves at once as today; the strings are the existing ones where the board uses them, and the new short lines are added in en and de",
+            "keyboard-complete; the a11y and contrast specs pass in both themes; the two states match board 15 within the tolerance REVIEW.md sets; the existing specs for these settings pass, changed only where they named a native control"
+          ]
+        },
+        {
+          "id": "E57.5",
+          "title": "Settings: Online catalogs and Advanced",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E57.3"
+          ],
+          "criteria": [
+            "Online catalogs as on board 15: each catalog is a card in the style of the source cards (a mark, the name, one line, the number of families when it is on, a `UiSwitch`); a catalog that is being turned on shows that on its card and its switch is disabled meanwhile; an error shows on the card it belongs to",
+            "Adobe Fonts is a card without a switch, with one line and 'How it works', which opens the existing `AdobeFontsNote`",
+            "'Folder for installed fonts' is a setting row: the path in the mono face, or 'Not chosen yet. The first Install asks for it.', and 'Change…'; under it the folder tree of the board, built from the paths the store already computes (`installPath`), one line per catalog that is on; 'Download fonts a document needs' is a setting row with a switch, disabled with the existing reason while no folder is chosen or no catalog is on",
+            "Advanced as on board 15: under 'Performance', 'Preview cache size' and 'Rescan sources every' are setting rows with `UiNumberField` and the unit after it (MB, minutes), saving on `commit` as today; under 'Troubleshooting', the logs folder is a row with the path in the mono face and 'Copy path' (the existing `CopyValue`), and 'First-run setup' a row with 'Run setup again'",
+            "there is no 'Open' button for the logs folder in this epic: the UI has no request that opens a folder in the file manager, and adding one is native code",
+            "strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes; the two states match board 15 within the tolerance REVIEW.md sets; the existing specs pass, changed only where they named a native control"
+          ]
+        },
+        {
+          "id": "E57.6",
+          "title": "Settings: Local API and AI assistants",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E57.3"
+          ],
+          "criteria": [
+            "Local API as on board 15: 'Address' is a setting row with the address in the mono face, a dot before it while the API runs, and 'Copy'; 'Not running.' takes the address's place when it does not; 'Token' is a row with the token masked, 'Show' or 'Hide' and 'Copy', and its warning as the row's line; 'Regenerate the token' is a row of its own with its consequence as the line and the 'Regenerate' button, which works as it does today",
+            "while the token is hidden it is not rendered; 'Copied' is announced through the existing status",
+            "AI assistants as on board 15: 'Allow AI assistants (MCP server)' is a setting row with a switch; with it on, 'Address' is a row with 'Copy', and 'Connect an assistant' is one block: a `UiSegmentedControl` with the clients fm-api lists (Claude Code, Claude Desktop, other HTTP clients), the snippet of the chosen client in the mono face on `--fm-surface`, 'Copy', and under it the line that the snippet holds the token and that the address changes at each start, with 'How to connect'",
+            "the snippet block replaces 'Show snippets' and 'Hide snippets': the snippet of the chosen client is shown with the token replaced by dots, 'Copy' copies the real snippet, and a 'Show' beside it reveals the token as 'Show snippets' does today; the dots are a plain replacement of the token the store already holds, nothing more",
+            "'What AI assistants may change' is a setting group with its note and one row per tool fm-api lists, each with a switch; a tool that asks each time says so as its line",
+            "with the server off the address, the snippets and the tools are not shown, as today; strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes; the two states match board 15 within the tolerance REVIEW.md sets; the existing specs (LocalApiSettings, McpSettings) pass, changed only where the markup they named changed"
+          ]
+        },
+        {
+          "id": "E57.7",
+          "title": "Settings: About and updates",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E57.3"
+          ],
+          "criteria": [
+            "About opens with the panel of board 15: the logotype (`AppLogo`, at the size of the board's wordmark, which only stands in for it), one line on what Font Fu is, and at its end the version with the API version and the platform under it, from `app_info`",
+            "under 'Updates', where this copy updates itself: one setting row whose title is the state ('Font Fu is up to date.', 'Checking for updates…', 'Version x is available.') and whose line is the last check, with 'Check for updates' and, when a version is available, 'Show version x'; the row is a status region, so a change is announced once",
+            "'Automatic updates' is choice cards in one column with the three levels and their lines (the two notes of 'install when I quit' are that card's line); it shows only the levels fm-api offers and never a combination it refuses, as E55.10 built it",
+            "while an update waits for the quit, a row says so with 'Install now', as today; an error of a check shows on the status row",
+            "'Platform notes' is the list in a quiet panel, or the existing sentence when there is none; where this copy does not update itself the Updates group is not shown and the notes say why, as today",
+            "strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes; the state matches board 15 within the tolerance REVIEW.md sets; SettingsUpdates.test.ts and the update specs pass, changed only where they named a native control"
+          ]
+        },
+        {
+          "id": "E57.8",
+          "title": "× closes: the standard icon button in every top bar and panel",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E57.3"
+          ],
+          "criteria": [
+            "the text button 'Close' is replaced by `UiIconButton` (icon `close`) in the Problems view, the Conflicts view, Compare copies (`DuplicateCompare.vue`), Block properties (`BlockProperties.vue`) and the Project sets panel (`ProjectSetsSidebar.vue`); Settings got it in E57.3",
+            "each has an accessible name that says what it closes ('Close problems', 'Close block properties'), the tooltip with that name and Esc where Esc closes it, and stands at the end of its bar or in the panel's top corner at the end of the line, where the others in the app stand (Quick Look, Similar, the drawers)",
+            "what closing does is unchanged: the same route or event, Esc as before, and the focus returns where it returned before",
+            "dialog footers keep a text button (the catalog download and install dialogs), and a button that ends a flow with another word (Cancel, Later, Done) is not touched",
+            "a test in the style of `ui/iconButtons.test.ts` fails when a component's top bar or panel head renders a text button whose label is `common.close` or a `*.close` string; strings in en and de; the a11y specs pass"
+          ]
+        },
+        {
+          "id": "E57.9",
+          "title": "The Problems view of board 16",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E57.2",
+            "E57.8"
+          ],
+          "criteria": [
+            "Problems gets the shell of Settings and Duplicates: a 232 px navigation with the title, 'All' and the groups of `PROBLEM_GROUPS` with their counts, and the panel beside it; the filter is still in the URL (`#/problems?kind=…`), so the sidebar's link and old links open it filtered; a group with no problem is listed in the muted colour and can still be opened",
+            "the panel's heading is the count in words ('8 things need a look'; 'No problems') with one line under it; the problems are grouped under small-caps headings with the group's count and one line that says what the group is",
+            "a problem is a row in its group's card, not a table row: an icon tile in the warning tone, the file or font name with the kind beside it, the message fm-api gives as the sentence, and the path in the mono face under it; the list is virtualized when it is long, and nothing about a problem is computed in the component",
+            "a row shows one action on hover and on focus: 'Copy path' for a file; 'Open Sources' for a folder that is not found; 'Decide…' for an activation conflict, which opens the existing Conflicts view for it. There is no 'Show in folder' in this epic (no request opens the file manager from the UI)",
+            "a sidecar conflict is a row with both values side by side, 'This computer' and 'Other computer', each with its button ('Keep mine', 'Use theirs') and the accessible names they have today; resolving one takes the row away and moves the focus to the next row or the group's heading",
+            "the empty state is the panel of board 16 ('All good.' and its line), with the navigation still there; the line about duplicates stands at the foot of the panel in both states, worded as on the board, and is not shown while no font has copies",
+            "the status colours are used for the icon tile only; a good state is neutral, never green (DESIGN.md)",
+            "strings in en and de; keyboard-complete (the groups, the rows, the actions); the a11y and contrast specs pass in both themes; both states match board 16 within the tolerance REVIEW.md sets; a Playwright spec on the mock covers the groups by keyboard, a filtered link, a sidecar conflict resolved, and the empty state"
+          ]
+        },
+        {
+          "id": "E57.10",
+          "title": "Duplicates in the File menu, and no row in the sidebar",
+          "size": "M",
+          "track": "platform",
+          "depends": [],
+          "criteria": [
+            "the native menu gains 'Duplicates' on all three systems (rule 5): on Windows and Linux at the top of the File menu, then a separator, then 'Settings…' and what follows; on a Mac at the top of the File menu, with 'Settings…' where it is, in the app menu. The label has no ellipsis (it opens a view) and comes from the shell's strings in the app's language, en and de, and follows a change of language as the other items do",
+            "choosing it opens the window when it is closed to the tray and goes to the `duplicates` route through the existing `shell:navigate` event; nothing is added to fm-api",
+            "the item is always enabled, also while no font has copies: the module then shows its own empty overview",
+            "the 'Duplicates' row and its count are removed from the sidebar's Sources group (`SourcesSidebar.vue`) with their strings and tests; the summary store stays for the notice, the mark on a family and the line in Problems, which are unchanged; the command palette keeps 'Find duplicates' and 'Show the copies of <family>'",
+            "docs/user ('Cleaning up duplicates') says where the module is opened from; the tests of the menu (as for the Settings item: the position per system, the label per language, the event) pass on the three systems, and a Playwright spec asserts that the sidebar has no such row and the palette still opens the module",
+            "this story changes native code, so its pull request runs the full matrix"
+          ]
+        }
+      ]
     }
   ]
 }
