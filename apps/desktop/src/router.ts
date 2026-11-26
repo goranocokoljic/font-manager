@@ -1,3 +1,4 @@
+// Probe for E57.1: times the frontend CI job. Never merged.
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router';
 import HomeView from './views/HomeView.vue';
 import ConflictsView from './views/ConflictsView.vue';
