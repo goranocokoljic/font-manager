@@ -53,7 +53,9 @@ const stateTitle = computed(() => {
   if ((updates.status === 'available' || updates.status === 'installing') && updates.update)
     return t('updates.available', { version: updates.update.version });
   const outcome = updates.overview?.lastCheck?.outcome;
-  if (outcome?.type === 'found') return t('updates.available', { version: outcome.version });
+  // A version the last check found but nothing offers now (the store is idle): it was found
+  // before this start and may be the version running now, installed since. Never "available".
+  if (outcome?.type === 'found') return t('updates.notCheckedSinceStart');
   if (outcome?.type === 'upToDate') return t('updates.upToDate');
   if (outcome?.type === 'failed') return t('updates.lastCheckFailed');
   return t('updates.lastCheck.never');

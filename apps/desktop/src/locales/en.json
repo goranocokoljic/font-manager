@@ -1638,6 +1638,7 @@
     "upToDate": "Font Fu is up to date.",
     "available": "Version {version} is available.",
     "lastCheckFailed": "The last check failed.",
+    "notCheckedSinceStart": "Font Fu has not checked for updates since it started.",
     "notice": {
       "label": "Update available",
       "message": "Font Fu {version} is available.",

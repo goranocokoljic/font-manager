@@ -262,6 +262,47 @@ describe('Updates (Settings → About)', () => {
     w.unmount();
   });
 
+  it('says "Checking for updates…" on the status row while a check runs (E57.7)', async () => {
+    const { c, check } = client();
+    // The mock's own answer, held until the test lets it through.
+    check.mockRestore();
+    const answer = c.checkForUpdate.bind(c);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.spyOn(c, 'checkForUpdate').mockImplementation(async () => {
+      await gate;
+      return answer();
+    });
+    const w = await mountAt('/settings?section=about');
+    const status = () => w.get('.updates [role="status"]').text();
+    expect(status()).toBe('Font Fu has not checked for updates yet.');
+    await button(w, 'Check for updates')!.trigger('click');
+    await flushPromises();
+    expect(status()).toBe('Checking for updates…');
+    expect(button(w, 'Check for updates')!.attributes('disabled')).toBeDefined();
+    release();
+    await flushPromises();
+    expect(status()).toBe('Font Fu is up to date.');
+    w.unmount();
+  });
+
+  it('after a restart, a version the last check found is not called available (E57.7)', async () => {
+    // 0.1.0 found 0.1.1 and installed it; the new start offers nothing, but the last check
+    // on disk still says it found 0.1.1.
+    const { c } = client({ update: 'patch' });
+    await c.checkForUpdate();
+    vi.spyOn(c, 'pendingUpdate').mockResolvedValue(null);
+    const w = await mountAt('/settings?section=about');
+    expect(useUpdatesStore().status).toBe('idle');
+    expect(w.get('.updates [role="status"]').text()).toBe(
+      'Font Fu has not checked for updates since it started.',
+    );
+    expect(w.text()).not.toContain('Version 0.1.1 is available.');
+    expect(w.text()).toContain('version 0.1.1 was available');
+    expect(button(w, 'Show version 0.1.1')).toBeUndefined();
+    w.unmount();
+  });
+
   it('shows the reason when the release server cannot be reached', async () => {
     client({ update: 'offline' });
     const w = await mountAt('/settings?section=about');
