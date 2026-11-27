@@ -12,8 +12,10 @@ import type {
   ResolutionId,
   SidecarConflict,
   SidecarConflictId,
+  SidecarField,
   TrashMoveStatus,
 } from '../api/types';
+import type { IconName } from '../components/ui/icons';
 import { t } from '../i18n';
 import { useToastStore, type ToastAction } from './toast';
 
@@ -43,17 +45,122 @@ export type ProblemGroupId = 'broken' | 'legacy' | 'sidecar' | 'activation' | 'l
 export interface ProblemGroup {
   id: ProblemGroupId;
   label: string;
+  /** One line that says what the group is (board 16, E57.9). */
+  line: string;
+  /** The icon of its rows' tile. */
+  icon: IconName;
   kinds: ProblemKind[];
 }
 
-/** A group whose `label` follows the UI's language (a getter over the catalog). */
-function group(id: ProblemGroupId, kinds: ProblemKind[]): ProblemGroup {
+/** A group whose `label` and `line` follow the UI's language (getters over the catalog). */
+function group(id: ProblemGroupId, icon: IconName, kinds: ProblemKind[]): ProblemGroup {
   return {
     id,
     get label() {
       return t(`problems.groups.${id}`);
     },
+    get line() {
+      return t(`problems.groupLines.${id}`);
+    },
+    icon,
     kinds,
+  };
+}
+
+/** The kinds the Problems view lists: every kind but the Duplicates module's. */
+type ListedKind = Exclude<ProblemKind, 'duplicateFile' | 'duplicateFace'>;
+
+/**
+ * The one action a problem row offers (E57.9): copy the file's path, open Settings › Sources
+ * for a folder that is not found, or open the Conflicts view for an activation conflict.
+ */
+export type ProblemAction = 'copyPath' | 'openSources' | 'decide';
+
+const ACTIONS: Record<ListedKind, ProblemAction> = {
+  broken: 'copyPath',
+  noUnicodeCmap: 'copyPath',
+  unsupported: 'copyPath',
+  sidecarConflict: 'copyPath',
+  indexRebuilt: 'copyPath',
+  missingSource: 'openSources',
+  systemConflict: 'decide',
+  activeConflict: 'decide',
+};
+
+/** A row of the Problems view: one entry `list_problems` reported, ready to show. */
+export interface ProblemRow {
+  type: 'problem';
+  key: string;
+  /** The file or folder name. */
+  name: string;
+  /** What kind of problem, a few words beside the name. */
+  kindLabel: string;
+  /** The sentence fm-api gives. */
+  message: string;
+  path: string;
+  action: ProblemAction;
+}
+
+/** A row of the Problems view for a sync conflict: both values, each with its button. */
+export interface ConflictRow {
+  type: 'conflict';
+  key: string;
+  /** The family. */
+  name: string;
+  /** The field, in words. */
+  kindLabel: string;
+  /** The sync file the other value came from. */
+  path: string;
+  conflict: SidecarConflict;
+}
+
+export type ProblemListRow = ProblemRow | ConflictRow;
+
+/** A group as the Problems view lists it: its count and its rows. */
+export interface ProblemSection {
+  group: ProblemGroup;
+  count: number;
+  rows: ProblemListRow[];
+}
+
+/** The last part of a path, with either separator; the path itself when it has none. */
+export function fileName(path: string): string {
+  return (
+    path
+      .split(/[\\/]/)
+      .filter((s) => s)
+      .pop() ?? path
+  );
+}
+
+/** The name of a sidecar conflict's field, in the UI's language. */
+export function fieldName(field: SidecarField): string {
+  return t(`problems.sidecar.fields.${field}`);
+}
+
+/** The row of one entry of `list_problems` (a listed kind). */
+export function problemRow(p: Problem, index: number): ProblemRow {
+  const kind = p.kind as ListedKind;
+  return {
+    type: 'problem',
+    key: `${p.kind}\u0000${p.path}\u0000${p.other ?? ''}\u0000${index}`,
+    name: fileName(p.path),
+    kindLabel: t(`problems.kinds.${kind}`),
+    message: p.message,
+    path: p.path,
+    action: ACTIONS[kind],
+  };
+}
+
+/** The row of a sync conflict. */
+export function conflictRow(c: SidecarConflict): ConflictRow {
+  return {
+    type: 'conflict',
+    key: `conflict-${c.id}`,
+    name: c.family,
+    kindLabel: fieldName(c.field),
+    path: c.sidecarPath,
+    conflict: c,
   };
 }
 
@@ -63,11 +170,11 @@ function group(id: ProblemGroupId, kinds: ProblemKind[]): ProblemGroup {
  * ones (`duplicateFile`, `duplicateFace`: the Duplicates module's, E56.15) is in one group.
  */
 export const PROBLEM_GROUPS: ProblemGroup[] = [
-  group('broken', ['broken', 'noUnicodeCmap']),
-  group('legacy', ['unsupported']),
-  group('sidecar', ['sidecarConflict']),
-  group('activation', ['systemConflict', 'activeConflict']),
-  group('library', ['missingSource', 'indexRebuilt']),
+  group('broken', 'alert', ['broken', 'noUnicodeCmap']),
+  group('legacy', 'clock', ['unsupported']),
+  group('sidecar', 'rescan', ['sidecarConflict']),
+  group('activation', 'power', ['systemConflict', 'activeConflict']),
+  group('library', 'folder', ['missingSource', 'indexRebuilt']),
 ];
 
 /** The group `id` names, or `undefined` for anything else (a stale URL). */
@@ -129,6 +236,48 @@ export const useProblemsStore = defineStore('problems', () => {
   function inGroup(group: ProblemGroupId | undefined): Problem[] {
     const kinds = group && problemGroup(group)?.kinds;
     return kinds ? listed.value.filter((p) => kinds.includes(p.kind)) : listed.value;
+  }
+
+  /**
+   * The sync entries of `list_problems` that no `list_sidecar_conflicts` entry shows: each
+   * conflict hides one entry about the same face and sync file, the one whose sentence names
+   * the other computer's value when there is one (fm-core words both from the same value), so
+   * a collection or pin entry on the same face and file is not taken for it. The rest (a sync
+   * file that cannot be read, a collection or pinned virtual style that cannot be joined
+   * here) are plain rows, so every counted entry is listed.
+   */
+  function unlisted(entries: Problem[]): Problem[] {
+    const hidden = new Set<Problem>();
+    const same = (p: Problem, c: SidecarConflict) =>
+      !hidden.has(p) && p.face === c.face && p.other === c.sidecarPath;
+    for (const c of sidecarConflicts.value) {
+      const own =
+        entries.find((p) => same(p, c) && p.message.includes(c.theirs)) ??
+        entries.find((p) => same(p, c));
+      if (own) hidden.add(own);
+    }
+    return entries.filter((p) => !hidden.has(p));
+  }
+
+  /**
+   * The groups the Problems view lists (E57.9): every group with a problem, or the one
+   * group `filter` names (even with none). A sync conflict fm-core can resolve is one
+   * `list_sidecar_conflicts` entry, shown with both values; its `list_problems` entry (the
+   * one about the same face and sync file) is the same conflict and is not listed again;
+   * every other sync entry is a plain row (`unlisted`).
+   */
+  function sections(filter: ProblemGroupId | undefined): ProblemSection[] {
+    const shown = filter ? PROBLEM_GROUPS.filter((g) => g.id === filter) : PROBLEM_GROUPS;
+    return shown
+      .map((g): ProblemSection => {
+        const entries = inGroup(g.id);
+        const rows: ProblemListRow[] =
+          g.id === 'sidecar'
+            ? [...sidecarConflicts.value.map(conflictRow), ...unlisted(entries).map(problemRow)]
+            : entries.map(problemRow);
+        return { group: g, count: counts.value[g.id], rows };
+      })
+      .filter((s) => filter || s.rows.length > 0);
   }
 
   async function refresh(): Promise<void> {
@@ -280,6 +429,7 @@ export const useProblemsStore = defineStore('problems', () => {
     total,
     counts,
     inGroup,
+    sections,
     load,
     stop,
     refresh,

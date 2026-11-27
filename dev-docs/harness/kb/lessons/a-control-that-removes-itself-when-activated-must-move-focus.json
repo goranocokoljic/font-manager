@@ -5,14 +5,15 @@
   "rule": "When activating a button changes state so a `v-if` removes that button (stop, remove, ×, a chip that turns back into its 'add' form), move focus after `nextTick` to the control that replaces it, or to the nearest stable control, when `document.activeElement` is body. A watcher on some other state (for example an overlay's `open`) does not cover this path. Test it: focus the button, activate it, assert `document.activeElement` is the replacement.",
   "rationale": "E50.9 (#580): 'stop' in the glyph popover and the compare chip's × unmounted themselves; focus fell to body, so Escape no longer closed the popover and Tab restarted at the top.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
-    580
+    580,
+    699
   ],
   "file_globs": [
     "apps/desktop/src/**/*.vue"
   ],
   "first_seen": "2026-11-15T09:39:34.653Z",
-  "last_seen": "2026-11-15T09:39:34.653Z"
+  "last_seen": "2026-11-27T10:29:38.108Z"
 }

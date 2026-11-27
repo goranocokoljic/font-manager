@@ -81,14 +81,13 @@ test('?mockLibrary=wall shows its 2 broken files in Problems, its duplicates not
   page,
 }) => {
   await page.goto('/?mockLibrary=wall#/problems');
-  const table = page.getByRole('table', { name: 'Problems' });
-  const kinds = table.locator('tbody tr td:first-child');
-  await expect(kinds.filter({ hasText: /^Broken files$/ })).toHaveCount(2);
-  // Its 3 duplicates are the Duplicates module's (E56.15), not rows of this table.
-  await expect(kinds.filter({ hasText: /^Duplicates$/ })).toHaveCount(0);
-  await expect(table.getByText('Agdasima').first()).toBeVisible();
+  const broken = page.locator('[data-group="broken"]');
+  await expect(broken.locator('h3')).toHaveText('Broken files · 2');
+  // Its 3 duplicates are the Duplicates module's (E56.15), not a group of this view.
+  await expect(page.getByRole('tab', { name: /^Duplicates/ })).toHaveCount(0);
+  await expect(page.getByText('Agdasima').first()).toBeVisible();
   // The small library's own entries are gone.
-  await expect(table.getByText('Quarto-Bold')).toHaveCount(0);
+  await expect(page.getByText('Quarto-Bold')).toHaveCount(0);
 });
 
 test('?mockLibrary=small keeps the three sample families', async ({ page }) => {

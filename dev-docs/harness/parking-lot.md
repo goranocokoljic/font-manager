@@ -615,3 +615,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.7 #697] apps/desktop/src/api/mock.ts:4253 — the mock offers all three update levels or none, so "only the levels fm-api offers" is never tested with a smaller set.
 - [E57.7 #697] apps/desktop/src/stores/updates.ts:166 — if `pendingUpdate()` throws at start after an automatic find, About says "has not checked since it started" (error-path wording).
 - [E57.8 #698] apps/desktop/e2e/problems.spec.ts:54 — closing Problems (and Conflicts, conflicts.spec.ts:43) checks only that "All fonts" is visible, not where the focus lands.
+- [E57.9 #699] apps/desktop/src/components/DuplicateCopyCard.vue:46 — the file-name-from-path one-liner is inlined in about 10 components (also DuplicatesFolders.vue:80, DuplicatesHistory.vue:22, SetupFoldersStep.vue:27, SourcesSettings.vue:40); `fileName` in stores/problems.ts could be the shared one.
+- [E57.9 #699] apps/desktop/src/views/SettingsView.vue:245 — the inset focus ring on the selected tab is 2.64:1 (light) / 2.44:1 (dark) against --fm-side-active and passes 3:1 only on its outer edge against --fm-surface (Problems copies the pattern).
