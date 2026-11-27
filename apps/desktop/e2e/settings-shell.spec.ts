@@ -67,6 +67,13 @@ test('the x in the panel corner closes Settings, Esc too; no top bar is left', a
   await expect(tab(page, 'About')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/settings/);
+
+  // Esc still closes after a click on plain text in the panel (focus is then on the page).
+  await page.goto('/#/settings?section=about');
+  await page.getByTestId('app-info').click();
+  await expect(tab(page, 'About')).not.toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page).not.toHaveURL(/settings/);
 });
 
 test('the shell: a 232 px navigation, the panel at most 760 px wide (Sources 920)', async ({

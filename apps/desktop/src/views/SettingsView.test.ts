@@ -416,6 +416,28 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('closes on Escape when a click on plain text left focus on the page', async () => {
+    const { wrapper, router } = await mountAt('/settings?section=about');
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('home');
+    wrapper.unmount();
+  });
+
+  it('leaves Escape to a dialog outside the view', async () => {
+    const { wrapper, router } = await mountAt('/settings?section=about');
+    const dialog = document.createElement('div');
+    dialog.tabIndex = -1;
+    document.body.append(dialog);
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('settings');
+    dialog.remove();
+    wrapper.unmount();
+  });
+
   it('moves between sections with the arrow keys and closes on Escape', async () => {
     const { wrapper, router } = await mountAt('/settings');
     const tablist = wrapper.get('[role="tablist"]');

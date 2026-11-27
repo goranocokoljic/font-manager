@@ -5,7 +5,7 @@
 // 760 px wide (Sources keeps its 920). No top bar: the x icon button in the panel's top
 // corner and Esc close the view. The open section is in the URL
 // (`#/settings?section=advanced`), so a reload keeps it.
-import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AboutSettings from '../components/settings/AboutSettings.vue';
 import ActivationSettings from '../components/settings/ActivationSettings.vue';
@@ -105,14 +105,24 @@ function close(): void {
   void router.push({ name: 'home' });
 }
 
+const root = ref<HTMLElement | null>(null);
+
+/**
+ * Esc closes the view wherever focus is in it, and also when a click on plain text has left
+ * focus on the page itself (no part of the panel takes focus on a click). A key inside a
+ * dialog or popover outside the view (the update dialog, setup) is theirs, not ours.
+ */
 function onKey(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && !commands.open && !e.defaultPrevented) {
-    e.preventDefault();
-    close();
-  }
+  if (e.key !== 'Escape' || commands.open || e.defaultPrevented) return;
+  const target = e.target as Node | null;
+  const ours = target === document.body || target === document.documentElement;
+  if (!ours && !(target && root.value?.contains(target))) return;
+  e.preventDefault();
+  close();
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKey);
   focusTab(current.value);
   await Promise.all([
     store.settings ? undefined : store.load(),
@@ -125,7 +135,10 @@ onMounted(async () => {
     themes.themes.length ? undefined : themes.load(),
   ]);
 });
-onBeforeUnmount(() => sources.stop());
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  sources.stop();
+});
 
 /** The last failure of any store this window reads. */
 const error = computed(() => store.error ?? sources.error ?? app.error);
@@ -135,7 +148,7 @@ const sectionTitle = (id: SectionId) => t(`settings.sections.${id}` as MessageKe
 </script>
 
 <template>
-  <div class="settings" @keydown="onKey">
+  <div ref="root" class="settings">
     <nav class="nav" aria-labelledby="settings-title">
       <h1 id="settings-title" class="title">{{ t('settings.title') }}</h1>
       <div
