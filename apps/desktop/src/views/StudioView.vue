@@ -487,4 +487,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   min-height: 0;
   overflow-x: auto;
 }
+/* A narrow window (E58.6, DESIGN.md): the compared pairings stack one above the other, each
+   as tall as the box, and the box scrolls down instead of sideways. */
+@media (max-width: 999.98px) {
+  .panels {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
 </style>

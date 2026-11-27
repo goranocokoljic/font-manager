@@ -846,6 +846,12 @@ h2 {
 .faces.sideBySide {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+/* A narrow window (E58.6, DESIGN.md): the faces stack one above the other. */
+@media (max-width: 999.98px) {
+  .faces.sideBySide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 /* A face's actions come up on hover or focus (E48.4). */
 .face-actions {
   display: flex;
