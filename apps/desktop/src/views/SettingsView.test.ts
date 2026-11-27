@@ -12,6 +12,7 @@ import {
 } from '../api/mock';
 import { setLocale } from '../i18n';
 import { createAppRouter } from '../router';
+import { useCatalogsStore } from '../stores/catalogs';
 import { pickOption, selectOptions } from '../components/ui/testing';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -73,8 +74,15 @@ describe('Settings window', () => {
   it('lists Adobe Fonts under Online catalogs and opens its note', async () => {
     const { wrapper } = await mountAt('/settings?section=catalogs');
     expect(wrapper.get('h2').text()).toBe('Online catalogs');
-    const entry = wrapper.get('button[aria-controls="settings-adobe-fonts"]');
-    expect(entry.text()).toBe('Adobe Fonts');
+    // A card without a switch (E57.5): its name, one line, and "How it works".
+    const adobe = wrapper.get('[data-catalog="adobeFonts"]');
+    expect(adobe.find('[role="switch"]').exists()).toBe(false);
+    expect(adobe.get('.name').text()).toBe('Adobe Fonts');
+    expect(adobe.get('.line').text()).toBe(
+      'Activated by Creative Cloud. Font Fu shows these fonts and cannot download them.',
+    );
+    const entry = adobe.get('button[aria-controls="settings-adobe-fonts"]');
+    expect(entry.text()).toBe('How it works');
     expect(entry.attributes('aria-expanded')).toBe('false');
     expect(wrapper.find('#settings-adobe-fonts').exists()).toBe(false);
     await entry.trigger('click');
@@ -104,17 +112,13 @@ describe('Settings window', () => {
   });
 
   it('offers to download fonts a document needs only with a download folder and a catalog on', async () => {
-    const box = (w: Awaited<ReturnType<typeof mountAt>>['wrapper']) =>
-      w.get('input[name="fetch-missing-fonts"]').element as HTMLInputElement;
-    const hint = (w: Awaited<ReturnType<typeof mountAt>>['wrapper']) =>
-      w.get('[data-testid="fetch-missing-fonts-hint"]').text();
-    // Neither: off and disabled, saying what it needs.
+    const box = (w: Wrapper) => toggle(w, 'fetch-missing-fonts');
+    const hint = (w: Wrapper) => labelOf(box(w), 'aria-describedby');
+    // Neither: off and disabled, saying what it needs, as the row's one line.
     let { wrapper } = await mountAt('/settings?section=catalogs');
-    expect(box(wrapper).closest('label')?.textContent?.trim()).toBe(
-      'Download fonts a document needs from the catalogs you turned on',
-    );
-    expect(box(wrapper).checked).toBe(false);
-    expect(box(wrapper).disabled).toBe(true);
+    expect(labelOf(box(wrapper))).toBe('Download fonts a document needs');
+    expect(box(wrapper).attributes('aria-checked')).toBe('false');
+    expect(box(wrapper).attributes('disabled')).toBeDefined();
     expect(hint(wrapper)).toBe(
       'Choose the folder for installed fonts and turn a catalog on first.',
     );
@@ -123,33 +127,121 @@ describe('Settings window', () => {
     // A folder but no catalog on: still disabled.
     await client.updateSettings({ downloadFolder: '/Users/demo/Installed fonts' });
     ({ wrapper } = await mountAt('/settings?section=catalogs'));
-    expect(box(wrapper).disabled).toBe(true);
+    expect(box(wrapper).attributes('disabled')).toBeDefined();
     // A catalog turned on: enabled, saying it downloads only from those.
-    await wrapper.get('input[name="catalog-googleFonts"]').setValue(true);
+    await toggle(wrapper, 'catalog-googleFonts').trigger('click');
     await flushPromises();
-    expect(box(wrapper).disabled).toBe(false);
+    expect(box(wrapper).attributes('disabled')).toBeUndefined();
     expect(hint(wrapper)).toContain('It downloads only from catalogs you turned on.');
-    await wrapper.get('input[name="fetch-missing-fonts"]').setValue(true);
+    await box(wrapper).trigger('click');
     await flushPromises();
+    expect(box(wrapper).attributes('aria-checked')).toBe('true');
     expect((await client.getSettings()).fetchMissingFonts).toBe(true);
     wrapper.unmount();
   });
 
+  it('says on its card that a catalog is being turned on, with its switch disabled, and a failure on that card (E57.5)', async () => {
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    setClient({
+      ...client,
+      refreshCatalog: async () => {
+        await slow;
+        throw { code: 'io', message: 'Fontshare could not be reached.', detail: null };
+      },
+    });
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    const fontshare = () => wrapper.get('[data-catalog="fontshare"]');
+    const google = () => wrapper.get('[data-catalog="googleFonts"]');
+    await toggle(wrapper, 'catalog-fontshare').trigger('click');
+    await flushPromises();
+    // Connecting: said on the card, its switch waits; the other card is untouched.
+    expect(fontshare().get('[data-testid="catalog-card-line"]').text()).toBe('Connecting…');
+    expect(fontshare().attributes('aria-busy')).toBe('true');
+    expect(toggle(wrapper, 'catalog-fontshare').attributes('disabled')).toBeDefined();
+    expect(toggle(wrapper, 'catalog-googleFonts').attributes('disabled')).toBeUndefined();
+
+    release();
+    await flushPromises();
+    // The failure is said on Fontshare's card, describes its switch, and nowhere else.
+    const error = fontshare().get('[data-testid="catalog-card-error"]');
+    expect(error.attributes('role')).toBe('alert');
+    expect(error.text()).toContain('Fontshare could not be reached.');
+    expect(toggle(wrapper, 'catalog-fontshare').attributes('aria-describedby')).toContain(
+      error.attributes('id'),
+    );
+    expect(toggle(wrapper, 'catalog-fontshare').attributes('disabled')).toBeUndefined();
+    expect(google().find('[data-testid="catalog-card-error"]').exists()).toBe(false);
+    expect(wrapper.findAll('[role="alert"]')).toHaveLength(1);
+    wrapper.unmount();
+    // The mock keeps the catalogs between tests.
+    await client.setCatalogEnabled({ id: 'fontshare', enabled: false });
+  });
+
+  it('says a failed list fetch on the card of a catalog that is also open in the browser (E57.5)', async () => {
+    setClient({
+      ...client,
+      refreshCatalog: async () => {
+        throw { code: 'io', message: 'Fontshare could not be reached.', detail: null };
+      },
+    });
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    const catalogs = useCatalogsStore();
+    catalogs.open = 'fontshare';
+    await toggle(wrapper, 'catalog-fontshare').trigger('click');
+    await flushPromises();
+    // The store keeps it as the open catalog's refresh error; the card still says it.
+    expect(catalogs.refreshError?.message).toBe('Fontshare could not be reached.');
+    expect(
+      wrapper.get('[data-catalog="fontshare"] [data-testid="catalog-card-error"]').text(),
+    ).toContain('Fontshare could not be reached.');
+    catalogs.open = null;
+    wrapper.unmount();
+    await client.setCatalogEnabled({ id: 'fontshare', enabled: false });
+  });
+
+  it('draws the folder tree with one line per catalog that is on (E57.5)', async () => {
+    await client.updateSettings({ downloadFolder: 'D:\\Type\\Library' });
+    await client.setCatalogEnabled({ id: 'googleFonts', enabled: true });
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    expect(wrapper.get('[data-testid="settings-download-folder-path"]').text()).toBe(
+      'D:\\Type\\Library',
+    );
+    const tree = wrapper.get('[data-testid="settings-catalog-paths"]');
+    expect(tree.attributes('aria-label')).toBe('Where each catalog installs');
+    expect(tree.findAll('li').map((l) => l.text())).toEqual([
+      'D:\\Type\\Library',
+      'Google Fonts\\<Family>',
+    ]);
+    expect(tree.get('[data-catalog="googleFonts"] .placeholder').text()).toBe('<Family>');
+    // Fontshare is off: no line for it.
+    expect(tree.find('[data-catalog="fontshare"]').exists()).toBe(false);
+    wrapper.unmount();
+    // The mock keeps the catalogs between tests.
+    await client.setCatalogEnabled({ id: 'googleFonts', enabled: false });
+  });
+
   it('turns Google Fonts on and off under Online catalogs, saying it connects', async () => {
     const { wrapper } = await mountAt('/settings?section=catalogs');
-    const box = wrapper.get('input[name="catalog-googleFonts"]');
-    expect(box.attributes('type')).toBe('checkbox');
-    expect((box.element as HTMLInputElement).checked).toBe(false);
-    expect(box.element.closest('label')?.textContent?.trim()).toBe('Google Fonts');
-    expect(wrapper.get(`#${box.attributes('aria-describedby')}`).text()).toContain(
-      'connects to the internet',
-    );
-    await box.setValue(true);
+    const box = toggle(wrapper, 'catalog-googleFonts');
+    const card = wrapper.get('[data-catalog="googleFonts"]');
+    expect(box.attributes('aria-checked')).toBe('false');
+    expect(labelOf(box)).toBe('Google Fonts');
+    expect(labelOf(box, 'aria-describedby')).toContain('connects to the internet');
+    // A card like a source card (E57.5): mark, name, one line, "off", the switch.
+    expect(card.get('.mark').text()).toBe('G');
+    expect(card.get('[data-testid="catalog-card-count"]').text()).toBe('off');
+    await box.trigger('click');
     await flushPromises();
     let [google] = await client.listCatalogs();
     expect(google?.enabled).toBe(true);
     expect(google?.familyCount, 'turning it on fetched the list').toBe(4);
-    await box.setValue(false);
+    expect(box.attributes('aria-checked')).toBe('true');
+    expect(card.get('[data-testid="catalog-card-count"]').text()).toBe('4 families');
+    expect(card.get('[data-testid="catalog-card-line"]').text()).toBe(
+      'Connected. Previews are fetched while you browse it.',
+    );
+    await box.trigger('click');
     await flushPromises();
     [google] = await client.listCatalogs();
     expect(google?.enabled).toBe(false);
@@ -433,11 +525,19 @@ describe('Settings window', () => {
     await commit(1, '');
     expect((field(1).element as HTMLInputElement).value).toBe('60');
     expect((await client.getSettings()).rescanIntervalMinutes).toBe(60);
-    expect(field(1).attributes('aria-describedby')).toBe('rescan-hint');
+    // A setting row (E57.5): its one line describes the field; the unit stands after it.
+    expect(document.getElementById(field(1).attributes('aria-describedby')!)?.textContent).toBe(
+      '0 turns automatic rescans off.',
+    );
+    expect(field(1).attributes('aria-label')).toBe('Rescan sources every (minutes)');
+    expect(wrapper.findAll('.unit').map((u) => u.text())).toEqual(['MB', 'minutes']);
 
     await commit(1, '0');
     expect((await client.getSettings()).rescanIntervalMinutes).toBe(0);
-    expect(wrapper.text()).toContain(mockFolders.logs);
+    // The logs folder: the path in the mono face, and "Copy path"; no "Open" (E57.5).
+    const logs = wrapper.get('[data-testid="settings-logs-folder"]');
+    expect(logs.get('.value').text()).toBe(mockFolders.logs);
+    expect(logs.findAll('button').map((b) => b.text())).toEqual(['Copy path']);
     wrapper.unmount();
   });
 

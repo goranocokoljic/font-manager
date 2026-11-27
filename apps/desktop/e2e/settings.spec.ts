@@ -33,7 +33,7 @@ test('Ctrl/Cmd+, opens Settings with its eight sections; Escape closes it', asyn
     '60',
   );
   await expect(
-    page.getByRole('button', { name: /^Copy logs folder: .*font-manager\/logs$/ }),
+    page.getByRole('button', { name: /^Copy path of the logs folder: .*font-manager\/logs$/ }),
   ).toBeVisible();
 
   await page.keyboard.press('Escape');

@@ -136,6 +136,18 @@ export const useCatalogsStore = defineStore('catalogs', () => {
   const refreshError = ref<ApiError | null>(null);
   /** The last failure of anything else (the list, a switch). */
   const error = ref<ApiError | null>(null);
+  /**
+   * The catalog `error` belongs to (E57.5): its switch failed, or turning it on could not
+   * fetch its list. `null` when the failure is not one catalog's (the list of catalogs, a
+   * page). Settings says the error on that catalog's card.
+   */
+  const errorCatalog = ref<CatalogId | null>(null);
+
+  /** Records a failure, and the catalog it belongs to, if any. */
+  function fail(e: unknown, id: CatalogId | null = null): void {
+    error.value = toApiError(e);
+    errorCatalog.value = id;
+  }
   /** The webview's own idea of the connection; `false` shows the offline note. */
   const online = ref(globalThis.navigator?.onLine ?? true);
   /** The "Download..." panel; `null` when it is closed. */
@@ -174,10 +186,11 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     try {
       catalogs.value = await client().listCatalogs();
       error.value = null;
+      errorCatalog.value = null;
       // A catalog opened before the list arrived reads its families now.
       if (current.value && !listed.value) await relist();
     } catch (e) {
-      error.value = toApiError(e);
+      fail(e);
     }
   }
 
@@ -202,8 +215,9 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       total.value = got.total;
       listed.value = true;
       error.value = null;
+      errorCatalog.value = null;
     } catch (e) {
-      if (gen === generation) error.value = toApiError(e);
+      if (gen === generation) fail(e);
     } finally {
       if (gen === generation) pending.delete(page);
     }
@@ -268,7 +282,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       return true;
     } catch (e) {
       if (open.value === id) refreshError.value = toApiError(e);
-      else error.value = toApiError(e);
+      else fail(e, id);
       return false;
     } finally {
       refreshing.value = false;
@@ -285,10 +299,11 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       const catalog = await client().setCatalogEnabled({ id, enabled });
       put(catalog);
       error.value = null;
+      errorCatalog.value = null;
       if (enabled && !catalog.refreshedAt) await refresh(id, false);
       else if (open.value === id) await relist();
     } catch (e) {
-      error.value = toApiError(e);
+      fail(e, id);
     } finally {
       busy.value = null;
     }
@@ -322,7 +337,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       }
       return done;
     } catch (e) {
-      error.value = toApiError(e);
+      fail(e);
       return false;
     } finally {
       checking.value = false;
@@ -581,6 +596,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     refreshing,
     refreshError,
     error,
+    errorCatalog,
     online,
     offline,
     load,

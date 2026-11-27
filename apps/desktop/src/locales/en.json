@@ -1435,16 +1435,28 @@
       "about": "About"
     },
     "catalogs": {
-      "note": "Font catalogs on the web. Open one to see what the app can do with it.",
+      "note": "Font catalogs on the web. Nothing is contacted until you turn a catalog on.",
       "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it.",
       "downloadFolder": "Folder for installed fonts",
       "downloadFolderNone": "Not chosen yet. The first Install asks for it.",
       "downloadFolderHint": "Install puts the fonts it downloads into this folder. Font Fu writes into no other folder without asking.",
       "pathsLabel": "Where each catalog installs",
-      "fetchMissing": "Download fonts a document needs from the catalogs you turned on",
+      "fetchMissing": "Download fonts a document needs",
       "fetchMissingHint": "When a design app opens a document with a font your library does not have, Font Fu looks it up in the font lists it already has and installs the family into the folder above. It downloads only from catalogs you turned on.",
       "fetchMissingNeeds": "Choose the folder for installed fonts and turn a catalog on first.",
-      "change": "Change…"
+      "change": "Change…",
+      "catalogsHeading": "Catalogs",
+      "installedHeading": "Installed fonts",
+      "lineOn": "Connected. Previews are fetched while you browse it.",
+      "lineOff": "Turning it on connects to the internet to fetch its list of fonts.",
+      "connecting": "Connecting…",
+      "families": {
+        "one": "{count} family",
+        "other": "{count} families"
+      },
+      "off": "off",
+      "adobeLine": "Activated by Creative Cloud. Font Fu shows these fonts and cannot download them.",
+      "howItWorks": "How it works"
     },
     "sources": {
       "note": "Folders the library indexes in place. Nothing is copied or moved; a watched folder is rescanned when its files change.",
@@ -1544,10 +1556,18 @@
       "rescanInterval": "Rescan sources every (minutes)",
       "rescanHint": "0 turns automatic rescans off.",
       "logsFolder": "Logs folder",
-      "logsFolderLabel": "logs folder",
+      "logsFolderLabel": "path of the logs folder",
       "setup": "First-run setup",
       "runSetup": "Run setup again",
-      "runSetupHint": "Opens every step with your current choices. A step you leave as it is changes nothing."
+      "runSetupHint": "Opens every step with your current choices. A step you leave as it is changes nothing.",
+      "performance": "Performance",
+      "troubleshooting": "Troubleshooting",
+      "cacheSizeTitle": "Preview cache size",
+      "cacheSizeLine": "Thumbnails and previews kept on disk.",
+      "rescanTitle": "Rescan sources every",
+      "unitMb": "MB",
+      "unitMinutes": "minutes",
+      "copyPath": "Copy path"
     },
     "localApi": {
       "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Fu through this address while the app runs. Each request needs the token.",

@@ -1435,16 +1435,28 @@
       "about": "Über"
     },
     "catalogs": {
-      "note": "Schriftkataloge im Web. Öffnen Sie einen, um zu sehen, was die App damit tun kann.",
+      "note": "Schriftkataloge im Web. Nichts wird kontaktiert, bevor du einen Katalog einschaltest.",
       "connectsHint": "Wenn Sie {name} einschalten, verbindet sich die App mit dem Internet, um die Schriftliste zu laden. Vorschauen werden beim Durchsuchen geladen.",
       "downloadFolder": "Ordner für installierte Schriften",
       "downloadFolderNone": "Noch nicht gewählt. Das erste Installieren fragt danach.",
       "downloadFolderHint": "Installieren legt die geladenen Schriften in diesen Ordner. In keinen anderen Ordner schreibt Font Fu, ohne zu fragen.",
       "pathsLabel": "Wohin jeder Katalog installiert",
-      "fetchMissing": "Schriften, die ein Dokument braucht, aus den eingeschalteten Katalogen laden",
+      "fetchMissing": "Schriften laden, die ein Dokument braucht",
       "fetchMissingHint": "Öffnet ein Designprogramm ein Dokument mit einer Schrift, die deine Bibliothek nicht hat, sucht Font Fu sie in den bereits geladenen Schriftlisten und installiert die Familie in den Ordner oben. Geladen wird nur aus Katalogen, die du eingeschaltet hast.",
       "fetchMissingNeeds": "Wähle zuerst den Ordner für installierte Schriften und schalte einen Katalog ein.",
-      "change": "Ändern…"
+      "change": "Ändern…",
+      "catalogsHeading": "Kataloge",
+      "installedHeading": "Installierte Schriften",
+      "lineOn": "Verbunden. Vorschauen werden beim Durchsuchen geladen.",
+      "lineOff": "Beim Einschalten verbindet sich die App mit dem Internet, um die Schriftliste zu laden.",
+      "connecting": "Verbinde…",
+      "families": {
+        "one": "{count} Familie",
+        "other": "{count} Familien"
+      },
+      "off": "aus",
+      "adobeLine": "Von Creative Cloud aktiviert. Font Fu zeigt diese Schriften und kann sie nicht laden.",
+      "howItWorks": "So funktioniert es"
     },
     "sources": {
       "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Nichts wird kopiert oder verschoben; ein beobachteter Ordner wird neu eingelesen, wenn sich seine Dateien ändern.",
@@ -1544,10 +1556,18 @@
       "rescanInterval": "Quellen neu einlesen alle (Minuten)",
       "rescanHint": "0 schaltet das automatische Neueinlesen aus.",
       "logsFolder": "Protokollordner",
-      "logsFolderLabel": "Protokollordner",
+      "logsFolderLabel": "Pfad des Protokollordners",
       "setup": "Ersteinrichtung",
       "runSetup": "Einrichtung erneut starten",
-      "runSetupHint": "Öffnet jeden Schritt mit deinen jetzigen Einstellungen. Ein Schritt, den du so lässt, ändert nichts."
+      "runSetupHint": "Öffnet jeden Schritt mit deinen jetzigen Einstellungen. Ein Schritt, den du so lässt, ändert nichts.",
+      "performance": "Leistung",
+      "troubleshooting": "Fehlersuche",
+      "cacheSizeTitle": "Größe des Vorschau-Caches",
+      "cacheSizeLine": "Miniaturen und Vorschauen, die auf der Festplatte bleiben.",
+      "rescanTitle": "Quellen neu einlesen alle",
+      "unitMb": "MB",
+      "unitMinutes": "Minuten",
+      "copyPath": "Pfad kopieren"
     },
     "localApi": {
       "note": "Andere Programme auf diesem Computer, etwa der Befehl fm und Plug-ins für Design-Apps, erreichen Font Fu über diese Adresse, solange die App läuft. Jede Anfrage braucht das Token.",
