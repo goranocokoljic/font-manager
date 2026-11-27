@@ -614,3 +614,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.7 #697] apps/desktop/src/components/ui/UiChoiceCards.vue:84 — the radiogroup is named by `aria-label`, repeating a visible heading instead of pointing at it with `aria-labelledby`.
 - [E57.7 #697] apps/desktop/src/api/mock.ts:4253 — the mock offers all three update levels or none, so "only the levels fm-api offers" is never tested with a smaller set.
 - [E57.7 #697] apps/desktop/src/stores/updates.ts:166 — if `pendingUpdate()` throws at start after an automatic find, About says "has not checked since it started" (error-path wording).
+- [E57.8 #698] apps/desktop/e2e/problems.spec.ts:54 — closing Problems (and Conflicts, conflicts.spec.ts:43) checks only that "All fonts" is visible, not where the focus lands.
