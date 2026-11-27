@@ -267,6 +267,31 @@ describe('problem rows', () => {
     expect(sidecar!.rows.map((r) => r.type)).toEqual(['conflict', 'conflict']);
   });
 
+  it('take a conflict for its own entry, not a collection entry on the same face and file', async () => {
+    // fm-core lists the collection first (an earlier merge), then the rating conflict.
+    const collection: Problem = {
+      kind: 'sidecarConflict',
+      face: 1,
+      path: '/Users/demo/Fonts/Inter.ttf',
+      other: '/Users/demo/Fonts/.fontlibrary/5d1c0a7e9b3f2468.json',
+      message:
+        'Another machine put this font in the collection "Client brand", which is a smart collection here.',
+    };
+    setClient({
+      ...client,
+      listProblems: async () => {
+        const list = await client.listProblems();
+        const i = list.findIndex((p) => p.kind === 'sidecarConflict');
+        return [...list.slice(0, i), collection, ...list.slice(i)];
+      },
+    });
+    const store = useProblemsStore();
+    await store.load();
+    const rows = store.sections('sidecar')[0]!.rows;
+    expect(rows.map((r) => r.type)).toEqual(['conflict', 'problem']);
+    expect(rows[1]).toMatchObject({ message: collection.message });
+  });
+
   it('drop a resolved sync conflict from the rows', async () => {
     const store = useProblemsStore();
     await store.load();

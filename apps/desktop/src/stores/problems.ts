@@ -240,17 +240,23 @@ export const useProblemsStore = defineStore('problems', () => {
 
   /**
    * The sync entries of `list_problems` that no `list_sidecar_conflicts` entry shows: each
-   * conflict hides the one entry about the same face and sync file. The rest (a sync file
-   * that cannot be read, a collection or pinned virtual style that cannot be joined here)
-   * are plain rows, so every counted entry is listed.
+   * conflict hides one entry about the same face and sync file, the one whose sentence names
+   * the other computer's value when there is one (fm-core words both from the same value), so
+   * a collection or pin entry on the same face and file is not taken for it. The rest (a sync
+   * file that cannot be read, a collection or pinned virtual style that cannot be joined
+   * here) are plain rows, so every counted entry is listed.
    */
   function unlisted(entries: Problem[]): Problem[] {
-    const shown = sidecarConflicts.value.map((c) => `${c.face}\u0000${c.sidecarPath}`);
-    return entries.filter((p) => {
-      const i = p.face === null ? -1 : shown.indexOf(`${p.face}\u0000${p.other ?? ''}`);
-      if (i >= 0) shown.splice(i, 1);
-      return i < 0;
-    });
+    const hidden = new Set<Problem>();
+    const same = (p: Problem, c: SidecarConflict) =>
+      !hidden.has(p) && p.face === c.face && p.other === c.sidecarPath;
+    for (const c of sidecarConflicts.value) {
+      const own =
+        entries.find((p) => same(p, c) && p.message.includes(c.theirs)) ??
+        entries.find((p) => same(p, c));
+      if (own) hidden.add(own);
+    }
+    return entries.filter((p) => !hidden.has(p));
   }
 
   /**
