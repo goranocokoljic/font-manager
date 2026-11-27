@@ -203,7 +203,11 @@ fn the_shells_language_and_my_languages_order_the_languages() -> TestResult {
         pairs(&[("en", "mine"), ("es", "mostUsed")])
     );
     call::<Value>(&webview, "set_shell_locale", json!({ "locale": "de" }))?;
-    assert!(kinds(&events_until(&rx, "languageOrderChanged")?).contains(&"languageOrderChanged"));
+    // One event, from this change: the hand-over at start announces nothing.
+    assert_eq!(
+        kinds(&events_until(&rx, "languageOrderChanged")?),
+        ["languageOrderChanged"]
+    );
     assert_eq!(
         first_languages(&webview, 3)?,
         pairs(&[("de", "mine"), ("en", "mostUsed"), ("es", "mostUsed")])

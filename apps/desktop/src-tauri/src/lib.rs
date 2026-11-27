@@ -1798,16 +1798,18 @@ pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri
 
 /// Registers this state and every command on a builder.
 pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> tauri::Builder<R> {
+    // The core orders `list_languages` by the language of the menu's strings
+    // from the start (E58.1); `set_shell_locale` updates it. Handed over
+    // before the subscription: nothing has read the order yet, so the UI's
+    // stream does not start with a `languageOrderChanged`.
+    let locale = shell_text::initial_locale(state.current_settings().language);
+    state.set_system_language(&locale);
     // Subscribe before the first command can run, so no event is missed; a
     // thread forwards the stream to the webview until the API drops it.
     let events = state.api.subscribe();
     let tray_api = Arc::clone(&state.api);
     let tray = state.tray.clone();
     let core = state.core.clone();
-    let locale = shell_text::initial_locale(state.current_settings().language);
-    // The core orders `list_languages` by the language of the menu's strings
-    // from the start (E58.1); `set_shell_locale` updates it.
-    state.set_system_language(&locale);
     let on_quit = quit_install::OnQuit::new(state.quit_install.clone());
     builder
         .manage(shell_text::ShellLocale::new(locale))
