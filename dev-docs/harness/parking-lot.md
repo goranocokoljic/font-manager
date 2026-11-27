@@ -590,3 +590,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-26
 - [E57.1 #691] go-harness.ps1:838 — `harness:human-merge` (and `bench` in scripts/harness/ci-wait.mjs:149) are still created with hard-coded colors and descriptions that repeat `HARNESS_LABELS` in scripts/harness/lib.mjs.
 - [E57.1 #691] scripts/harness/epic-sync.mjs:46 — `epicOf` and full-run.mjs `epicNumber` each map an epic id to its issue number with their own title rule; they agree today but could drift.
+
+## 2026-11-27
+- [E57.3 #693] apps/desktop/src/components/ThemeCard.vue:28 — a radio card of its own (hidden native radio with an accent ring), as are SetupCatalogsStep.vue:73 and :96; DESIGN.md now calls a local copy of a choice card a bug (E57.4 covers ThemeCard, the Setup steps are outside E57).
+- [E57.3 #693] apps/desktop/src/views/SettingsView.vue — every tab's `aria-controls="panel-<id>"` points to a panel that exists only for the open tab (pattern moved unchanged from before E57.3).
