@@ -130,6 +130,19 @@ for (const vp of SMALL_VIEWPORTS) {
       expect(g.x).toBeGreaterThanOrEqual(0);
       expect(g.x + g.width).toBeLessThanOrEqual(vp.width);
       expect(await cutOffControls(page, TOOLBARS)).toEqual([]);
+      // The table is wider than its box, and that box is the one that scrolls sideways.
+      const scroll = await grid.evaluate((el) => ({
+        overflowX: getComputedStyle(el).overflowX,
+        wider: el.scrollWidth > el.clientWidth,
+      }));
+      expect(scroll).toEqual({ overflowX: 'auto', wider: true });
+      // Scrolled to its end, the last column is inside the window.
+      await grid.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth;
+      });
+      const last = await box(grid.getByRole('columnheader').last());
+      expect(last.x).toBeGreaterThanOrEqual(g.x - 1);
+      expect(last.x + last.width).toBeLessThanOrEqual(Math.min(vp.width, g.x + g.width) + 1);
     });
 
     test("Compare's faces stack one above the other", async ({ page }) => {
@@ -197,6 +210,14 @@ test.describe('the panes fold by themselves', () => {
     await page.setViewportSize({ width: 1000, height: 700 });
     await expect(sidebar(page)).toBeVisible();
     await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('the focus moves to the list when the sidebar folds while it has it', async ({ page }) => {
+    await sidebar(page).focus();
+    await expect(sidebar(page)).toBeFocused();
+    await page.setViewportSize({ width: 667, height: 467 });
+    await expect(sidebar(page)).toBeHidden();
+    await expect(page.getByRole('main')).toBeFocused();
   });
 
   test('a fold by itself is not saved: with room again the sidebar is back', async ({ page }) => {
