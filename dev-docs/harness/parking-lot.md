@@ -594,3 +594,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.10 #700] apps/desktop/src-tauri/src/menu.rs:233 — `relabel` renames the File menu title only on FileMenu OSes, so a File menu the shell makes on a Mac would not follow a language change (not reached with Tauri's macOS default menu).
 - [E57.10 #700] apps/desktop/src/App.vue:77 — a `shell:navigate` route change does not move focus into the new view, so a screen-reader user hears no announcement after File › Duplicates or Settings….
 - [E57.10 #700] apps/desktop/src/locales/en.json:46 — the shell menu labels have no access keys (`&`), so the Windows menu bar has no Alt+letter shortcuts for them.
+
+## 2026-11-27
+- [E57.3 #693] apps/desktop/src/components/ThemeCard.vue:28 — a radio card of its own (hidden native radio with an accent ring), as are SetupCatalogsStep.vue:73 and :96; DESIGN.md now calls a local copy of a choice card a bug (E57.4 covers ThemeCard, the Setup steps are outside E57).
+- [E57.3 #693] apps/desktop/src/views/SettingsView.vue — every tab's `aria-controls="panel-<id>"` points to a panel that exists only for the open tab (pattern moved unchanged from before E57.3).

@@ -1,0 +1,18 @@
+{
+  "id": "a-full-view-that-closes-on-esc-must-not-hang-the-key-on-its-",
+  "title": "A full view that closes on Esc must not hang the key on its own root element",
+  "category": "accessibility",
+  "rule": "When a full view (Settings, Problems, Duplicates, Studio) closes on Escape, do not rely only on a keydown handler on the view's root element: a click on plain text that no element takes focus for leaves focus on body, and the key never reaches the root. Listen on window while the view is mounted (remove the listener on unmount), act only when the target is inside the view or is body/documentElement, and keep the guards for the command palette and defaultPrevented so dialogs and popovers outside the view keep their own Esc. Test it with a Playwright step that clicks the view's plain text and then presses Esc, and a unit test that dispatches Escape on document.body and on an element outside the view.",
+  "rationale": "E57.3 (#693): the Settings tabpanel lost tabindex=\"0\", so after a click on About's text focus fell to body and Esc no longer closed Settings; the handler was only on the .settings div.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    693
+  ],
+  "file_globs": [
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-11-27T00:27:57.856Z",
+  "last_seen": "2026-11-27T00:27:57.856Z"
+}

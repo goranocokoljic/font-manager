@@ -1,38 +1,29 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+// Settings (boards 11 and 15, E57.3): the shell alone. A 232 px navigation on the surface
+// colour with the title and the eight sections as a vertical tab list, and beside it the
+// panel: the open section (a component of its own under components/settings/), at most
+// 760 px wide (Sources keeps its 920). No top bar: the x icon button in the panel's top
+// corner and Esc close the view. The open section is in the URL
+// (`#/settings?section=advanced`), so a reload keeps it.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { formatApiVersion } from '../api/version';
-import type { FullSettings } from '../api/client';
-import type { Language, SettingsUpdate, UpdateLevel } from '../api/types';
-import AdobeFontsNote from '../components/AdobeFontsNote.vue';
-import AppLogo from '../components/AppLogo.vue';
-import CopyValue from '../components/CopyValue.vue';
-import LocalApiSettings from '../components/LocalApiSettings.vue';
-import McpSettings from '../components/McpSettings.vue';
-import SourcesSettings from '../components/SourcesSettings.vue';
-import ThemeCard from '../components/ThemeCard.vue';
-import UiButton from '../components/ui/UiButton.vue';
+import AboutSettings from '../components/settings/AboutSettings.vue';
+import ActivationSettings from '../components/settings/ActivationSettings.vue';
+import AdvancedSettings from '../components/settings/AdvancedSettings.vue';
+import AppearanceSettings from '../components/settings/AppearanceSettings.vue';
+import CatalogsSettings from '../components/settings/CatalogsSettings.vue';
+import LocalApiSettings from '../components/settings/LocalApiSettings.vue';
+import McpSettings from '../components/settings/McpSettings.vue';
+import SourcesSettings from '../components/settings/SourcesSettings.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
-import UiNumberField from '../components/ui/UiNumberField.vue';
-import UiSelect from '../components/ui/UiSelect.vue';
-import {
-  CATALOGS,
-  LOCALES,
-  errorMessage,
-  formatDate,
-  resolveLocale,
-  t,
-  type Catalog,
-  type MessageKey,
-} from '../i18n';
+import UiIconButton from '../components/ui/UiIconButton.vue';
+import { errorMessage, t, type MessageKey } from '../i18n';
 import { useAppStore } from '../stores/app';
-import { installPath, useCatalogsStore } from '../stores/catalogs';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
-import { useSetupStore } from '../stores/setup';
 import { useSourcesStore } from '../stores/sources';
 import { useThemesStore } from '../stores/themes';
-import { useToastStore } from '../stores/toast';
 import { useUpdatesStore } from '../stores/updates';
 
 const store = useSettingsStore();
@@ -40,39 +31,56 @@ const catalogs = useCatalogsStore();
 const sources = useSourcesStore();
 const commands = useCommandsStore();
 const app = useAppStore();
-const toast = useToastStore();
 const updates = useUpdatesStore();
 const themes = useThemesStore();
-const setup = useSetupStore();
 const route = useRoute();
 const router = useRouter();
 
 const sections = [
-  { id: 'sources', icon: 'folder' },
-  { id: 'activation', icon: 'power' },
-  { id: 'appearance', icon: 'sun' },
-  { id: 'catalogs', icon: 'globe' },
-  { id: 'advanced', icon: 'sliders' },
-  { id: 'localApi', icon: 'code' },
-  { id: 'mcp', icon: 'sparkles' },
-  { id: 'about', icon: 'info' },
+  { id: 'sources', icon: 'folder', component: SourcesSettings },
+  { id: 'activation', icon: 'power', component: ActivationSettings },
+  { id: 'appearance', icon: 'sun', component: AppearanceSettings },
+  { id: 'catalogs', icon: 'globe', component: CatalogsSettings },
+  { id: 'advanced', icon: 'sliders', component: AdvancedSettings },
+  { id: 'localApi', icon: 'code', component: LocalApiSettings },
+  { id: 'mcp', icon: 'sparkles', component: McpSettings },
+  { id: 'about', icon: 'info', component: AboutSettings },
 ] as const;
 type SectionId = (typeof sections)[number]['id'];
 
-// The open section is in the URL (`#/settings?section=advanced`), so a reload keeps it.
 const current = computed<SectionId>(
   () => sections.find((s) => s.id === route.query.section)?.id ?? 'sources',
 );
+const section = computed(() => sections.find((s) => s.id === current.value)!);
 
 const focusTab = (id: SectionId) => document.getElementById(`tab-${id}`)?.focus();
 
-async function select(id: SectionId, focus = false): Promise<void> {
-  await router.replace({ query: { ...route.query, section: id } });
-  if (focus) {
-    await nextTick();
-    focusTab(id);
+/**
+ * Where focus goes once the section has changed: the tab when an arrow key moved it (the tab
+ * list keeps working), the section's heading otherwise (a click, Enter or Space on a tab).
+ */
+let focusAfter: 'tab' | 'heading' | null = null;
+
+async function select(id: SectionId, focus: 'tab' | 'heading'): Promise<void> {
+  if (id === current.value) {
+    if (focus === 'heading') focusHeading();
+    return;
   }
+  focusAfter = focus;
+  await router.replace({ query: { ...route.query, section: id } });
 }
+
+function focusHeading(): void {
+  document.querySelector<HTMLElement>('.panel [data-section-heading]')?.focus();
+}
+
+watch(current, async (id) => {
+  const how = focusAfter;
+  focusAfter = null;
+  await nextTick();
+  if (how === 'tab') focusTab(id);
+  else if (how === 'heading') focusHeading();
+});
 
 // A vertical tab list: arrows move between sections, Home and End jump to the ends.
 function onTabKey(e: KeyboardEvent): void {
@@ -90,21 +98,31 @@ function onTabKey(e: KeyboardEvent): void {
             : -1;
   if (to < 0) return;
   e.preventDefault();
-  void select(sections[to].id, true);
+  void select(sections[to].id, 'tab');
 }
 
 function close(): void {
   void router.push({ name: 'home' });
 }
 
+const root = ref<HTMLElement | null>(null);
+
+/**
+ * Esc closes the view wherever focus is in it, and also when a click on plain text has left
+ * focus on the page itself (no part of the panel takes focus on a click). A key inside a
+ * dialog or popover outside the view (the update dialog, setup) is theirs, not ours.
+ */
 function onKey(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && !commands.open && !e.defaultPrevented) {
-    e.preventDefault();
-    close();
-  }
+  if (e.key !== 'Escape' || commands.open || e.defaultPrevented) return;
+  const target = e.target as Node | null;
+  const ours = target === document.body || target === document.documentElement;
+  if (!ours && !(target && root.value?.contains(target))) return;
+  e.preventDefault();
+  close();
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKey);
   focusTab(current.value);
   await Promise.all([
     store.settings ? undefined : store.load(),
@@ -117,117 +135,22 @@ onMounted(async () => {
     themes.themes.length ? undefined : themes.load(),
   ]);
 });
-onBeforeUnmount(() => sources.stop());
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  sources.stop();
+});
 
-const s = computed(() => store.settings);
-/**
- * "Download fonts a document needs" (E29.5) has nothing to do without the download
- * folder and a catalog that is on.
- */
-const canFetchMissing = computed(
-  () => !!s.value?.downloadFolder && catalogs.catalogs.some((c) => c.enabled),
-);
-/** Online catalogs: the Adobe Fonts entry shows its note when opened. */
-const adobeFontsOpen = ref(false);
 /** The last failure of any store this window reads. */
 const error = computed(() => store.error ?? sources.error ?? app.error);
 
-/** Radio choices; each change is saved at once. */
-function choose(patch: SettingsUpdate): void {
-  void store.update(patch);
-}
-
-/**
- * "Start at login": the OS may refuse the login entry; then a toast says so and
- * the switch shows the state fm-api reports again.
- */
-async function saveStartAtLogin(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  if (await store.update({ startAtLogin: input.checked })) return;
-  toast.show(store.error ? errorMessage(store.error) : t('settings.activation.startAtLoginFailed'));
-  input.checked = store.settings?.startAtLogin ?? false;
-}
-
-type NumberKey = keyof Pick<FullSettings, 'cacheLimitMb' | 'rescanIntervalMinutes'>;
-
-/**
- * A number field saves when the user commits it (Enter, leaving the field, − / +), not on
- * every key, so "1" on the way to "1024" is never sent. A refused or empty value re-keys the
- * field, which shows the saved number again.
- */
-const numberReset = ref<Record<NumberKey, number>>({ cacheLimitMb: 0, rescanIntervalMinutes: 0 });
-async function saveNumber(key: NumberKey, value: number | ''): Promise<void> {
-  const valid = value !== '' && value >= 0 && Number.isInteger(value);
-  const ok = valid && (await store.update({ [key]: value }));
-  if (!ok) numberReset.value[key] += 1;
-}
-
-// Identifiers the template uses, kept here: the catalog check (src/i18n/templates.test.ts)
-// reads a camelCase literal in a template as text.
-const saveCacheLimit = (v: number | '') => saveNumber('cacheLimitMb', v);
-const saveRescanInterval = (v: number | '') => saveNumber('rescanIntervalMinutes', v);
-const KEEP_EXISTING = 'keepExisting' satisfies FullSettings['onConflict'];
-const upToDate = computed(() => updates.status === 'upToDate');
-
-/** The update levels this copy offers (E55.10); none where it does not update itself. */
-const levels = computed(() => updates.overview?.levels ?? []);
-const INSTALL_ON_QUIT = 'installOnQuit' satisfies UpdateLevel;
-const levelLabel = (level: UpdateLevel) => t(`updates.level.${level}` as MessageKey);
-
-/** Saves the level (both settings at once), then reads the status under the control again. */
-async function chooseLevel(level: UpdateLevel): Promise<void> {
-  await store.update({ updateLevel: level });
-  await updates.loadOverview();
-}
-
-/** When the last check ran and what it found. */
-const lastCheckText = computed(() => {
-  const last = updates.overview?.lastCheck;
-  if (!last) return t('updates.lastCheck.never');
-  const ms = Date.parse(last.at);
-  const when = Number.isFinite(ms) ? formatDate(ms) : last.at;
-  const outcome = last.outcome;
-  if (outcome.type === 'found')
-    return t('updates.lastCheck.found', { when, version: outcome.version });
-  if (outcome.type === 'failed')
-    return t('updates.lastCheck.failed', { when, message: outcome.message });
-  return t('updates.lastCheck.upToDate', { when });
-});
-
 /** A section's title, which is also its heading. */
 const sectionTitle = (id: SectionId) => t(`settings.sections.${id}` as MessageKey);
-
-/** A locale's own name for itself (`Deutsch`), from its catalog. */
-function localeName(tag: string): string {
-  const name = (CATALOGS[tag]?.meta as Catalog | undefined)?.name;
-  return typeof name === 'string' ? name : tag;
-}
-
-/** The locale "System" resolves to on this computer, by its own name. */
-const systemLocaleName = computed(() => {
-  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
-  return localeName(resolveLocale('system', preferred));
-});
-
-const languageOptions = computed(() => [
-  { value: 'system', label: t('language.system', { name: systemLocaleName.value }) },
-  ...LOCALES.map((tag) => ({ value: tag, label: localeName(tag) })),
-]);
-function chooseLanguage(value: string): void {
-  choose({ language: value as Language });
-}
 </script>
 
 <template>
-  <div class="settings" @keydown="onKey">
-    <header class="bar" data-top-bar>
+  <div ref="root" class="settings">
+    <nav class="nav" aria-labelledby="settings-title">
       <h1 id="settings-title" class="title">{{ t('settings.title') }}</h1>
-      <UiButton aria-keyshortcuts="Escape" @click="close">
-        {{ t('common.close') }}
-      </UiButton>
-    </header>
-
-    <div class="body">
       <div
         role="tablist"
         aria-orientation="vertical"
@@ -236,396 +159,42 @@ function chooseLanguage(value: string): void {
         @keydown="onTabKey"
       >
         <button
-          v-for="section in sections"
-          :id="`tab-${section.id}`"
-          :key="section.id"
+          v-for="s in sections"
+          :id="`tab-${s.id}`"
+          :key="s.id"
           type="button"
           role="tab"
           class="tab"
-          :aria-selected="current === section.id"
-          :aria-controls="`panel-${section.id}`"
-          :tabindex="current === section.id ? 0 : -1"
-          @click="select(section.id)"
+          :aria-selected="current === s.id"
+          :aria-controls="`panel-${s.id}`"
+          :tabindex="current === s.id ? 0 : -1"
+          @click="select(s.id, 'heading')"
         >
-          <UiIcon :name="section.icon" />
-          {{ sectionTitle(section.id) }}
+          <UiIcon :name="s.icon" />
+          {{ sectionTitle(s.id) }}
         </button>
       </div>
+    </nav>
 
+    <div class="main">
+      <UiIconButton
+        class="close"
+        icon="close"
+        :label="t('settings.close')"
+        shortcut="Esc"
+        aria-keyshortcuts="Escape"
+        data-testid="settings-close"
+        @click="close"
+      />
       <div
         :id="`panel-${current}`"
         role="tabpanel"
         :aria-labelledby="`tab-${current}`"
-        tabindex="0"
         class="panel"
+        :class="{ wide: current === 'sources' }"
       >
         <p v-if="error" role="alert" class="error">{{ errorMessage(error) }}</p>
-
-        <SourcesSettings v-if="current === 'sources'" />
-
-        <template v-else-if="current === 'activation' && s">
-          <h2 class="heading">{{ sectionTitle('activation') }}</h2>
-          <fieldset class="group">
-            <legend>{{ t('settings.activation.modeLegend') }}</legend>
-            <label class="choice">
-              <input
-                type="radio"
-                name="activation-mode"
-                :checked="s.activationMode === 'session'"
-                @change="choose({ activationMode: 'session' })"
-              />
-              {{ t('settings.activation.modeSession') }}
-            </label>
-            <label class="choice">
-              <input
-                type="radio"
-                name="activation-mode"
-                :checked="s.activationMode === 'permanent'"
-                @change="choose({ activationMode: 'permanent' })"
-              />
-              {{ t('settings.activation.modePermanent') }}
-            </label>
-          </fieldset>
-          <fieldset class="group">
-            <legend>{{ t('settings.activation.conflictLegend') }}</legend>
-            <label class="choice">
-              <input
-                type="radio"
-                name="on-conflict"
-                :checked="s.onConflict === KEEP_EXISTING"
-                @change="choose({ onConflict: KEEP_EXISTING })"
-              />
-              {{ t('settings.activation.conflictAsk') }}
-            </label>
-            <label class="choice">
-              <input
-                type="radio"
-                name="on-conflict"
-                :checked="s.onConflict === 'replace'"
-                @change="choose({ onConflict: 'replace' })"
-              />
-              {{ t('settings.activation.conflictReplace') }}
-            </label>
-          </fieldset>
-          <label class="choice">
-            <input
-              type="checkbox"
-              name="reactivate-on-launch"
-              :checked="s.reactivateOnLaunch"
-              @change="choose({ reactivateOnLaunch: ($event.target as HTMLInputElement).checked })"
-            />
-            {{ t('settings.activation.reactivateOnLaunch') }}
-          </label>
-          <label class="choice">
-            <input
-              type="checkbox"
-              name="keep-in-tray"
-              aria-describedby="keep-in-tray-hint"
-              :checked="s.keepInTray"
-              @change="choose({ keepInTray: ($event.target as HTMLInputElement).checked })"
-            />
-            {{ t('settings.activation.keepInTray') }}
-          </label>
-          <p id="keep-in-tray-hint" class="note hint">
-            {{ t('settings.activation.keepInTrayHint') }}
-          </p>
-          <!-- fm-api reports null where the system does not offer it (ADR 0011). -->
-          <template v-if="s.startAtLogin != null">
-            <label class="choice start-at-login">
-              <input
-                type="checkbox"
-                name="start-at-login"
-                aria-describedby="start-at-login-hint"
-                :checked="s.startAtLogin"
-                @change="saveStartAtLogin"
-              />
-              {{ t('settings.activation.startAtLogin') }}
-            </label>
-            <p id="start-at-login-hint" class="note hint">
-              {{ t('settings.activation.startAtLoginHint') }}
-            </p>
-          </template>
-        </template>
-
-        <template v-else-if="current === 'appearance' && s">
-          <h2 class="heading">{{ sectionTitle('appearance') }}</h2>
-          <fieldset class="group">
-            <legend>{{ t('settings.appearance.colorTheme') }}</legend>
-            <div class="theme-cards">
-              <ThemeCard
-                v-for="theme in themes.themes"
-                :key="theme.id"
-                :theme="theme"
-                :scheme="themes.scheme"
-                :checked="themes.active?.id === theme.id"
-                @choose="themes.choose"
-              />
-            </div>
-          </fieldset>
-          <fieldset class="group">
-            <legend>{{ t('settings.appearance.theme') }}</legend>
-            <label
-              v-for="value in ['system', 'light', 'dark'] as const"
-              :key="value"
-              class="choice"
-            >
-              <input
-                type="radio"
-                name="theme"
-                :checked="s.theme === value"
-                @change="choose({ theme: value })"
-              />
-              {{ t(`settings.appearance.themes.${value}`) }}
-            </label>
-          </fieldset>
-          <label class="field">
-            <span>{{ t('language.label') }}</span>
-            <UiSelect
-              name="language"
-              class="select"
-              aria-describedby="language-hint"
-              :model-value="s.language ?? 'system'"
-              :options="languageOptions"
-              @update:model-value="chooseLanguage"
-            />
-          </label>
-          <p id="language-hint" class="note">{{ t('language.hint') }}</p>
-        </template>
-
-        <template v-else-if="current === 'catalogs'">
-          <h2 class="heading">{{ sectionTitle('catalogs') }}</h2>
-          <p class="note">{{ t('settings.catalogs.note') }}</p>
-          <template v-for="c in catalogs.catalogs" :key="c.id">
-            <label class="choice">
-              <input
-                type="checkbox"
-                :name="`catalog-${c.id}`"
-                :aria-describedby="`catalog-hint-${c.id}`"
-                :checked="c.enabled"
-                :disabled="catalogs.busy === c.id"
-                @change="catalogs.setEnabled(c.id, ($event.target as HTMLInputElement).checked)"
-              />
-              <bdi>{{ c.name }}</bdi>
-            </label>
-            <p :id="`catalog-hint-${c.id}`" class="note hint">
-              {{ t('settings.catalogs.connectsHint', { name: c.name }) }}
-            </p>
-          </template>
-          <p v-if="catalogs.error" role="alert" class="note">
-            {{ errorMessage(catalogs.error) }}
-          </p>
-          <UiButton
-            aria-controls="settings-adobe-fonts"
-            :aria-expanded="adobeFontsOpen"
-            @click="adobeFontsOpen = !adobeFontsOpen"
-          >
-            {{ t('catalogs.adobeFonts.name') }}
-          </UiButton>
-          <AdobeFontsNote v-if="adobeFontsOpen" id="settings-adobe-fonts" :level="3" />
-          <div class="field" data-testid="settings-download-folder">
-            <span id="download-folder-label">{{ t('settings.catalogs.downloadFolder') }}</span>
-            <span class="folder-row">
-              <bdi
-                v-if="s?.downloadFolder"
-                class="folder"
-                data-testid="settings-download-folder-path"
-                >{{ s.downloadFolder }}</bdi
-              >
-              <span v-else class="note">{{ t('settings.catalogs.downloadFolderNone') }}</span>
-              <UiButton
-                aria-describedby="download-folder-label download-folder-hint"
-                data-testid="settings-download-folder-change"
-                @click="catalogs.changeDownloadFolder()"
-              >
-                {{ t('settings.catalogs.change') }}
-              </UiButton>
-            </span>
-          </div>
-          <p id="download-folder-hint" class="note hint">
-            {{ t('settings.catalogs.downloadFolderHint') }}
-          </p>
-          <ul
-            v-if="s?.downloadFolder"
-            class="catalog-paths"
-            :aria-label="t('settings.catalogs.pathsLabel')"
-            data-testid="settings-catalog-paths"
-          >
-            <li v-for="c in catalogs.catalogs" :key="c.id" :data-catalog="c.id">
-              <bdi>{{ c.name }}</bdi
-              >:
-              <bdi class="folder">{{
-                installPath(s.downloadFolder, c, t('setup.catalogs.familyPlaceholder'))
-              }}</bdi>
-            </li>
-          </ul>
-          <label class="choice">
-            <input
-              type="checkbox"
-              name="fetch-missing-fonts"
-              aria-describedby="fetch-missing-fonts-hint"
-              :checked="s?.fetchMissingFonts ?? false"
-              :disabled="!canFetchMissing"
-              @change="choose({ fetchMissingFonts: ($event.target as HTMLInputElement).checked })"
-            />
-            {{ t('settings.catalogs.fetchMissing') }}
-          </label>
-          <p id="fetch-missing-fonts-hint" class="note hint" data-testid="fetch-missing-fonts-hint">
-            {{
-              canFetchMissing
-                ? t('settings.catalogs.fetchMissingHint')
-                : t('settings.catalogs.fetchMissingNeeds')
-            }}
-          </p>
-        </template>
-
-        <template v-else-if="current === 'advanced' && s">
-          <h2 class="heading">{{ sectionTitle('advanced') }}</h2>
-          <label class="field">
-            <span>{{ t('settings.advanced.cacheSize') }}</span>
-            <span class="number">
-              <UiNumberField
-                :key="`cache-${numberReset.cacheLimitMb}`"
-                :model-value="s.cacheLimitMb"
-                :min="0"
-                @commit="saveCacheLimit"
-              />
-            </span>
-          </label>
-          <label class="field">
-            <span>{{ t('settings.advanced.rescanInterval') }}</span>
-            <span class="number">
-              <UiNumberField
-                :key="`rescan-${numberReset.rescanIntervalMinutes}`"
-                :model-value="s.rescanIntervalMinutes"
-                :min="0"
-                aria-describedby="rescan-hint"
-                @commit="saveRescanInterval"
-              />
-            </span>
-          </label>
-          <p id="rescan-hint" class="note">{{ t('settings.advanced.rescanHint') }}</p>
-          <div v-if="store.folders" class="field">
-            <span>{{ t('settings.advanced.logsFolder') }}</span>
-            <span>
-              <CopyValue
-                :value="store.folders.logs"
-                :label="t('settings.advanced.logsFolderLabel')"
-              />
-            </span>
-          </div>
-          <div class="field">
-            <span>{{ t('settings.advanced.setup') }}</span>
-            <span>
-              <UiButton
-                aria-describedby="run-setup-hint"
-                data-testid="settings-run-setup"
-                @click="setup.runAgain()"
-              >
-                {{ t('settings.advanced.runSetup') }}
-              </UiButton>
-            </span>
-          </div>
-          <p id="run-setup-hint" class="note">{{ t('settings.advanced.runSetupHint') }}</p>
-        </template>
-
-        <LocalApiSettings v-else-if="current === 'localApi'" />
-
-        <McpSettings v-else-if="current === 'mcp'" />
-
-        <template v-else-if="current === 'about' && app.info">
-          <h2 class="heading">{{ sectionTitle('about') }}</h2>
-          <AppLogo class="brand" data-testid="app-logo" />
-          <dl class="info" data-testid="app-info">
-            <dt>{{ t('home.info.app') }}</dt>
-            <dd>
-              <bdi>{{ app.info.name }} {{ app.info.version }}</bdi>
-            </dd>
-            <dt>{{ t('home.info.api') }}</dt>
-            <dd>{{ formatApiVersion(app.info.apiVersion) }}</dd>
-            <dt>{{ t('home.info.platform') }}</dt>
-            <dd>
-              <bdi>{{ app.info.platform }}</bdi>
-            </dd>
-          </dl>
-          <!-- Hidden where Flatpak or a package manager installs the updates; the
-               platform notes below say so (ADR 0012). -->
-          <section v-if="updates.support?.offered" class="updates" aria-labelledby="updates-title">
-            <h3 id="updates-title" class="subheading">{{ t('updates.title') }}</h3>
-            <div class="add">
-              <UiButton
-                :disabled="updates.status === 'checking' || updates.status === 'installing'"
-                @click="updates.check()"
-              >
-                {{ t('updates.check') }}
-              </UiButton>
-              <UiButton
-                v-if="updates.status === 'available' && updates.update && !updates.open"
-                @click="updates.open = true"
-              >
-                {{ t('updates.showVersion', { version: updates.update.version }) }}
-              </UiButton>
-            </div>
-            <p role="status" class="note status">
-              <template v-if="updates.status === 'checking'">{{ t('updates.checking') }}</template>
-              <template v-else-if="upToDate">{{ t('updates.upToDate') }}</template>
-              <template v-else-if="updates.status === 'available' && updates.update">{{
-                t('updates.available', { version: updates.update.version })
-              }}</template>
-            </p>
-            <p v-if="updates.error && !updates.open" role="alert" class="error">
-              {{ errorMessage(updates.error) }}
-            </p>
-            <!-- E55.10: one control over "Check automatically" and "Install updates when I
-                 quit"; fm-api maps each level to the two settings, so no combination it
-                 refuses is shown. Native radios: arrow keys move between the levels. -->
-            <fieldset v-if="s && levels.length" class="group">
-              <legend>{{ t('updates.level.legend') }}</legend>
-              <template v-for="level in levels" :key="level">
-                <label class="choice">
-                  <input
-                    type="radio"
-                    name="update-level"
-                    :checked="updates.overview?.level === level"
-                    :aria-describedby="
-                      level === INSTALL_ON_QUIT ? 'install-on-quit-notes' : undefined
-                    "
-                    @change="chooseLevel(level)"
-                  />
-                  {{ levelLabel(level) }}
-                </label>
-                <ul
-                  v-if="level === INSTALL_ON_QUIT"
-                  id="install-on-quit-notes"
-                  class="note hint level-notes"
-                >
-                  <li>{{ t('updates.level.majorAsks') }}</li>
-                  <li>{{ t('updates.level.sessionEnds') }}</li>
-                </ul>
-              </template>
-            </fieldset>
-            <p class="note level-hint">
-              {{ t('updates.checkAutomaticallyHint') }}
-            </p>
-            <p v-if="updates.overview" class="note last-check">{{ lastCheckText }}</p>
-            <div v-if="updates.overview?.waiting" class="add waiting">
-              <p class="note">
-                {{ t('updates.waiting', { version: updates.overview.waiting }) }}
-              </p>
-              <UiButton @click="updates.openDialog()">{{ t('updates.installNow') }}</UiButton>
-            </div>
-          </section>
-          <h3 id="platform-notes-title" class="subheading">
-            {{ t('settings.about.platformNotes') }}
-          </h3>
-          <ul
-            v-if="app.info.platformNotes?.length"
-            class="notes"
-            aria-labelledby="platform-notes-title"
-          >
-            <li v-for="note in app.info.platformNotes" :key="note">{{ note }}</li>
-          </ul>
-          <p v-else class="note">{{ t('settings.about.noPlatformNotes') }}</p>
-        </template>
+        <component :is="section.component" />
       </div>
     </div>
   </div>
@@ -634,221 +203,88 @@ function chooseLanguage(value: string): void {
 <style scoped>
 .settings {
   display: flex;
-  flex-direction: column;
   height: 100vh;
+  min-height: 0;
 }
-.bar {
+.nav {
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 48px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--fm-border);
+  flex: none;
+  flex-direction: column;
+  width: 232px;
+  padding: var(--fm-space-4) var(--fm-space-3);
+  border-inline-end: 1px solid var(--fm-border);
+  background-color: var(--fm-surface);
 }
 .title {
-  margin: 0;
-  font-size: var(--fm-text-md);
+  margin: var(--fm-space-2) var(--fm-space-2) var(--fm-space-4);
+  font-size: var(--fm-text-lg);
   font-weight: 600;
-}
-.body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
 }
 .tabs {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 180px;
-  padding: 8px;
-  border-inline-end: 1px solid var(--fm-border);
-  background-color: var(--fm-surface);
 }
 .tab {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: var(--fm-gap) 8px;
+  gap: var(--fm-space-2);
+  height: 32px;
+  padding: 0 var(--fm-space-2);
   border: 0;
-  border-radius: var(--fm-radius-sm);
+  border-radius: var(--fm-radius-md);
   background-color: transparent;
-  color: var(--fm-muted);
+  color: var(--fm-fg);
   font: inherit;
   text-align: start;
 }
 .tab:hover {
   background-color: var(--fm-hover);
-  color: var(--fm-fg);
 }
 .tab:focus-visible {
   outline-offset: -2px;
 }
 .tab[aria-selected='true'] {
-  background-color: var(--fm-hover);
-  color: var(--fm-fg);
+  background-color: var(--fm-side-active, var(--fm-hover));
   font-weight: 600;
 }
-.tab[aria-selected='true']::before {
-  content: '';
-  position: absolute;
-  inset-block: 6px;
-  inset-inline-start: 0;
-  width: 2px;
-  border-radius: 1px;
-  background-color: var(--fm-accent);
+.tab :deep(.ui-icon) {
+  color: var(--fm-muted);
 }
 .tab[aria-selected='true'] :deep(.ui-icon) {
   color: var(--fm-fg);
 }
-.panel {
+.main {
+  position: relative;
   flex: 1;
-  max-width: 720px;
-  padding: 16px 24px;
+  min-width: 0;
   overflow-y: auto;
 }
-.heading {
-  margin: 0 0 12px;
-  font-size: var(--fm-text-lg);
+/* In the panel's top corner, at the end of the line. */
+.close {
+  position: absolute;
+  inset-block-start: var(--fm-space-4);
+  inset-inline-end: var(--fm-space-4);
 }
-.note {
-  margin: 0 0 12px;
-  color: var(--fm-muted);
+.panel {
+  box-sizing: border-box;
+  max-width: calc(760px + 2 * var(--fm-space-8));
+  padding: var(--fm-space-8) var(--fm-space-8) var(--fm-space-6);
 }
-.hint {
-  margin-block: 4px 0;
-  margin-inline: 22px 0;
+.panel.wide {
+  max-width: calc(920px + 2 * var(--fm-space-8));
 }
-.level-notes {
-  margin-block: 2px 4px;
-  padding-inline-start: 18px;
+/* Every section's heading, Sources' too, is drawn by the shell (boards 11 and 15). It takes
+   focus when the section changes; a ring only for the keyboard. */
+.panel :deep([data-section-heading]) {
+  font-size: var(--fm-text-xl);
 }
-.level-hint {
-  margin: 4px 0 0;
-}
-.last-check {
-  margin-top: 8px;
-}
-.waiting {
-  align-items: center;
-}
-.waiting .note {
-  margin: 0;
-}
-.start-at-login {
-  margin-top: 12px;
-}
-.updates {
-  margin-bottom: 8px;
-}
-.status {
-  margin-top: 8px;
-}
-.status:empty {
-  display: none;
-}
-.subheading {
-  margin: 16px 0 8px;
-  font-size: var(--fm-text-md);
-}
-.notes {
-  margin: 0;
-  padding-inline-start: 20px;
-}
-.notes li + li {
-  margin-top: 6px;
+.panel :deep([data-section-heading]:focus:not(:focus-visible)) {
+  outline: none;
 }
 .error {
   margin: 0 0 12px;
   color: var(--fm-danger);
-}
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.add {
-  display: flex;
-  gap: 8px;
-}
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fm-gap);
-  margin: 0 0 16px;
-  padding: 0;
-  border: 0;
-}
-.group legend {
-  margin-bottom: 6px;
-  padding: 0;
-}
-/* Group legends and field labels share one quiet caption style. */
-.group legend,
-.field > span:first-child {
-  color: var(--fm-muted);
-  font-size: var(--fm-text-sm);
-  font-weight: 600;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 12px;
-}
-.folder-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.folder {
-  overflow-wrap: anywhere;
-}
-.catalog-paths {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-sm);
-  list-style: none;
-}
-.input {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
-}
-.number {
-  width: 120px;
-}
-.select {
-  align-self: flex-start;
-}
-.theme-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--fm-space-3);
-}
-.brand {
-  block-size: 40px;
-  margin-block-end: var(--fm-space-4);
-}
-.info {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--fm-space-1) var(--fm-space-4);
-  margin: 0 0 var(--fm-space-4);
-  font-size: var(--fm-text-sm);
-}
-.info dt {
-  color: var(--fm-muted);
-}
-.info dd {
-  margin: 0;
 }
 </style>

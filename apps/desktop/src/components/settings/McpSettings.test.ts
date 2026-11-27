@@ -1,13 +1,18 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setClient, type FmClient } from '../api/client';
-import { MOCK_ENDPOINT_URL, MOCK_MCP_SHIM, createMockClient, mockEndpointToken } from '../api/mock';
-import { setLocale } from '../i18n';
+import { setClient, type FmClient } from '../../api/client';
+import {
+  MOCK_ENDPOINT_URL,
+  MOCK_MCP_SHIM,
+  createMockClient,
+  mockEndpointToken,
+} from '../../api/mock';
+import { setLocale } from '../../i18n';
 import McpSettings from './McpSettings.vue';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
-vi.mock('../api/clipboard', () => ({ copyText: vi.fn(() => Promise.resolve()) }));
+vi.mock('../../api/clipboard', () => ({ copyText: vi.fn(() => Promise.resolve()) }));
 
 let client: FmClient;
 
@@ -71,7 +76,7 @@ describe('Settings → AI assistants', () => {
   });
 
   it('copies each snippet with the real address and token', async () => {
-    const { copyText } = await import('../api/clipboard');
+    const { copyText } = await import('../../api/clipboard');
     const w = await mountIt();
     await turnOn(w);
     const [claude, http] = (await client.mcpStatus()).snippets ?? [];
@@ -91,7 +96,7 @@ describe('Settings → AI assistants', () => {
   });
 
   it('offers Claude Desktop the stdio shim by its absolute path, without the token', async () => {
-    const { copyText } = await import('../api/clipboard');
+    const { copyText } = await import('../../api/clipboard');
     const w = await mountIt();
     await turnOn(w);
     const desktop = (await client.mcpStatus()).snippets?.find((s) => s.client === 'claudeDesktop');

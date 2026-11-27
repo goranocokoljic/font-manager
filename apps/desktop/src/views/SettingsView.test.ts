@@ -373,6 +373,71 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('is the shell of board 15: navigation, the section heading and line, the x to close', async () => {
+    const { wrapper, router } = await mountAt('/settings?section=activation');
+    // No top bar with a text button "Close".
+    expect(wrapper.find('[data-top-bar]').exists()).toBe(false);
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Close')).toBe(false);
+    const nav = wrapper.get('nav.nav');
+    expect(nav.get('h1').text()).toBe('Settings');
+    expect(nav.findAll('[role="tab"] .ui-icon')).toHaveLength(8);
+    const panel = wrapper.get('[role="tabpanel"]');
+    expect(panel.attributes('id')).toBe('panel-activation');
+    expect(panel.get('h2').text()).toBe('Activation');
+    expect(panel.get('.lead').text()).toBe(
+      'How the Activate button behaves, and what happens to active fonts when the window closes.',
+    );
+    // The x icon button, named for what it closes, with Esc in its tooltip.
+    const close = wrapper.get('[data-testid="settings-close"]');
+    expect(close.attributes('aria-label')).toBe('Close settings');
+    expect(close.attributes('aria-keyshortcuts')).toBe('Escape');
+    await close.trigger('focus');
+    await flushPromises();
+    expect(document.body.textContent).toContain('Esc');
+    await close.trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('home');
+    wrapper.unmount();
+  });
+
+  it('opens the section in the URL, and moves focus to its heading on a click', async () => {
+    const { wrapper, router } = await mountAt('/settings?section=advanced');
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Advanced');
+    expect(document.activeElement?.id).toBe('tab-advanced');
+    await wrapper.get('#tab-about').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.query.section).toBe('about');
+    expect(document.activeElement?.tagName).toBe('H2');
+    expect(document.activeElement?.textContent).toBe('About');
+    // Sources keeps its own head; its heading takes focus the same way.
+    await wrapper.get('#tab-sources').trigger('click');
+    await flushPromises();
+    expect(document.activeElement?.id).toBe('sources-title');
+    wrapper.unmount();
+  });
+
+  it('closes on Escape when a click on plain text left focus on the page', async () => {
+    const { wrapper, router } = await mountAt('/settings?section=about');
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('home');
+    wrapper.unmount();
+  });
+
+  it('leaves Escape to a dialog outside the view', async () => {
+    const { wrapper, router } = await mountAt('/settings?section=about');
+    const dialog = document.createElement('div');
+    dialog.tabIndex = -1;
+    document.body.append(dialog);
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('settings');
+    dialog.remove();
+    wrapper.unmount();
+  });
+
   it('moves between sections with the arrow keys and closes on Escape', async () => {
     const { wrapper, router } = await mountAt('/settings');
     const tablist = wrapper.get('[role="tablist"]');

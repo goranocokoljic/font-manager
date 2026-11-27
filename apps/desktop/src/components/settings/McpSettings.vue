@@ -8,12 +8,12 @@
 // tools and their grants, all off by default. The help link opens the user
 // docs page on AI assistants (E27.8) in the help window.
 import { computed, onMounted, ref } from 'vue';
-import { useClient } from '../api/client';
-import type { McpClient, McpGrant } from '../api/types';
-import { t, type MessageKey } from '../i18n';
-import { useSettingsStore } from '../stores/settings';
-import CopyValue from './CopyValue.vue';
-import { useCopy } from './useCopy';
+import { useClient } from '../../api/client';
+import type { McpClient, McpGrant } from '../../api/types';
+import { t, type MessageKey } from '../../i18n';
+import { useSettingsStore } from '../../stores/settings';
+import CopyValue from '../CopyValue.vue';
+import { useCopy } from '../useCopy';
 
 const store = useSettingsStore();
 const shown = ref(false);
@@ -77,7 +77,9 @@ async function toggle(event: globalThis.Event): Promise<void> {
 
 <template>
   <section class="mcp" aria-labelledby="mcp-title">
-    <h2 id="mcp-title" class="heading">{{ t('settings.sections.mcp') }}</h2>
+    <h2 id="mcp-title" class="heading" tabindex="-1" data-section-heading>
+      {{ t('settings.sections.mcp') }}
+    </h2>
     <p class="note">
       {{ t('settings.mcp.note') }}
       <button type="button" class="link" @click="useClient().openHelp('mcp')">

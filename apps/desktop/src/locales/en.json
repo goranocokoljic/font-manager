@@ -1423,6 +1423,7 @@
   },
   "settings": {
     "title": "Settings",
+    "close": "Close settings",
     "sections": {
       "sources": "Sources",
       "activation": "Activation",
@@ -1589,6 +1590,11 @@
     "about": {
       "platformNotes": "Platform notes",
       "noPlatformNotes": "Everything works the same on this system."
+    },
+    "lead": {
+      "activation": "How the Activate button behaves, and what happens to active fonts when the window closes.",
+      "appearance": "Colours and language. Specimens always draw in the theme’s text colour on its paper.",
+      "advanced": "Limits and maintenance. The defaults suit most libraries."
     }
   },
   "updates": {
