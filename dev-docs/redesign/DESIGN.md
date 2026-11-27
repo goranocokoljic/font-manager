@@ -124,7 +124,10 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   for now" appears only on the folders step while no folder is added, and records the step as
   skipped. Folder and catalog rows are the Sources cards; switches, the select and the radio
   list are the app's own controls. Reopened from Settings it shows every step, the step names
-  become links and a close button appears.
+  become links and a close button appears. Its head carries the interface size (E58.10): a
+  segmented control of three, each the letter A at its size, on every step. It is in the head
+  and not a step, because the user must be able to read the setup itself; a step would come
+  too late or delay the first question.
 - **Duplicates (board 14, E56):** a full view of its own, like Studio, never a section of
   Problems: duplicates are housekeeping, not faults. Its count is always the neutral count
   style, never the red dot, and the Problems total does not include it. Layout as in Settings:

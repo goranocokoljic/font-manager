@@ -2449,6 +2449,26 @@
             "dev-docs/design/redesign/ gains `15-settings-languages.png` and `15-settings-appearance.png` exported again, at 2×, with the README table and the export date updated",
             "DESIGN.md has the rules for Languages and for the interface size (written with this draft; the owner reads them once)"
           ]
+        },
+        {
+          "id": "E58.10",
+          "title": "Choose the interface size during the first-run setup",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E58.5",
+            "E58.7"
+          ],
+          "criteria": [
+            "the first-run setup shows a size control in its head, beside the step indicator, on every step and when it is reopened from Settings: a `UiSegmentedControl` of three segments, each the letter A drawn at its size, with the accessible names Default, Large and Extra large and the group's label 'Interface size'; the size in use is the pressed one",
+            "choosing a segment applies the size at once (E58.7) and saves it through fm-api (E58.5); it is the same setting Settings › Appearance shows, so nothing is asked twice and a size chosen here is the one chosen there",
+            "it is not a step: the step indicator, the steps that are open and the setup status of E55.2 do not change, no request is added to fm-api, and Back, Continue, Finish and 'Skip for now' work as before",
+            "the control is reachable first: it is the first tab stop of the setup after the logotype, and the focus stays on the chosen segment when the size changes",
+            "the setup is usable at 800 × 560 and at 667 × 467 CSS pixels, the smallest window at 125 and at 150 per cent: the asking pane keeps its content, the pane beside it (what the answer leads to) goes under it or folds away, no control is cut off and the page has no horizontal scroll bar",
+            "DESIGN.md's rule for the first-run setup names the control and says why it is in the head and not a step (the user must be able to read the setup itself; a step would come too late or delay the first question); ADR 0026 gets the same sentence",
+            "strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes at all three sizes; the screenshots of the story are taken at the default size",
+            "a Playwright spec on the mock opens a first start, chooses Large, asserts the size of the setup's text and that the choice is pressed, finishes the setup, and finds Large chosen under Settings › Appearance; a second run at 667 × 467 asserts no horizontal overflow on each step"
+          ]
         }
       ]
     }
