@@ -619,3 +619,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.9 #699] apps/desktop/src/views/SettingsView.vue:245 — the inset focus ring on the selected tab is 2.64:1 (light) / 2.44:1 (dark) against --fm-side-active and passes 3:1 only on its outer edge against --fm-surface (Problems copies the pattern).
 - [E58.1 #712] apps/desktop/src/stores/search.ts:461 — search, ruleEditor (:366) and duplicates (:164) stores load listLanguages once and do not listen for languageOrderChanged; ADR 0028 gives this to E58.3.
 - [E58.6 #717] apps/desktop/src/components/MainLayout.vue:51 — the palette action "Go to sidebar" does nothing, with no feedback, while the sidebar is folded (now reachable through a fold by room).
+
+## 2026-11-28
+- [E58.5 #716] crates/fm-core/src/config.rs:30 — `Config` has no catch-all map, so every save drops keys this version does not know; ADR 0007's "an older or newer app can read the file" holds for reads only.
+- [E58.5 #716] crates/fm-core/src/settings.rs:775 — going back to an older version replaces a newer version's interface size with "default" for good (the dropped_languages precedent).
+- [E58.5 #716] apps/desktop/src-tauri/src/lib.rs:2097 — in the MockApi fallback (index cannot open), settings go straight to `SettingsStore`, which emits no events, so `InterfaceSizeChanged` and `LanguageOrderChanged` are never sent in that mode.
