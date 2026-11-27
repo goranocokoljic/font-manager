@@ -599,3 +599,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.3 #693] apps/desktop/src/components/ThemeCard.vue:28 — a radio card of its own (hidden native radio with an accent ring), as are SetupCatalogsStep.vue:73 and :96; DESIGN.md now calls a local copy of a choice card a bug (E57.4 covers ThemeCard, the Setup steps are outside E57).
 - [E57.3 #693] apps/desktop/src/views/SettingsView.vue — every tab's `aria-controls="panel-<id>"` points to a panel that exists only for the open tab (pattern moved unchanged from before E57.3).
 - [E57.4 #694] docs/user/activation.md:152 — the user guide named the old label "Replace the other font for this session without asking" (updated to "Replace without asking" in the same PR).
+- [E57.5 #695] apps/desktop/src/locales/de.json:907 — `settings.catalogs.connectsHint` keeps the formal "Sie" while the other catalog strings use "du".
+- [E57.5 #695] apps/desktop/src/stores/catalogs.ts:275 — `refresh` returns `false` silently while another refresh runs, so turning a never-refreshed catalog on during a browser Refresh leaves it on with no list and no error.
+- [E57.5 #695] apps/desktop/src/stores/catalogs.ts:297 — `busy` holds a single catalog id, so turning a second catalog on while the first is in flight re-enables the first card's switch early.
+- [E57.5 #695] apps/desktop/src/components/ui/UiSwitch.vue:23 — the off switch's track and knob may be under 3:1 non-text contrast in both themes; worth measuring.
+- [E57.5 #695] apps/desktop/src/components/settings/CatalogsSettings.vue:136 — a catalog switch becomes disabled while it connects, so focus drops from it and "Connecting…" is only in its description.
