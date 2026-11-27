@@ -12,7 +12,7 @@ Boards 1, 2 and 3 have several states. Each state is a Tweak, so an export is re
 3. **Share › Export** the board as PNG at 2× and save it under the file name in the table.
 4. Put the files in this folder; fill in the export date at the bottom.
 
-Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak; boards 9–11 have one, three and one. Board 12 (Preview options) is 1120 px wide, so its exports are 2240 px; its two popover files are the popover alone, cropped (848 px). Board 14 (Duplicates) has nine states, set by its state tweak; its second board, the ways in, has one state and is 1280 px wide, so its export is 2560 px. Board 15 (Settings) has seven states and board 16 (Problems) two, each set by its state tweak.
+Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare) has three states, set by its height, mode and toast tweaks; board 8 (Letters) has four, set by its state tweak; boards 9–11 have one, three and one. Board 12 (Preview options) is 1120 px wide, so its exports are 2240 px; its two popover files are the popover alone, cropped (848 px). Board 14 (Duplicates) has nine states, set by its state tweak; its second board, the ways in, has one state and is 1280 px wide, so its export is 2560 px. Board 15 (Settings) has eight states and board 16 (Problems) two, each set by its state tweak.
 
 ## The files
 
@@ -74,7 +74,8 @@ Boards 4, 5 and 6 have one state each: export them as they are. Board 7 (Compare
 | `14-duplicates-rules.png` | 14 | state = Rules | the languages, the guard above the list, the rules in order, the preview before Save | E56.14 |
 | `14-duplicates-entry.png` | 14 · Duplicates: the ways in | — | "Duplicates" in the File menu (no sidebar row), the notice after a scan, the "copies" mark on a family, the command palette (the accent rings mark what is new and are not drawn in the app) | E56.15, E57 |
 | `15-settings-activation.png` | 15 · Settings | state = Activation | the shell with the x to close; choice cards for the activation mode and for name conflicts, setting rows with switches | E57.3, E57.4 |
-| `15-settings-appearance.png` | 15 | state = Appearance | theme cards, light or dark as three choice cards, the language row | E57.4 |
+| `15-settings-appearance.png` | 15 | state = Appearance | theme cards, light or dark as three choice cards, Interface size as three choice cards, the "Language of the app" row | E57.4, E58.8 |
+| `15-settings-languages.png` | 15 | state = Languages | "Languages I work in" as rows to reorder, "Then the rest" with the first ten and what is behind "Show more", the row that Duplicates uses the list too | E58.2 |
 | `15-settings-catalogs.png` | 15 | state = Online catalogs | catalog cards, the folder for installed fonts with its tree, the fetch-missing switch | E57.5 |
 | `15-settings-advanced.png` | 15 | state = Advanced | number rows with units, the logs folder, run setup again | E57.5 |
 | `15-settings-local-api.png` | 15 | state = Local API | the address, the masked token, regenerate | E57.6 |

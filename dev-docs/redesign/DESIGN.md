@@ -187,6 +187,28 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   version in one quiet panel; the state of updates is the title of its row. Nothing here is
   coloured but the accent on the chosen card and the switch that is on, and a failed change
   (the OS refused "Start at login"), which the row says in `--fm-danger`, not a toast.
+- **Languages (board 15, E58):** one list, "Languages I work in", kept under Settings >
+  Languages and used everywhere. The core answers every list of languages in one order: the
+  user's languages in the user's order, then the most used ones not picked
+  (`data/charsets/order.json`), then all others from A to Z; while none is picked, the
+  system's language leads. No component sorts languages. The section shows the list as rows
+  to reorder (handle, number, name, the language's distinctive letters, x to remove) with
+  "Add a language", and under it "Then the rest": what completes the first ten, and what is
+  behind "Show more". The filter drawer shows the first ten of the order and any chosen
+  language, as before; a menu of languages draws a hairline after the user's own. Duplicates
+  reads the same list and its module links here; the app's own language is "Language of the
+  app" under Appearance, never "Language" alone.
+- **Interface size (E58):** three sizes, Default, Large (125%) and Extra large (150%), chosen
+  as choice cards under Appearance. A size enlarges everything the app draws except the fonts
+  on show: a preview, a specimen, the waterfall, a glyph cell, Compare and the Studio paper
+  are drawn at exactly the size the user set, at every interface size. Every such surface
+  takes the zoom back through the one shared piece the ADR "Interface size" names; a surface
+  that scales a specimen by a rule of its own is a bug. The chrome around a specimen scales
+  with the interface (a card's label and actions), so a wall shows fewer columns at a larger
+  size. A larger interface is a smaller window: at 150% the smallest window has the room of
+  667 x 467, so the inspector, then the sidebar, fold by themselves when there is no room
+  and come back when there is, without touching what the user chose by hand. Boards and the
+  screenshots of UI stories are at the default size.
 - **Close (E57.8):** a full view or a panel closes with `UiIconButton` (icon `close`) at the
   end of its bar or in its top corner at the end of the line, named for what it closes, with
   Esc in its tooltip where Esc closes it. A text button "Close" in a top bar or a panel head

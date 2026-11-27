@@ -2292,6 +2292,165 @@
           ]
         }
       ]
+    },
+    {
+      "id": "E58",
+      "title": "Your languages first, everywhere; and three sizes of the interface",
+      "phase": 3,
+      "track": "ui",
+      "milestone": "Launch",
+      "depends": [
+        "E56",
+        "E57"
+      ],
+      "labels": [
+        "launch"
+      ],
+      "summary": "Two things for people who use the app every day. (1) The order of languages. `list_languages` answers the 51 presets of data/charsets in file-name order, then file order: Arabic, Persian, the two Chinese, Japanese, Korean, Russian, Ukrainian, Belarusian and Bulgarian are the first ten, which are the ten the filter drawer shows before 'Show more' (`LANGUAGES_SHOWN` in FilterChips.vue); English is the 18th. The sample text menu, the family page, the rule editor and Duplicates read the same list. The user already has an ordered list of languages, 'Languages I work in' (`Settings.my_languages`, E56.3), but it is edited only inside the Duplicates module, where nobody looks for it, and it orders nothing. From this epic the core answers the languages in one order for every adapter: the user's languages in the user's order, then the most used ones the user has not picked (a data file), then all others from A to Z; the list is edited under Settings › Languages, and Duplicates reads it as before. (2) The size of the interface. Interface text is 13 px, the smallest labels 11 px, and Settings, Duplicates and Problems are hard to read for someone who wears glasses. Appearance gets 'Interface size': Default, Large (125 per cent) and Extra large (150 per cent). It enlarges everything in the app except the fonts the user looks at: previews, specimens, the waterfall, glyphs, Compare and the Studio paper keep exactly the pixel size they have today, because judging type at a known size is what the app is for. Enlarging the interface is the same as making the window smaller: at 150 per cent the smallest window (1000 × 700) has the room of 667 × 467, so the panes have to fold away by themselves when there is no room.",
+      "stories": [
+        {
+          "id": "E58.1",
+          "title": "One order of languages, decided in the core",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "data/charsets gains `order.json` with its JSON schema next to it and a test that validates it: the most used languages as an ordered list of preset codes, drafted as en, es, fr, de, pt, it, ru, zh-Hans, ja, ar; a code that no preset has fails the test; the file is community-editable like the others",
+            "`list_languages` answers in one order: first the user's languages (`Settings.my_languages`) in the user's order; then the languages of `order.json` that are not among them, in the file's order; then every other preset from A to Z by its English name. The same answer goes to the app, the CLI and MCP; no adapter and no component sorts languages",
+            "while `my_languages` is empty, the presets of the system's language lead the list (for a language with two scripts, the script the system names, else both in file order), then the file's order, then A to Z; the system's language is the value the shell already uses for the menu's strings, handed to the core at start, and where it has no preset nothing leads",
+            "each `LanguagePreset` gains an optional field that says which of the three parts it is in (the user's, the most used, the others), added with `#[serde(default)]`, so a list can draw a line between the parts without knowing the rule; nothing existing is removed or renamed and `pnpm gen:types` only adds lines",
+            "a change of `my_languages` is announced through the typed `Event` enum (the existing settings event, or a new variant; nothing existing changes), and the answer of `list_languages` after it is in the new order",
+            "MockApi and the TypeScript mock give the same order for the same settings; tests: no language set and a system language with one preset, with two scripts, and with none; three languages set in an order; a language set that is also in `order.json` is not listed twice",
+            "the Duplicates rules and guards read `my_languages` as before and their tests pass untouched; ADR 0024 (the exact language filter) or a new short ADR records the order, the data file, the lead of the system's language and the date (Goran, 27 Nov 2026)"
+          ]
+        },
+        {
+          "id": "E58.2",
+          "title": "Settings › Languages, and Duplicates points to it",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E58.1",
+            "E58.9"
+          ],
+          "criteria": [
+            "Settings gains the section Languages between Appearance and Online catalogs (board 15, state Languages), built from the Settings building blocks of E57.3 and `UiReorderList`",
+            "'Languages I work in' is the ordered list: each row has the handle, its number, the name, the language's distinctive letters (`sampleGlyphs`) and a × that removes it; rows are reordered by drag and by keyboard; 'Add a language' opens the searchable picker over `list_languages` that the Duplicates rules use today, moved to a shared component; every change saves at once through fm-api",
+            "'Then the rest' shows what follows, from the API's answer alone: the languages that complete the first ten with their numbers, then, under 'Behind \"Show more\"', the next ones and how many more follow from A to Z; the number ten is the one constant the filter drawer uses, defined once",
+            "while no language is set the list is empty with one line that says which language leads now and why (the system's), and 'Add a language'",
+            "one row says that Duplicates uses this list too and opens the Duplicates rules; in the Duplicates module the editor of the languages is gone from the rules page, the foot of its navigation still names the languages and its link opens Settings › Languages, and the overview's offer to set languages goes there too",
+            "the Appearance row 'Language' is renamed 'Language of the app' in en and de, with its hint unchanged",
+            "strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes; it matches board 15's state within the tolerance REVIEW.md sets; a Playwright spec on the mock covers adding, reordering by keyboard, removing, and the way from Duplicates"
+          ]
+        },
+        {
+          "id": "E58.3",
+          "title": "Every list of languages follows the order",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E58.1"
+          ],
+          "criteria": [
+            "the filter drawer shows the first ten languages of the API's answer and, as today, any other language that is chosen; 'Show more' and 'Show fewer' work as they do now",
+            "the language menu of the sample text (preview options and the toolbar's control), the language select of the family page, the sample select of Compare copies and the language list of the rule editor show the API's order, with a hairline between the user's languages and the rest where the control is a menu",
+            "the lists follow a change made under Settings › Languages at once: the stores read the list again on the event of E58.1 and none keeps its own copy of the order; the UI does not poll",
+            "a test fails when a component or store sorts or slices the languages by a rule of its own (the one slice to ten in the filter drawer is the exception, by its shared constant)",
+            "a Playwright spec on the mock sets two languages, checks that they lead the filter drawer and the sample menu, and that a chosen language outside the first ten stays visible"
+          ]
+        },
+        {
+          "id": "E58.4",
+          "title": "Interface size: prove the way on three systems, and record it",
+          "size": "L",
+          "track": "platform",
+          "depends": [],
+          "criteria": [
+            "a test build shows the interface at 100, 125 and 150 per cent in two ways: the webview's own zoom (Tauri's `set_zoom`) and a CSS zoom on the root; in both, every surface that shows a font takes the zoom back, so its content is laid out in true pixels",
+            "measured on Windows, macOS and Linux, at each size and for each way: the rendered size of a specimen on the wall, the family page's hero, the waterfall's 10 to 96 px ladder, a glyph cell, Compare's overlay and the Studio paper is the same as at 100 per cent, to the pixel; the numbers are in the PR",
+            "checked in the same build, for each way: a popover and a tooltip open where their button is, the drag ghost follows the pointer, a virtualized list shows no gap and no overlap while it scrolls, the text field menu opens at the pointer, and a PDF from the Studio (ADR 0013) has the same page size and the same text sizes as at 100 per cent",
+            "a new ADR, 'Interface size', records the way chosen and why, what each surface that shows a font must do, what does not scale because the system draws it (native menus, the tray, dialogs of the system), and what is given up; if neither way holds on all three systems the story ends blocked with the measurements, for the owner to decide",
+            "the test build's code is not merged as a feature: what stays is the ADR and an integration test per system that renders one specimen at each size and asserts its size (rule 5: all three or none)",
+            "cold start stays under 1 s with a size other than the default set"
+          ]
+        },
+        {
+          "id": "E58.5",
+          "title": "The interface size as a setting",
+          "size": "S",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "the settings gain the interface size: `default`, `large` or `extraLarge`, added with `#[serde(default)]`, stored in config.json through fm-api and never in localStorage; a config file that names another value is read as `default` and reported once",
+            "fm-api gives the factor of each size (1, 1.25, 1.5) with the setting, so no adapter writes the numbers; MockApi and the TypeScript mock follow; `pnpm gen:types` only adds lines",
+            "a change is announced through the typed `Event` enum, as other settings are",
+            "the CLI and MCP are not affected and their tests pass untouched"
+          ]
+        },
+        {
+          "id": "E58.6",
+          "title": "Room for a larger interface: the panes fold by themselves",
+          "size": "M",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "when the window has no room for the sidebar, the main pane and the inspector together, the inspector folds first and then the sidebar, by themselves, and they come back when the room does; what the user chose by hand (open or folded) is remembered apart from this and is not overwritten",
+            "the library, the family page, the Studio, Settings, Duplicates and Problems are usable in a viewport of 800 × 560 and of 667 × 467 CSS pixels, which is the smallest window at 125 and at 150 per cent: no horizontal scroll bar on the page, no control cut off, the toolbar wraps, and a wide table scrolls inside its own box",
+            "the shells of Settings, Duplicates and Problems keep their navigation at 667 px; Compare's faces and the Studio's panels stack one above the other at these widths; DESIGN.md's rule for narrow windows records both",
+            "nothing changes at 1000 px and wider: the existing specs and the board comparisons pass unchanged",
+            "Playwright specs run the six views at the two small viewports and assert no horizontal overflow and that every toolbar control can be reached; the a11y specs pass there too"
+          ]
+        },
+        {
+          "id": "E58.7",
+          "title": "Apply the interface size everywhere but on the fonts",
+          "size": "L",
+          "track": "platform",
+          "depends": [
+            "E58.4",
+            "E58.5",
+            "E58.6"
+          ],
+          "criteria": [
+            "the size set in the settings is applied the way the ADR of E58.4 chose, before the first paint at start (no jump from one size to another) and at once on a change, without a restart; the window keeps its size and position",
+            "every surface that shows a font takes the zoom back through one shared piece (a component or a class named in DESIGN.md), not by a rule of its own: the wall and its three views, the family page (hero, styles, ramp, text, waterfall, characters, features, pairings), Quick Look, Compare and Compare copies, Similar, the Duplicates copy cards, the theme cards' small walls, the Studio paper and its print, the letters picker and the catalog browser's previews",
+            "at each size the value the user set for a preview (the size slider, auto size, line height, tracking) is what is drawn, to the pixel; the integration test of E58.4 runs on all three systems, and a unit test fails when a component draws a face with `useHeldFace` or the preview styles outside the shared piece",
+            "the chrome around a specimen scales (a card's label, its actions, the toolbar), so a wall shows fewer columns at a larger size; nothing else about the wall changes",
+            "popovers, tooltips, the drag ghost, the text field menu and virtualized lists behave at each size as E58.4 checked them; the screenshots a UI story captures are taken at the default size",
+            "browser mode (the mock) applies the same sizes, so the Playwright specs cover them: one spec opens the wall, the family page and Settings at 125 and 150 per cent and asserts the specimen's size and the interface text's size",
+            "cold start stays under 1 s and idle memory under 350 MB; this story changes native code, so its pull request runs the full matrix"
+          ]
+        },
+        {
+          "id": "E58.8",
+          "title": "Appearance: Interface size",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E58.7",
+            "E58.9"
+          ],
+          "criteria": [
+            "Appearance gains 'Interface size' after 'Light or dark' (board 15, state Appearance): three choice cards, Default, Large and Extra large, each with its line (the per cent and the text size), and the group's note that the fonts on show keep the size set for them",
+            "choosing a card saves and applies at once; the focus stays on the chosen card and the section does not scroll away from it",
+            "the cards are `UiChoiceCards`; strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes at all three sizes",
+            "it matches board 15's state within the tolerance REVIEW.md sets; a Playwright spec on the mock chooses each size and asserts the interface text's size and that a theme card's small wall did not change size"
+          ]
+        },
+        {
+          "id": "E58.9",
+          "title": "Board 15 again: Languages and Interface size",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "the owner confirms the state Languages and the 'Interface size' cards of board 15, which were a first pass, and the four drafted points of this epic's note: the order of the most used languages, the lead of the system's language, the name 'Language of the app', and the milestone",
+            "dev-docs/design/redesign/ gains `15-settings-languages.png` and `15-settings-appearance.png` exported again, at 2×, with the README table and the export date updated",
+            "DESIGN.md has the rules for Languages and for the interface size (written with this draft; the owner reads them once)"
+          ]
+        }
+      ]
     }
   ]
 }
