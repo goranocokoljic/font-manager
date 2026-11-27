@@ -1929,6 +1929,13 @@ notice: UpdateNotice } |
  */
 { type: "languageOrderChanged" } | 
 /**
+ *  The interface size changed (E58.5): `update_settings` saved another
+ *  `Settings::interface_size`. Every window applies the factor at once.
+ */
+{ type: "interfaceSizeChanged"; 
+/**  The size now set, with its factor. */
+interfaceSize: InterfaceSizeChoice } | 
+/**
  *  A cleanup plan is being applied (E56.7): `done` of the `total` files
  *  that leave, under the job `apply_cleanup` returned. The last event of
  *  the job has `finished` set; `cancelled` when `cancel_cleanup` stopped
@@ -3147,6 +3154,31 @@ export type InstallUpdateRequest = {
 	version: string,
 	/**  The user confirmed a second time that a major update may install. */
 	confirmMajor?: boolean,
+};
+
+/**
+ *  The size of the interface (E58.5): everything in the app but the fonts the
+ *  user looks at grows by [`Self::factor`]. Stored in `config.json`; a value
+ *  this version does not have reads as [`Self::Default`]
+ *  ([`Settings::dropped_interface_size`]).
+ */
+export type InterfaceSize = 
+/**  The size the app is drawn at: 100 per cent. */
+"default" | 
+/**  125 per cent. */
+"large" | 
+/**  150 per cent. */
+"extraLarge";
+
+/**
+ *  An interface size with its factor (E58.5), so no adapter writes the
+ *  numbers.
+ */
+export type InterfaceSizeChoice = {
+	/**  The size. */
+	size: InterfaceSize,
+	/**  Its factor ([`InterfaceSize::factor`]): 1, 1.25 or 1.5. */
+	factor: number | null,
 };
 
 /**  A long-running job (a scan); its progress arrives as events. */
@@ -4966,6 +4998,24 @@ export type Settings = {
 	 *  until the user changes it. Stored in `config.json`.
 	 */
 	keeperPolicy?: KeeperPolicy,
+	/**
+	 *  The size of the interface (E58.5): Default, Large or Extra large.
+	 *  Stored in `config.json`; `Default` for a file from before sizes.
+	 */
+	interfaceSize?: InterfaceSize,
+	/**
+	 *  Every interface size with its factor, from the smallest; the factor of
+	 *  [`Self::interface_size`] is the one to apply. Never stored: every
+	 *  answer carries all of them.
+	 */
+	interfaceSizes?: InterfaceSizeChoice[],
+	/**
+	 *  The interface size the file named but this version does not have, read
+	 *  as `Default` on this read. Never stored: the read that reports it saves
+	 *  the file with `Default`, so it is reported once. `None` in every other
+	 *  answer.
+	 */
+	droppedInterfaceSize?: string | null,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -5033,6 +5083,11 @@ export type SettingsUpdate = {
 	 *  absolute path is refused and nothing changes.
 	 */
 	keeperPolicy?: KeeperPolicy | null,
+	/**
+	 *  The size of the interface (E58.5). A change is announced as
+	 *  [`crate::Event::InterfaceSizeChanged`].
+	 */
+	interfaceSize?: InterfaceSize | null,
 };
 
 /**  How the user closed a setup step. */

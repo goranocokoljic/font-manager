@@ -55,6 +55,66 @@ pub enum Language {
     De,
 }
 
+/// The size of the interface (E58.5): everything in the app but the fonts the
+/// user looks at grows by [`Self::factor`]. Stored in `config.json`; a value
+/// this version does not have reads as [`Self::Default`]
+/// ([`Settings::dropped_interface_size`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum InterfaceSize {
+    /// The size the app is drawn at: 100 per cent.
+    #[default]
+    Default,
+    /// 125 per cent.
+    Large,
+    /// 150 per cent.
+    ExtraLarge,
+}
+
+impl InterfaceSize {
+    /// Every size, from the smallest.
+    pub const ALL: [Self; 3] = [Self::Default, Self::Large, Self::ExtraLarge];
+
+    /// How much larger than [`Self::Default`] the interface is drawn: 1, 1.25
+    /// or 1.5. The one place these numbers are written.
+    pub fn factor(self) -> f64 {
+        match self {
+            Self::Default => 1.0,
+            Self::Large => 1.25,
+            Self::ExtraLarge => 1.5,
+        }
+    }
+
+    /// This size with its factor, as the API answers it.
+    pub fn choice(self) -> InterfaceSizeChoice {
+        InterfaceSizeChoice {
+            size: self,
+            factor: self.factor(),
+        }
+    }
+
+    /// Every size with its factor, from the smallest
+    /// ([`Settings::interface_sizes`]).
+    pub fn choices() -> Vec<InterfaceSizeChoice> {
+        Self::ALL.into_iter().map(Self::choice).collect()
+    }
+}
+
+/// An interface size with its factor (E58.5), so no adapter writes the
+/// numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InterfaceSizeChoice {
+    /// The size.
+    pub size: InterfaceSize,
+    /// Its factor ([`InterfaceSize::factor`]): 1, 1.25 or 1.5.
+    pub factor: f64,
+}
+
+// The factor is one of the three finite constants of `InterfaceSize::factor`,
+// never NaN, so equality is total.
+impl Eq for InterfaceSizeChoice {}
+
 /// The user's settings. Missing keys take their defaults.
 ///
 /// The TypeScript type marks every field optional because of the defaults;
@@ -140,6 +200,21 @@ pub struct Settings {
     /// until the user changes it. Stored in `config.json`.
     #[serde(default)]
     pub keeper_policy: KeeperPolicy,
+    /// The size of the interface (E58.5): Default, Large or Extra large.
+    /// Stored in `config.json`; `Default` for a file from before sizes.
+    #[serde(default)]
+    pub interface_size: InterfaceSize,
+    /// Every interface size with its factor, from the smallest; the factor of
+    /// [`Self::interface_size`] is the one to apply. Never stored: every
+    /// answer carries all of them.
+    #[serde(default = "InterfaceSize::choices")]
+    pub interface_sizes: Vec<InterfaceSizeChoice>,
+    /// The interface size the file named but this version does not have, read
+    /// as `Default` on this read. Never stored: the read that reports it saves
+    /// the file with `Default`, so it is reported once. `None` in every other
+    /// answer.
+    #[serde(default)]
+    pub dropped_interface_size: Option<String>,
 }
 
 /// Whether the user has set the languages they work in (E56.3). An answer of
@@ -187,6 +262,9 @@ impl Default for Settings {
             my_languages: Vec::new(),
             dropped_languages: Vec::new(),
             keeper_policy: KeeperPolicy::default(),
+            interface_size: InterfaceSize::Default,
+            interface_sizes: InterfaceSize::choices(),
+            dropped_interface_size: None,
         }
     }
 }
@@ -262,6 +340,10 @@ pub struct SettingsUpdate {
     /// absolute path is refused and nothing changes.
     #[serde(default)]
     pub keeper_policy: Option<KeeperPolicy>,
+    /// The size of the interface (E58.5). A change is announced as
+    /// [`crate::Event::InterfaceSizeChanged`].
+    #[serde(default)]
+    pub interface_size: Option<InterfaceSize>,
 }
 
 impl Settings {
@@ -347,6 +429,18 @@ impl Settings {
                 Some(policy) => policy.normalized(),
                 None => self.keeper_policy.clone(),
             },
+            interface_size: update.interface_size.unwrap_or(self.interface_size),
+            interface_sizes: InterfaceSize::choices(),
+            dropped_interface_size: None,
+        })
+    }
+
+    /// The event that announces a change of the interface size from `before`
+    /// to these settings, or `None` when the size stayed. Every
+    /// implementation of [`SettingsService::update_settings`] uses this.
+    pub fn interface_size_change(&self, before: InterfaceSize) -> Option<crate::Event> {
+        (self.interface_size != before).then(|| crate::Event::InterfaceSizeChanged {
+            interface_size: self.interface_size.choice(),
         })
     }
 }
@@ -704,6 +798,51 @@ mod tests {
         assert_eq!(
             refused.expect_err("relative folder").code,
             ErrorCode::InvalidRequest
+        );
+    }
+
+    #[test]
+    fn the_interface_size_is_default_for_old_files_and_each_size_has_its_factor() {
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old file");
+        assert_eq!(old.interface_size, InterfaceSize::Default);
+        let factors: Vec<(InterfaceSize, f64)> = old
+            .interface_sizes
+            .iter()
+            .map(|c| (c.size, c.factor))
+            .collect();
+        assert_eq!(
+            factors,
+            [
+                (InterfaceSize::Default, 1.0),
+                (InterfaceSize::Large, 1.25),
+                (InterfaceSize::ExtraLarge, 1.5)
+            ]
+        );
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["interfaceSize"], "default");
+        assert_eq!(
+            json["interfaceSizes"],
+            serde_json::json!([
+                {"size": "default", "factor": 1.0},
+                {"size": "large", "factor": 1.25},
+                {"size": "extraLarge", "factor": 1.5}
+            ])
+        );
+        let update: SettingsUpdate =
+            serde_json::from_str(r#"{"interfaceSize":"extraLarge"}"#).expect("update");
+        let next = old.apply(&update).expect("applied");
+        assert_eq!(next.interface_size, InterfaceSize::ExtraLarge);
+        assert_eq!(next.theme, Theme::Dark, "the other settings stay");
+        assert_eq!(
+            next.interface_size_change(InterfaceSize::Default),
+            Some(crate::Event::InterfaceSizeChanged {
+                interface_size: InterfaceSize::ExtraLarge.choice()
+            })
+        );
+        assert_eq!(next.interface_size_change(InterfaceSize::ExtraLarge), None);
+        assert!(
+            serde_json::from_str::<SettingsUpdate>(r#"{"interfaceSize":"huge"}"#).is_err(),
+            "a request with another size is refused"
         );
     }
 

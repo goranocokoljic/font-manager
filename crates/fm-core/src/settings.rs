@@ -204,11 +204,26 @@ impl SettingsStore {
 }
 
 impl SettingsStore {
+    /// The interface size `config`'s file named but this version does not
+    /// have (E58.5), logged; the caller saves the file, which writes
+    /// `Default`, so it is reported once.
+    fn report_unknown_interface_size(config: &Config) -> Option<String> {
+        let unknown = config.unknown_interface_size.clone()?;
+        tracing::info!(
+            size = %unknown,
+            "an interface size this version does not have was read as the default"
+        );
+        Some(unknown)
+    }
+}
+
+impl SettingsStore {
     /// The settings for fm-core's own use (start, the watcher, installs,
     /// the shell's close handler): a language id without a preset is left
     /// out of the answer, but the file is not changed and nothing is
     /// reported, so the one report goes to the next
-    /// [`SettingsService::get_settings`] an API caller makes (E56.3).
+    /// [`SettingsService::get_settings`] an API caller makes (E56.3); the
+    /// same for an interface size this version does not have (E58.5).
     pub fn read(&self) -> ApiResult<Settings> {
         let mut config = Config::load(&self.file)?;
         Self::drop_unknown_languages(&mut config)?;
@@ -223,18 +238,22 @@ impl SettingsService for SettingsStore {
     fn get_settings(&self) -> ApiResult<Settings> {
         let mut config = Config::load(&self.file)?;
         let mut dropped = Self::drop_unknown_languages(&mut config)?;
-        if !dropped.is_empty() {
+        if !dropped.is_empty() || config.unknown_interface_size.is_some() {
             // Read again under the lock, so a concurrent update is not lost.
             let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
             config = Config::load(&self.file)?;
             dropped = Self::drop_unknown_languages(&mut config)?;
-            if !dropped.is_empty() {
+            if !dropped.is_empty() || config.unknown_interface_size.is_some() {
+                // The save writes the size read as `Default`, so an unknown
+                // size is reported once, like a dropped language (E58.5).
                 config.save(&self.file)?;
             }
         }
+        let dropped_interface_size = Self::report_unknown_interface_size(&config);
         with_known_theme(Settings {
             start_at_login: self.start_at_login(),
             dropped_languages: dropped,
+            dropped_interface_size,
             ..config.settings
         })
     }
@@ -243,6 +262,7 @@ impl SettingsService for SettingsStore {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut config = Config::load(&self.file)?;
         let dropped = Self::drop_unknown_languages(&mut config)?;
+        let dropped_interface_size = Self::report_unknown_interface_size(&config);
         let current = Settings {
             start_at_login: self.start_at_login(),
             ..config.settings
@@ -273,6 +293,7 @@ impl SettingsService for SettingsStore {
         with_known_theme(Settings {
             start_at_login: self.start_at_login(),
             dropped_languages: dropped,
+            dropped_interface_size,
             ..config.settings
         })
     }
@@ -846,5 +867,104 @@ mod tests {
         let now = store.get_settings().expect("read");
         assert_eq!(now.start_at_login, Some(false));
         assert_eq!(now.theme, Theme::System);
+    }
+
+    #[test]
+    fn the_interface_size_is_saved_in_the_file_and_read_by_the_next_start() {
+        use fm_api::settings::InterfaceSize;
+        let dir = TempDir::new("settings-interface-size");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        let first = store.get_settings().expect("read");
+        assert_eq!(
+            first.interface_size,
+            InterfaceSize::Default,
+            "Default at first"
+        );
+        let factors: Vec<(InterfaceSize, f64)> = first
+            .interface_sizes
+            .iter()
+            .map(|c| (c.size, c.factor))
+            .collect();
+        assert_eq!(
+            factors,
+            [
+                (InterfaceSize::Default, 1.0),
+                (InterfaceSize::Large, 1.25),
+                (InterfaceSize::ExtraLarge, 1.5)
+            ],
+            "every answer carries the factor of each size"
+        );
+        let saved = store
+            .update_settings(SettingsUpdate {
+                interface_size: Some(InterfaceSize::Large),
+                ..SettingsUpdate::default()
+            })
+            .expect("saved");
+        assert_eq!(saved.interface_size, InterfaceSize::Large);
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(paths.config_file()).expect("file"))
+                .expect("json");
+        assert_eq!(json["interfaceSize"], "large", "stored in config.json");
+        assert!(json.get("interfaceSizes").is_none(), "never stored");
+        let next_start = SettingsStore::new(&paths);
+        assert_eq!(
+            next_start.get_settings().expect("read").interface_size,
+            InterfaceSize::Large
+        );
+    }
+
+    #[test]
+    fn an_unknown_interface_size_reads_as_default_and_is_reported_once() {
+        use fm_api::settings::InterfaceSize;
+        let dir = TempDir::new("settings-interface-size-unknown");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        let file = paths.config_file();
+        let text = r#"{"interfaceSize":"gigantic","themeId":"moss","telemetry":true}"#;
+        fs::write(&file, text).expect("write");
+        let store = SettingsStore::new(&paths);
+
+        let quiet = store.read().expect("read");
+        assert_eq!(quiet.interface_size, InterfaceSize::Default);
+        assert_eq!(
+            quiet.dropped_interface_size, None,
+            "fm-core's own read reports nothing"
+        );
+        assert_eq!(fs::read_to_string(&file).expect("read"), text, "unchanged");
+
+        let first = store.get_settings().expect("read");
+        assert_eq!(first.interface_size, InterfaceSize::Default);
+        assert_eq!(first.dropped_interface_size.as_deref(), Some("gigantic"));
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&file).expect("read")).expect("json");
+        assert_eq!(json["interfaceSize"], "default");
+        assert_eq!(json["themeId"], "moss", "the other keys are kept");
+        assert_eq!(json["telemetry"], true);
+        let second = store.get_settings().expect("read");
+        assert_eq!(second.dropped_interface_size, None, "reported once");
+    }
+
+    #[test]
+    fn an_update_reports_the_unknown_interface_size_it_replaced() {
+        use fm_api::settings::InterfaceSize;
+        let dir = TempDir::new("settings-interface-size-unknown-update");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        fs::write(paths.config_file(), r#"{"interfaceSize":"gigantic"}"#).expect("write");
+        let store = SettingsStore::new(&paths);
+        let updated = store
+            .update_settings(SettingsUpdate {
+                density: Some(Density::Compact),
+                ..SettingsUpdate::default()
+            })
+            .expect("updated");
+        assert_eq!(updated.interface_size, InterfaceSize::Default);
+        assert_eq!(updated.dropped_interface_size.as_deref(), Some("gigantic"));
+        assert_eq!(
+            store.get_settings().expect("read").dropped_interface_size,
+            None,
+            "reported once"
+        );
     }
 }

@@ -10,7 +10,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use fm_api::settings::Settings;
+use fm_api::settings::{InterfaceSize, Settings};
 use fm_api::setup::{SetupAnswer, SetupStep};
 use fm_api::{ApiError, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,11 @@ const START_AT_LOGIN_KEY: &str = "startAtLogin";
 /// The JSON key of `Settings::dropped_languages`, an answer of one read,
 /// left out of the file.
 const DROPPED_LANGUAGES_KEY: &str = "droppedLanguages";
+/// The JSON key of `Settings::interface_size`.
+const INTERFACE_SIZE_KEY: &str = "interfaceSize";
+/// The JSON keys of `Settings::interface_sizes` and
+/// `Settings::dropped_interface_size`, answers that are never stored.
+const INTERFACE_SIZE_ANSWER_KEYS: [&str; 2] = ["interfaceSizes", "droppedInterfaceSize"];
 
 /// The app's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,6 +48,11 @@ pub struct Config {
     /// What the Settings window edits, stored at the top level of the file.
     #[serde(flatten)]
     pub settings: Settings,
+    /// The interface size the file named but this version does not have
+    /// (E58.5), read as `Default`; as the file has it (a JSON string's text,
+    /// else the JSON). Never stored: the next save writes `Default`.
+    #[serde(skip)]
+    pub unknown_interface_size: Option<String>,
 }
 
 impl Default for Config {
@@ -54,6 +64,7 @@ impl Default for Config {
             mcp_grants: BTreeSet::new(),
             setup_answers: BTreeMap::new(),
             settings: Settings::default(),
+            unknown_interface_size: None,
         }
     }
 }
@@ -82,13 +93,34 @@ impl Config {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
             Err(e) => return Err(io_error("The settings file could not be read.", path, &e)),
         };
-        serde_json::from_str(&text).map_err(|e| {
+        let invalid = |e: serde_json::Error| {
             ApiError::new(
                 ErrorCode::InvalidRequest,
                 "The settings file is not valid. Fix or remove it to use the defaults.",
             )
             .with_detail(format!("{}: {e}", path.display()))
-        })
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).map_err(invalid)?;
+        let unknown_size = value
+            .get(INTERFACE_SIZE_KEY)
+            .filter(|v| serde_json::from_value::<InterfaceSize>((*v).clone()).is_err())
+            .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_owned));
+        let mut config: Self = match unknown_size {
+            // The usual case parses the text, so an error names its line.
+            None => serde_json::from_str(&text).map_err(invalid)?,
+            Some(_) => {
+                let mut value = value;
+                if let Some(map) = value.as_object_mut() {
+                    map.remove(INTERFACE_SIZE_KEY);
+                }
+                serde_json::from_value(value).map_err(invalid)?
+            }
+        };
+        // Answers, never read from the file.
+        config.settings.interface_sizes = InterfaceSize::choices();
+        config.settings.dropped_interface_size = None;
+        config.unknown_interface_size = unknown_size;
+        Ok(config)
     }
 
     /// Reads the config file and writes the defaults when it does not exist
@@ -118,6 +150,9 @@ impl Config {
         if let Some(map) = value.as_object_mut() {
             map.remove(START_AT_LOGIN_KEY);
             map.remove(DROPPED_LANGUAGES_KEY);
+            for key in INTERFACE_SIZE_ANSWER_KEYS {
+                map.remove(key);
+            }
         }
         let json = serde_json::to_string_pretty(&value).map_err(internal)?;
         let tmp = path.with_extension("json.tmp");
@@ -165,8 +200,10 @@ mod tests {
             setup_answers: BTreeMap::from([(SetupStep::Catalogs, SetupAnswer::Skipped)]),
             settings: Settings {
                 cache_limit_mb: 256,
+                interface_size: InterfaceSize::Large,
                 ..Settings::default()
             },
+            unknown_interface_size: None,
         };
         config.save(&path).expect("saved");
         assert_eq!(Config::load(&path).expect("loaded"), config);
@@ -256,5 +293,75 @@ mod tests {
         let path = dir.path().join("Ünïcødé 字体").join("config.json");
         Config::default().save(&path).expect("saved");
         assert_eq!(Config::load(&path).expect("loaded"), Config::default());
+    }
+
+    #[test]
+    fn the_interface_size_is_stored_and_its_answers_are_not() {
+        let dir = TempDir::new("config-interface-size");
+        let path = dir.path().join("config.json");
+        let config = Config {
+            settings: Settings {
+                interface_size: InterfaceSize::ExtraLarge,
+                dropped_interface_size: Some("huge".into()),
+                ..Settings::default()
+            },
+            ..Config::default()
+        };
+        config.save(&path).expect("saved");
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("file")).expect("json");
+        assert_eq!(json["interfaceSize"], "extraLarge");
+        assert!(
+            json.get("interfaceSizes").is_none(),
+            "an answer, not stored"
+        );
+        assert!(
+            json.get("droppedInterfaceSize").is_none(),
+            "an answer, not stored"
+        );
+        let read = Config::load(&path).expect("loaded");
+        assert_eq!(read.settings.interface_size, InterfaceSize::ExtraLarge);
+        assert_eq!(read.settings.dropped_interface_size, None);
+        assert_eq!(read.unknown_interface_size, None);
+    }
+
+    #[test]
+    fn a_file_from_before_interface_sizes_reads_the_default_size() {
+        let dir = TempDir::new("config-interface-size-old");
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"theme": "dark"}"#).expect("write");
+        let config = Config::load(&path).expect("loaded");
+        assert_eq!(config.settings.interface_size, InterfaceSize::Default);
+        assert_eq!(config.settings.interface_sizes, InterfaceSize::choices());
+        assert_eq!(config.unknown_interface_size, None);
+    }
+
+    #[test]
+    fn an_interface_size_this_version_does_not_have_reads_as_default() {
+        let dir = TempDir::new("config-interface-size-unknown");
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"interfaceSize": "huge", "theme": "dark", "interfaceSizes": []}"#,
+        )
+        .expect("write");
+        let config = Config::load(&path).expect("loaded, not refused");
+        assert_eq!(config.settings.interface_size, InterfaceSize::Default);
+        assert_eq!(config.unknown_interface_size.as_deref(), Some("huge"));
+        assert_eq!(
+            config.settings.theme,
+            fm_api::settings::Theme::Dark,
+            "the other keys kept"
+        );
+        assert_eq!(
+            config.settings.interface_sizes,
+            InterfaceSize::choices(),
+            "the factors come from fm-api, never from the file"
+        );
+
+        fs::write(&path, r#"{"interfaceSize": 2}"#).expect("write");
+        let config = Config::load(&path).expect("loaded");
+        assert_eq!(config.settings.interface_size, InterfaceSize::Default);
+        assert_eq!(config.unknown_interface_size.as_deref(), Some("2"));
     }
 }
