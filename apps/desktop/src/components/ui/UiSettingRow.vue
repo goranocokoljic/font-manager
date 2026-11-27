@@ -8,7 +8,9 @@
 // message, said on the row under its line (an alert) and added to the control's description.
 // `empty` (E57.5) is said, muted and in the text face, where the value goes while there is
 // none ("Not chosen yet."); the `value` slot (E57.5) replaces the value's text, for a caller
-// that marks it up (a test id), and stays in the mono face.
+// that marks it up (a test id), and stays in the mono face. `live` (E57.7) makes the title a
+// status region, for a row whose title is a state (About's "Font Fu is up to date."): a change
+// of the state is announced once, the line under it is not.
 import { computed, useId } from 'vue';
 
 const props = defineProps<{
@@ -17,6 +19,7 @@ const props = defineProps<{
   value?: string;
   empty?: string;
   error?: string;
+  live?: boolean;
 }>();
 
 defineSlots<{
@@ -40,7 +43,7 @@ const control = computed(() => ({
 <template>
   <div class="ui-setting-row">
     <div class="text">
-      <span :id="titleId" class="title">{{ title }}</span>
+      <span :id="titleId" class="title" :role="live ? 'status' : undefined">{{ title }}</span>
       <span v-if="line" :id="lineId" class="line">{{ line }}</span>
       <bdi v-if="value || $slots.value" class="value"
         ><slot name="value">{{ value }}</slot></bdi

@@ -1620,7 +1620,9 @@
     },
     "about": {
       "platformNotes": "Hinweise zur Plattform",
-      "noPlatformNotes": "Auf diesem System funktioniert alles gleich."
+      "noPlatformNotes": "Auf diesem System funktioniert alles gleich.",
+      "tagline": "Ein freier Open-Source-Schriftenmanager für Windows, macOS und Linux.",
+      "api": "API {version}"
     },
     "lead": {
       "activation": "Wie die Schaltfläche „Aktivieren“ arbeitet und was mit aktiven Schriften geschieht, wenn das Fenster schließt.",
@@ -1635,7 +1637,8 @@
     "checking": "Suche nach Updates…",
     "upToDate": "Font Fu ist auf dem neuesten Stand.",
     "available": "Version {version} ist verfügbar.",
-    "checkAutomaticallyHint": "Mit einer automatischen Stufe kontaktiert Font Fu seinen Release-Server beim Start und einmal am Tag, sonst nur, wenn du suchst. Nichts wird installiert, bevor du es bestätigst, außer du wählst die Installation beim Beenden.",
+    "lastCheckFailed": "Die letzte Suche ist fehlgeschlagen.",
+    "notCheckedSinceStart": "Font Fu hat seit dem Start nicht nach Updates gesucht.",
     "notice": {
       "label": "Update verfügbar",
       "message": "Font Fu {version} ist verfügbar.",
@@ -1666,7 +1669,9 @@
       "notify": "Mir sagen, wenn es ein Update gibt",
       "installOnQuit": "Updates laden und beim Beenden installieren",
       "majorAsks": "Eine neue Hauptversion fragt dich immer zuerst.",
-      "sessionEnds": "Für die Sitzung aktivierte Schriften enden beim Beenden, wie immer."
+      "sessionEnds": "Für die Sitzung aktivierte Schriften enden beim Beenden, wie immer.",
+      "offLine": "Font Fu sucht nur, wenn du es willst.",
+      "notifyLine": "Sucht beim Start und einmal am Tag. Nichts wird installiert, bevor du es bestätigst."
     },
     "lastCheck": {
       "never": "Font Fu hat noch nicht nach Updates gesucht.",

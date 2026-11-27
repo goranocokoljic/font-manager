@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// Settings › About: the logotype, the version, updates and the platform notes. Moved out of
-// SettingsView in E57.3 as it was; E57.7 draws it as board 15 shows.
+// Settings › About (board 15): one quiet panel with the logotype, one line on what Font Fu
+// is and the version; then, where this copy updates itself, the state of updates as the
+// title of one setting row, the update levels as choice cards, and the platform notes in a
+// quiet panel.
 import { computed } from 'vue';
 import { formatApiVersion } from '../../api/version';
 import type { UpdateLevel } from '../../api/types';
@@ -10,6 +12,9 @@ import { useSettingsStore } from '../../stores/settings';
 import { useUpdatesStore } from '../../stores/updates';
 import AppLogo from '../AppLogo.vue';
 import UiButton from '../ui/UiButton.vue';
+import UiChoiceCards, { type ChoiceCard } from '../ui/UiChoiceCards.vue';
+import UiSettingGroup from '../ui/UiSettingGroup.vue';
+import UiSettingRow from '../ui/UiSettingRow.vue';
 import SettingsSection from './SettingsSection.vue';
 
 const store = useSettingsStore();
@@ -17,12 +22,23 @@ const app = useAppStore();
 const updates = useUpdatesStore();
 const s = computed(() => store.settings);
 
-const upToDate = computed(() => updates.status === 'upToDate');
+/** The line of each level's card; "install when I quit" has its two notes as its line. */
+const levelLine = (level: UpdateLevel): string =>
+  level === 'installOnQuit'
+    ? `${t('updates.level.majorAsks')} ${t('updates.level.sessionEnds')}`
+    : t(`updates.level.${level}Line` as MessageKey);
 
-/** The update levels this copy offers (E55.10); none where it does not update itself. */
-const levels = computed(() => updates.overview?.levels ?? []);
-const INSTALL_ON_QUIT = 'installOnQuit' satisfies UpdateLevel;
-const levelLabel = (level: UpdateLevel) => t(`updates.level.${level}` as MessageKey);
+/**
+ * The update levels this copy offers (E55.10), as cards: only those fm-api lists, so no
+ * combination of the two settings it refuses is shown; none where it does not update itself.
+ */
+const levels = computed<ChoiceCard<UpdateLevel>[]>(() =>
+  (updates.overview?.levels ?? []).map((level) => ({
+    value: level,
+    title: t(`updates.level.${level}` as MessageKey),
+    line: levelLine(level),
+  })),
+);
 
 /** Saves the level (both settings at once), then reads the status under the control again. */
 async function chooseLevel(level: UpdateLevel): Promise<void> {
@@ -30,10 +46,25 @@ async function chooseLevel(level: UpdateLevel): Promise<void> {
   await updates.loadOverview();
 }
 
-/** When the last check ran and what it found. */
+/** The title of the status row: where "Check for updates" is, else what the last check found. */
+const stateTitle = computed(() => {
+  if (updates.status === 'checking') return t('updates.checking');
+  if (updates.status === 'upToDate') return t('updates.upToDate');
+  if ((updates.status === 'available' || updates.status === 'installing') && updates.update)
+    return t('updates.available', { version: updates.update.version });
+  const outcome = updates.overview?.lastCheck?.outcome;
+  // A version the last check found but nothing offers now (the store is idle): it was found
+  // before this start and may be the version running now, installed since. Never "available".
+  if (outcome?.type === 'found') return t('updates.notCheckedSinceStart');
+  if (outcome?.type === 'upToDate') return t('updates.upToDate');
+  if (outcome?.type === 'failed') return t('updates.lastCheckFailed');
+  return t('updates.lastCheck.never');
+});
+
+/** The row's line: when the last check ran and what it found; none before the first check. */
 const lastCheckText = computed(() => {
   const last = updates.overview?.lastCheck;
-  if (!last) return t('updates.lastCheck.never');
+  if (!last) return undefined;
   const ms = Date.parse(last.at);
   const when = Number.isFinite(ms) ? formatDate(ms) : last.at;
   const outcome = last.outcome;
@@ -43,141 +74,153 @@ const lastCheckText = computed(() => {
     return t('updates.lastCheck.failed', { when, message: outcome.message });
   return t('updates.lastCheck.upToDate', { when });
 });
+
+/** A failed check, said on the status row; the dialog says its own errors. */
+const checkError = computed(() =>
+  updates.error && !updates.open ? errorMessage(updates.error) : undefined,
+);
 </script>
 
 <template>
   <SettingsSection id="about" :heading="t('settings.sections.about')">
     <template v-if="app.info">
-      <AppLogo class="brand" data-testid="app-logo" />
-      <dl class="info" data-testid="app-info">
-        <dt>{{ t('home.info.app') }}</dt>
-        <dd>
-          <bdi>{{ app.info.name }} {{ app.info.version }}</bdi>
-        </dd>
-        <dt>{{ t('home.info.api') }}</dt>
-        <dd>{{ formatApiVersion(app.info.apiVersion) }}</dd>
-        <dt>{{ t('home.info.platform') }}</dt>
-        <dd>
-          <bdi>{{ app.info.platform }}</bdi>
-        </dd>
-      </dl>
+      <!-- The board's wordmark only stands in for the logotype, at its size. -->
+      <div class="hero" data-testid="app-info">
+        <div class="identity">
+          <AppLogo class="brand" data-testid="app-logo" />
+          <p class="tagline">{{ t('settings.about.tagline') }}</p>
+        </div>
+        <p class="version">
+          <span class="number"
+            ><span class="sr-only">{{ app.info.name }} </span
+            ><bdi>{{ app.info.version }}</bdi></span
+          >
+          <span class="meta"
+            >{{ t('settings.about.api', { version: formatApiVersion(app.info.apiVersion) }) }} ·
+            <span class="sr-only">{{ t('home.info.platform') }} </span
+            ><bdi>{{ app.info.platform }}</bdi></span
+          >
+        </p>
+      </div>
       <!-- Hidden where Flatpak or a package manager installs the updates; the
            platform notes below say so (ADR 0012). -->
       <section v-if="updates.support?.offered" class="updates" aria-labelledby="updates-title">
-        <h3 id="updates-title" class="subheading">{{ t('updates.title') }}</h3>
-        <div class="add">
-          <UiButton
-            :disabled="updates.status === 'checking' || updates.status === 'installing'"
-            @click="updates.check()"
-          >
-            {{ t('updates.check') }}
-          </UiButton>
-          <UiButton
-            v-if="updates.status === 'available' && updates.update && !updates.open"
-            @click="updates.open = true"
-          >
-            {{ t('updates.showVersion', { version: updates.update.version }) }}
-          </UiButton>
-        </div>
-        <p role="status" class="note status">
-          <template v-if="updates.status === 'checking'">{{ t('updates.checking') }}</template>
-          <template v-else-if="upToDate">{{ t('updates.upToDate') }}</template>
-          <template v-else-if="updates.status === 'available' && updates.update">{{
-            t('updates.available', { version: updates.update.version })
-          }}</template>
-        </p>
-        <p v-if="updates.error && !updates.open" role="alert" class="error">
-          {{ errorMessage(updates.error) }}
-        </p>
-        <!-- E55.10: one control over "Check automatically" and "Install updates when I
-             quit"; fm-api maps each level to the two settings, so no combination it
-             refuses is shown. Native radios: arrow keys move between the levels. -->
-        <fieldset v-if="s && levels.length" class="group">
-          <legend>{{ t('updates.level.legend') }}</legend>
-          <template v-for="level in levels" :key="level">
-            <label class="choice">
-              <input
-                type="radio"
-                name="update-level"
-                :checked="updates.overview?.level === level"
-                :aria-describedby="level === INSTALL_ON_QUIT ? 'install-on-quit-notes' : undefined"
-                @change="chooseLevel(level)"
-              />
-              {{ levelLabel(level) }}
-            </label>
-            <ul
-              v-if="level === INSTALL_ON_QUIT"
-              id="install-on-quit-notes"
-              class="note hint level-notes"
+        <h3 id="updates-title" class="heading">{{ t('updates.title') }}</h3>
+        <UiSettingGroup>
+          <UiSettingRow live :title="stateTitle" :line="lastCheckText" :error="checkError">
+            <UiButton
+              :disabled="updates.status === 'checking' || updates.status === 'installing'"
+              @click="updates.check()"
             >
-              <li>{{ t('updates.level.majorAsks') }}</li>
-              <li>{{ t('updates.level.sessionEnds') }}</li>
-            </ul>
-          </template>
-        </fieldset>
-        <p class="note level-hint">
-          {{ t('updates.checkAutomaticallyHint') }}
-        </p>
-        <p v-if="updates.overview" class="note last-check">{{ lastCheckText }}</p>
-        <div v-if="updates.overview?.waiting" class="add waiting">
-          <p class="note">
-            {{ t('updates.waiting', { version: updates.overview.waiting }) }}
-          </p>
-          <UiButton @click="updates.openDialog()">{{ t('updates.installNow') }}</UiButton>
+              {{ t('updates.check') }}
+            </UiButton>
+            <UiButton
+              v-if="updates.status === 'available' && updates.update && !updates.open"
+              @click="updates.open = true"
+            >
+              {{ t('updates.showVersion', { version: updates.update.version }) }}
+            </UiButton>
+          </UiSettingRow>
+          <UiSettingRow
+            v-if="updates.overview?.waiting"
+            :title="t('updates.waiting', { version: updates.overview.waiting })"
+          >
+            <UiButton @click="updates.openDialog()">{{ t('updates.installNow') }}</UiButton>
+          </UiSettingRow>
+        </UiSettingGroup>
+        <!-- E55.10: one control over "Check automatically" and "Install updates when I
+             quit"; fm-api maps each level to the two settings. -->
+        <!-- Not a region of its own: the cards' radio group carries the name, and a second
+             region named "…updates" would sit inside "Updates". -->
+        <div v-if="s && levels.length" class="levels">
+          <h3 id="update-level-heading" class="heading">{{ t('updates.level.legend') }}</h3>
+          <UiChoiceCards
+            name="update-level"
+            :label="t('updates.level.legend')"
+            :columns="1"
+            :model-value="updates.overview?.level ?? null"
+            :options="levels"
+            @update:model-value="chooseLevel"
+          />
         </div>
       </section>
-      <h3 id="platform-notes-title" class="subheading">
-        {{ t('settings.about.platformNotes') }}
-      </h3>
-      <ul
-        v-if="app.info.platformNotes?.length"
-        class="notes"
-        aria-labelledby="platform-notes-title"
-      >
-        <li v-for="note in app.info.platformNotes" :key="note">{{ note }}</li>
-      </ul>
-      <p v-else class="note">{{ t('settings.about.noPlatformNotes') }}</p>
+      <section aria-labelledby="platform-notes-title">
+        <h3 id="platform-notes-title" class="heading">
+          {{ t('settings.about.platformNotes') }}
+        </h3>
+        <div class="panel notes-panel">
+          <ul
+            v-if="app.info.platformNotes?.length"
+            class="notes"
+            aria-labelledby="platform-notes-title"
+          >
+            <li v-for="note in app.info.platformNotes" :key="note">{{ note }}</li>
+          </ul>
+          <p v-else class="empty">{{ t('settings.about.noPlatformNotes') }}</p>
+        </div>
+      </section>
     </template>
   </SettingsSection>
 </template>
 
 <style scoped>
-.note {
-  margin: 0 0 12px;
+/* The quiet panel: the surface tone, no border. */
+.hero,
+.panel {
+  border-radius: var(--fm-radius-lg);
+  background-color: var(--fm-surface);
+}
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--fm-space-3) var(--fm-space-5);
+  margin: var(--fm-space-4) 0 var(--fm-space-5);
+  padding: var(--fm-space-6) var(--fm-space-5);
+}
+.identity {
+  min-width: 0;
+}
+.brand {
+  block-size: 72px;
+  max-inline-size: 100%;
+  margin-block-end: var(--fm-space-3);
+}
+.tagline {
+  margin: 0;
   color: var(--fm-muted);
 }
-.hint {
-  margin-block: 4px 0;
-  margin-inline: 22px 0;
-}
-.level-notes {
-  margin-block: 2px 4px;
-  padding-inline-start: 18px;
-}
-.level-hint {
-  margin: 4px 0 0;
-}
-.last-check {
-  margin-top: 8px;
-}
-.waiting {
-  align-items: center;
-}
-.waiting .note {
+.version {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   margin: 0;
 }
-.updates {
-  margin-bottom: 8px;
+.number {
+  font-size: var(--fm-text-xl);
+  font-weight: 600;
 }
-.status {
-  margin-top: 8px;
+.meta {
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
 }
-.status:empty {
-  display: none;
+.levels {
+  margin: 0 0 var(--fm-space-5);
 }
-.subheading {
-  margin: 16px 0 8px;
-  font-size: var(--fm-text-md);
+/* The small-caps heading of UiSettingGroup, over the groups of this section. */
+.heading {
+  margin: 0 0 var(--fm-space-2);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.notes-panel {
+  padding: var(--fm-space-3) var(--fm-space-4);
+  color: var(--fm-muted);
 }
 .notes {
   margin: 0;
@@ -186,49 +229,7 @@ const lastCheckText = computed(() => {
 .notes li + li {
   margin-top: 6px;
 }
-.error {
-  margin: 0 0 12px;
-  color: var(--fm-danger);
-}
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.add {
-  display: flex;
-  gap: 8px;
-}
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fm-gap);
-  margin: 0 0 16px;
-  padding: 0;
-  border: 0;
-}
-.group legend {
-  margin-bottom: 6px;
-  padding: 0;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-sm);
-  font-weight: 600;
-}
-.brand {
-  block-size: 40px;
-  margin-block: var(--fm-space-3) var(--fm-space-4);
-}
-.info {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--fm-space-1) var(--fm-space-4);
-  margin: 0 0 var(--fm-space-4);
-  font-size: var(--fm-text-sm);
-}
-.info dt {
-  color: var(--fm-muted);
-}
-.info dd {
+.empty {
   margin: 0;
 }
 </style>

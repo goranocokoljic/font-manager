@@ -113,4 +113,14 @@ describe('UiSettingRow and UiSettingGroup', () => {
     expect(slotted.find('.empty').exists()).toBe(false);
     slotted.unmount();
   });
+
+  it('with live, the title is a status region; the line is not (E57.7)', async () => {
+    const row = mount(UiSettingRow, { props: { title: 'Checking for updates…', line: 'Never.' } });
+    expect(row.find('[role="status"]').exists()).toBe(false);
+    await row.setProps({ live: true });
+    expect(row.get('[role="status"]').text()).toBe('Checking for updates…');
+    await row.setProps({ title: 'Font Fu is up to date.' });
+    expect(row.findAll('[role="status"]')).toHaveLength(1);
+    expect(row.get('[role="status"]').text()).toBe('Font Fu is up to date.');
+  });
 });
