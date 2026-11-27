@@ -619,3 +619,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.9 #699] apps/desktop/src/views/SettingsView.vue:245 — the inset focus ring on the selected tab is 2.64:1 (light) / 2.44:1 (dark) against --fm-side-active and passes 3:1 only on its outer edge against --fm-surface (Problems copies the pattern).
 - [E58.1 #712] apps/desktop/src/stores/search.ts:461 — search, ruleEditor (:366) and duplicates (:164) stores load listLanguages once and do not listen for languageOrderChanged; ADR 0028 gives this to E58.3.
 - [E58.6 #717] apps/desktop/src/components/MainLayout.vue:51 — the palette action "Go to sidebar" does nothing, with no feedback, while the sidebar is folded (now reachable through a fold by room).
+
+## 2026-11-28
+
+- [E58.3 #714] apps/desktop/src/components/DuplicatesRules.vue:33 — the Duplicates › Rules "Add a language" picker lists `store.presets` without the hairline after the user's languages.
+- [E58.3 #714] apps/desktop/src/stores/search.ts:477 — if `onEvent` rejects, `languageEvents` stays a rejected promise and the language-order subscription is never retried.
+- [E58.3 #714] apps/desktop/src/components/ui/UiSelect.vue:316 — the listbox is named only by `aria-labelledby` pointing at the trigger, so a Select without a visible label names its menu by the chosen value.
+- [E58.3 #714] apps/desktop/src/components/DuplicatesRules.vue:28 — `languagePresets` follows the order of `myLanguages`, not `store.presets` (the user's own list; likely intended).
