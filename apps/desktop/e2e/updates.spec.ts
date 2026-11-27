@@ -58,7 +58,7 @@ test('the update level is one control of three choices, saved and keyboard-compl
 }) => {
   await page.goto(about(1));
   const updates = page.getByRole('region', { name: 'Updates' });
-  const level = updates.getByRole('group', { name: 'Automatic updates' });
+  const level = updates.getByRole('radiogroup', { name: 'Automatic updates' });
   const off = level.getByRole('radio', { name: 'Off' });
   const notify = level.getByRole('radio', { name: 'Tell me when there is an update' });
   const onQuit = level.getByRole('radio', {

@@ -1620,7 +1620,9 @@
     },
     "about": {
       "platformNotes": "Platform notes",
-      "noPlatformNotes": "Everything works the same on this system."
+      "noPlatformNotes": "Everything works the same on this system.",
+      "tagline": "A free, open-source font manager for Windows, macOS and Linux.",
+      "api": "API {version}"
     },
     "lead": {
       "activation": "How the Activate button behaves, and what happens to active fonts when the window closes.",
@@ -1635,7 +1637,7 @@
     "checking": "Checking for updates…",
     "upToDate": "Font Fu is up to date.",
     "available": "Version {version} is available.",
-    "checkAutomaticallyHint": "With an automatic level, Font Fu contacts its release server at start and once a day; otherwise only when you check. Nothing installs until you confirm it, unless you choose to install when you quit.",
+    "lastCheckFailed": "The last check failed.",
     "notice": {
       "label": "Update available",
       "message": "Font Fu {version} is available.",
@@ -1666,7 +1668,9 @@
       "notify": "Tell me when there is an update",
       "installOnQuit": "Download updates and install them when I quit",
       "majorAsks": "A major version always asks you first.",
-      "sessionEnds": "Fonts activated for the session end when you quit, as they always do."
+      "sessionEnds": "Fonts activated for the session end when you quit, as they always do.",
+      "offLine": "Font Fu checks only when you ask.",
+      "notifyLine": "Checks at start and once a day. Nothing installs until you confirm."
     },
     "lastCheck": {
       "never": "Font Fu has not checked for updates yet.",

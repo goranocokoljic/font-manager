@@ -222,7 +222,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   `UiSettingGroup` (a card of rows under an optional small-caps heading and note) and
   `UiSettingRow` (title, one line, an optional mono value, one control that the row labels and
   describes through its `control` slot props, and `error`, a failed change said on the row and
-  added to the control's description, E57.4); a local copy of a choice card or a setting row
+  added to the control's description, E57.4, and `live`, a title that is a state and is
+  announced once as a status, E57.7); a local copy of a choice card or a setting row
   is a bug; every Settings section is a component of its own under `components/settings/`,
   its head `SettingsSection` (Sources keeps its own);
   every inspector tab head is `InspectorTabHead`;

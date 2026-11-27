@@ -114,17 +114,17 @@ describe('Updates (Settings → About)', () => {
   it('one control of three levels sets the two settings (E55.10)', async () => {
     const { c, check } = client();
     const w = await mountAt('/settings?section=about');
-    const radios = () => w.findAll('input[name="update-level"]');
-    const labels = () => radios().map((r) => r.element.parentElement!.textContent!.trim());
+    const cards = () => w.findAll('[role="radiogroup"][data-name="update-level"] [role="radio"]');
+    const labels = () => cards().map((r) => r.get('.title').text());
     expect(labels()).toEqual([
       'Off',
       'Tell me when there is an update',
       'Download updates and install them when I quit',
     ]);
-    const checked = () => radios().findIndex((r) => (r.element as HTMLInputElement).checked);
+    const checked = () => cards().findIndex((r) => r.attributes('aria-checked') === 'true');
     expect(checked()).toBe(0);
     const pick = async (i: number) => {
-      await radios()[i]!.setValue(true);
+      await cards()[i]!.trigger('click');
       await flushPromises();
       const s = await c.getSettings();
       return [s.checkUpdatesAutomatically, s.installUpdatesOnQuit];
@@ -137,12 +137,12 @@ describe('Updates (Settings → About)', () => {
     await pick(2);
     expect(await pick(0)).toEqual([false, false]);
     expect(checked()).toBe(0);
-    // The third choice names the two consequences, tied to it for screen readers.
-    const third = radios()[2]!.element as HTMLInputElement;
-    const notes = document.getElementById(third.getAttribute('aria-describedby')!)!;
-    expect(notes.textContent).toContain('A major version always asks you first.');
-    expect(notes.textContent).toContain('Fonts activated for the session end when you quit');
-    expect(radios()[0]!.attributes('aria-describedby')).toBeUndefined();
+    // The third choice names the two consequences as its line, tied to it for screen readers.
+    const line = (i: number) =>
+      document.getElementById(cards()[i]!.attributes('aria-describedby')!)!.textContent!;
+    expect(line(2)).toContain('A major version always asks you first.');
+    expect(line(2)).toContain('Fonts activated for the session end when you quit');
+    expect(line(0)).toBe('Font Fu checks only when you ask.');
     // Choosing a level asks the release server nothing by itself (the shell's timer does).
     expect(check).toHaveBeenCalledTimes(0);
     w.unmount();
@@ -172,7 +172,7 @@ describe('Updates (Settings → About)', () => {
   it('a Flatpak copy shows no level control', async () => {
     client({ update: 'managed' });
     const w = await mountAt('/settings?section=about');
-    expect(w.findAll('input[name="update-level"]')).toHaveLength(0);
+    expect(w.findAll('[data-name="update-level"] [role="radio"]')).toHaveLength(0);
     w.unmount();
   });
 
