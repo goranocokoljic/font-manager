@@ -111,6 +111,7 @@
   "blocks": {
     "block": "Block",
     "label": "Block {n}",
+    "close": "Blockeigenschaften schließen",
     "properties": "Eigenschaften von {label}",
     "sizePt": "{size} pt",
     "badge": "{size} pt · {lineHeight}",
@@ -1930,6 +1931,7 @@
     "unlockedTitle": "Diese Rolle sperren, damit Mischen sie lässt, wie sie ist"
   },
   "conflicts": {
+    "close": "Schriftkonflikte schließen",
     "title": "Schriftkonflikte",
     "intro": "Zwei aktive Schriften mit demselben PostScript-Namen sind ein Konflikt: Apps fragen Schriften über diesen Namen an. Gewinner ist die Schrift, die die App zuerst nennt: eine Schrift, mit der du die andere für diese Sitzung ersetzt hast, oder die spätere von zwei Schriften, die die App aktiviert hat.",
     "none": "Keine Konflikte.",
@@ -1943,6 +1945,7 @@
     "face": "Schriftschnitt {id}"
   },
   "problems": {
+    "close": "Probleme schließen",
     "noneShort": "Keine Probleme",
     "title": "Probleme",
     "filters": "Probleme anzeigen",

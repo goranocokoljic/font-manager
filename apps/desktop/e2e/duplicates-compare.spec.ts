@@ -40,8 +40,12 @@ const half = (page: Page, side: 'a' | 'b') =>
 
 /** Picks the copy whose option name matches `file` as the first or the second copy. */
 async function pick(page: Page, which: 'First copy' | 'Second copy', file: RegExp) {
-  await comparison(page).getByRole('combobox', { name: which }).click();
-  await page.getByRole('option', { name: file }).click();
+  const box = comparison(page).getByRole('combobox', { name: which });
+  await box.click();
+  await expect(box).toHaveAttribute('aria-expanded', 'true');
+  // The option of this list: the other copy's list may still be fading out (120 ms).
+  const list = await box.getAttribute('aria-controls');
+  await page.locator(`[id="${list}"]`).getByRole('option', { name: file }).click();
 }
 
 /** Opens the comparison of the sample's Inter with the copy whose option matches `file`. */
@@ -211,12 +215,23 @@ test('an unreadable copy shows the API message in its half, and the keyboard doe
   // Every control is reached by Tab; N answers "not duplicates" from the comparison.
   await page.keyboard.press('c');
   await expect(c.getByRole('heading', { level: 3 })).toBeFocused();
+  // E57.8: the × stands at the end of the heading's line, so it comes right after it.
+  const close = c.getByRole('button', { name: 'Close the comparison' });
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await expect(close).toHaveAttribute('aria-keyshortcuts', 'Escape');
+  const head = (await c.getByRole('heading', { level: 3 }).boundingBox())!;
+  const box = (await close.boundingBox())!;
+  const panel = (await c.boundingBox())!;
+  expect(Math.abs(box.y + box.height / 2 - (head.y + head.height / 2))).toBeLessThan(12);
+  expect(panel.x + panel.width - (box.x + box.width)).toBeLessThan(40);
   await page.keyboard.press('Tab');
   await expect(c.getByRole('combobox', { name: 'First copy' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(c.getByRole('combobox', { name: 'Second copy' })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(c.getByRole('button', { name: 'Close the comparison' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(close).toBeFocused();
   await page.keyboard.press('n');
   await expect(nav(page).getByTestId('dup-count-plan')).toHaveText('1');
   // Legacy Grotesk left the queue: Inter is the one set still to decide.

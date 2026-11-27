@@ -36,14 +36,12 @@ const { folded, toggle } = useFolded('sets');
               ? t('sets.imported', { name: store.imported.set.name })
               : t('sets.importedAll', { name: store.imported.set.name })
           }}</span>
-          <button
-            type="button"
-            class="action"
-            :aria-label="t('sets.dismissLabel')"
+          <UiIconButton
+            icon="close"
+            size="sm"
+            :label="t('sets.dismissLabel')"
             @click="store.dismissImport()"
-          >
-            {{ t('common.close') }}
-          </button>
+          />
         </p>
         <template v-if="store.imported.missing.length">
           <p id="fm-sets-missing" class="missing-heading">
@@ -91,16 +89,6 @@ const { folded, toggle } = useFolded('sets');
   position: relative;
   display: flex;
   align-items: center;
-}
-.action {
-  flex: none;
-  padding: 2px 6px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--fm-text-xs);
 }
 /* A set's export icon takes the count's place under the pointer and under keyboard focus. */
 .export {

@@ -111,6 +111,7 @@
   "blocks": {
     "block": "Block",
     "label": "Block {n}",
+    "close": "Close block properties",
     "properties": "{label} properties",
     "sizePt": "{size} pt",
     "badge": "{size} pt · {lineHeight}",
@@ -1930,6 +1931,7 @@
     "unlockedTitle": "Lock this role so Shuffle leaves it as it is"
   },
   "conflicts": {
+    "close": "Close font conflicts",
     "title": "Font conflicts",
     "intro": "Two active fonts with the same PostScript name are a conflict: apps ask for fonts by that name. The winner is the font the app puts first: a font you chose to replace the other one with for this session, or the later of two fonts the app activated.",
     "none": "No conflicts.",
@@ -1943,6 +1945,7 @@
     "face": "Face {id}"
   },
   "problems": {
+    "close": "Close problems",
     "title": "Problems",
     "noneShort": "No problems",
     "filters": "Show problems",

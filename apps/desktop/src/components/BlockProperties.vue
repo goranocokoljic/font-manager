@@ -6,11 +6,13 @@
 // value the block really has. A number field commits on change (a spinner step, Enter
 // or leaving it), so typing "14" is not clamped at "1" on the way.
 //
-// Escape closes the editor; the parent returns focus to the block's size badge.
+// Escape or the × in the top corner (E57.8) closes the editor; the parent returns focus to
+// the block's size badge.
 import { computed, nextTick, onMounted, ref, useId } from 'vue';
 import type { BlockAlign, BlockOverflow, LayoutBounds, TextBlock } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import type { BlockProps } from '../stores/textLayouts';
+import UiIconButton from './ui/UiIconButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const props = defineProps<{
@@ -127,18 +129,28 @@ async function setChoice(change: BlockProps): Promise<void> {
         @update:model-value="setChoice({ overflow: $event })"
       />
     </div>
-    <button type="button" class="close" @click="emit('close')">{{ t('common.close') }}</button>
+    <UiIconButton
+      class="close"
+      icon="close"
+      :label="t('blocks.close')"
+      shortcut="Esc"
+      aria-keyshortcuts="Escape"
+      @click="emit('close')"
+    />
   </div>
 </template>
 
 <style scoped>
 .props {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 16px;
   align-items: center;
   margin: 4px 0 12px;
   padding: 8px 12px;
+  /* Room for the × in the top end corner. */
+  padding-inline-end: 44px;
   border: 1px solid var(--fm-control-border);
   background-color: var(--fm-bg);
   color: var(--fm-fg);
@@ -162,8 +174,11 @@ async function setChoice(change: BlockProps): Promise<void> {
 .unit {
   color: var(--fm-muted);
 }
+/* The × stands in the top end corner, like every panel's; it stays last in the Tab order. */
 .close {
-  margin-inline-start: auto;
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
 }
 .props :focus-visible {
   outline: 2px solid var(--fm-accent);

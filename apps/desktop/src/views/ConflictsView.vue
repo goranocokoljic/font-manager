@@ -4,7 +4,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { Clash } from '../api/types';
-import UiButton from '../components/ui/UiButton.vue';
+import UiIconButton from '../components/ui/UiIconButton.vue';
 import { errorMessage, t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import { useConflictsStore } from '../stores/conflicts';
@@ -49,9 +49,14 @@ function winner(c: Clash): string {
       <h1 id="conflicts-title" ref="title" class="title" tabindex="-1">
         {{ t('conflicts.title') }}
       </h1>
-      <UiButton aria-keyshortcuts="Escape" @click="close">
-        {{ t('common.close') }}
-      </UiButton>
+      <UiIconButton
+        icon="close"
+        :label="t('conflicts.close')"
+        shortcut="Esc"
+        aria-keyshortcuts="Escape"
+        data-testid="conflicts-close"
+        @click="close"
+      />
     </header>
     <main class="panel">
       <p class="note">{{ t('conflicts.intro') }}</p>

@@ -11,6 +11,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import type { SidecarField } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import UiButton from '../components/ui/UiButton.vue';
+import UiIconButton from '../components/ui/UiIconButton.vue';
 import { useCommandsStore } from '../stores/commands';
 import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import {
@@ -70,9 +71,14 @@ function fieldName(field: SidecarField): string {
       <h1 id="problems-title" ref="title" class="title" tabindex="-1">
         {{ t('problems.title') }}
       </h1>
-      <UiButton aria-keyshortcuts="Escape" @click="close">
-        {{ t('common.close') }}
-      </UiButton>
+      <UiIconButton
+        icon="close"
+        :label="t('problems.close')"
+        shortcut="Esc"
+        aria-keyshortcuts="Escape"
+        data-testid="problems-close"
+        @click="close"
+      />
     </header>
     <main class="panel">
       <div class="filters" role="group" :aria-label="t('problems.filters')">
