@@ -1,19 +1,27 @@
 <script setup lang="ts">
-// Settings → AI assistants (E27.1): the opt-in switch for the MCP server on the
-// local API endpoint, and copyable config snippets that fm-core writes with the
-// real address and token. The snippets carry the token, so they stay hidden
-// until the user asks to see them; Copy works either way. The Claude Desktop
-// snippet (E27.7) starts the bundled stdio shim by its absolute path. Below
-// them, one switch per tool that changes something (E27.6): fm-core lists the
-// tools and their grants, all off by default. The help link opens the user
-// docs page on AI assistants (E27.8) in the help window.
+// Settings › AI assistants (E27.1; board 15, E57.6): the opt-in switch for the MCP server on
+// the local API endpoint as a setting row; with it on, the server's address and "Connect an
+// assistant", one block: a segmented control with the clients fm-api lists, the chosen
+// client's snippet (written by fm-core with the real address and token) in the mono face,
+// Copy, and the line that the snippet holds the token, with "How to connect" (the user docs
+// page on AI assistants, E27.8). The snippet shows dots where the token is until Show: the
+// dots plainly replace the token the store already holds (Settings › Local API's endpoint);
+// Copy copies the real snippet either way. The Claude Desktop snippet (E27.7) starts the
+// bundled stdio shim and holds no token. Below, one switch row per tool that changes
+// something (E27.6): fm-core lists the tools and their grants, all off by default.
 import { computed, onMounted, ref } from 'vue';
 import { useClient } from '../../api/client';
 import type { McpClient, McpGrant } from '../../api/types';
 import { t, type MessageKey } from '../../i18n';
 import { useSettingsStore } from '../../stores/settings';
 import CopyValue from '../CopyValue.vue';
+import UiButton from '../ui/UiButton.vue';
+import UiSegmentedControl, { type SegmentOption } from '../ui/UiSegmentedControl.vue';
+import UiSettingGroup from '../ui/UiSettingGroup.vue';
+import UiSettingRow from '../ui/UiSettingRow.vue';
+import UiSwitch from '../ui/UiSwitch.vue';
 import { useCopy } from '../useCopy';
+import SettingsSection from './SettingsSection.vue';
 
 const store = useSettingsStore();
 const shown = ref(false);
@@ -22,26 +30,49 @@ const { status: copyStatus, copy } = useCopy();
 
 onMounted(() => {
   void store.loadMcp();
+  // The token the snippets hold, so the hidden snippet can show dots in its place.
+  void store.loadEndpoint();
 });
 
 const status = computed(() => store.mcp);
 
-const titles: Record<
-  McpClient,
-  'settings.mcp.claudeCode' | 'settings.mcp.http' | 'settings.mcp.claudeDesktop'
-> = {
-  claudeCode: 'settings.mcp.claudeCode',
-  http: 'settings.mcp.http',
-  claudeDesktop: 'settings.mcp.claudeDesktop',
+const titles: Record<McpClient, MessageKey> = {
+  claudeCode: 'settings.mcp.clients.claudeCode',
+  http: 'settings.mcp.clients.http',
+  claudeDesktop: 'settings.mcp.clients.claudeDesktop',
 };
-const copyLabels: Record<
-  McpClient,
-  'settings.mcp.copyClaudeCode' | 'settings.mcp.copyHttp' | 'settings.mcp.copyClaudeDesktop'
-> = {
+const copyLabels: Record<McpClient, MessageKey> = {
   claudeCode: 'settings.mcp.copyClaudeCode',
   http: 'settings.mcp.copyHttp',
   claudeDesktop: 'settings.mcp.copyClaudeDesktop',
 };
+
+const snippets = computed(() => status.value?.snippets ?? []);
+/** The client chosen in the segmented control; the first one fm-api lists until the user picks. */
+const chosen = ref<McpClient | null>(null);
+const snippet = computed(
+  () => snippets.value.find((s) => s.client === chosen.value) ?? snippets.value[0] ?? null,
+);
+const clientOptions = computed<SegmentOption<McpClient>[]>(() =>
+  snippets.value.map((s) => ({ value: s.client, label: t(titles[s.client]) })),
+);
+const choose = (client: McpClient) => (chosen.value = client);
+
+/** The token as the store holds it; empty while the endpoint is not read yet. */
+const token = computed(() => store.endpoint?.token ?? '');
+/** Whether the chosen snippet holds the token (Claude Desktop's does not). */
+const holdsToken = computed(() => !!token.value && !!snippet.value?.text.includes(token.value));
+/**
+ * The snippet as drawn: the real text once shown or when it holds no token; otherwise the
+ * token replaced by as many dots. While the token is not known yet, nothing is drawn.
+ */
+const drawn = computed(() => {
+  const s = snippet.value;
+  if (!s) return null;
+  if (shown.value) return s.text;
+  if (!token.value) return null;
+  return s.text.replaceAll(token.value, '•'.repeat(token.value.length));
+});
 
 /** The switch label of each tool fm-core lists; a tool this UI does not know shows its name. */
 const toolLabels: Record<string, MessageKey> = {
@@ -57,209 +88,173 @@ function toolLabel(tool: string): string {
 
 const grantBusy = ref(false);
 
-async function toggleGrant(grant: McpGrant, event: globalThis.Event): Promise<void> {
-  const input = event.target as HTMLInputElement;
+async function toggleGrant(grant: McpGrant): Promise<void> {
   grantBusy.value = true;
-  const saved = await store.setMcpGrant(grant.tool, input.checked);
+  await store.setMcpGrant(grant.tool, !grant.granted);
   grantBusy.value = false;
-  if (!saved) input.checked = grant.granted;
 }
 
-async function toggle(event: globalThis.Event): Promise<void> {
-  const input = event.target as HTMLInputElement;
+/** A refused change leaves the switch where the API has it: the switch draws the store. */
+async function toggle(): Promise<void> {
   busy.value = true;
-  const saved = await store.setMcpEnabled(input.checked);
+  await store.setMcpEnabled(!(status.value?.enabled ?? false));
   busy.value = false;
-  // A refused change leaves the switch where the API has it.
-  if (!saved) input.checked = status.value?.enabled ?? false;
 }
+
+const openHelp = () => useClient().openHelp('mcp');
 </script>
 
 <template>
-  <section class="mcp" aria-labelledby="mcp-title">
-    <h2 id="mcp-title" class="heading" tabindex="-1" data-section-heading>
-      {{ t('settings.sections.mcp') }}
-    </h2>
-    <p class="note">
-      {{ t('settings.mcp.note') }}
-      <button type="button" class="link" @click="useClient().openHelp('mcp')">
-        {{ t('settings.mcp.help') }}
-      </button>
-    </p>
+  <SettingsSection id="mcp" :heading="t('settings.sections.mcp')" :lead="t('settings.mcp.note')">
     <template v-if="status">
-      <label class="choice">
-        <input
-          type="checkbox"
-          role="switch"
-          name="mcp-enabled"
-          aria-describedby="mcp-enabled-hint"
-          :checked="status.enabled"
-          :aria-checked="status.enabled"
-          :disabled="busy"
-          @change="toggle"
-        />
-        {{ t('settings.mcp.enable') }}
-      </label>
-      <p id="mcp-enabled-hint" class="note hint">{{ t('settings.mcp.enableHint') }}</p>
+      <UiSettingGroup>
+        <UiSettingRow
+          v-slot="{ control }"
+          :title="t('settings.mcp.enable')"
+          :line="t('settings.mcp.enableHint')"
+        >
+          <UiSwitch
+            v-bind="control"
+            name="mcp-enabled"
+            :checked="status.enabled"
+            :disabled="busy"
+            @click="toggle"
+          />
+        </UiSettingRow>
+        <UiSettingRow
+          v-if="status.enabled"
+          :title="t('settings.mcp.address')"
+          :empty="status.url ? undefined : t('settings.mcp.notRunning')"
+          data-testid="mcp-address"
+        >
+          <template v-if="status.url" #value>
+            <span class="dot" aria-hidden="true" />{{ status.url }}
+          </template>
+          <CopyValue
+            v-if="status.url"
+            :value="status.url"
+            :label="t('settings.mcp.addressLabel')"
+            :text="t('settings.mcp.copy')"
+          />
+        </UiSettingRow>
+      </UiSettingGroup>
 
       <template v-if="status.enabled">
-        <div v-if="status.url" class="field">
-          <span>{{ t('settings.mcp.address') }}</span>
-          <span>
-            <CopyValue :value="status.url" :label="t('settings.mcp.addressLabel')" />
-          </span>
-          <p class="note hint">{{ t('settings.mcp.addressHint') }}</p>
-        </div>
-        <p v-else class="note">{{ t('settings.mcp.notRunning') }}</p>
-
-        <div v-if="status.snippets?.length" class="snippets">
-          <div class="row">
-            <button
-              type="button"
-              class="button"
-              aria-controls="mcp-snippets"
-              :aria-pressed="shown"
-              @click="shown = !shown"
-            >
-              {{ shown ? t('settings.mcp.hideSnippets') : t('settings.mcp.showSnippets') }}
-            </button>
-          </div>
-          <ul id="mcp-snippets" class="list">
-            <li v-for="snippet in status.snippets" :key="snippet.client" class="field">
-              <span :id="`mcp-snippet-${snippet.client}`">{{ t(titles[snippet.client]) }}</span>
-              <div class="row">
-                <button
-                  type="button"
-                  class="button"
-                  :aria-label="t(copyLabels[snippet.client])"
-                  @click="copy(snippet.text)"
-                >
-                  {{ t('settings.mcp.copy') }}
-                </button>
-              </div>
-              <pre
-                v-if="shown"
-                class="snippet"
-                :aria-labelledby="`mcp-snippet-${snippet.client}`"
-              ><code>{{ snippet.text }}</code></pre>
-            </li>
-          </ul>
-          <p class="note hint">{{ t('settings.mcp.tokenHint') }}</p>
-        </div>
-
-        <fieldset v-if="status.grants?.length" class="grants" aria-describedby="mcp-grants-note">
-          <legend class="legend">{{ t('settings.mcp.grantsTitle') }}</legend>
-          <p id="mcp-grants-note" class="note hint">{{ t('settings.mcp.grantsNote') }}</p>
-          <div v-for="grant in status.grants" :key="grant.tool" class="grant">
-            <label class="choice">
-              <input
-                type="checkbox"
-                role="switch"
-                :name="`mcp-grant-${grant.tool}`"
-                :checked="grant.granted"
-                :aria-checked="grant.granted"
-                :aria-describedby="grant.confirm ? `mcp-grant-${grant.tool}-hint` : undefined"
-                :disabled="grantBusy"
-                @change="toggleGrant(grant, $event)"
+        <UiSettingGroup v-if="snippet" :heading="t('settings.mcp.connectTitle')">
+          <div class="connect" data-testid="mcp-connect">
+            <div class="bar">
+              <UiSegmentedControl
+                :model-value="snippet.client"
+                :options="clientOptions"
+                :label="t('settings.mcp.clientsLabel')"
+                wrap
+                @update:model-value="choose"
               />
-              {{ toolLabel(grant.tool) }}
-            </label>
-            <p v-if="grant.confirm" :id="`mcp-grant-${grant.tool}-hint`" class="note grant-hint">
-              {{ t('settings.mcp.asksEachTime') }}
+              <span class="actions">
+                <UiButton
+                  v-if="holdsToken"
+                  aria-controls="mcp-snippet"
+                  :aria-pressed="shown"
+                  @click="shown = !shown"
+                >
+                  {{ shown ? t('settings.mcp.hide') : t('settings.mcp.show') }}
+                </UiButton>
+                <UiButton :aria-label="t(copyLabels[snippet.client])" @click="copy(snippet.text)">
+                  {{ t('settings.mcp.copy') }}
+                </UiButton>
+              </span>
+            </div>
+            <pre
+              id="mcp-snippet"
+              class="snippet"
+              :aria-label="t(titles[snippet.client])"
+              data-testid="mcp-snippet"
+            ><code v-if="drawn !== null">{{ drawn }}</code></pre>
+            <p class="foot">
+              <span id="mcp-snippet-hint">{{ t('settings.mcp.tokenHint') }}</span>
+              <button type="button" class="link" @click="openHelp">
+                {{ t('settings.mcp.help') }}
+              </button>
             </p>
           </div>
-        </fieldset>
+        </UiSettingGroup>
+
+        <UiSettingGroup
+          v-if="status.grants?.length"
+          :heading="t('settings.mcp.grantsTitle')"
+          :note="t('settings.mcp.grantsNote')"
+          data-testid="mcp-grants"
+        >
+          <UiSettingRow
+            v-for="grant in status.grants"
+            :key="grant.tool"
+            v-slot="{ control }"
+            :title="toolLabel(grant.tool)"
+            :line="grant.confirm ? t('settings.mcp.asksEachTime') : undefined"
+          >
+            <UiSwitch
+              v-bind="control"
+              :name="`mcp-grant-${grant.tool}`"
+              :checked="grant.granted"
+              :disabled="grantBusy"
+              @click="toggleGrant(grant)"
+            />
+          </UiSettingRow>
+        </UiSettingGroup>
       </template>
-      <p role="status" class="note status">
+      <p role="status" class="status">
         <template v-if="copyStatus === 'copied'">{{ t('common.copied') }}</template>
         <template v-else-if="copyStatus === 'failed'">{{ t('copy.failed') }}</template>
       </p>
     </template>
-  </section>
+  </SettingsSection>
 </template>
 
 <style scoped>
-.heading {
-  margin: 0 0 12px;
-  font-size: var(--fm-text-lg);
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: var(--fm-space-2);
+  border-radius: 50%;
+  background-color: var(--fm-fg);
+  vertical-align: middle;
 }
-.note {
-  margin: 0 0 12px;
-  color: var(--fm-muted);
-}
-.hint {
-  margin: 4px 0 12px;
-}
-.status {
-  margin-top: 8px;
-}
-.status:empty {
-  display: none;
-}
-.grants {
-  margin: 0 0 16px;
-  padding: 0;
-  border: 0;
-}
-.legend {
-  margin: 0 0 4px;
-  padding: 0;
-  font-weight: 600;
-}
-.grant {
-  margin: 0 0 8px;
-}
-.grant-hint {
-  margin-block: 2px 0;
-  margin-inline: 24px 0;
-}
-.choice {
+.bar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: var(--fm-space-3);
+  padding: var(--fm-space-3) var(--fm-space-4);
 }
-.field {
+.actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 12px;
+  flex: none;
+  gap: var(--fm-space-2);
 }
-.field > span:first-child {
-  font-weight: 600;
-}
-.list {
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
+/* The snippet on the surface colour, edge to edge inside the card (board 15). */
 .snippet {
+  min-height: 2lh;
   margin: 0;
-  padding: 8px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
+  padding: var(--fm-space-4);
+  background-color: var(--fm-surface);
   font-family: var(--fm-font-mono);
   font-size: var(--fm-text-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.button {
-  padding: 4px 10px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.button:disabled {
-  opacity: 0.5;
+.foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fm-space-4);
+  margin: 0;
+  padding: var(--fm-space-3) var(--fm-space-4);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
 }
 .link {
+  flex: none;
   padding: 0;
   border: 0;
   background: none;
@@ -271,5 +266,13 @@ async function toggle(event: globalThis.Event): Promise<void> {
 .link:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: 2px;
+}
+.status {
+  margin: 0;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.status:empty {
+  display: none;
 }
 </style>

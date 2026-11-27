@@ -1,11 +1,17 @@
 <script setup lang="ts">
-// Settings → Local API (E25.1, ADR 0015): the endpoint's address and its token,
-// masked until the user asks to see it, with Copy and Regenerate.
+// Settings › Local API (E25.1, ADR 0015; board 15, E57.6): under "Connection" the endpoint's
+// address (a dot before it while the API runs, "Copy") and its token, dots until Show, with
+// Copy; "Regenerate the token" is a row of its own. While the token is hidden only the dots
+// are rendered, never the token. "Copied" and "regenerated" are said in the section's status.
 import { computed, onMounted, ref } from 'vue';
 import { t } from '../../i18n';
 import { useSettingsStore } from '../../stores/settings';
 import CopyValue from '../CopyValue.vue';
+import UiButton from '../ui/UiButton.vue';
+import UiSettingGroup from '../ui/UiSettingGroup.vue';
+import UiSettingRow from '../ui/UiSettingRow.vue';
 import { useCopy } from '../useCopy';
+import SettingsSection from './SettingsSection.vue';
 
 const store = useSettingsStore();
 const shown = ref(false);
@@ -20,6 +26,7 @@ onMounted(() => {
 const info = computed(() => store.endpoint);
 /** Dots in place of the token until Show is pressed; the same length as the token. */
 const masked = computed(() => '•'.repeat(info.value?.token.length ?? 0));
+const tokenText = computed(() => (shown.value ? (info.value?.token ?? '') : masked.value));
 
 function copyToken(): void {
   if (info.value) void copy(info.value.token);
@@ -34,128 +41,95 @@ async function regenerate(): Promise<void> {
 </script>
 
 <template>
-  <section class="local-api" aria-labelledby="local-api-title">
-    <h2 id="local-api-title" class="heading" tabindex="-1" data-section-heading>
-      {{ t('settings.sections.localApi') }}
-    </h2>
-    <p class="note">{{ t('settings.localApi.note') }}</p>
+  <SettingsSection
+    id="local-api"
+    :heading="t('settings.sections.localApi')"
+    :lead="t('settings.localApi.note')"
+  >
     <template v-if="info">
-      <div class="field">
-        <span>{{ t('settings.localApi.address') }}</span>
-        <span v-if="info.url">
-          <CopyValue :value="info.url" :label="t('settings.localApi.addressLabel')" />
-        </span>
-        <span v-else class="note">{{ t('settings.localApi.notRunning') }}</span>
-      </div>
-      <div class="field">
-        <label for="local-api-token">{{ t('settings.localApi.token') }}</label>
-        <div class="row">
-          <input
-            id="local-api-token"
-            class="input token"
-            readonly
-            spellcheck="false"
-            autocomplete="off"
-            aria-describedby="local-api-token-hint"
-            :value="shown ? info.token : masked"
+      <UiSettingGroup :heading="t('settings.localApi.connection')">
+        <UiSettingRow
+          :title="t('settings.localApi.address')"
+          :empty="info.url ? undefined : t('settings.localApi.notRunning')"
+          data-testid="local-api-address"
+        >
+          <template v-if="info.url" #value>
+            <span class="dot" aria-hidden="true" />{{ info.url }}
+          </template>
+          <CopyValue
+            v-if="info.url"
+            :value="info.url"
+            :label="t('settings.localApi.addressLabel')"
+            :text="t('settings.localApi.copy')"
           />
-          <button
-            type="button"
-            class="button"
-            aria-controls="local-api-token"
-            :aria-pressed="shown"
-            @click="shown = !shown"
-          >
-            {{ shown ? t('settings.localApi.hide') : t('settings.localApi.show') }}
-          </button>
-          <button
-            type="button"
-            class="button"
-            :aria-label="t('settings.localApi.copyToken')"
-            @click="copyToken"
-          >
-            {{ t('settings.localApi.copy') }}
-          </button>
-          <button
-            type="button"
-            class="button"
-            aria-describedby="local-api-regenerate-hint"
+        </UiSettingRow>
+        <UiSettingRow
+          :title="t('settings.localApi.token')"
+          :line="t('settings.localApi.tokenHint')"
+          data-testid="local-api-token"
+        >
+          <template #value>
+            <span id="local-api-token-value" class="token">{{ tokenText }}</span>
+          </template>
+          <template #default="{ control }">
+            <UiButton
+              aria-controls="local-api-token-value"
+              :aria-pressed="shown"
+              :aria-describedby="control['aria-describedby']"
+              @click="shown = !shown"
+            >
+              {{ shown ? t('settings.localApi.hide') : t('settings.localApi.show') }}
+            </UiButton>
+            <UiButton :aria-label="t('settings.localApi.copyToken')" @click="copyToken">
+              {{ t('settings.localApi.copy') }}
+            </UiButton>
+          </template>
+        </UiSettingRow>
+      </UiSettingGroup>
+      <UiSettingGroup>
+        <UiSettingRow
+          v-slot="{ control }"
+          :title="t('settings.localApi.regenerateTitle')"
+          :line="t('settings.localApi.regenerateHint')"
+        >
+          <UiButton
+            :aria-describedby="control['aria-describedby']"
             :disabled="busy"
             @click="regenerate"
           >
             {{ t('settings.localApi.regenerate') }}
-          </button>
-        </div>
-        <p id="local-api-token-hint" class="note hint">{{ t('settings.localApi.tokenHint') }}</p>
-        <p id="local-api-regenerate-hint" class="note hint">
-          {{ t('settings.localApi.regenerateHint') }}
-        </p>
-        <p role="status" class="note status">
-          <template v-if="copyStatus === 'copied'">{{ t('common.copied') }}</template>
-          <template v-else-if="copyStatus === 'failed'">{{ t('copy.failed') }}</template>
-          <template v-else-if="regenerated">{{ t('settings.localApi.regenerated') }}</template>
-        </p>
-      </div>
+          </UiButton>
+        </UiSettingRow>
+      </UiSettingGroup>
+      <p role="status" class="status">
+        <template v-if="copyStatus === 'copied'">{{ t('common.copied') }}</template>
+        <template v-else-if="copyStatus === 'failed'">{{ t('copy.failed') }}</template>
+        <template v-else-if="regenerated">{{ t('settings.localApi.regenerated') }}</template>
+      </p>
     </template>
-  </section>
+  </SettingsSection>
 </template>
 
 <style scoped>
-.heading {
-  margin: 0 0 12px;
-  font-size: var(--fm-text-lg);
+/* The running dot before the address: the text colour, like the board's. */
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: var(--fm-space-2);
+  border-radius: 50%;
+  background-color: var(--fm-fg);
+  vertical-align: middle;
 }
-.note {
-  margin: 0 0 12px;
-  color: var(--fm-muted);
-}
-.hint {
-  margin: 4px 0 0;
+.token {
+  letter-spacing: 0.02em;
 }
 .status {
-  margin-top: 8px;
+  margin: 0;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
 }
 .status:empty {
   display: none;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 12px;
-}
-.field > span:first-child,
-.field > label {
-  font-weight: 600;
-}
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.input {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
-}
-.token {
-  flex: 1;
-  min-width: 16em;
-  font-family: var(--fm-font-mono);
-}
-.button {
-  padding: 4px 10px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.button:disabled {
-  opacity: 0.5;
 }
 </style>

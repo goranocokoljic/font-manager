@@ -311,9 +311,11 @@ plugins. Settings → About → Platform notes tells you when this applies.
 
 AI assistants such as Claude Code can use Font Fu through the Model Context Protocol
 (MCP). This is off until you turn it on. Open Settings → AI assistants and turn on
-**Allow AI assistants (MCP server)**. Then click **Copy Claude Code command** and run the
-command in a terminal, or click **Copy HTTP client config** and paste the block into the
-settings of another assistant. The snippets contain the token, so keep them secret.
+**Allow AI assistants (MCP server)**. Under **Connect an assistant**, choose
+**Claude Code**, click **Copy** and run the command in a terminal. Or choose **Other HTTP
+clients**, click **Copy** and paste the block into the settings of another assistant. The
+snippet contains the token, so keep it secret. The token shows as dots until you click
+**Show**; **Copy** always copies the real snippet.
 
 The address changes each time Font Fu starts. After a restart, copy the snippet
 again. Turn the switch off to stop all assistants at once.

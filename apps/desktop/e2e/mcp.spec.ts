@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-// Settings → AI assistants (E27.1): the opt-in switch for the MCP server and the
-// copyable client snippets, all reachable and named for the keyboard.
+// Settings → AI assistants (E27.1; board 15, E57.6): the opt-in switch for the MCP server, the
+// address and the snippet block with one segment per client, all reachable and named for
+// the keyboard.
 
 test.beforeEach(async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -20,7 +21,7 @@ test('the AI assistants section is off by default', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Copy Claude Code command' })).toHaveCount(0);
 });
 
-test('the switch and the copy buttons work from the keyboard', async ({ page }) => {
+test('the switch, the client segments and Copy work from the keyboard', async ({ page }) => {
   const toggle = page.getByRole('switch', { name: 'Allow AI assistants (MCP server)' });
   await toggle.focus();
   await page.keyboard.press('Space');
@@ -30,21 +31,30 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
       name: 'Copy MCP server address: http://127.0.0.1:47613/mcp',
     }),
   ).toBeVisible();
+  const snippet = page.getByTestId('mcp-snippet');
 
-  // Tab order: switch → address → Show snippets → Copy Claude Code → Copy HTTP config
-  // → Copy Claude Desktop config.
+  // Tab order: switch → address Copy → the three client segments → Show → Copy → How to connect.
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: /^Copy MCP server address/ })).toBeFocused();
   await page.keyboard.press('Tab');
-  const show = page.getByRole('button', { name: 'Show snippets' });
+  const clients = page.getByRole('group', { name: 'Assistant' });
+  const claudeCode = clients.getByRole('button', { name: 'Claude Code' });
+  await expect(claudeCode).toBeFocused();
+  await expect(claudeCode).toHaveAttribute('aria-pressed', 'true');
+  // The token is dots until Show.
+  await expect(snippet).toContainText('Authorization: Bearer ' + '•'.repeat(64));
+  await expect(snippet).toHaveCSS('font-family', /mono|Menlo|Consolas/i);
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  const show = page.getByRole('button', { name: 'Show' });
   await expect(show).toBeFocused();
   await expect(show).toHaveAttribute('aria-pressed', 'false');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Hide snippets' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await expect(page.locator('pre')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(snippet).toContainText(/Bearer [0-9a-f]{64}/);
+  await page.keyboard.press('Enter');
+  await expect(snippet).not.toContainText(/Bearer [0-9a-f]{64}/);
 
   await page.keyboard.press('Tab');
   const claude = page.getByRole('button', { name: 'Copy Claude Code command' });
@@ -55,10 +65,15 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
   expect(command).toMatch(
     /^claude mcp add --transport http font-manager http:\/\/127\.0\.0\.1:47613\/mcp --header "Authorization: Bearer [0-9a-f]{64}"$/,
   );
-
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Copy HTTP client config' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'How to connect' })).toBeFocused();
+
+  // Other HTTP clients, chosen by keyboard: its JSON config is copied.
+  const http = clients.getByRole('button', { name: 'Other HTTP clients' });
+  await http.focus();
   await page.keyboard.press('Enter');
+  await expect(http).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Copy HTTP client config' }).press('Enter');
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).not.toBe(command);
   const config = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(config.mcpServers['font-manager']).toMatchObject({
@@ -67,15 +82,13 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
   });
 
   // Claude Desktop (E27.7): the bundled stdio shim by its absolute path, shown and copyable.
-  await page.keyboard.press('Tab');
-  const desktop = page.getByRole('button', { name: 'Copy Claude Desktop config' });
-  await expect(desktop).toBeFocused();
-  const desktopSnippet = page.getByLabel('Claude Desktop (starts the bundled fm-mcp-stdio)');
-  await expect(desktopSnippet).toBeVisible();
-  await expect(desktopSnippet).toContainText(
+  const desktop = clients.getByRole('button', { name: 'Claude Desktop' });
+  await desktop.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Claude Desktop', { exact: true }).last()).toContainText(
     '/Applications/Font Fu.app/Contents/MacOS/fm-mcp-stdio',
   );
-  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Copy Claude Desktop config' }).press('Enter');
   await expect
     .poll(async () => JSON.parse(await page.evaluate(() => navigator.clipboard.readText())))
     .toMatchObject({
@@ -84,11 +97,13 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
       },
     });
 
-  // Off again: the snippets go away.
+  // Off again: the address, the snippets and the tools go away.
   await toggle.focus();
   await page.keyboard.press('Space');
   await expect(toggle).not.toBeChecked();
-  await expect(page.getByRole('button', { name: 'Copy Claude Code command' })).toHaveCount(0);
+  await expect(page.getByTestId('mcp-connect')).toHaveCount(0);
+  await expect(page.getByTestId('mcp-address')).toHaveCount(0);
+  await expect(page.getByTestId('mcp-grants')).toHaveCount(0);
 });
 
 // E27.6: one switch per mutating tool, and the Allow / Deny toast of a destructive
@@ -104,7 +119,7 @@ test.describe('tool grants and confirmations', () => {
   });
 
   test('every mutating tool has a labelled switch, all off', async ({ page }) => {
-    const group = page.getByRole('group', { name: 'What AI assistants may change' });
+    const group = page.getByRole('region', { name: 'What AI assistants may change' });
     for (const name of ['Activate fonts', 'Deactivate fonts', 'Tag fonts', 'Export web fonts']) {
       await expect(group.getByRole('switch', { name, exact: true })).not.toBeChecked();
     }
