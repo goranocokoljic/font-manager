@@ -102,6 +102,47 @@ describe('catalogs store: online catalogs (E22.2)', () => {
     expect(calls, 'a refreshed catalog is not fetched again').not.toContain('refreshCatalog');
   });
 
+  it('names the catalog a failed switch belongs to, and forgets it on the next success (E57.5)', async () => {
+    const client = createMockClient();
+    let refuse = true;
+    setClient({
+      ...client,
+      refreshCatalog: async (req) => {
+        if (refuse)
+          throw { code: 'io', message: 'The catalog could not be reached.', detail: null };
+        return client.refreshCatalog(req);
+      },
+    });
+    const store = useCatalogsStore();
+    await store.load();
+    // Turning Fontshare on cannot fetch its list: the error is Fontshare's.
+    await store.setEnabled('fontshare', true);
+    expect(store.error?.message).toBe('The catalog could not be reached.');
+    expect(store.errorCatalog).toBe('fontshare');
+    expect(store.busy).toBeNull();
+
+    refuse = false;
+    await store.setEnabled('googleFonts', true);
+    expect(store.error).toBeNull();
+    expect(store.errorCatalog).toBeNull();
+
+    // A failure that is not one catalog's names none.
+    setClient({
+      ...client,
+      setCatalogEnabled: async () => {
+        throw { code: 'io', message: 'refused', detail: null };
+      },
+      listCatalogs: async () => {
+        throw { code: 'io', message: 'no list', detail: null };
+      },
+    });
+    await store.setEnabled('googleFonts', false);
+    expect(store.errorCatalog).toBe('googleFonts');
+    await store.load();
+    expect(store.error?.message).toBe('no list');
+    expect(store.errorCatalog).toBeNull();
+  });
+
   it('searches through the core and drops the answer of an older search', async () => {
     const client = createMockClient();
     let release: () => void = () => undefined;

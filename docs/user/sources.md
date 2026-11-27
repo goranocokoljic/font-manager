@@ -151,9 +151,10 @@ To change the folder, open **Settings** → **Online catalogs** and select
 
 Font Fu can install a family for you when a design app opens a document
 that needs a font your library does not have. Turn it on in **Settings** →
-**Online catalogs**: select **Download fonts a document needs from the catalogs
-you turned on**. The switch works only when the folder for installed fonts is
-chosen and at least one catalog is on.
+**Online catalogs**: turn on **Download fonts a document needs**. The switch
+works only when the folder for installed fonts is chosen and at least one catalog
+is on. Under the folder, Settings shows where each catalog that is on installs
+a family.
 
 Font Fu downloads only from the catalogs you turned on. It looks for the
 family only in the font lists it already has; refresh a catalog to get its

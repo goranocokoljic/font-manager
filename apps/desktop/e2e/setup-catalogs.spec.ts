@@ -143,14 +143,16 @@ test("one catalog on, 'Inside my font folder': the landing line, then Install as
   );
   await expect(line.getByRole('heading')).toHaveCount(0);
 
-  // Settings → Online catalogs: the download folder and each catalog's path.
-  await page.goto('/#/settings?section=catalogs');
+  // Settings → Online catalogs: the download folder and its tree, one line per catalog that is
+  // on (E57.5). Opened in the app: a reload would forget the mock's catalog that is on.
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.getByRole('tab', { name: 'Online catalogs' }).click();
   await expect(page.getByTestId('settings-download-folder-path')).toHaveText(
     '/Users/demo/Client type',
   );
   await expect(page.getByTestId('settings-catalog-paths').getByRole('listitem')).toHaveText([
-    'Google Fonts: /Users/demo/Client type/Google Fonts/<Family>',
-    'Fontshare: /Users/demo/Client type/Fontshare/<Family>',
+    '/Users/demo/Client type',
+    'Google Fonts/<Family>',
   ]);
 });
 

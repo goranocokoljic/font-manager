@@ -6,11 +6,21 @@
 // line its description (`aria-describedby`). No caller writes those ids by hand; a local copy
 // of a setting row is a bug (DESIGN.md, "Settings"). `error` (E57.4) is a failed change's
 // message, said on the row under its line (an alert) and added to the control's description.
+// `empty` (E57.5) is said, muted and in the text face, where the value goes while there is
+// none ("Not chosen yet."); the `value` slot (E57.5) replaces the value's text, for a caller
+// that marks it up (a test id), and stays in the mono face.
 import { computed, useId } from 'vue';
 
-const props = defineProps<{ title: string; line?: string; value?: string; error?: string }>();
+const props = defineProps<{
+  title: string;
+  line?: string;
+  value?: string;
+  empty?: string;
+  error?: string;
+}>();
 
 defineSlots<{
+  value?: () => unknown;
   default?: (props: {
     control: { 'aria-labelledby': string; 'aria-describedby': string | undefined };
   }) => unknown;
@@ -32,7 +42,10 @@ const control = computed(() => ({
     <div class="text">
       <span :id="titleId" class="title">{{ title }}</span>
       <span v-if="line" :id="lineId" class="line">{{ line }}</span>
-      <bdi v-if="value" class="value">{{ value }}</bdi>
+      <bdi v-if="value || $slots.value" class="value"
+        ><slot name="value">{{ value }}</slot></bdi
+      >
+      <span v-else-if="empty" class="line empty">{{ empty }}</span>
       <span v-if="error" :id="errorId" role="alert" class="error">{{ error }}</span>
     </div>
     <div v-if="$slots.default" class="control">

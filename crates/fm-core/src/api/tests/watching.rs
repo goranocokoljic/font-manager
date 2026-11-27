@@ -221,6 +221,10 @@ fn sources_added_paused_resumed_and_removed_change_what_is_watched() {
             mode: ImportMode::IndexInPlace,
         })
         .expect("source");
+    // Let the watch go live first: FSEvents (macOS) restarts its stream to
+    // add a folder and drops what changes before the new stream runs. The
+    // add's own scan covers that moment; this test is about later changes.
+    let _ = changes_of(&rx, second.id, Duration::from_millis(1000));
     let path = other.join("a.ttf");
     std::fs::copy(fixtures().join(NEW_FONT), &path).expect("copy");
     let events = expected_changes_of(&rx, second.id, EXPECTED, Duration::from_millis(1500));

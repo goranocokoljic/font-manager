@@ -115,7 +115,7 @@ off until you turn it on:
 1. Open **Settings** → **Online catalogs**.
 2. Turn on a catalog, for example Google Fonts, and choose the **Folder for
    installed fonts**.
-3. Select **Download fonts a document needs from the catalogs you turned on**.
+3. Turn on **Download fonts a document needs**.
 
 When a document needs a font that your library does not have, Font Fu looks
 for its family in the font lists of the catalogs you turned on. It looks only in

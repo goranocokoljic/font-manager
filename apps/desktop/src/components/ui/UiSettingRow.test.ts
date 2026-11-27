@@ -93,4 +93,24 @@ describe('UiSettingRow and UiSettingGroup', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it('says `empty` where the value goes while there is none; the value slot keeps the mono face (E57.5)', async () => {
+    const wrapper = mount(UiSettingRow, {
+      props: { title: 'Folder for installed fonts', empty: 'Not chosen yet.' },
+    });
+    expect(wrapper.find('.value').exists()).toBe(false);
+    expect(wrapper.get('.empty').text()).toBe('Not chosen yet.');
+    await wrapper.setProps({ value: '/Users/me/Type' });
+    expect(wrapper.get('.value').text()).toBe('/Users/me/Type');
+    expect(wrapper.find('.empty').exists()).toBe(false);
+    wrapper.unmount();
+
+    const slotted = mount(UiSettingRow, {
+      props: { title: 'Folder', empty: 'Not chosen yet.' },
+      slots: { value: () => h('span', { 'data-testid': 'path' }, '/Users/me/Type') },
+    });
+    expect(slotted.get('.value [data-testid="path"]').text()).toBe('/Users/me/Type');
+    expect(slotted.find('.empty').exists()).toBe(false);
+    slotted.unmount();
+  });
 });

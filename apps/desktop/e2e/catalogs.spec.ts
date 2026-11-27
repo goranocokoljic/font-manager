@@ -52,13 +52,13 @@ test('Settings -> Online catalogs shows the same note, reachable by keyboard', a
   await expect(tab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', { name: 'Online catalogs', level: 2 })).toBeVisible();
 
-  const entry = page.getByRole('button', { name: 'Adobe Fonts' });
+  const entry = page.getByRole('button', { name: 'How it works' });
   await tab.focus();
   await page.keyboard.press('Tab'); // the tab panel
   // The switch of every catalog comes first (E22.2): Google Fonts, Fontshare.
   for (const name of ['Google Fonts', 'Fontshare']) {
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('checkbox', { name })).toBeFocused();
+    await expect(page.getByRole('switch', { name })).toBeFocused();
   }
   await page.keyboard.press('Tab');
   await expect(entry).toBeFocused();
@@ -190,7 +190,7 @@ test('offline, a failed refresh keeps the cached list with a plain note', async 
 test('Settings -> Online catalogs turns Google Fonts on with the same switch', async ({ page }) => {
   await serveFonts(page);
   await page.goto('/#/settings?section=catalogs');
-  const box = page.getByRole('checkbox', { name: 'Google Fonts' });
+  const box = page.getByRole('switch', { name: 'Google Fonts' });
   await expect(box).not.toBeChecked();
   await expect(box).toHaveAccessibleDescription(/connects to the internet/);
   await box.focus();
@@ -206,9 +206,7 @@ test('Settings -> Online catalogs offers to download fonts a document needs once
 }) => {
   await serveFonts(page);
   await page.goto('/#/settings?section=catalogs');
-  const fetch = page.getByRole('checkbox', {
-    name: 'Download fonts a document needs from the catalogs you turned on',
-  });
+  const fetch = page.getByRole('switch', { name: 'Download fonts a document needs' });
   await expect(fetch).not.toBeChecked();
   await expect(fetch).toBeDisabled();
   await expect(fetch).toHaveAccessibleDescription(
@@ -217,7 +215,7 @@ test('Settings -> Online catalogs offers to download fonts a document needs once
   await page.getByTestId('settings-download-folder-change').click();
   await expect(page.getByTestId('settings-download-folder-path')).toBeVisible();
   await expect(fetch, 'no catalog on yet').toBeDisabled();
-  await page.getByRole('checkbox', { name: 'Google Fonts' }).check();
+  await page.getByRole('switch', { name: 'Google Fonts' }).click();
   await expect(fetch).toBeEnabled();
   await expect(fetch).toHaveAccessibleDescription(/downloads only from catalogs you turned on/);
   await fetch.focus();
