@@ -31,6 +31,7 @@ import type {
   RecommendationFilter,
   SetDecision,
 } from '../api/types';
+import { useSearchStore } from './search';
 
 /** The folder pairs one request asks for. */
 export const PAIR_PAGE = 100;
@@ -107,7 +108,9 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
   const pairs = ref<FolderPair[]>([]);
   const pairTotal = ref<number | null>(null);
   const sessions = ref<number | null>(null);
-  const presets = ref<LanguagePreset[]>([]);
+  const search = useSearchStore();
+  /** Every language preset, in the API's order: the search store's list, not a copy (E58.3). */
+  const presets = computed<LanguagePreset[]>(() => search.languages);
   const error = ref<unknown>(null);
 
   const filter = ref<QueueFilter>({
@@ -156,19 +159,18 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
   async function load(): Promise<void> {
     await guard(async () => {
       const c = client();
-      const [o, d, p, s, l] = await Promise.all([
+      const [o, d, p, s] = await Promise.all([
         c.duplicatesOverview({}),
         c.getCleanupDraft(),
         c.listFolderPairs({ page: { offset: 0, limit: 2 } }),
         c.listCleanupSessions(),
-        presets.value.length ? Promise.resolve(presets.value) : c.listLanguages(),
+        search.loadLanguages(),
       ]);
       overview.value = o;
       draft.value = d;
       pairs.value = p.items;
       pairTotal.value = p.total;
       sessions.value = s.length;
-      presets.value = l;
     });
   }
 

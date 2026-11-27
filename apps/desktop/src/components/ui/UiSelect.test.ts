@@ -32,6 +32,24 @@ afterEach(() => {
 });
 
 describe('UiSelect', () => {
+  it('draws a hairline above an option that starts a new part, not while filtering (E58.3)', async () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      value: `v${i}`,
+      label: `Option ${i}`,
+      ...(i === 2 ? { separatorBefore: true } : {}),
+    }));
+    const { w } = mountSelect({ modelValue: 'v0', options: many });
+    await w.get('button').trigger('click');
+    await nextTick();
+    expect(options().map((o) => o.classList.contains('break'))).toEqual(
+      many.map((_, i) => i === 2),
+    );
+    await w.get('button').trigger('keydown', { key: 'O' });
+    await nextTick();
+    expect(options()).toHaveLength(10);
+    expect(options().some((o) => o.classList.contains('break'))).toBe(false);
+  });
+
   it('is a combobox button that shows the chosen option and lists the rest on click', async () => {
     const { w } = mountSelect();
     const button = w.get('button');

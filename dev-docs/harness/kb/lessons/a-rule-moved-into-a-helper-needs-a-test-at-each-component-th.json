@@ -1,0 +1,20 @@
+{
+  "id": "a-rule-moved-into-a-helper-needs-a-test-at-each-component-th",
+  "title": "A rule moved into a helper needs a test at each component that wires it",
+  "category": "testing",
+  "rule": "When a criterion says a list must follow a rule (an order from the API, a filter, a cut-off) and the code puts that rule in a shared helper, test the helper and also every component or store that uses it: mount the component (or drive the store) with data where the rule's answer differs from every plausible local rule (A to Z, the order the codes were collected in, the input order), and assert the rendered order or set. A test on the helper alone stays green when a component stops calling it, or adds its own sort after it. Check that a name sort and the old local code each make the component test fail.",
+  "rationale": "E58.3 (#714): Compare copies ordered its sample chips through the sampleLanguages helper, but only the helper was tested; a sort in DuplicateCompare.vue or a revert to the old collect order left every test green (criterion 4).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    714
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/stores/**/*.ts",
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-11-27T23:00:41.834Z",
+  "last_seen": "2026-11-27T23:00:41.834Z"
+}

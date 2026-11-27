@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef, watch } from 'vue';
-import { useClient } from '../api/client';
+import { useClient, type Unsubscribe } from '../api/client';
 import type {
   ApiError,
   Collection,
@@ -455,13 +455,32 @@ export const useSearchStore = defineStore('search', () => {
     setFilters({});
   }
 
-  async function loadLanguages(): Promise<void> {
-    if (languages.value.length) return;
+  /** Bumped by every read of the languages; an answer to an older one is dropped. */
+  let languageRead = 0;
+  let languageEvents: Promise<Unsubscribe> | undefined;
+
+  /** Reads `list_languages` again: the one list, in the core's order, that every menu shows. */
+  async function readLanguages(): Promise<void> {
+    const mine = ++languageRead;
     try {
-      languages.value = await useClient().listLanguages();
+      const list = await useClient().listLanguages();
+      if (mine === languageRead) languages.value = list;
     } catch (e) {
       error.value = e as ApiError;
     }
+  }
+
+  /**
+   * Loads the languages (once) and follows `languageOrderChanged` (E58.1): a change under
+   * Settings › Languages reorders every list at once. Nothing else keeps a copy.
+   */
+  async function loadLanguages(): Promise<void> {
+    languageEvents ??= useClient().onEvent((event) => {
+      if (event.type === 'languageOrderChanged') void readLanguages();
+    });
+    await languageEvents.catch(() => undefined);
+    if (languages.value.length) return;
+    await readLanguages();
   }
 
   /** Saves the chosen filters as a smart collection named `name`. */

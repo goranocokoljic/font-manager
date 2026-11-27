@@ -20,6 +20,7 @@ import type {
 } from '../api/types';
 import { t } from '../i18n';
 import { CLASSES, FORMATS, LICENSES, SLANTS } from '../search/chips';
+import { languageMenu } from '../search/languages';
 import { useCollectionsStore } from './collections';
 import { useSearchStore } from './search';
 
@@ -104,6 +105,8 @@ export interface DraftRule {
 export interface Choice {
   value: string;
   label: string;
+  /** A hairline above it: the first language after the user's own (E58.3). */
+  separatorBefore?: boolean;
 }
 
 /** The value menus, every one from the API. */
@@ -148,7 +151,7 @@ export function choicesFor(dimension: Dimension, c: Choices): Choice[] | null {
     case 'feature':
       return (counts.features ?? []).map(({ value }) => ({ value, label: value }));
     case 'language':
-      return c.languages.map((l) => ({ value: l.code, label: l.name }));
+      return languageMenu(c.languages, (l) => ({ value: l.code, label: l.name }));
     case 'license':
       return (counts.license ?? []).map(({ value }) => ({
         value,
@@ -345,7 +348,9 @@ export const useRuleEditorStore = defineStore('ruleEditor', () => {
   const editing = shallowRef<Collection | null>(null);
   const name = ref('');
   const draft = ref<DraftRule>({ op: 'and', items: [] });
-  const choices = shallowRef<Choices>(NO_CHOICES);
+  const loaded = shallowRef<Choices>(NO_CHOICES);
+  /** The value menus; the languages are the search store's list, in the API's order (E58.3). */
+  const choices = computed<Choices>(() => ({ ...loaded.value, languages: search.languages }));
   /** Family groups the draft rule finds now; null until the API answered. */
   const count = ref<number | null>(null);
   const error = ref<ApiError | null>(null);
@@ -360,15 +365,15 @@ export const useRuleEditorStore = defineStore('ruleEditor', () => {
 
   async function loadChoices(): Promise<void> {
     const client = useClient();
-    choices.value = NO_CHOICES;
+    loaded.value = NO_CHOICES;
     try {
-      const [languages, tags, sources, all] = await Promise.all([
-        client.listLanguages(),
+      const [, tags, sources, all] = await Promise.all([
+        search.loadLanguages(),
         client.listTags(),
         client.listSources(),
         client.search({ query: '', filters: {}, page: { offset: 0, limit: 0 } }),
       ]);
-      choices.value = { counts: all.counts ?? {}, languages, tags, sources };
+      loaded.value = { counts: all.counts ?? {}, languages: [], tags, sources };
     } catch (e) {
       error.value = e as ApiError;
     }

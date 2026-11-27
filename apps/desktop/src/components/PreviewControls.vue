@@ -11,6 +11,7 @@ import { FmSlide } from '../motion';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { cardText, wallLayout, type WallPreset } from '../list/grid';
 import { languageName } from '../search/chips';
+import { languageMenu } from '../search/languages';
 import { chosenValue, traitForGlyph } from '../search/traits';
 import { useActions } from '../stores/commands';
 import { useSearchStore } from '../stores/search';
@@ -373,7 +374,7 @@ const autoSizeOptions = computed<SegmentOption<AutoSize>[]>(() =>
   })),
 );
 const languageOptions = computed(() =>
-  store.languagePicks.map((lang) => ({
+  languageMenu(store.languagePicks, (lang) => ({
     value: lang.code,
     label: lang.name,
     disabled: !lang.pangram,

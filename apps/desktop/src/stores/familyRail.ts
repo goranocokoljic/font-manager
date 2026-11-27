@@ -10,6 +10,8 @@ import type {
   PairingSuggestion,
 } from '../api/types';
 import { chosenLanguages } from '../search/chips';
+import { presetsIn } from '../search/languages';
+import { useSearchStore } from './search';
 
 /** The language chips the rail shows before "+N more". */
 export const RAIL_LANGUAGE_CHIPS = 6;
@@ -50,7 +52,20 @@ export const useFamilyRailStore = defineStore('familyRail', () => {
   /** Bumped by every `load`; an answer to an older one is dropped. */
   let request = 0;
 
-  const complete = computed(() => completeLanguages(languages.value));
+  const search = useSearchStore();
+  /**
+   * The languages covered in full, in the order `list_languages` answers (E58.3): the user's
+   * lead. One the list does not name (or all, before it loaded) follows in fm-core's order.
+   */
+  const complete = computed(() => {
+    const done = completeLanguages(languages.value);
+    const byCode = new Map(done.map((l) => [l.code, l]));
+    const listed = presetsIn(search.languages, byCode.keys()).flatMap(
+      (p) => byCode.get(p.code) ?? [],
+    );
+    const named = new Set(listed.map((l) => l.code));
+    return [...listed, ...done.filter((l) => !named.has(l.code))];
+  });
   const shown = computed(() =>
     expanded.value ? complete.value : complete.value.slice(0, RAIL_LANGUAGE_CHIPS),
   );
