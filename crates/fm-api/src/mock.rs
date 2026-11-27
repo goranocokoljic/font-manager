@@ -289,6 +289,7 @@ mod cleanup;
 mod cleanup_service;
 mod duplicate_sets;
 mod folder_pairs;
+mod language_order;
 
 /// The largest page a list returns.
 const MAX_PAGE: u32 = 500;
@@ -647,6 +648,8 @@ struct State {
     /// Foundry merges (E50.11): the name merged away, lowercased, and the
     /// two names as given.
     foundry_merges: BTreeMap<String, (String, String)>,
+    /// The system's language as a shell would hand it over (E58.1).
+    system_language: Option<String>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -687,6 +690,18 @@ impl MockApi {
     pub fn new() -> Self {
         Self {
             state: Mutex::new(State::sample()),
+        }
+    }
+
+    /// The system's language, as fm-core's `CoreApi::set_system_language`:
+    /// while no language is set, its presets lead `list_languages` (E58.1).
+    /// A change is announced as [`Event::LanguageOrderChanged`].
+    pub fn set_system_language(&self, tag: &str) {
+        let tag = Some(tag.trim().to_owned()).filter(|t| !t.is_empty());
+        let mut st = self.state();
+        if st.system_language != tag {
+            st.system_language = tag;
+            st.emit(Event::LanguageOrderChanged);
         }
     }
 
@@ -1134,6 +1149,7 @@ impl State {
             catalog_cache: BTreeMap::new(),
             foundry_merges: BTreeMap::new(),
             catalog_downloads: Vec::new(),
+            system_language: None,
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -3240,8 +3256,14 @@ impl SearchService for MockApi {
         })
     }
 
+    /// In fm-core's order (ADR 0028), from the mock's settings and system
+    /// language.
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
-        Ok(LANGUAGES
+        let (mine, system) = {
+            let st = self.state();
+            (st.settings.my_languages.clone(), st.system_language.clone())
+        };
+        let presets = LANGUAGES
             .iter()
             .map(|(code, name, script, _)| LanguagePreset {
                 code: (*code).into(),
@@ -3255,8 +3277,15 @@ impl SearchService for MockApi {
                     .iter()
                     .find(|(c, _)| c == code)
                     .map(|(_, glyphs)| (*glyphs).into()),
+                group: None,
             })
-            .collect())
+            .collect();
+        Ok(language_order::arrange(
+            presets,
+            &language_order::most_used(),
+            &mine,
+            system.as_deref(),
+        ))
     }
 
     /// A simple stand-in for the core's score: the share of the text's letters
@@ -5586,7 +5615,12 @@ impl SettingsService for MockApi {
             release_host: None,
         };
         crate::update::check_settings_update(&req, Some(&support))?;
+        let before = st.settings.my_languages.clone();
         st.settings = st.settings.apply(&req)?;
+        // As fm-core: the order of `list_languages` follows the user's languages.
+        if req.my_languages.is_some() && st.settings.my_languages != before {
+            st.emit(Event::LanguageOrderChanged);
+        }
         Ok(Settings {
             dropped_languages: dropped,
             ..st.settings.clone()
@@ -7283,6 +7317,67 @@ impl EventSource for MockApi {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mock_codes(api: &MockApi) -> Vec<(String, Option<crate::search::LanguageGroup>)> {
+        api.list_languages()
+            .expect("languages")
+            .into_iter()
+            .map(|p| (p.code, p.group))
+            .collect()
+    }
+
+    /// E58.1: the mock orders its presets as fm-core does, announces a
+    /// change of `my_languages` and of the system's language, and answers in
+    /// the new order after it.
+    #[test]
+    fn the_mock_orders_languages_and_announces_a_change() {
+        use crate::search::LanguageGroup::{Mine, MostUsed, Others};
+        let api = MockApi::new();
+        let rx = api.subscribe();
+        let code = |c: &str, g| (c.to_owned(), Some(g));
+        // en is most used; the rest from A to Z by English name.
+        assert_eq!(
+            mock_codes(&api),
+            [
+                code("en", MostUsed),
+                code("pl", Others),
+                code("sr-Cyrl", Others),
+                code("sr-Latn", Others),
+            ]
+        );
+        api.set_system_language("sr");
+        assert_eq!(rx.try_recv(), Ok(Event::LanguageOrderChanged));
+        assert_eq!(
+            mock_codes(&api)[..3],
+            // Both scripts, in the mock's preset order.
+            [
+                code("sr-Latn", Mine),
+                code("sr-Cyrl", Mine),
+                code("en", MostUsed)
+            ]
+        );
+        api.update_settings(SettingsUpdate {
+            my_languages: Some(vec!["pl".into(), "en".into()]),
+            ..SettingsUpdate::default()
+        })
+        .expect("saved");
+        assert_eq!(rx.try_recv(), Ok(Event::LanguageOrderChanged));
+        assert_eq!(
+            mock_codes(&api),
+            [
+                code("pl", Mine),
+                code("en", Mine),
+                code("sr-Cyrl", Others),
+                code("sr-Latn", Others),
+            ]
+        );
+        api.update_settings(SettingsUpdate {
+            my_languages: Some(vec!["pl".into(), "en".into()]),
+            ..SettingsUpdate::default()
+        })
+        .expect("saved");
+        assert!(rx.try_recv().is_err(), "the same list is no change");
+    }
 
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]

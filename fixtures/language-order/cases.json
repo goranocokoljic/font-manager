@@ -1,0 +1,121 @@
+{
+  "description": "The order of list_languages (E58.1, ADR 0028) for the same presets and settings. fm-core, the Rust MockApi and the TypeScript mock each run every case; expected is [code, group] in the answer's order.",
+  "presets": [
+    { "code": "en", "name": "English", "script": "Latn" },
+    { "code": "de", "name": "German", "script": "Latn" },
+    { "code": "fr", "name": "French", "script": "Latn" },
+    { "code": "pl", "name": "Polish", "script": "Latn" },
+    { "code": "sr-Cyrl", "name": "Serbian (Cyrillic)", "script": "Cyrl" },
+    { "code": "sr-Latn", "name": "Serbian (Latin)", "script": "Latn" },
+    { "code": "cs", "name": "Czech", "script": "Latn" },
+    { "code": "vi", "name": "Vietnamese", "script": "Latn" }
+  ],
+  "mostUsed": ["en", "fr", "de"],
+  "cases": [
+    {
+      "name": "no language set, a system language with one preset",
+      "myLanguages": [],
+      "system": "pl-PL",
+      "expected": [
+        ["pl", "mine"],
+        ["en", "mostUsed"],
+        ["fr", "mostUsed"],
+        ["de", "mostUsed"],
+        ["cs", "others"],
+        ["sr-Cyrl", "others"],
+        ["sr-Latn", "others"],
+        ["vi", "others"]
+      ]
+    },
+    {
+      "name": "no language set, a system language with two scripts that names one",
+      "myLanguages": [],
+      "system": "sr-Latn",
+      "expected": [
+        ["sr-Latn", "mine"],
+        ["en", "mostUsed"],
+        ["fr", "mostUsed"],
+        ["de", "mostUsed"],
+        ["cs", "others"],
+        ["pl", "others"],
+        ["sr-Cyrl", "others"],
+        ["vi", "others"]
+      ]
+    },
+    {
+      "name": "no language set, a system language with two scripts that names none",
+      "myLanguages": [],
+      "system": "sr-RS",
+      "expected": [
+        ["sr-Cyrl", "mine"],
+        ["sr-Latn", "mine"],
+        ["en", "mostUsed"],
+        ["fr", "mostUsed"],
+        ["de", "mostUsed"],
+        ["cs", "others"],
+        ["pl", "others"],
+        ["vi", "others"]
+      ]
+    },
+    {
+      "name": "no language set, a system language without a preset",
+      "myLanguages": [],
+      "system": "ja",
+      "expected": [
+        ["en", "mostUsed"],
+        ["fr", "mostUsed"],
+        ["de", "mostUsed"],
+        ["cs", "others"],
+        ["pl", "others"],
+        ["sr-Cyrl", "others"],
+        ["sr-Latn", "others"],
+        ["vi", "others"]
+      ]
+    },
+    {
+      "name": "no language set and no system language",
+      "myLanguages": [],
+      "system": null,
+      "expected": [
+        ["en", "mostUsed"],
+        ["fr", "mostUsed"],
+        ["de", "mostUsed"],
+        ["cs", "others"],
+        ["pl", "others"],
+        ["sr-Cyrl", "others"],
+        ["sr-Latn", "others"],
+        ["vi", "others"]
+      ]
+    },
+    {
+      "name": "three languages set in an order; the system language does not lead",
+      "myLanguages": ["vi", "sr-Cyrl", "pl"],
+      "system": "de",
+      "expected": [
+        ["vi", "mine"],
+        ["sr-Cyrl", "mine"],
+        ["pl", "mine"],
+        ["en", "mostUsed"],
+        ["fr", "mostUsed"],
+        ["de", "mostUsed"],
+        ["cs", "others"],
+        ["sr-Latn", "others"]
+      ]
+    },
+    {
+      "name": "a language set that is also most used is listed once",
+      "myLanguages": ["fr", "cs"],
+      "system": "en",
+      "expected": [
+        ["fr", "mine"],
+        ["cs", "mine"],
+        ["en", "mostUsed"],
+        ["de", "mostUsed"],
+        ["pl", "others"],
+        ["sr-Cyrl", "others"],
+        ["sr-Latn", "others"],
+        ["vi", "others"]
+      ]
+    }
+  ]
+}

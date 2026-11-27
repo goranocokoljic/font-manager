@@ -10,6 +10,7 @@ import paperTheme from '../../../../data/themes/paper.json';
 import { HELP_PAGES } from '../help';
 import { catalogFontPath } from './catalogFont';
 import { COLLECTION_COLORS } from './collectionColors';
+import { arrangeLanguages, mostUsedLanguages } from './mockLanguageOrder';
 import type { FmClient, FullSettings } from './client';
 import type { PreviewBytes } from './preview';
 import {
@@ -4542,9 +4543,15 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!f) throw notFound(face);
       return mockFaceCoverage(f, options.cjkFaces?.includes(face) ?? false);
     },
+    // In fm-core's order (E58.1, ADR 0028): the shell's locale stands for the system's language.
     listLanguages: async () =>
       structuredClone(
-        options.library === 'wall' ? [...mockLanguages, WALL_VIETNAMESE] : mockLanguages,
+        arrangeLanguages(
+          languagePresets(),
+          mostUsedLanguages,
+          settings.myLanguages,
+          shellLocale.value || null,
+        ),
       ),
     // A simple stand-in for the core's score: the share of the text's letters
     // outside ASCII that are on the preset's glyph line.
@@ -5933,7 +5940,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         next.installUpdatesOnQuit = onQuit;
       }
       const turnedOn = !settings.checkUpdatesAutomatically && next.checkUpdatesAutomatically;
+      // As fm-core: the order of `listLanguages` follows the user's languages (E58.1).
+      const reordered =
+        req.myLanguages != null &&
+        JSON.stringify(next.myLanguages) !== JSON.stringify(settings.myLanguages);
       settings = next;
+      if (reordered) emit({ type: 'languageOrderChanged' });
       if (turnedOn) automaticCheckTurnedOn();
       options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
       return { ...settings, droppedLanguages: dropped };
@@ -6037,7 +6049,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // Browser mode has no native menu or tray to relabel; the last locale is kept
     // so tests can see what the shell was told.
     setShellLocale: async (locale) => {
+      // As the app: the shell's locale is the system's language of `listLanguages` (E58.1).
+      const changed = shellLocale.value !== locale;
       shellLocale.value = locale;
+      if (changed) emit({ type: 'languageOrderChanged' });
     },
     onShellNavigate: async (handler) => {
       shellNavigateHandlers.add(handler);

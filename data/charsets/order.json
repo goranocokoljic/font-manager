@@ -1,0 +1,4 @@
+{
+  "$schema": "./order.schema.json",
+  "mostUsed": ["en", "es", "fr", "de", "pt", "it", "ru", "zh-Hans", "ja", "ar"]
+}

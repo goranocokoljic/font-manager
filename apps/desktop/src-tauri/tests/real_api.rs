@@ -166,6 +166,66 @@ fn the_app_serves_the_core_api_when_the_folders_were_found() -> TestResult {
     Ok(())
 }
 
+/// The codes and groups `list_languages` answers, first `n`.
+fn first_languages(
+    webview: &WebviewWindow<MockRuntime>,
+    n: usize,
+) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let list: Vec<Value> = call(webview, "list_languages", json!({}))?;
+    Ok(list
+        .iter()
+        .take(n)
+        .map(|p| {
+            (
+                p["code"].as_str().unwrap_or_default().to_owned(),
+                p["group"].as_str().unwrap_or_default().to_owned(),
+            )
+        })
+        .collect())
+}
+
+fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+    list.iter()
+        .map(|(c, g)| ((*c).to_owned(), (*g).to_owned()))
+        .collect()
+}
+
+/// E58.1: the shell hands the language of its menu strings to the core at
+/// start and on `set_shell_locale`; with no language set its presets lead
+/// `list_languages`, and a change of the order is an event.
+#[test]
+fn the_shells_language_and_my_languages_order_the_languages() -> TestResult {
+    let home = Home::new("language-order")?;
+    let (_app, webview, rx) = app(&home)?;
+    // At start the shell's locale is English ("System" until the UI says).
+    assert_eq!(
+        first_languages(&webview, 2)?,
+        pairs(&[("en", "mine"), ("es", "mostUsed")])
+    );
+    call::<Value>(&webview, "set_shell_locale", json!({ "locale": "de" }))?;
+    assert!(kinds(&events_until(&rx, "languageOrderChanged")?).contains(&"languageOrderChanged"));
+    assert_eq!(
+        first_languages(&webview, 3)?,
+        pairs(&[("de", "mine"), ("en", "mostUsed"), ("es", "mostUsed")])
+    );
+    call::<Value>(
+        &webview,
+        "update_settings",
+        json!({ "req": { "myLanguages": ["pl", "fr", "sr-Latn"] } }),
+    )?;
+    events_until(&rx, "languageOrderChanged")?;
+    assert_eq!(
+        first_languages(&webview, 4)?,
+        pairs(&[
+            ("pl", "mine"),
+            ("fr", "mine"),
+            ("sr-Latn", "mine"),
+            ("en", "mostUsed"),
+        ])
+    );
+    Ok(())
+}
+
 #[test]
 fn the_app_wires_the_os_pdf_printer_into_the_core_api() -> TestResult {
     use fm_api::ExportService as _;

@@ -208,6 +208,15 @@ impl AppState {
         })
     }
 
+    /// Hands the system's language (the locale of the menu's strings) to the
+    /// core, which leads `list_languages` with its presets while the user has
+    /// set no language (E58.1). The mock backend has none.
+    pub fn set_system_language(&self, locale: &str) {
+        if let Some(core) = &self.core {
+            core.set_system_language(locale);
+        }
+    }
+
     /// Which implementation the commands talk to.
     pub fn backend(&self) -> Backend {
         self.backend
@@ -1758,10 +1767,17 @@ fn show_in_file_manager(folder: &Path) -> ApiResult<()> {
 }
 
 /// Shows the native shell's labels (Help menu, tray) in the UI's locale; the
-/// UI calls it at start and when the Language setting changes.
+/// UI calls it at start and when the Language setting changes. The same
+/// locale is the system's language of `list_languages` (E58.1, ADR 0028).
 #[tauri::command]
-async fn set_shell_locale<R: Runtime>(app: AppHandle<R>, locale: String) -> ApiResult<()> {
-    shell_text::apply(&app, &locale)
+async fn set_shell_locale<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    locale: String,
+) -> ApiResult<()> {
+    shell_text::apply(&app, &locale)?;
+    state.set_system_language(&locale);
+    Ok(())
 }
 
 /// Opens the OS print dialog for the calling webview's page (Pairing Studio's
@@ -1789,6 +1805,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let tray = state.tray.clone();
     let core = state.core.clone();
     let locale = shell_text::initial_locale(state.current_settings().language);
+    // The core orders `list_languages` by the language of the menu's strings
+    // from the start (E58.1); `set_shell_locale` updates it.
+    state.set_system_language(&locale);
     let on_quit = quit_install::OnQuit::new(state.quit_install.clone());
     builder
         .manage(shell_text::ShellLocale::new(locale))

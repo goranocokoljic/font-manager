@@ -16,7 +16,9 @@ validated against the JSON schema next to it by a test (epic E3).
 | `thai.json`       | Thai                                                            |
 | `devanagari.json` | Hindi, Marathi, Nepali                                          |
 | `cjk.json`        | Chinese (Simplified, Traditional), Japanese, Korean — basics    |
-| `charset.schema.json` | the JSON schema every other file follows                    |
+| `charset.schema.json` | the JSON schema every language file follows                 |
+| `order.json`      | the most used languages, in order (see below)                   |
+| `order.schema.json` | the JSON schema of `order.json`                               |
 
 ## Format
 
@@ -53,6 +55,21 @@ validated against the JSON schema next to it by a test (epic E3).
   `data/pangrams`. Language detection also reads them: when presets have the same
   letters, the shorter line ranks first (`sr-Latn` before `hr` for `đ` + `ć`).
 - `source` — where the base set comes from: `hyperglot`, `google-fonts` or `project`.
+
+## The order of languages
+
+`order.json` lists the most used languages as preset codes, in order:
+
+```json
+{ "$schema": "./order.schema.json", "mostUsed": ["en", "es", "fr", "de"] }
+```
+
+Every list of languages in the app, the CLI and MCP follows one order (ADR 0028): first
+the languages the user works in, in the user's order (while none is set, the system's
+language); then the languages of `mostUsed` that are not among them, in the file's
+order; then every other preset from A to Z by its English name. Each code must be a
+preset of the other files, listed once; `cargo nextest run -p fm-core language_order`
+checks it.
 
 ## Contributing
 

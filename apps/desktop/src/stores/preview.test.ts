@@ -271,7 +271,8 @@ describe('preview store', () => {
       setClient(createMockClient());
       const store = freshStore();
       await store.loadPangrams();
-      const withPangram = mockLanguages.filter((l) => l.pangram);
+      // In the API's order (E58.1), not the mock's data order.
+      const withPangram = (await createMockClient().listLanguages()).filter((l) => l.pangram);
       expect(withPangram.length).toBeLessThan(mockLanguages.length);
       expect(store.pangramLanguages.map((l) => l.code)).toEqual(withPangram.map((l) => l.code));
       expect(store.pangramText('sr-Cyrl')).toBe(pangramOf('sr-Cyrl'));

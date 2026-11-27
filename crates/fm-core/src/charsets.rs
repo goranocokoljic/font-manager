@@ -97,6 +97,7 @@ impl Charset {
             script: self.script.clone(),
             pangram: None,
             sample_glyphs: self.sample_glyphs.clone(),
+            group: None,
         }
     }
 }
@@ -276,7 +277,7 @@ fn chars(list: &str) -> Result<Vec<char>, String> {
     Ok(out)
 }
 
-fn is_language_code(code: &str) -> bool {
+pub(crate) fn is_language_code(code: &str) -> bool {
     let mut parts = code.split('-');
     let lang_ok = parts
         .next()
@@ -336,7 +337,13 @@ mod tests {
                     .to_string_lossy()
                     .into_owned()
             })
-            .filter(|n| n.ends_with(".json") && n != "charset.schema.json")
+            .filter(|n| {
+                n.ends_with(".json")
+                    && n != "charset.schema.json"
+                    // The language order (E58.1) has its own loader and schema.
+                    && n != crate::language_order::FILE.0
+                    && n != crate::language_order::SCHEMA_FILE
+            })
             .collect();
         on_disk.sort();
         let embedded: Vec<&str> = FILES.iter().map(|(n, _)| *n).collect();

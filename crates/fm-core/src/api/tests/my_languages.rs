@@ -58,3 +58,71 @@ fn the_start_up_reads_leave_the_dropped_language_report_to_the_api_caller() {
         "reported once"
     );
 }
+
+fn first_codes(api: &CoreApi, n: usize) -> Vec<String> {
+    api.list_languages()
+        .expect("languages")
+        .into_iter()
+        .take(n)
+        .map(|p| p.code)
+        .collect()
+}
+
+fn set_mine(api: &CoreApi, ids: &[&str]) {
+    api.update_settings(SettingsUpdate {
+        my_languages: Some(ids.iter().map(|s| (*s).to_owned()).collect()),
+        ..SettingsUpdate::default()
+    })
+    .expect("saved");
+}
+
+/// E58.1: a change of `my_languages` is announced, and `list_languages`
+/// answers in the new order at once; an update that leaves the list as it
+/// is announces nothing.
+#[test]
+fn a_change_of_my_languages_is_an_event_and_reorders_the_list() {
+    let lib = Lib::new("api-language-order");
+    let rx = lib.api.subscribe();
+    assert_eq!(first_codes(&lib.api, 2), ["en", "es"], "the file's order");
+
+    set_mine(&lib.api, &["sr-Latn", "de", "ja"]);
+    assert_eq!(rx.recv_timeout(WAIT), Ok(Event::LanguageOrderChanged));
+    assert_eq!(first_codes(&lib.api, 4), ["sr-Latn", "de", "ja", "en"]);
+
+    set_mine(&lib.api, &["sr-Latn", "de", "ja"]);
+    lib.api
+        .update_settings(SettingsUpdate {
+            theme: Some(fm_api::settings::Theme::Dark),
+            ..SettingsUpdate::default()
+        })
+        .expect("saved");
+    assert!(
+        rx.recv_timeout(std::time::Duration::from_millis(200))
+            .is_err(),
+        "nothing changed the order"
+    );
+
+    set_mine(&lib.api, &[]);
+    assert_eq!(rx.recv_timeout(WAIT), Ok(Event::LanguageOrderChanged));
+    assert_eq!(first_codes(&lib.api, 1), ["en"]);
+}
+
+/// E58.1: the system's language the shell hands over leads while no
+/// language is set, and its change is announced once.
+#[test]
+fn the_system_language_leads_until_the_user_sets_languages() {
+    let lib = Lib::new("api-language-system");
+    let rx = lib.api.subscribe();
+    lib.api.set_system_language("sr");
+    assert_eq!(rx.recv_timeout(WAIT), Ok(Event::LanguageOrderChanged));
+    assert_eq!(first_codes(&lib.api, 3), ["sr-Cyrl", "sr-Latn", "en"]);
+    lib.api.set_system_language("sr");
+    assert!(
+        rx.recv_timeout(std::time::Duration::from_millis(200))
+            .is_err(),
+        "the same language again is no change"
+    );
+    set_mine(&lib.api, &["fr"]);
+    assert_eq!(rx.recv_timeout(WAIT), Ok(Event::LanguageOrderChanged));
+    assert_eq!(first_codes(&lib.api, 2), ["fr", "en"]);
+}

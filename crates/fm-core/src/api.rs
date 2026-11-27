@@ -190,6 +190,10 @@ pub struct CoreApi {
     /// `None` without a shell (the CLI's direct link, most tests), when the
     /// setup never asks about updates.
     update_support: Option<fm_api::update::UpdateSupport>,
+    /// The system's language as the shell names it (the locale of its menu
+    /// strings), for the lead of `list_languages` while the user has set no
+    /// language (E58.1); `None` without a shell, when nothing leads.
+    system_language: Mutex<Option<String>>,
 }
 
 impl std::fmt::Debug for CoreApi {
@@ -294,6 +298,7 @@ impl CoreApi {
             file_drag: Mutex::new(None),
             watching: None,
             update_support: None,
+            system_language: Mutex::new(None),
         }
     }
 
@@ -338,6 +343,23 @@ impl CoreApi {
         pass.start();
         self.trait_pass = Some(pass);
         self
+    }
+
+    /// Records the system's language as the shell names it (`de`, `sr-Latn`),
+    /// the locale of its menu strings: while the user has set no language,
+    /// its presets lead `list_languages` (E58.1, ADR 0028). A change is
+    /// announced as [`Event::LanguageOrderChanged`].
+    pub fn set_system_language(&self, tag: &str) {
+        let tag = Some(tag.trim().to_owned()).filter(|t| !t.is_empty());
+        let changed = {
+            let mut now = lock(&self.system_language);
+            let changed = *now != tag;
+            *now = tag;
+            changed
+        };
+        if changed {
+            self.events.send(&Event::LanguageOrderChanged);
+        }
     }
 
     /// Records whether the shell could make a tray item, for the platform
@@ -1421,8 +1443,17 @@ impl SearchService for CoreApi {
         Ok(self.lock().face_coverage(face)?)
     }
 
+    /// In the one order of ADR 0028, from the saved `my_languages` and the
+    /// system's language the shell handed over ([`CoreApi::set_system_language`]).
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
-        Ok(pangrams::presets()?)
+        let mine = self.settings.read()?.my_languages;
+        let system = lock(&self.system_language).clone();
+        Ok(crate::language_order::arrange(
+            pangrams::presets()?,
+            &crate::language_order::most_used()?,
+            &mine,
+            system.as_deref(),
+        ))
     }
 
     fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>> {
@@ -2417,9 +2448,17 @@ impl SettingsService for CoreApi {
         // (E55.9); a caller that set no support (the CLI's direct link) may
         // only turn it off.
         fm_api::update::check_settings_update(&req, self.update_support.as_ref())?;
+        let before = match req.my_languages {
+            Some(_) => Some(self.settings.read()?.my_languages),
+            None => None,
+        };
         let settings = self.settings.update_settings(req)?;
         if let Some(previews) = &self.previews {
             previews.set_limit(cache::limit_from_mb(settings.cache_limit_mb));
+        }
+        // The order of `list_languages` follows the user's languages (E58.1).
+        if before.is_some_and(|b| b != settings.my_languages) {
+            self.events.send(&Event::LanguageOrderChanged);
         }
         Ok(settings)
     }
