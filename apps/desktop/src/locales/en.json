@@ -1948,21 +1948,12 @@
     "close": "Close problems",
     "title": "Problems",
     "noneShort": "No problems",
-    "filters": "Show problems",
     "all": "All",
-    "noneOfKind": "No problems of this kind.",
-    "none": "No problems. Your library is in good shape.",
-    "columns": {
-      "problem": "Problem",
-      "file": "File",
-      "with": "With",
-      "details": "Details"
-    },
     "groups": {
       "duplicates": "Duplicates",
       "broken": "Broken files",
       "legacy": "Legacy formats",
-      "sidecar": "Sidecar conflicts",
+      "sidecar": "Sync conflicts",
       "activation": "Activation conflicts",
       "library": "Folders and index"
     },
@@ -2013,8 +2004,6 @@
       "confirm": "Move to trash"
     },
     "sidecar": {
-      "title": "Resolve sidecar conflicts",
-      "note": "Another computer that syncs the same folder set these values differently. Pick the value to keep; the other computer takes it at its next sync.",
       "mine": "This computer",
       "theirs": "Other computer",
       "keepMine": "Keep mine",
@@ -2033,7 +2022,58 @@
       "one": "{count} font has more than one copy.",
       "other": "{count} fonts have more than one copy."
     },
-    "openDuplicates": "Open Duplicates"
+    "openDuplicates": "Open Duplicates",
+    "heading": {
+      "zero": "No problems",
+      "one": "{count} thing needs a look",
+      "other": "{count} things need a look"
+    },
+    "headingLine": "None of them stops the rest of your library from working. Each says what is wrong and what you can do.",
+    "emptyLine": "Your library is in good shape.",
+    "allGood": "All good.",
+    "allGoodLine": "Every file in your folders was read, nothing clashes with a system font, and your folders are where they should be. Font Fu checks again after every scan.",
+    "groupNone": "Nothing of this kind right now.",
+    "groupLabel": "{group}, {count}",
+    "more": {
+      "one": "{count} more",
+      "other": "{count} more"
+    },
+    "moreLabel": {
+      "one": "{count} more in {group}",
+      "other": "{count} more in {group}"
+    },
+    "groupLines": {
+      "broken": "Files that could not be read. They are left where they are and stay out of the library.",
+      "legacy": "Formats Font Fu does not read. Most foundries offer the same font as OpenType.",
+      "sidecar": "Another computer that syncs the same folder set a value differently. Pick one; the other computer takes it at its next sync.",
+      "activation": "A font you activated has the same name as another active font, so applications see only one of them.",
+      "library": "Folders that are not where they were, and an index Font Fu had to build again."
+    },
+    "kinds": {
+      "broken": "damaged file",
+      "noUnicodeCmap": "no character map",
+      "unsupported": "legacy format",
+      "sidecarConflict": "sync file",
+      "systemConflict": "same name as a system font",
+      "activeConflict": "same name as an active font",
+      "missingSource": "folder not found",
+      "indexRebuilt": "index rebuilt"
+    },
+    "actions": {
+      "copyPath": "Copy path",
+      "openSources": "Open Sources",
+      "decide": "Decide…",
+      "copyPathLabel": "Copy path: {name}",
+      "openSourcesLabel": "Open Sources: {name}",
+      "decideLabel": "Decide: {name}"
+    },
+    "copied": "Path copied.",
+    "copyFailed": "Could not copy the path.",
+    "duplicatesStrong": {
+      "one": "{count} font has more than one copy.",
+      "other": "{count} fonts have more than one copy."
+    },
+    "duplicatesQuiet": "Copies are not problems; they are cleaned up in Duplicates."
   },
   "sources": {
     "title": "Sources",

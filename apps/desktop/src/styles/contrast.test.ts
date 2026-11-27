@@ -430,7 +430,6 @@ describe('the accent in the style sheets', () => {
 
   it.each([
     ['primary button', 'components/UpdateDialog.vue', '.button.primary'],
-    ['primary button', 'views/ProblemsView.vue', '.button.primary'],
     ['activate button', 'components/InspectorInfo.vue', '.activate'],
     ['count badge', 'components/ui/UiBadge.vue', '.tone-accent'],
     ['pressed chip', 'components/FilterChips.vue', ".chip[aria-pressed='true']"],

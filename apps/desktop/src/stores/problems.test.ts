@@ -8,7 +8,14 @@ import {
   mockSidecarConflicts,
 } from '../api/mock';
 import type { ApiError, Problem, ProblemKind, SidecarConflict } from '../api/types';
-import { PROBLEM_GROUPS, groupOf, problemGroup, useProblemsStore } from './problems';
+import {
+  PROBLEM_GROUPS,
+  fileName,
+  groupOf,
+  problemGroup,
+  problemRow,
+  useProblemsStore,
+} from './problems';
 import { TOAST_MS, useToastStore } from './toast';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -129,6 +136,105 @@ describe('problems store', () => {
     await store.refresh();
     expect(store.error).toEqual(failure);
     expect(store.total).toBe(4);
+  });
+});
+
+// E57.9: the rows of the Problems view come ready from the store.
+describe('problem rows', () => {
+  const entry = (kind: ProblemKind, path: string): Problem => ({
+    kind,
+    face: null,
+    path,
+    other: null,
+    message: `The message of ${kind}.`,
+  });
+
+  it('name a file or folder by the last part of its path, with either separator', () => {
+    expect(fileName('/Users/demo/Fonts/Inter.ttf')).toBe('Inter.ttf');
+    expect(fileName('E:\\Backup 2014\\Fonts\\COURIER.FON')).toBe('COURIER.FON');
+    expect(fileName('/Volumes/Gone/')).toBe('Gone');
+    expect(fileName('Ünïcødé.otf')).toBe('Ünïcødé.otf');
+  });
+
+  it('give every listed kind its words and its one action', () => {
+    const cases: [ProblemKind, string, string][] = [
+      ['broken', 'damaged file', 'copyPath'],
+      ['noUnicodeCmap', 'no character map', 'copyPath'],
+      ['unsupported', 'legacy format', 'copyPath'],
+      ['sidecarConflict', 'sync file', 'copyPath'],
+      ['indexRebuilt', 'index rebuilt', 'copyPath'],
+      ['missingSource', 'folder not found', 'openSources'],
+      ['systemConflict', 'same name as a system font', 'decide'],
+      ['activeConflict', 'same name as an active font', 'decide'],
+    ];
+    for (const [kind, words, action] of cases) {
+      const row = problemRow(entry(kind, `/f/${kind}.otf`), 0);
+      expect(row, kind).toMatchObject({
+        type: 'problem',
+        name: `${kind}.otf`,
+        kindLabel: words,
+        message: `The message of ${kind}.`,
+        path: `/f/${kind}.otf`,
+        action,
+      });
+    }
+  });
+
+  it('list the groups with problems, in order, and the open group even with none', async () => {
+    const store = useProblemsStore();
+    await store.load();
+    expect(store.sections(undefined).map((s) => [s.group.id, s.count, s.rows.length])).toEqual([
+      ['broken', 1, 1],
+      ['legacy', 1, 1],
+      ['sidecar', 1, 1],
+      ['activation', 1, 1],
+    ]);
+    const library = store.sections('library');
+    expect(library.map((s) => [s.group.id, s.count, s.rows])).toEqual([['library', 0, []]]);
+    expect(store.sections('legacy')[0]!.rows[0]).toMatchObject({
+      name: 'LEGGR___.PFB',
+      kindLabel: 'legacy format',
+    });
+  });
+
+  it('show a resolvable sync conflict once, with both values, and an unreadable sync file as a row', async () => {
+    const unreadable: Problem = {
+      kind: 'sidecarConflict',
+      face: null,
+      path: '/Users/demo/Fonts/.fontlibrary/broken.json',
+      other: null,
+      message: 'The sync file cannot be read.',
+    };
+    setClient({
+      ...client,
+      listProblems: async () => [...(await client.listProblems()), unreadable],
+    });
+    const store = useProblemsStore();
+    await store.load();
+    const [sidecar] = store.sections('sidecar');
+    expect(sidecar!.count).toBe(2);
+    expect(sidecar!.rows).toHaveLength(2);
+    const [conflict, file] = sidecar!.rows;
+    expect(conflict).toMatchObject({
+      type: 'conflict',
+      name: 'Inter',
+      kindLabel: 'Rating',
+      path: '/Users/demo/Fonts/.fontlibrary/5d1c0a7e9b3f2468.json',
+      conflict: { mine: '4 stars', theirs: '2 stars' },
+    });
+    expect(file).toMatchObject({
+      type: 'problem',
+      name: 'broken.json',
+      message: 'The sync file cannot be read.',
+    });
+  });
+
+  it('drop a resolved sync conflict from the rows', async () => {
+    const store = useProblemsStore();
+    await store.load();
+    await store.resolveConflict(1, 'theirs');
+    expect(store.sections(undefined).map((s) => s.group.id)).not.toContain('sidecar');
+    expect(store.sections('sidecar')[0]!.rows).toEqual([]);
   });
 });
 

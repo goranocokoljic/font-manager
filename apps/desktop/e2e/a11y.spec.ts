@@ -185,7 +185,7 @@ test('every interactive element of the family page Developer part has a name', a
 
 test('every interactive element of the Problems view has a name', async ({ page }) => {
   await open(page, '/problems');
-  await expect(page.getByRole('table', { name: 'Problems' })).toBeVisible();
+  await expect(page.getByTestId('problems-group').first()).toBeVisible();
   expect(await unnamedControls(page)).toEqual([]);
 });
 
@@ -623,7 +623,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     test('Problems', async ({ page }) => {
       await open(page, '/problems');
-      await expect(page.getByRole('table', { name: 'Problems' })).toBeVisible();
+      await expect(page.getByTestId('problems-group').first()).toBeVisible();
       await inTheme(page);
       expect(await violations(page)).toEqual([]);
     });

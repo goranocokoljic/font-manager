@@ -1447,6 +1447,11 @@ export interface MockOptions {
   faceTags?: Partial<Record<FaceId, string[]>>;
   /** Problems entries after the ones the sample faces have (files the mock has no face for). */
   extraProblems?: Problem[];
+  /**
+   * `false` lists no problem at all, the sample faces' own included (the empty state of
+   * Problems, E57.9). Default true.
+   */
+  problems?: boolean;
   /** Duplicate groups (files the mock has no face for), keeper first. */
   duplicates?: DuplicateGroup[];
   /**
@@ -5208,40 +5213,43 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       virtualStyles.splice(i, 1);
     },
-    listProblems: async () => [
-      ...faces.flatMap((f): Problem[] => {
-        const out: Problem[] = [];
-        const health = f.face.health;
-        if (health.kind !== 'ok')
-          out.push({
-            kind: health.kind,
-            face: f.face.id,
-            path: f.path,
-            other: null,
-            message: health.reason,
-          });
-        const clash = clashes[f.face.id];
-        if (clash)
-          out.push({
-            kind: 'systemConflict',
-            face: f.face.id,
-            path: f.path,
-            other: clash,
-            message: `${f.face.postscriptName} has the same PostScript name as a system font.`,
-          });
-        return out;
-      }),
-      ...structuredClone(options.extraProblems ?? []).filter(
-        (p) => !trashed.has(p.path) && !(p.other !== null && trashed.has(p.other)),
-      ),
-      ...sidecarConflicts.map((c): Problem => ({
-        kind: 'sidecarConflict',
-        face: c.face,
-        path: faces.find((f) => f.face.id === c.face)?.path ?? c.sidecarPath,
-        other: c.sidecarPath,
-        message: `Another machine set a different value (${c.theirs}); this machine's value (${c.mine}) is kept.`,
-      })),
-    ],
+    listProblems: async () =>
+      options.problems === false
+        ? []
+        : [
+            ...faces.flatMap((f): Problem[] => {
+              const out: Problem[] = [];
+              const health = f.face.health;
+              if (health.kind !== 'ok')
+                out.push({
+                  kind: health.kind,
+                  face: f.face.id,
+                  path: f.path,
+                  other: null,
+                  message: health.reason,
+                });
+              const clash = clashes[f.face.id];
+              if (clash)
+                out.push({
+                  kind: 'systemConflict',
+                  face: f.face.id,
+                  path: f.path,
+                  other: clash,
+                  message: `${f.face.postscriptName} has the same PostScript name as a system font.`,
+                });
+              return out;
+            }),
+            ...structuredClone(options.extraProblems ?? []).filter(
+              (p) => !trashed.has(p.path) && !(p.other !== null && trashed.has(p.other)),
+            ),
+            ...sidecarConflicts.map((c): Problem => ({
+              kind: 'sidecarConflict',
+              face: c.face,
+              path: faces.find((f) => f.face.id === c.face)?.path ?? c.sidecarPath,
+              other: c.sidecarPath,
+              message: `Another machine set a different value (${c.theirs}); this machine's value (${c.mine}) is kept.`,
+            })),
+          ],
     listDuplicates: async () => duplicates(),
     listDuplicateSets: async (req) => {
       const scope = req.scope;
@@ -6162,6 +6170,9 @@ export const mockClient: FmClient = createMockClient({
         sidecarConflicts: mockSidecarConflicts,
         sets: mockSets,
       }),
+  // `?mockProblems=0` lists no problem and no sync conflict: the empty state of Problems
+  // (E57.9).
+  ...(textFromUrl('mockProblems')[0] === '0' ? { problems: false, sidecarConflicts: [] } : {}),
   // `?mockDuplicates=1` adds copies for the Duplicates module (E56.11): JetBrains Mono
   // twice as the same file, Inter in three versions, Legacy Grotesk twice in one version.
   // `?mockCopyCompare=1` adds Inter as a WOFF2 of the same version (E56.13).
