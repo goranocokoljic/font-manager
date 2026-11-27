@@ -174,6 +174,8 @@ mod tests {
         assert_eq!(text("en", "shell.tray.quit"), lifecycle::MENU_QUIT);
         assert_eq!(text("en", "shell.settings"), lifecycle::MENU_SETTINGS);
         assert_eq!(text("de", "shell.settings"), "Einstellungen…");
+        assert_eq!(text("en", "shell.duplicates"), lifecycle::MENU_DUPLICATES);
+        assert_eq!(text("de", "shell.duplicates"), "Duplikate");
         for n in [0, 1, 7] {
             assert_eq!(
                 count("en", "shell.tray.active", n),
@@ -195,6 +197,7 @@ mod tests {
             "shell.helpMenu",
             "shell.about",
             "shell.settings",
+            "shell.duplicates",
             "shell.fileMenu",
             "shell.tray.tooltip",
             "shell.tray.open",

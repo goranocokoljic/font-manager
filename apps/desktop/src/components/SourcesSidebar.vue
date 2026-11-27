@@ -8,20 +8,15 @@ import UiIconButton from './ui/UiIconButton.vue';
 // System source is listed read-only: the app never pauses or removes it.
 // A live region that is always in the page reads the scan progress to screen
 // readers (the progress bars come and go with the scan, too late to announce).
-// Under the folders, a "Duplicates" row opens the Duplicates module (E56.15).
 import { computed, onBeforeUnmount, onMounted } from 'vue';
-import { RouterLink } from 'vue-router';
 import type { Source } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
 import { useFolded } from './useFolded';
-import { useDuplicateSummaryStore } from '../stores/duplicateSummary';
 import { useSourcesStore, type ScanProgress } from '../stores/sources';
 
 const store = useSourcesStore();
-const dupes = useDuplicateSummaryStore();
 onMounted(() => {
   void store.load();
-  void dupes.start();
 });
 onBeforeUnmount(() => store.stop());
 
@@ -142,19 +137,6 @@ const { folded, toggle } = useFolded('sources');
           />
           <span class="scan-text">{{ progressText(store.progressOf(source.id)!) }}</span>
         </div>
-      </li>
-      <!-- The way into the Duplicates module (E56.15): the fonts that have copies, in the
-           quiet count of every row, never the dot of Problems; hidden while there are none. -->
-      <li v-if="dupes.fonts > 0" class="duplicates">
-        <RouterLink :to="{ name: 'duplicates' }" class="side-row" data-testid="sidebar-duplicates">
-          <span class="side-lead"><UiIcon name="layers" /></span>
-          <span class="side-label">{{ t('sources.duplicates') }}</span>
-          <span
-            class="side-count"
-            :aria-label="t('sources.duplicatesCount', { count: dupes.fonts })"
-            >{{ formatNumber(dupes.fonts) }}</span
-          >
-        </RouterLink>
       </li>
     </ul>
   </section>
