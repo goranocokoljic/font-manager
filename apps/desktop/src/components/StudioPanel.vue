@@ -280,6 +280,22 @@ onMounted(() => {
 .panel + .panel {
   border-inline-start: 1px solid var(--fm-border);
 }
+/* A narrow window (E58.6): the panel takes the box's full height in the stack, and its roles
+   rail sits above the page instead of beside it. */
+@media (max-width: 999.98px) {
+  .panel,
+  .panel.with-rail {
+    flex: 0 0 100%;
+    min-width: 0;
+  }
+  .panel + .panel {
+    border-inline-start: 0;
+    border-top: 1px solid var(--fm-border);
+  }
+  .body {
+    flex-direction: column;
+  }
+}
 .bar {
   display: flex;
   align-items: center;

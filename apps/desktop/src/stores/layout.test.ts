@@ -1,9 +1,17 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 import PaneDivider from '../components/PaneDivider.vue';
-import { LAYOUT_STORAGE_KEY, SIDEBAR, SPLIT_LIST, clampWidth, useLayoutStore } from './layout';
+import {
+  LAYOUT_STORAGE_KEY,
+  MAIN_ROOM,
+  SIDEBAR,
+  SPLIT_LIST,
+  clampWidth,
+  panesShown,
+  useLayoutStore,
+} from './layout';
 
 function freshStore() {
   setActivePinia(createPinia());
@@ -143,5 +151,93 @@ describe('pane divider', () => {
     await pointer(right, 'pointerdown', 100);
     await pointer(right, 'pointermove', 130);
     expect(right.emitted('resize')).toEqual([[210]]);
+  });
+});
+
+describe('the panes fold by themselves (E58.6)', () => {
+  const both = { sidebar: 232, inspector: 320 };
+
+  it('shows every open pane when there is room', () => {
+    expect(panesShown(232 + 320 + MAIN_ROOM, both)).toEqual({ sidebar: true, inspector: true });
+  });
+
+  it('folds the inspector first, then the sidebar', () => {
+    expect(panesShown(232 + 320 + MAIN_ROOM - 1, both)).toEqual({
+      sidebar: true,
+      inspector: false,
+    });
+    expect(panesShown(232 + MAIN_ROOM, both)).toEqual({ sidebar: true, inspector: false });
+    expect(panesShown(232 + MAIN_ROOM - 1, both)).toEqual({ sidebar: false, inspector: false });
+  });
+
+  it('never shows a pane the user folded, and gives its room to the others', () => {
+    expect(panesShown(5000, { sidebar: null, inspector: null })).toEqual({
+      sidebar: false,
+      inspector: false,
+    });
+    // The sidebar folded by hand: the inspector alone fits where both would not.
+    expect(panesShown(320 + MAIN_ROOM, { sidebar: null, inspector: 320 })).toEqual({
+      sidebar: false,
+      inspector: true,
+    });
+  });
+
+  it('folds nothing at 1000 px and wider, whatever the sidebar width', () => {
+    expect(panesShown(1000, { sidebar: SIDEBAR.max, inspector: null }).sidebar).toBe(true);
+  });
+
+  it('folds the default sidebar at 667 px and keeps it at 800 px', () => {
+    const panes = { sidebar: SIDEBAR.initial, inspector: null };
+    expect(panesShown(667, panes).sidebar).toBe(false);
+    expect(panesShown(800, panes).sidebar).toBe(true);
+  });
+});
+
+describe('the store follows the window and keeps the user choice (E58.6)', () => {
+  const initial = window.innerWidth;
+  async function resize(width: number) {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    window.dispatchEvent(new Event('resize'));
+    await nextTick();
+  }
+  afterEach(() => resize(initial));
+
+  it('folds the sidebar without room, brings it back with room, and saves nothing', async () => {
+    const layout = freshStore();
+    await resize(667);
+    expect(layout.sidebarShown).toBe(false);
+    expect(layout.sidebarFolded).toBe(true);
+    expect(layout.sidebarOpen).toBe(true);
+    await resize(1000);
+    expect(layout.sidebarShown).toBe(true);
+    expect(layout.sidebarFolded).toBe(false);
+    expect(JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) ?? '{}').sidebarOpen).not.toBe(
+      false,
+    );
+  });
+
+  it('keeps a sidebar the user folded folded when the room comes back', async () => {
+    const layout = freshStore();
+    layout.toggleSidebar();
+    await resize(667);
+    await resize(1280);
+    expect(layout.sidebarOpen).toBe(false);
+    expect(layout.sidebarShown).toBe(false);
+  });
+
+  it('shows a folded sidebar on request without changing the saved choice', async () => {
+    const layout = freshStore();
+    await resize(667);
+    layout.toggleSidebar();
+    expect(layout.sidebarShown).toBe(true);
+    layout.toggleSidebar();
+    expect(layout.sidebarShown).toBe(false);
+    expect(layout.sidebarOpen).toBe(true);
+    // A look ends when the room changes; with room the sidebar is back by the user's choice.
+    layout.toggleSidebar();
+    await resize(700);
+    expect(layout.sidebarShown).toBe(false);
+    await resize(1000);
+    expect(layout.sidebarShown).toBe(true);
   });
 });

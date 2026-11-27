@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { compareRows } from './compare-pins';
+import { NARROW_VIEWS, SMALL_VIEWPORTS } from './narrow';
 import { openDeveloper, showSection } from './family-page';
 import { selectOption } from './select';
 
@@ -627,6 +628,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await inTheme(page);
       expect(await violations(page)).toEqual([]);
     });
+
+    // E58.6: the smallest window at 125 and at 150 per cent.
+    for (const vp of SMALL_VIEWPORTS) {
+      test(`the six views at ${vp.width} × ${vp.height}`, async ({ page }) => {
+        await page.setViewportSize(vp);
+        for (const view of NARROW_VIEWS) {
+          await open(page, view.route);
+          await expect(view.ready(page).first()).toBeVisible();
+          await inTheme(page);
+          expect(await violations(page), view.name).toEqual([]);
+        }
+      });
+    }
   });
 }
 

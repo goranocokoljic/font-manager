@@ -343,6 +343,15 @@ const roleName = (role: BlockRole) => t(`studio.role.${role}`);
   border-inline-end: 1px solid var(--fm-border);
   background-color: var(--fm-surface);
 }
+/* A narrow window (E58.6): the rail is a band above the page, the page keeps the rest. */
+@media (max-width: 999.98px) {
+  .rail {
+    width: auto;
+    max-height: 40%;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--fm-border);
+  }
+}
 .head {
   display: flex;
   align-items: baseline;

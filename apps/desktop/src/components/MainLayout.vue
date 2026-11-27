@@ -67,7 +67,7 @@ useActions([
   <div class="window">
     <div class="columns">
       <nav
-        v-if="layout.sidebarOpen"
+        v-if="layout.sidebarShown"
         id="fm-sidebar"
         ref="sidebar"
         class="sidebar column"
@@ -78,7 +78,7 @@ useActions([
         <slot name="sidebar" />
       </nav>
       <PaneDivider
-        v-if="layout.sidebarOpen"
+        v-if="layout.sidebarShown"
         :label="t('layout.resizeSidebar')"
         controls="fm-sidebar"
         :value="layout.sidebarWidth"
