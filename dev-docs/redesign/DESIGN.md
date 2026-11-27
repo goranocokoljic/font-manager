@@ -224,7 +224,7 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   describes through its `control` slot props, and `error`, a failed change said on the row and
   added to the control's description, E57.4); a local copy of a choice card or a setting row
   is a bug; every Settings section is a component of its own under `components/settings/`,
-  its head `SettingsSection` (Sources, Local API and AI assistants keep theirs);
+  its head `SettingsSection` (Sources keeps its own);
   every inspector tab head is `InspectorTabHead`;
   a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
   local acquire/release copy (review 50). Every number field is `UiNumberField`; a caller that

@@ -604,3 +604,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E57.5 #695] apps/desktop/src/stores/catalogs.ts:297 — `busy` holds a single catalog id, so turning a second catalog on while the first is in flight re-enables the first card's switch early.
 - [E57.5 #695] apps/desktop/src/components/ui/UiSwitch.vue:23 — the off switch's track and knob may be under 3:1 non-text contrast in both themes; worth measuring.
 - [E57.5 #695] apps/desktop/src/components/settings/CatalogsSettings.vue:136 — a catalog switch becomes disabled while it connects, so focus drops from it and "Connecting…" is only in its description.
+- [E57.6 #696] apps/desktop/src/stores/settings.ts:62 — `regenerateEndpointToken` leaves `store.mcp.snippets` holding the revoked token until `loadMcp` runs again.
+- [E57.6 #696] dev-docs/security/local-endpoint-and-mcp-2026-10-31.md:34 — cites the deleted unit test "hides the snippet text until Show snippets is pressed"; the behaviour is now covered by "shows the chosen snippet with dots for the token; Show reveals it, Hide masks it".
+- [E57.6 #696] apps/desktop/src/components/settings/LocalApiSettings.vue:132 — `.status:empty { display: none }` drops the live region from the accessibility tree until text appears, so some screen readers can miss the first "Copied" (same in McpSettings.vue).
+- [E57.6 #696] apps/desktop/src/components/settings/LocalApiSettings.vue:107 — the `copy.failed` status branch has no test in Local API or AI assistants.

@@ -14,8 +14,10 @@ makes no network calls of its own for this (see [Getting started](getting-starte
 
 1. Open Settings → **AI assistants**.
 2. Turn on **Allow AI assistants (MCP server)**. It is off until you do.
-3. Connect your assistant with one of the snippets below the switch. The snippets contain
-   the token of the local API. Keep them secret, like a password.
+3. Connect your assistant with a snippet under **Connect an assistant**: choose your
+   assistant above the snippet, then click **Copy**. The snippet contains the token of the
+   local API. Keep it secret, like a password. The token shows as dots until you click
+   **Show**; **Copy** always copies the real snippet.
 
 Turn the switch off to stop all assistants at once. A request that an assistant sends
 while the switch is off gets this answer: "Open Font Fu and turn on AI assistants in
@@ -25,7 +27,8 @@ Settings."
 
 Claude Code talks to Font Fu over HTTP, on the address that Settings shows.
 
-1. In Settings → AI assistants, click **Copy Claude Code command**.
+1. In Settings → AI assistants, choose **Claude Code** under **Connect an assistant** and
+   click **Copy**.
 2. Paste the command into a terminal and run it. It looks like this:
 
    ```
@@ -46,7 +49,8 @@ Claude Desktop cannot call an HTTP address of its own. It starts a small program
 and its token itself. So the Claude Desktop snippet holds no token and no port, and it
 keeps working after a restart of Font Fu.
 
-1. In Settings → AI assistants, click **Copy Claude Desktop config**.
+1. In Settings → AI assistants, choose **Claude Desktop** under **Connect an assistant**
+   and click **Copy**.
 2. In Claude Desktop, open **Settings → Developer → Edit Config**. This opens
    `claude_desktop_config.json` in a file manager.
 3. Open the file in a text editor and paste the `font-manager` entry into the `mcpServers`
@@ -63,8 +67,8 @@ and arguments) can use the same entry.
 
 ## Other assistants
 
-For an assistant that connects over HTTP with a JSON config, click **Copy HTTP client
-config**. The block names the address and the `Authorization` header with the token.
+For an assistant that connects over HTTP with a JSON config, choose **Other HTTP
+clients** under **Connect an assistant** and click **Copy**. The block names the address and the `Authorization` header with the token.
 
 ## What an assistant can do
 

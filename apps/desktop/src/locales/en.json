@@ -1571,6 +1571,7 @@
     },
     "localApi": {
       "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Fu through this address while the app runs. Each request needs the token.",
+      "connection": "Connection",
       "address": "Address",
       "addressLabel": "local API address",
       "notRunning": "Not running.",
@@ -1581,29 +1582,33 @@
       "copy": "Copy",
       "copyToken": "Copy token",
       "regenerate": "Regenerate",
+      "regenerateTitle": "Regenerate the token",
       "regenerateHint": "A new token replaces the old one at once. Programs that use the old token stop working until they get the new one.",
       "regenerated": "A new token was made. The old token no longer works."
     },
     "mcp": {
-      "note": "AI assistants such as Claude Code can use Font Fu through the Model Context Protocol (MCP). They reach it on this computer only, while the app runs, with the local API token.",
+      "note": "AI assistants such as Claude Code can use Font Fu through the Model Context Protocol (MCP). They reach it on this computer only, while the app runs.",
       "enable": "Allow AI assistants (MCP server)",
       "enableHint": "Off by default. When off, Font Fu does not answer MCP requests.",
       "address": "Address",
       "addressLabel": "MCP server address",
-      "addressHint": "The address changes each time the app starts. Copy the snippet again after a restart.",
       "notRunning": "The local API is not running, so the MCP server has no address yet.",
-      "showSnippets": "Show snippets",
-      "hideSnippets": "Hide snippets",
-      "claudeCode": "Claude Code",
-      "http": "Other HTTP clients (JSON config)",
-      "claudeDesktop": "Claude Desktop (starts the bundled fm-mcp-stdio)",
+      "connectTitle": "Connect an assistant",
+      "clientsLabel": "Assistant",
+      "clients": {
+        "claudeCode": "Claude Code",
+        "claudeDesktop": "Claude Desktop",
+        "http": "Other HTTP clients"
+      },
+      "show": "Show",
+      "hide": "Hide",
       "copy": "Copy",
       "copyClaudeCode": "Copy Claude Code command",
       "copyHttp": "Copy HTTP client config",
       "copyClaudeDesktop": "Copy Claude Desktop config",
-      "tokenHint": "The snippets contain the local API token. Keep them secret.",
+      "tokenHint": "The snippet contains the local API token. Keep it secret. The address changes each time the app starts.",
       "grantsTitle": "What AI assistants may change",
-      "grantsNote": "Searching, reading font details and previews are always allowed. Each tool that changes something needs its own switch. All are off by default, and a change applies to the next request.",
+      "grantsNote": "Searching, reading font details and previews are always allowed. Each tool that changes something needs its own switch.",
       "tools": {
         "activate_fonts": "Activate fonts",
         "deactivate_fonts": "Deactivate fonts",
@@ -1611,7 +1616,7 @@
         "export_web": "Export web fonts"
       },
       "asksEachTime": "Asks you every time (Allow / Deny)",
-      "help": "How to connect Claude Code and Claude Desktop"
+      "help": "How to connect"
     },
     "about": {
       "platformNotes": "Platform notes",
