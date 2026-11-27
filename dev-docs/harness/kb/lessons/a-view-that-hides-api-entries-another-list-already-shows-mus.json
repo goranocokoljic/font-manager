@@ -1,0 +1,19 @@
+{
+  "id": "a-view-that-hides-api-entries-another-list-already-shows-mus",
+  "title": "A view that hides API entries another list already shows must hide them one by one, by their own key",
+  "category": "correctness",
+  "rule": "When the UI shows one fm-api list in place of entries of another (a conflict list with both values instead of the matching Problems entries), hide an entry only when it matches a shown item on everything that identifies it (face, file and the value the sentence names), one entry per shown item, and list every other entry as a plain row. Never drop a whole class of entries (all with a face, all of a kind) on the belief that the other list covers them: read the fm-core query of both lists and compare their filters. Test it with an entry the other list leaves out, two shown items on one key, and an unrelated entry listed first on the same key, and assert that every counted entry is listed (count === rows).",
+  "rationale": "E57.9 (#699): the Problems view dropped every face-bearing sync entry because list_sidecar_conflicts lists them, but fm-core lists only value fields there, so collection and pin conflicts were counted and never shown; the first fix matched on face and file only and hid a collection entry in place of the rating conflict's own.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    699
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**/*.ts",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-11-27T10:29:38.108Z",
+  "last_seen": "2026-11-27T10:29:38.108Z"
+}
