@@ -20,6 +20,7 @@ import type {
   SetDecision,
 } from '../api/types';
 import { t } from '../i18n';
+import { sampleLanguages as languagesToSample } from '../search/languages';
 import { useHeldFace } from '../preview/useHeldFace';
 import { useSpecimen } from '../preview/useSpecimen';
 import SpecimenText from './SpecimenText';
@@ -103,7 +104,8 @@ const presetOf = (code: string) => props.presets.find((p) => p.code === code);
 const languageName = (code: string) => presetOf(code)?.name ?? code;
 const names = (codes: readonly string[] | undefined) => (codes ?? []).map(languageName);
 
-// The languages to switch the sample to: the user's, then those that differ.
+// The languages to switch the sample to: the user's and those that differ, in the API's
+// order (E58.3), so the user's lead.
 const sampleLanguages = computed(() => {
   const x = d.value;
   const codes = [
@@ -113,9 +115,7 @@ const sampleLanguages = computed(() => {
     ...(x?.loclLost ?? []),
     ...(x?.loclGained ?? []),
   ];
-  return [...new Set(codes)]
-    .map(presetOf)
-    .filter((p): p is LanguagePreset => !!p && !!(p.pangram ?? p.sampleGlyphs));
+  return languagesToSample(props.presets, codes);
 });
 const sampleLanguage = ref<string | null>(null);
 const sampleText = computed(() => {

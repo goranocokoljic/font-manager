@@ -237,17 +237,17 @@ test.describe('the preview row', () => {
     await expect(page.getByRole('slider', { name: 'Size slider', exact: true })).toHaveValue('80');
   });
 
-  test('the Language picker puts its pangram up and lists recent languages first', async ({
-    page,
-  }) => {
+  test('the Language picker puts its pangram up and keeps the API order', async ({ page }) => {
     const wall = await openWall(page);
     const language = row(page).getByLabel('Language');
-    expect((await optionLabels(language))[0]).toBe('English');
+    const before = await optionLabels(language);
+    expect(before[0]).toBe('English');
     await selectOption(language, { label: 'Serbian (Cyrillic)' });
     await expect(field(page)).toHaveValue(/фењерџија/);
     await expect(wall).toHaveAttribute('data-preset', 'pangram');
     await expect(chip(page, 'Pangram')).toHaveAttribute('aria-pressed', 'true');
-    expect((await optionLabels(language))[0]).toBe('Serbian (Cyrillic)');
+    // A pick does not move the language up: the list is the API's order (E58.3).
+    expect(await optionLabels(language)).toEqual(before);
   });
 
   test('the language it already shows presses the Pangram chip', async ({ page }) => {

@@ -6,8 +6,6 @@ import {
   CUSTOM_TEXT_MAX,
   DEFAULT_PREVIEW,
   PREVIEW_STORAGE_KEY,
-  RECENT_LANGUAGES_KEY,
-  RECENT_LANGUAGES_MAX,
   listPreview,
   normalizePreview,
   previewRowHeight,
@@ -58,40 +56,22 @@ describe('preview presets (E41.2)', () => {
     expect(normalizePreview({ sample: 'lorem' }).preset).toBe('word');
   });
 
-  it('a chosen language goes first, once, and is remembered; the list has a limit', async () => {
-    setClient(createMockClient());
+  it('a chosen language shows its pangram; the picker keeps the API order (E58.3)', async () => {
+    const client = createMockClient();
+    setClient(client);
     const store = freshStore();
     await store.loadPangrams();
+    const before = store.languagePicks.map((l) => l.code);
     store.chooseLanguage('all', 'de');
     store.chooseLanguage('all', 'sr-Cyrl');
-    store.chooseLanguage('all', 'de');
     expect(store.settingsFor('all')).toMatchObject({
-      language: 'de',
+      language: 'sr-Cyrl',
       sample: 'pangram',
       preset: 'pangram',
     });
-    expect(store.languagePicks.slice(0, 2).map((l) => l.code)).toEqual(['de', 'sr-Cyrl']);
-    expect(store.languagePicks).toHaveLength(mockLanguages.length);
-    expect(new Set(store.languagePicks.map((l) => l.code)).size).toBe(mockLanguages.length);
-
-    const again = freshStore();
-    await again.loadPangrams();
-    expect(again.languagePicks[0]!.code).toBe('de');
-
-    for (const code of mockLanguages.map((l) => l.code)) again.chooseLanguage('all', code);
-    expect(again.recentLanguages).toHaveLength(RECENT_LANGUAGES_MAX);
-  });
-
-  it('ignores a damaged recent list and a recent language the API no longer has', async () => {
-    setClient(createMockClient());
-    localStorage.setItem(RECENT_LANGUAGES_KEY, '{oops');
-    expect(freshStore().recentLanguages).toEqual([]);
-    localStorage.setItem(RECENT_LANGUAGES_KEY, JSON.stringify(['xx', 42, 'de']));
-    const store = freshStore();
-    await store.loadPangrams();
-    expect(store.recentLanguages).toEqual(['xx', 'de']);
-    expect(store.languagePicks[0]!.code).toBe('de');
-    expect(store.languagePicks.map((l) => l.code)).not.toContain('xx');
+    // Choosing does not move a language to the top: the list is the API's answer as it is.
+    expect(store.languagePicks.map((l) => l.code)).toEqual(before);
+    expect(before).toEqual((await client.listLanguages()).map((l) => l.code));
   });
 });
 

@@ -1423,6 +1423,8 @@ export interface MockOptions {
    * like the Rust mock) or `wall` (60 families from fixtures/fonts/, E40.2).
    */
   library?: 'small' | 'wall';
+  /** Answers `mockMoreLanguages` too: more languages than the filter drawer shows (E58.3). */
+  moreLanguages?: boolean;
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
   scanStepMs?: number;
   /**
@@ -2062,6 +2064,27 @@ export const mockLanguages: LanguagePreset[] = [
   // A preset without a pangram: the picker leaves it out.
   { code: 'mt', name: 'Maltese', script: 'Latn', pangram: null, sampleGlyphs: null },
 ];
+
+/**
+ * More Latin presets, with `moreLanguages` (`?mockLanguages=more`, E58.3): with them the
+ * mock has more languages than the filter drawer shows before "Show more".
+ */
+export const mockMoreLanguages: LanguagePreset[] = (
+  [
+    ['es', 'Spanish', 'El veloz murciélago hindú comía feliz cardillo y kiwi'],
+    ['it', 'Italian', 'Quel vituperabile xenofobo zelante assaggia il whisky ed esclama alleluja'],
+    [
+      'pt',
+      'Portuguese',
+      'Zebras caolhas de Java querem passar fax para moças gigantes de New York',
+    ],
+    ['nl', 'Dutch', "Pa's wijze lynx bezag vroom het fikse aquaduct"],
+    ['cs', 'Czech', 'Příliš žluťoučký kůň úpěl ďábelské ódy'],
+    ['tr', 'Turkish', 'Pijamalı hasta yağız şoföre çabucak güvendi'],
+    ['sv', 'Swedish', 'Flygande bäckasiner söka hwila på mjuka tuvor'],
+    ['hu', 'Hungarian', 'Árvíztűrő tükörfúrógép'],
+  ] as const
+).map(([code, name, pangram]) => ({ code, name, script: 'Latn', pangram, sampleGlyphs: null }));
 
 const OPEN_LICENSE_LABELS: Record<OpenLicense, string> = {
   ofl: 'OFL',
@@ -3298,8 +3321,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     options.settingsStorage,
   );
   /** The language presets `listLanguages` answers for this library. */
-  const languagePresets = () =>
-    options.library === 'wall' ? [...mockLanguages, WALL_VIETNAMESE] : mockLanguages;
+  const languagePresets = () => [
+    ...mockLanguages,
+    ...(options.library === 'wall' ? [WALL_VIETNAMESE] : []),
+    ...(options.moreLanguages ? mockMoreLanguages : []),
+  ];
   /**
    * fm-core's settings store (E56.3): drops the language ids without a preset, saves the
    * list without them and returns them, so each is reported once.
@@ -6174,6 +6200,8 @@ export const mockClient: FmClient = createMockClient({
   moreSources: countFromUrl('mockSources', 1) ? mockMoreSources : [],
   settingsStorage: sessionStorageOf(),
   library,
+  // `?mockLanguages=more` answers more languages than the filter drawer shows (E58.3).
+  moreLanguages: textFromUrl('mockLanguages')[0] === 'more',
   // `?mockSetup=first` opens the first-run setup as at a first start (E55.4); without it the
   // setup has no open step, so the other specs see the library.
   setup: setupFromUrl(),

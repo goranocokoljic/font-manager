@@ -30,11 +30,12 @@ const chip = (rail: ReturnType<Page['getByTestId']>, name: string) =>
 test('"Supports N languages": the complete ones as chips', async ({ page }) => {
   const rail = await openRail(page);
   await expect(rail.getByRole('heading', { name: 'Supports 4 languages' })).toBeVisible();
+  // In the order of list_languages (E58.3): English leads, the others from A to Z.
   await expect(rail.getByTestId('rail-language')).toHaveText([
     'English',
     'Polish',
-    'Serbian (Latin)',
     'Serbian (Cyrillic)',
+    'Serbian (Latin)',
   ]);
   await expect(rail.getByTestId('rail-languages-more')).toHaveCount(0);
 });

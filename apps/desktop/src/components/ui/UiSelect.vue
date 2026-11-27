@@ -8,7 +8,8 @@
 //
 // With `remote`, the parent does the filtering: the typed text goes out as `search` (and an
 // empty one when the menu opens), and the options shown are the ones the parent sends back.
-// An option with a `fontFamily` is set in it, in the menu and on the button.
+// An option with a `fontFamily` is set in it, in the menu and on the button. An option with
+// `separatorBefore` has a hairline above it while the list is not filtered.
 //
 // Attributes fall through to the button: `id` (for a `<label for>`), `aria-label`,
 // `name`, `class`, `data-testid`. The button sizes to its longest option, so a change
@@ -321,7 +322,7 @@ defineExpose({ focus: () => trigger.value?.focus() });
           :key="o.value"
           class="option"
           role="option"
-          :class="{ active: i === active }"
+          :class="{ active: i === active, break: o.separatorBefore && !query }"
           :aria-selected="o.value === modelValue"
           :aria-disabled="o.disabled || undefined"
           :data-value="String(o.value)"
@@ -454,6 +455,18 @@ defineExpose({ focus: () => trigger.value?.focus() });
 }
 .option.active {
   background-color: var(--fm-hover);
+}
+/* A new part of the list (the languages after the user's own): a hairline above it. */
+.option.break {
+  position: relative;
+  margin-block-start: var(--fm-space-1);
+}
+.option.break::before {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--fm-space-1) / -2);
+  border-top: 1px solid var(--fm-border);
+  content: '';
 }
 .option[aria-selected='true'] {
   font-weight: 500;

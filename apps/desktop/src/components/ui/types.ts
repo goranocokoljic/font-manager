@@ -9,4 +9,6 @@ export interface SelectOption<T extends string | number = string> {
   title?: string;
   /** A CSS `font-family` the label is set in: a font picker shows each family in itself. */
   fontFamily?: string;
+  /** A hairline above the option: a new part of the list starts (E58.3). */
+  separatorBefore?: boolean;
 }

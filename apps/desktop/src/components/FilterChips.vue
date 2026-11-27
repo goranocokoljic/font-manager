@@ -13,6 +13,7 @@ import {
   toggleLanguage,
   type Chip,
 } from '../search/chips';
+import { LANGUAGES_SHOWN } from '../search/languages';
 import { traitChipTail, traitLineLabel, type TraitChip } from '../search/traits';
 import { useCollectionsStore } from '../stores/collections';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
@@ -43,8 +44,8 @@ watch(
   { immediate: true },
 );
 
-/** The first languages sit in the drawer; the rest hide behind an expander. */
-const LANGUAGES_SHOWN = 10;
+// The first languages of the API's answer sit in the drawer (the user's lead, ADR 0028),
+// with every chosen one; the rest hide behind an expander.
 const allLanguages = ref(false);
 const shownLanguages = computed(() => {
   const all = search.languages;
