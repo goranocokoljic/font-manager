@@ -1,20 +1,24 @@
 <script setup lang="ts">
-// Settings › Appearance: the colour theme, light or dark, and the language. Moved out of
-// SettingsView in E57.3 as it was; E57.4 draws it with choice cards and setting rows.
+// Settings › Appearance (board 15): the colour themes as `ThemeCard`s in one row, light or dark
+// as three choice cards with small figures, and the language as a setting row. Every choice
+// saves at once.
 import { computed } from 'vue';
-import type { Language, SettingsUpdate } from '../../api/types';
+import type { Language, SettingsUpdate, Theme } from '../../api/types';
 import { CATALOGS, LOCALES, resolveLocale, t, type Catalog } from '../../i18n';
 import { useSettingsStore } from '../../stores/settings';
 import { useThemesStore } from '../../stores/themes';
 import ThemeCard from '../ThemeCard.vue';
+import UiChoiceCards, { type ChoiceCard } from '../ui/UiChoiceCards.vue';
 import UiSelect from '../ui/UiSelect.vue';
+import UiSettingGroup from '../ui/UiSettingGroup.vue';
+import UiSettingRow from '../ui/UiSettingRow.vue';
 import SettingsSection from './SettingsSection.vue';
 
 const store = useSettingsStore();
 const themes = useThemesStore();
 const s = computed(() => store.settings);
 
-/** Radio choices; each change is saved at once. */
+/** Each change is saved at once. */
 function choose(patch: SettingsUpdate): void {
   void store.update(patch);
 }
@@ -35,6 +39,28 @@ const languageOptions = computed(() => [
   { value: 'system', label: t('language.system', { name: systemLocaleName.value }) },
   ...LOCALES.map((tag) => ({ value: tag, label: localeName(tag) })),
 ]);
+const schemes = computed<ChoiceCard<Theme>[]>(() =>
+  (['system', 'light', 'dark'] as const).map((value) => ({
+    value,
+    title: t(`settings.appearance.themes.${value}`),
+  })),
+);
+
+/**
+ * The figures of the light and dark cards: the active theme's own paper in that mode (half
+ * and half for "Same as the system"), so each shows what the choice gives in this theme.
+ */
+const paperStyle = computed(() => {
+  const theme = themes.active;
+  if (!theme) return {};
+  return {
+    '--light': theme.light.bg,
+    '--light-border': theme.light.border,
+    '--dark': theme.dark.bg,
+    '--dark-border': theme.dark.border,
+  };
+});
+
 function chooseLanguage(value: string): void {
   choose({ language: value as Language });
 }
@@ -48,7 +74,7 @@ function chooseLanguage(value: string): void {
   >
     <template v-if="s">
       <fieldset class="group">
-        <legend>{{ t('settings.appearance.colorTheme') }}</legend>
+        <legend class="heading">{{ t('settings.appearance.colorTheme') }}</legend>
         <div class="theme-cards">
           <ThemeCard
             v-for="theme in themes.themes"
@@ -60,75 +86,86 @@ function chooseLanguage(value: string): void {
           />
         </div>
       </fieldset>
-      <fieldset class="group">
-        <legend>{{ t('settings.appearance.theme') }}</legend>
-        <label v-for="value in ['system', 'light', 'dark'] as const" :key="value" class="choice">
-          <input
-            type="radio"
-            name="theme"
-            :checked="s.theme === value"
-            @change="choose({ theme: value })"
+      <section class="group" aria-labelledby="scheme-heading">
+        <h3 id="scheme-heading" class="heading">{{ t('settings.appearance.theme') }}</h3>
+        <UiChoiceCards
+          name="theme"
+          :columns="3"
+          :label="t('settings.appearance.theme')"
+          :model-value="s.theme"
+          :options="schemes"
+          @update:model-value="choose({ theme: $event })"
+        >
+          <template #figure="{ option }">
+            <span
+              class="paper"
+              :class="option.value"
+              :style="paperStyle"
+              data-testid="scheme-figure"
+            />
+          </template>
+        </UiChoiceCards>
+      </section>
+      <UiSettingGroup :heading="t('language.label')">
+        <UiSettingRow v-slot="{ control }" :title="t('language.label')" :line="t('language.hint')">
+          <UiSelect
+            v-bind="control"
+            name="language"
+            :model-value="s.language ?? 'system'"
+            :options="languageOptions"
+            @update:model-value="chooseLanguage"
           />
-          {{ t(`settings.appearance.themes.${value}`) }}
-        </label>
-      </fieldset>
-      <label class="field">
-        <span>{{ t('language.label') }}</span>
-        <UiSelect
-          name="language"
-          class="select"
-          aria-describedby="language-hint"
-          :model-value="s.language ?? 'system'"
-          :options="languageOptions"
-          @update:model-value="chooseLanguage"
-        />
-      </label>
-      <p id="language-hint" class="note">{{ t('language.hint') }}</p>
+        </UiSettingRow>
+      </UiSettingGroup>
     </template>
   </SettingsSection>
 </template>
 
 <style scoped>
-.note {
-  margin: 0 0 12px;
-  color: var(--fm-muted);
-}
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fm-gap);
-  margin: 0 0 16px;
+  margin: 0 0 var(--fm-space-5);
   padding: 0;
   border: 0;
 }
-.group legend {
-  margin-bottom: 6px;
+/* The small-caps heading of UiSettingGroup, over cards that are not setting rows. */
+.heading {
+  margin: 0 0 var(--fm-space-2);
   padding: 0;
-}
-/* Group legends and field labels share one quiet caption style. */
-.group legend,
-.field > span:first-child {
   color: var(--fm-muted);
-  font-size: var(--fm-text-sm);
+  font-size: var(--fm-text-xs);
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 12px;
-}
-.select {
-  align-self: flex-start;
-}
+/* The themes in one row, however many there are. */
 .theme-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   gap: var(--fm-space-3);
+}
+/* Light or dark: a small sheet of the theme's paper in that mode. */
+.paper {
+  box-sizing: border-box;
+  display: block;
+  width: 36px;
+  height: 20px;
+  border-radius: var(--fm-radius-sm);
+}
+.paper.light {
+  border: 1px solid var(--light-border, var(--fm-border-strong));
+  background: var(--light, var(--fm-bg));
+}
+.paper.dark {
+  border: 1px solid var(--dark-border, var(--fm-border-strong));
+  background: var(--dark, var(--fm-fg));
+}
+.paper.system {
+  border: 1px solid var(--fm-border-strong);
+  background: linear-gradient(
+    to right,
+    var(--light, var(--fm-bg)) 0 50%,
+    var(--dark, var(--fm-fg)) 50% 100%
+  );
 }
 </style>

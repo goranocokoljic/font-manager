@@ -598,3 +598,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-27
 - [E57.3 #693] apps/desktop/src/components/ThemeCard.vue:28 — a radio card of its own (hidden native radio with an accent ring), as are SetupCatalogsStep.vue:73 and :96; DESIGN.md now calls a local copy of a choice card a bug (E57.4 covers ThemeCard, the Setup steps are outside E57).
 - [E57.3 #693] apps/desktop/src/views/SettingsView.vue — every tab's `aria-controls="panel-<id>"` points to a panel that exists only for the open tab (pattern moved unchanged from before E57.3).
+- [E57.4 #694] docs/user/activation.md:152 — the user guide named the old label "Replace the other font for this session without asking" (updated to "Replace without asking" in the same PR).

@@ -185,7 +185,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   card's one line, never a paragraph between controls. A switch saves at once; a number saves
   on `commit`. A secret (the token) is dots until Show. About opens with the logotype and the
   version in one quiet panel; the state of updates is the title of its row. Nothing here is
-  coloured but the accent on the chosen card and the switch that is on.
+  coloured but the accent on the chosen card and the switch that is on, and a failed change
+  (the OS refused "Start at login"), which the row says in `--fm-danger`, not a toast.
 - **Close (E57.8):** a full view or a panel closes with `UiIconButton` (icon `close`) at the
   end of its bar or in its top corner at the end of the line, named for what it closes, with
   Esc in its tooltip where Esc closes it. A text button "Close" in a top bar or a panel head
@@ -220,7 +221,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   (a radio group drawn as cards, one tab stop, arrows move the choice, one to three columns),
   `UiSettingGroup` (a card of rows under an optional small-caps heading and note) and
   `UiSettingRow` (title, one line, an optional mono value, one control that the row labels and
-  describes through its `control` slot props); a local copy of a choice card or a setting row
+  describes through its `control` slot props, and `error`, a failed change said on the row and
+  added to the control's description, E57.4); a local copy of a choice card or a setting row
   is a bug; every Settings section is a component of its own under `components/settings/`,
   its head `SettingsSection` (Sources, Local API and AI assistants keep theirs);
   every inspector tab head is `InspectorTabHead`;

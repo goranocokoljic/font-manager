@@ -23,7 +23,8 @@ const props = withDefaults(
     options: readonly ChoiceCard<T>[];
     /** The group's name; also the prefix of the cards' ids. */
     name: string;
-    ariaLabel: string;
+    /** The group's accessible name. */
+    label: string;
     columns?: 1 | 2 | 3;
   }>(),
   { columns: 2 },
@@ -80,7 +81,7 @@ function onKey(e: KeyboardEvent, from: ChoiceCard<T>): void {
     role="radiogroup"
     class="ui-choice-cards"
     :class="`cols-${columns}`"
-    :aria-label="ariaLabel"
+    :aria-label="label"
     :data-name="name"
   >
     <div

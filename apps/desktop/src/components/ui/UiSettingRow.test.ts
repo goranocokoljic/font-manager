@@ -71,4 +71,26 @@ describe('UiSettingRow and UiSettingGroup', () => {
     expect(bare.get('section').attributes('aria-labelledby')).toBeUndefined();
     bare.unmount();
   });
+  it('says a failed change on the row, as an alert that also describes the control (E57.4)', async () => {
+    const wrapper = mount(UiSettingRow, {
+      props: { title: 'Start at login', line: 'Font Fu starts in the tray.' },
+      slots: {
+        default: ({ control }: { control: Record<string, string | undefined> }) =>
+          h(UiSwitch, { checked: false, ...control }),
+      },
+      attachTo: document.body,
+    });
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    await wrapper.setProps({ error: 'Start at login could not be changed.' });
+    const alert = wrapper.get('[role="alert"]');
+    expect(alert.text()).toBe('Start at login could not be changed.');
+    const ids = wrapper.get('[role="switch"]').attributes('aria-describedby')!.split(' ');
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toEqual([
+      'Font Fu starts in the tray.',
+      'Start at login could not be changed.',
+    ]);
+    await wrapper.setProps({ error: undefined });
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });

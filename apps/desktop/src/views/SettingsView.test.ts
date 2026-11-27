@@ -38,11 +38,18 @@ async function mountAt(path: string) {
   return { wrapper, router };
 }
 
-const radio = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label: string) =>
-  wrapper
-    .findAll('label')
-    .find((l) => l.text() === label)!
-    .get('input');
+type Wrapper = Awaited<ReturnType<typeof mountAt>>['wrapper'];
+
+/** A choice card (E57.4) by its title. */
+const card = (wrapper: Wrapper, title: string) =>
+  wrapper.findAll('[role="radio"]').find((c) => c.get('.title').text() === title)!;
+
+/** A setting row's switch, by its name. */
+const toggle = (wrapper: Wrapper, name: string) => wrapper.get(`[role="switch"][name="${name}"]`);
+
+/** The text of the element that labels (or first describes) `el`. */
+const labelOf = (el: { attributes: (k: string) => string | undefined }, attr = 'aria-labelledby') =>
+  document.getElementById(el.attributes(attr)!.split(' ')[0]!)?.textContent?.trim();
 
 describe('Settings window', () => {
   it('has the eight sections as tabs and opens Sources first', async () => {
@@ -151,7 +158,7 @@ describe('Settings window', () => {
 
   it('applies the theme the moment it changes and saves it; there is no density (E51.5)', async () => {
     const { wrapper } = await mountAt('/settings?section=appearance');
-    await radio(wrapper, 'Dark').setValue(true);
+    await card(wrapper, 'Dark').trigger('click');
     await flushPromises();
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(await client.getSettings()).toMatchObject({ theme: 'dark' });
@@ -188,7 +195,7 @@ describe('Settings window', () => {
     expect(wrapper.get('[data-theme-id="moss"]').classes()).toContain('checked');
 
     // The cards follow the light or dark mode.
-    await radio(wrapper, 'Dark').setValue(true);
+    await card(wrapper, 'Dark').trigger('click');
     await flushPromises();
     const dark = (wrapper.get('[data-theme-id="moss"]').element as HTMLElement).style;
     expect(dark.getPropertyValue('--fm-accent')).toBe('#8fb573');
@@ -208,7 +215,8 @@ describe('Settings window', () => {
     const spy = vi.spyOn(client, 'updateSettings');
     const { wrapper } = await mountAt('/settings?section=appearance');
     const select = wrapper.get('[role="combobox"][name="language"]');
-    expect(select.element.closest('label')!.textContent).toContain('Language');
+    expect(labelOf(select)).toBe('Language');
+    expect(labelOf(select, 'aria-describedby')).toContain('System follows the language');
     const options = await selectOptions(select);
     expect(options.map(([value]) => value)).toEqual(['system', 'en', 'de']);
     expect(options.map(([, label]) => label)).toEqual(['System (English)', 'English', 'Deutsch']);
@@ -243,26 +251,62 @@ describe('Settings window', () => {
     }
   });
 
-  it('saves the activation choices', async () => {
+  it('saves the activation choices, drawn as choice cards with their figures (E57.4)', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
-    await radio(wrapper, 'Permanently (also after a restart)').setValue(true);
-    await radio(wrapper, 'Replace the other font for this session without asking').setValue(true);
+    const groups = wrapper.findAll('[role="radiogroup"]');
+    expect(groups.map((g) => g.attributes('aria-label'))).toEqual([
+      'The Activate button activates fonts',
+      'When a font has the same name as a system font or an active font',
+    ]);
+    for (const g of groups) expect(g.classes()).toContain('cols-2');
+    expect(groups[0]!.findAll('[role="radio"]').map((c) => c.text())).toEqual([
+      'For this sessionUntil Font Fu quits.',
+      'PermanentlyAlso after a restart, until you deactivate them.',
+    ]);
+    expect(groups[0]!.findAll('[data-testid="activation-figure"]')).toHaveLength(2);
+    expect(card(wrapper, 'For this session').attributes('aria-checked')).toBe('true');
+
+    await card(wrapper, 'Permanently').trigger('click');
+    await card(wrapper, 'Replace without asking').trigger('click');
     await flushPromises();
     expect(await client.getSettings()).toMatchObject({
       activationMode: 'permanent',
       onConflict: 'replace',
     });
+    expect(card(wrapper, 'Permanently').attributes('aria-checked')).toBe('true');
+    // The arrow keys move the choice and save it.
+    await card(wrapper, 'Replace without asking').trigger('keydown', { key: 'ArrowLeft' });
+    await flushPromises();
+    expect((await client.getSettings()).onConflict).toBe('keepExisting');
+    wrapper.unmount();
+  });
+
+  it('puts the three switches under "While the app runs", each with its one line (E57.4)', async () => {
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const group = wrapper.get('.ui-setting-group');
+    expect(group.get('h3').text()).toBe('While the app runs');
+    const switches = group.findAll('[role="switch"]');
+    expect(switches.map((sw) => labelOf(sw))).toEqual([
+      'Reactivate on launch',
+      'Keep running in the tray when the window is closed',
+      'Start at login',
+    ]);
+    expect(labelOf(switches[0]!, 'aria-describedby')).toBe(
+      'Activate the last session’s fonts again when the app starts.',
+    );
+    expect(wrapper.find('input[type="checkbox"], input[type="radio"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
   it('saves "reactivate on launch"', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
-    const box = wrapper.get('input[name="reactivate-on-launch"]');
-    expect((box.element as HTMLInputElement).checked).toBe(false);
-    await box.setValue(true);
+    const box = toggle(wrapper, 'reactivate-on-launch');
+    expect(box.attributes('aria-checked')).toBe('false');
+    await box.trigger('click');
     await flushPromises();
     expect((await client.getSettings()).reactivateOnLaunch).toBe(true);
-    await box.setValue(false);
+    expect(box.attributes('aria-checked')).toBe('true');
+    await box.trigger('click');
     await flushPromises();
     expect((await client.getSettings()).reactivateOnLaunch).toBe(false);
     wrapper.unmount();
@@ -270,15 +314,13 @@ describe('Settings window', () => {
 
   it('saves "keep running in the tray", on by default', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
-    const box = wrapper.get('input[name="keep-in-tray"]');
-    expect(box.element.closest('label')!.textContent).toContain(
-      'Keep running in the tray when the window is closed',
-    );
-    expect((box.element as HTMLInputElement).checked).toBe(true);
-    await box.setValue(false);
+    const box = toggle(wrapper, 'keep-in-tray');
+    expect(labelOf(box)).toBe('Keep running in the tray when the window is closed');
+    expect(box.attributes('aria-checked')).toBe('true');
+    await box.trigger('click');
     await flushPromises();
     expect((await client.getSettings()).keepInTray).toBe(false);
-    await box.setValue(true);
+    await box.trigger('click');
     await flushPromises();
     expect((await client.getSettings()).keepInTray).toBe(true);
     wrapper.unmount();
@@ -289,37 +331,63 @@ describe('Settings window', () => {
     setClient(client);
     const { wrapper } = await mountAt('/settings?section=activation');
     expect((await client.getSettings()).startAtLogin).toBeNull();
-    expect(wrapper.find('input[name="start-at-login"]').exists()).toBe(false);
+    expect(wrapper.find('[name="start-at-login"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('Start at login');
     wrapper.unmount();
   });
 
   it('turns "Start at login" on and off, offered and off by default', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
-    const box = wrapper.get('input[name="start-at-login"]');
-    expect(box.element.closest('label')!.textContent!.trim()).toBe('Start at login');
-    expect((box.element as HTMLInputElement).checked).toBe(false);
-    await box.setValue(true);
+    const box = toggle(wrapper, 'start-at-login');
+    expect(labelOf(box)).toBe('Start at login');
+    expect(box.attributes('aria-checked')).toBe('false');
+    await box.trigger('click');
     await flushPromises();
     expect((await client.getSettings()).startAtLogin).toBe(true);
-    await box.setValue(false);
+    await box.trigger('click');
     await flushPromises();
     expect((await client.getSettings()).startAtLogin).toBe(false);
     wrapper.unmount();
   });
 
-  it('shows a toast and the real state when the system refuses the login entry', async () => {
+  it('says on its row when the system refuses the login entry, and the switch goes back', async () => {
     client = createMockClient({ setup: 'none', startAtLogin: 'refuse' });
     setClient(client);
     const { wrapper } = await mountAt('/settings?section=activation');
-    const box = wrapper.get('input[name="start-at-login"]');
-    await box.setValue(true);
+    const box = toggle(wrapper, 'start-at-login');
+    await box.trigger('click');
     await flushPromises();
-    expect(wrapper.get('[data-testid="toast"]').text()).toContain(
+    const row = box.element.closest('.ui-setting-row')!;
+    expect(row.querySelector('[role="alert"]')?.textContent).toContain(
       'Start at login could not be turned on',
     );
-    expect((box.element as HTMLInputElement).checked).toBe(false);
+    expect(box.attributes('aria-describedby')!.split(' ')).toHaveLength(2);
+    expect(box.attributes('aria-checked')).toBe('false');
     expect((await client.getSettings()).startAtLogin).toBe(false);
+    // Said once, on the row: no toast, no second alert above the section.
+    expect(wrapper.findAll('[role="alert"]')).toHaveLength(1);
+    expect(wrapper.find('[data-testid="toast"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('draws light or dark as three choice cards with figures, the themes in one row (E57.4)', async () => {
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    const group = wrapper.get('[role="radiogroup"][aria-label="Light or dark"]');
+    expect(group.classes()).toContain('cols-3');
+    expect(group.findAll('[role="radio"]').map((c) => c.text())).toEqual([
+      'Same as the system',
+      'Light',
+      'Dark',
+    ]);
+    const figures = group.findAll('[data-testid="scheme-figure"]');
+    expect(figures.map((f) => f.classes()[1])).toEqual(['system', 'light', 'dark']);
+    // Each figure is the active theme's own paper in that mode (Paper: light, dark).
+    const style = (figures[2]!.element as HTMLElement).style;
+    expect(style.getPropertyValue('--dark')).not.toBe('');
+    expect(style.getPropertyValue('--light')).not.toBe(style.getPropertyValue('--dark'));
+    expect(card(wrapper, 'Same as the system').attributes('aria-checked')).toBe('true');
+    expect(wrapper.findAll('.theme-cards [data-testid="theme-card"]')).toHaveLength(4);
+    expect(wrapper.find('input[type="radio"]:not(.sr-only)').exists()).toBe(false);
     wrapper.unmount();
   });
 

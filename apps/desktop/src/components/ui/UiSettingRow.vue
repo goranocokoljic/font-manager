@@ -4,10 +4,11 @@
 // at its end. The row names its control: the default slot gets `control`, the attributes to
 // bind on it (`v-bind="control"`), which make the title its label (`aria-labelledby`) and the
 // line its description (`aria-describedby`). No caller writes those ids by hand; a local copy
-// of a setting row is a bug (DESIGN.md, "Settings").
+// of a setting row is a bug (DESIGN.md, "Settings"). `error` (E57.4) is a failed change's
+// message, said on the row under its line (an alert) and added to the control's description.
 import { computed, useId } from 'vue';
 
-const props = defineProps<{ title: string; line?: string; value?: string }>();
+const props = defineProps<{ title: string; line?: string; value?: string; error?: string }>();
 
 defineSlots<{
   default?: (props: {
@@ -18,9 +19,11 @@ defineSlots<{
 const uid = useId();
 const titleId = `${uid}-title`;
 const lineId = `${uid}-line`;
+const errorId = `${uid}-error`;
 const control = computed(() => ({
   'aria-labelledby': titleId,
-  'aria-describedby': props.line ? lineId : undefined,
+  'aria-describedby':
+    [props.line ? lineId : '', props.error ? errorId : ''].filter(Boolean).join(' ') || undefined,
 }));
 </script>
 
@@ -30,6 +33,7 @@ const control = computed(() => ({
       <span :id="titleId" class="title">{{ title }}</span>
       <span v-if="line" :id="lineId" class="line">{{ line }}</span>
       <bdi v-if="value" class="value">{{ value }}</bdi>
+      <span v-if="error" :id="errorId" role="alert" class="error">{{ error }}</span>
     </div>
     <div v-if="$slots.default" class="control">
       <slot :control="control" />
@@ -56,6 +60,10 @@ const control = computed(() => ({
 }
 .line {
   color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.error {
+  color: var(--fm-danger);
   font-size: var(--fm-text-sm);
 }
 .value {

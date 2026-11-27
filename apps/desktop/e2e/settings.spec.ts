@@ -53,10 +53,8 @@ test('the theme applies at once, without a reload', async ({ page }) => {
 
 test('the activation choice applies to the next activation', async ({ page }) => {
   await page.goto('/#/settings?section=activation');
-  await page
-    .getByRole('radio', { name: 'Replace the other font for this session without asking' })
-    .check();
-  await page.getByRole('radio', { name: 'Permanently (also after a restart)' }).check();
+  await page.getByRole('radio', { name: 'Replace without asking' }).check();
+  await page.getByRole('radio', { name: 'Permanently' }).check();
   await page.getByRole('button', { name: 'Close' }).click();
 
   // Face 1 has no clash: permanent.
@@ -86,12 +84,12 @@ test('the status bar counts active fonts as activation changes', async ({ page }
 
 test('"reactivate on launch" is saved', async ({ page }) => {
   await page.goto('/#/settings?section=activation');
-  const box = page.getByRole('checkbox', { name: /Reactivate on launch/ });
+  const box = page.getByRole('switch', { name: 'Reactivate on launch' });
   await expect(box).not.toBeChecked();
   await box.check();
   await page.getByRole('button', { name: 'Close' }).click();
   await page.goto('/#/settings?section=activation');
-  await expect(page.getByRole('checkbox', { name: /Reactivate on launch/ })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Reactivate on launch' })).toBeChecked();
 });
 
 // E50.13: Settings › Sources as cards (dev-docs/design/redesign/11-sources.png). The mock
@@ -177,21 +175,27 @@ test('a cloud folder and a missing one; the drop zone and the problems strip', a
   await expect(page).toHaveURL(/#\/problems/);
 });
 
-/** WCAG contrast ratio of the field's border against the page background. */
+/**
+ * WCAG contrast ratio of the field's border against the page background. The field, not the
+ * Language group of the same name (E57.4).
+ */
 const borderContrast = (page: Page, name: string) =>
-  page.getByLabel(name).evaluate((el) => {
-    const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
-    const lum = (c: string) => {
-      const [r, g, b] = rgb(c).map((v) => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      });
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    };
-    const a = lum(getComputedStyle(el).borderTopColor);
-    const b = lum(getComputedStyle(document.body).backgroundColor);
-    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-  });
+  page
+    .getByLabel(name)
+    .and(page.locator('input, button'))
+    .evaluate((el) => {
+      const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+      const lum = (c: string) => {
+        const [r, g, b] = rgb(c).map((v) => {
+          const s = v / 255;
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const a = lum(getComputedStyle(el).borderTopColor);
+      const b = lum(getComputedStyle(document.body).backgroundColor);
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    });
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`form fields are outlined at 3:1 or more (${scheme})`, async ({ page }) => {
@@ -209,7 +213,7 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
   page,
 }) => {
   await page.goto('/#/settings?section=activation');
-  const keep = page.getByRole('checkbox', {
+  const keep = page.getByRole('switch', {
     name: 'Keep running in the tray when the window is closed',
   });
   await expect(keep).toBeChecked();
@@ -221,7 +225,7 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
   await page.getByRole('button', { name: 'Close' }).click();
   await page.goto('/#/settings?section=activation');
   await expect(
-    page.getByRole('checkbox', { name: 'Keep running in the tray when the window is closed' }),
+    page.getByRole('switch', { name: 'Keep running in the tray when the window is closed' }),
   ).not.toBeChecked();
 
   await tab(page, 'About').click();
@@ -239,27 +243,27 @@ test('"Start at login" is visible on Windows, macOS and Linux alike', async ({ p
     await tab(page, 'About').click();
     await expect(page.getByTestId('app-info')).toContainText(platform);
     await tab(page, 'Activation').click();
-    await expect(page.getByRole('checkbox', { name: 'Start at login' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'Start at login' })).not.toBeChecked();
+    await expect(page.getByRole('switch', { name: 'Start at login' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Start at login' })).not.toBeChecked();
   }
 });
 
 test('"Start at login" stays hidden where fm-api does not offer it (Flatpak)', async ({ page }) => {
   await page.goto('/?mockStartAtLogin=3#/settings?section=activation');
   await expect(
-    page.getByRole('checkbox', { name: 'Keep running in the tray when the window is closed' }),
+    page.getByRole('switch', { name: 'Keep running in the tray when the window is closed' }),
   ).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Start at login' })).toHaveCount(0);
+  await expect(page.getByRole('switch', { name: 'Start at login' })).toHaveCount(0);
 });
 
 test('"Start at login" is a labelled switch the keyboard reaches and turns on', async ({
   page,
 }) => {
   await page.goto('/#/settings?section=activation');
-  const tray = page.getByRole('checkbox', {
+  const tray = page.getByRole('switch', {
     name: 'Keep running in the tray when the window is closed',
   });
-  const login = page.getByRole('checkbox', { name: 'Start at login' });
+  const login = page.getByRole('switch', { name: 'Start at login' });
   await expect(login).not.toBeChecked();
   await expect(login).toHaveAccessibleDescription(/starts in the tray when you log in/);
   await tray.focus();
@@ -275,16 +279,18 @@ test('"Start at login" is a labelled switch the keyboard reaches and turns on', 
   await expect(login).toBeChecked();
 });
 
-test('"Start at login" shows an error toast when the system refuses the entry', async ({
+test('"Start at login" says on its row when the system refuses the entry (E57.4)', async ({
   page,
 }) => {
   await page.goto('/?mockStartAtLogin=2#/settings?section=activation');
-  const login = page.getByRole('checkbox', { name: 'Start at login' });
+  const login = page.getByRole('switch', { name: 'Start at login' });
   await login.focus();
   await page.keyboard.press('Space');
-  await expect(page.getByTestId('toast')).toContainText(
+  await expect(page.getByRole('alert')).toContainText(
     'Start at login could not be turned on: the system refused the login entry.',
   );
+  await expect(login).toHaveAccessibleDescription(/the system refused the login entry/);
+  await expect(page.getByTestId('toast')).toHaveCount(0);
   await expect(login).not.toBeChecked();
 });
 

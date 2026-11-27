@@ -149,8 +149,8 @@ When you activate such a font, Font Fu asks you what to do:
   also when you asked for a permanent activation. After that, the other font is back.
 - **Cancel** — nothing changes.
 
-In the settings, under **Activation**, you can choose **Replace the other font for this
-session without asking**. Then Font Fu does not ask.
+In the settings, under **Activation**, you can choose **Replace without asking**. Then
+Font Fu does not ask, and replaces the other font for this session.
 
 Font Fu never deactivates the other font. If the other font is a system font or a
 font that another app installed, it stays installed.
