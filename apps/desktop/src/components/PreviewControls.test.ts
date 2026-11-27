@@ -126,7 +126,7 @@ describe('PreviewControls', () => {
     expect((field(wrapper).element as HTMLInputElement).value).toBe('');
   });
 
-  it('lists the recent languages first and every API language; one puts its pangram up', async () => {
+  it('lists every API language in its order, also after a pick; one puts its pangram up', async () => {
     const { wrapper, store } = controls();
     await flushPromises();
     const language = selectLabelled(wrapper, 'Language');
@@ -140,12 +140,29 @@ describe('PreviewControls', () => {
       sample: 'pangram',
       preset: 'pangram',
     });
+    // A pick does not move the language up: the order stays the API's (E58.3).
     const after = await selectOptions(language);
-    expect(after[0]![0]).toBe('sr-Cyrl');
+    expect(after.map(([code]) => code)).toEqual(api.map((l) => l.code));
     expect(after).toHaveLength(mockLanguages.length);
     expect((field(wrapper).element as HTMLInputElement).value).toBe(
       mockLanguages.find((l) => l.code === 'sr-Cyrl')!.pangram,
     );
+  });
+
+  it('leads with the user languages and draws a hairline after them (E58.3)', async () => {
+    const client = createMockClient();
+    await client.updateSettings({ myLanguages: ['pl', 'de'] });
+    setClient(client);
+    const { wrapper } = controls();
+    await flushPromises();
+    const language = selectLabelled(wrapper, 'Language');
+    await language.trigger('click');
+    await flushPromises();
+    const rows = [...document.body.querySelectorAll<HTMLElement>('.ui-popover [role="option"]')];
+    expect(rows.slice(0, 2).map((r) => r.dataset.value)).toEqual(['pl', 'de']);
+    expect(rows.flatMap((r, i) => (r.classList.contains('break') ? [i] : []))).toEqual([2]);
+    await language.trigger('keydown', { key: 'Escape' });
+    setClient(undefined);
   });
 
   it('picking the language it already shows presses the Pangram chip', async () => {
