@@ -212,6 +212,18 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   667 x 467, so the inspector, then the sidebar, fold by themselves when there is no room
   and come back when there is, without touching what the user chose by hand. Boards and the
   screenshots of UI stories are at the default size.
+- **Narrow windows (E58.6):** every view is usable down to 667 x 467 CSS px (the smallest
+  window at 150%): no horizontal scroll bar on the page, no control cut off, a top bar wraps
+  its controls onto a second row, and a wide table scrolls inside its own box. The panes fold
+  by the one rule in `stores/layout.ts` (`panesShown`): the main pane keeps `MAIN_ROOM`
+  (480 px); without it the inspector folds first, then the sidebar. A fold by room is never
+  saved: `sidebarOpen` stays the user's choice, the sidebar button shows what is on screen,
+  and pressing it without room shows the sidebar for a look until the window changes. The
+  shells of Settings, Duplicates and Problems keep their 232 px navigation at every width.
+  Below 1000 px (CSS `@media (max-width: 999.98px)`) side-by-side content
+  stacks: Compare's Grid shows one face per row, and the Studio's compared panels stack one
+  above the other, each with its roles rail above the page. At 1000 px and wider nothing
+  changes.
 - **Close (E57.8):** a full view or a panel closes with `UiIconButton` (icon `close`) at the
   end of its bar or in its top corner at the end of the line, named for what it closes, with
   Esc in its tooltip where Esc closes it. A text button "Close" in a top bar or a panel head

@@ -52,9 +52,9 @@ const sizeMode = computed<PreviewSurface>(() => props.mode);
     <UiIconButton
       icon="sidebar"
       :label="t('home.sidebar')"
-      aria-controls="fm-sidebar"
+      :aria-controls="layout.sidebarShown ? 'fm-sidebar' : undefined"
       aria-keyshortcuts="["
-      :aria-pressed="layout.sidebarOpen"
+      :aria-pressed="layout.sidebarShown"
       :title="t('home.sidebarTitle')"
       @click="layout.toggleSidebar"
     />

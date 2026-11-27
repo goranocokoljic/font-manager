@@ -2,7 +2,7 @@
 // The main window: sidebar | font list, with a status bar below. The sidebar's width and
 // visibility come from the layout store; this component offers the layout actions (sidebar
 // toggle, go to a column). Each column is a tab stop, so Tab moves between columns.
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
@@ -12,6 +12,17 @@ import PaneDivider from './PaneDivider.vue';
 const layout = useLayoutStore();
 const sidebar = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
+
+// The sidebar folds by itself when the window has no room (E58.6). If it holds the focus, the
+// focus goes to the list column before the sidebar leaves, so it never falls to the page.
+watch(
+  () => layout.sidebarShown,
+  (shown) => {
+    if (shown || !sidebar.value?.contains(document.activeElement)) return;
+    list.value?.focus();
+  },
+  { flush: 'pre' },
+);
 
 /** The font view in the list column: list, table, grid or waterfall. */
 const FONT_VIEW = '[role="tree"], [role="treegrid"], [role="listbox"]';
@@ -67,7 +78,7 @@ useActions([
   <div class="window">
     <div class="columns">
       <nav
-        v-if="layout.sidebarOpen"
+        v-if="layout.sidebarShown"
         id="fm-sidebar"
         ref="sidebar"
         class="sidebar column"
@@ -78,7 +89,7 @@ useActions([
         <slot name="sidebar" />
       </nav>
       <PaneDivider
-        v-if="layout.sidebarOpen"
+        v-if="layout.sidebarShown"
         :label="t('layout.resizeSidebar')"
         controls="fm-sidebar"
         :value="layout.sidebarWidth"

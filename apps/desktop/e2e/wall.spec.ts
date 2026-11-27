@@ -140,7 +140,8 @@ test.describe('the wall', () => {
     expect(first!.width).toBeGreaterThanOrEqual(260);
     await page.setViewportSize({ width: 1000, height: 900 });
     await expect(wall).toHaveAttribute('data-columns', '2');
-    await page.setViewportSize({ width: 700, height: 900 });
+    // 720 px still has room for the sidebar (232 + 480, E58.6): the wall gets what is left.
+    await page.setViewportSize({ width: 720, height: 900 });
     await expect(wall).toHaveAttribute('data-columns', '1');
   });
 
