@@ -25,6 +25,7 @@ import { useSpecimen } from '../preview/useSpecimen';
 import SpecimenText from './SpecimenText';
 import UiBadge from './ui/UiBadge.vue';
 import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const props = defineProps<{
@@ -263,6 +264,14 @@ function onKey(e: KeyboardEvent): void {
   <section class="comparison" :aria-label="title" data-testid="copy-comparison" @keydown="onKey">
     <header class="head">
       <h3 ref="heading" tabindex="-1">{{ title }}</h3>
+      <UiIconButton
+        icon="close"
+        :label="t('duplicatesModule.compare.close')"
+        shortcut="Esc"
+        aria-keyshortcuts="Escape"
+        data-testid="compare-close"
+        @click="emit('close')"
+      />
       <div class="pick">
         <UiSelect
           :model-value="comparison.a.path"
@@ -279,9 +288,6 @@ function onKey(e: KeyboardEvent): void {
           @update:model-value="pickSecond"
         />
       </div>
-      <UiButton aria-keyshortcuts="Escape" @click="emit('close')">
-        {{ t('duplicatesModule.compare.close') }}
-      </UiButton>
     </header>
 
     <div
@@ -519,13 +525,14 @@ function onKey(e: KeyboardEvent): void {
   gap: var(--fm-space-2) var(--fm-space-3);
 }
 .head h3 {
-  flex: 1 1 100%;
+  flex: 1 1 0;
+  min-width: 0;
   margin: 0;
   font-size: var(--fm-text-md);
 }
 .pick {
   display: flex;
-  flex: 1;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   gap: var(--fm-space-2);
   min-width: 0;

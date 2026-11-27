@@ -395,7 +395,14 @@ test('the properties editor works from the keyboard; Escape returns focus to the
     await expect(editor.getByLabel(name, { exact: true })).toBeFocused();
   }
   await page.keyboard.press('Tab');
-  await expect(editor.getByRole('button', { name: 'Close' })).toBeFocused();
+  const close = editor.getByRole('button', { name: 'Close block properties' });
+  await expect(close).toBeFocused();
+  // E57.8: the × stands in the editor's top corner, at the end of the line.
+  const box = (await close.boundingBox())!;
+  const panel = (await editor.boundingBox())!;
+  expect(box.y - panel.y).toBeLessThan(12);
+  expect(panel.x + panel.width - (box.x + box.width)).toBeLessThan(12);
+  await expect(close).toHaveAttribute('aria-keyshortcuts', 'Escape');
 
   // The keyboard steps a number by the core's step (1 pt of size). A closed select is not
   // stepped here: on macOS an arrow key opens its menu instead of changing the value.
@@ -411,6 +418,13 @@ test('the properties editor works from the keyboard; Escape returns focus to the
   await expect(editor).toBeHidden();
   await expect(badge).toBeFocused();
   await expect(badge).toHaveAttribute('aria-expanded', 'false');
+
+  // The × closes it the same way: the focus goes back to the badge.
+  await page.keyboard.press('Enter');
+  await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Close block properties' }).click();
+  await expect(editor).toBeHidden();
+  await expect(badge).toBeFocused();
 });
 
 for (const scheme of ['light', 'dark'] as const) {

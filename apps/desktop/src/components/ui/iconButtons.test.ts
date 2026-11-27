@@ -285,3 +285,129 @@ describe('the icon button tooltip (E54.9)', () => {
     expect(style).toMatch(/\.ui-icon-button\.lg \{\s*min-width: 32px;\s*height: 32px;/);
   });
 });
+
+// E57.8: × closes. A top bar or a panel head closes with the icon button `close`, never with a
+// text button that says "Close". A dialog footer (a `<footer>`, or a `buttons`, `actions` or
+// `footer` row) keeps its text button: the catalog download and install dialogs end that way.
+
+/** The text buttons of one template whose label is `common.close` or a `*.close` string. */
+export function textCloseButtons(source: string): Array<[number, string]> {
+  const template = source.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, (m) =>
+    m.replace(/[^\n]/g, ' '),
+  );
+  const found: Array<[number, string]> = [];
+  const button = /<(button|UiButton)\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/\1>/g;
+  for (const m of template.matchAll(button)) {
+    const label = m[3]!.replace(/<!--[\s\S]*?-->/g, '').trim();
+    if (!/^\{\{\s*t\(\s*'(?:[\w]+\.)*close'\s*\)\s*\}\}$/.test(label)) continue;
+    if (inFooter(template.slice(0, m.index))) continue;
+    const line = template.slice(0, m.index).split('\n').length;
+    found.push([line, `<${m[1]}${m[2]!.replace(/\s+/g, ' ').slice(0, 60)}…>`]);
+  }
+  return found;
+}
+
+const VOID = new Set(['input', 'img', 'br', 'hr', 'meta', 'link', 'col', 'source', 'wbr']);
+
+/** Whether the elements still open at the end of `before` include a dialog footer. */
+function inFooter(before: string): boolean {
+  const open: Array<{ name: string; footer: boolean }> = [];
+  const tag = /<(\/?)([A-Za-z][\w-]*)\b((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
+  for (const [, closing, name, attrs, self] of before
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .matchAll(tag)) {
+    if (closing) {
+      const i = open.map((e) => e.name).lastIndexOf(name!);
+      if (i >= 0) open.length = i;
+    } else if (!self && !VOID.has(name!.toLowerCase())) {
+      const footer = name === 'footer' || /\bclass="[^"]*\b(buttons|actions|footer)\b/.test(attrs!);
+      open.push({ name: name!, footer });
+    }
+  }
+  return open.some((e) => e.footer);
+}
+
+describe('× closes (E57.8)', () => {
+  const tpl = (body: string) => `<template>${body}</template>`;
+
+  it('finds a text Close in a bar or a panel head, and lets a footer and other words through', () => {
+    expect(
+      textCloseButtons(
+        tpl(
+          `<header class="bar">\n<UiButton @click="close">\n  {{ t('common.close') }}\n</UiButton></header>`,
+        ),
+      ),
+    ).toEqual([[2, '<UiButton @click="close"…>']]);
+    expect(
+      textCloseButtons(
+        tpl(`<div class="head"><button>{{ t('duplicatesModule.compare.close') }}</button></div>`),
+      ),
+    ).toHaveLength(1);
+    expect(
+      textCloseButtons(
+        tpl(`<div class="props"><input /><button>{{ t('common.close') }}</button></div>`),
+      ),
+    ).toHaveLength(1);
+    expect(
+      textCloseButtons(
+        tpl(`<div class="buttons"><button>{{ t('catalogs.download.close') }}</button></div>`),
+      ),
+    ).toEqual([]);
+    expect(
+      textCloseButtons(
+        tpl(
+          `<div class="actions"><template v-if="a"><b>x</b></template><button>{{ t('catalogs.install.close') }}</button></div>`,
+        ),
+      ),
+    ).toEqual([]);
+    expect(
+      textCloseButtons(tpl(`<footer><button>{{ t('common.close') }}</button></footer>`)),
+    ).toEqual([]);
+    // A footer that has closed no longer covers the button after it.
+    expect(
+      textCloseButtons(
+        tpl(
+          `<div class="buttons"><i>a</i></div><header><button>{{ t('common.close') }}</button></header>`,
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      textCloseButtons(tpl(`<header><button>{{ t('common.cancel') }}</button></header>`)),
+    ).toEqual([]);
+    expect(
+      textCloseButtons(tpl(`<header><button>{{ t('x.closeAll') }}</button></header>`)),
+    ).toEqual([]);
+  });
+
+  it('no top bar or panel head closes with a text button', () => {
+    const offenders = Object.entries(sources).flatMap(([path, source]) =>
+      textCloseButtons(source).map(([line, tag]) => `${path.slice(5)}:${line} ${tag}`),
+    );
+    expect(offenders, 'use <UiIconButton icon="close"> for these').toEqual([]);
+  });
+
+  it.each([
+    ['/src/views/ProblemsView.vue', 'problems.close', true],
+    ['/src/views/ConflictsView.vue', 'conflicts.close', true],
+    ['/src/components/DuplicateCompare.vue', 'duplicatesModule.compare.close', true],
+    ['/src/components/BlockProperties.vue', 'blocks.close', true],
+    ['/src/components/ProjectSetsSidebar.vue', 'sets.dismissLabel', false],
+  ])('%s closes with the × named by %s', (path, key, esc) => {
+    const source = sources[path]!;
+    const close = source.match(/<UiIconButton\b[^>]*\bicon="close"[^>]*>/)?.[0];
+    expect(close, 'a UiIconButton with the icon close').toBeDefined();
+    expect(close).toContain(`:label="t('${key}')"`);
+    // The tooltip names the Esc key only where Esc closes it.
+    expect(close!.includes('shortcut="Esc"')).toBe(esc);
+    expect(close!.includes('aria-keyshortcuts="Escape"')).toBe(esc);
+  });
+
+  it('the catalog download and install dialogs keep their text Close in the footer', () => {
+    expect(sources['/src/components/CatalogDownload.vue']).toContain(
+      "{{ t('catalogs.download.close') }}",
+    );
+    expect(sources['/src/components/CatalogInstall.vue']).toContain(
+      "{{ t('catalogs.install.close') }}",
+    );
+  });
+});
