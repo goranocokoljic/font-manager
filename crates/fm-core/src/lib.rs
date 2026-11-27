@@ -41,6 +41,7 @@ pub mod index;
 pub mod inventory;
 pub mod keeper_policy;
 pub mod language_detect;
+pub mod language_order;
 pub mod layout;
 pub mod license;
 pub mod lifecycle;

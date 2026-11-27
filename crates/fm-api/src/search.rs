@@ -606,6 +606,26 @@ pub struct LanguagePreset {
     /// is in the preset's characters. `None` when the preset has none (E42.10).
     #[serde(default)]
     pub sample_glyphs: Option<String>,
+    /// Which part of the `list_languages` order the preset is in (E58.1,
+    /// ADR 0028), so a list can draw a line between the parts without
+    /// knowing the rule. `None` where no order was applied.
+    #[serde(default)]
+    pub group: Option<LanguageGroup>,
+}
+
+/// The three parts of the `list_languages` order (E58.1, ADR 0028), in the
+/// order they are listed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageGroup {
+    /// The user's languages (`Settings::my_languages`) in the user's order;
+    /// while none is set, the presets of the system's language.
+    Mine,
+    /// The most used languages of `data/charsets/order.json` that are not
+    /// the user's, in the file's order.
+    MostUsed,
+    /// Every other preset, from A to Z by its English name.
+    Others,
 }
 
 /// How many characters of one Unicode block a face maps.
@@ -814,7 +834,11 @@ pub trait SearchService {
     /// Coverage of one face per Unicode block and per language preset, from
     /// the code points in the index.
     fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage>;
-    /// Every language preset.
+    /// Every language preset, in one order for every adapter (E58.1, ADR
+    /// 0028): the user's languages in the user's order (while none is set,
+    /// the presets of the system's language), then the most used ones of
+    /// `data/charsets/order.json`, then all others from A to Z by English
+    /// name; each preset says its [`LanguageGroup`].
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>>;
     /// The language presets a text may be in, best first, from its letters
     /// outside ASCII. Empty for a text without such letters.

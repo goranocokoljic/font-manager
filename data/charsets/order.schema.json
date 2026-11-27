@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/charsets/order.schema.json",
+  "title": "Font Fu language order",
+  "description": "The most used languages, in order: after the user's own languages, these lead every list of languages (E58.1, ADR 0028). Each entry is the code of a preset in the other files of data/charsets, listed once.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "mostUsed"],
+  "properties": {
+    "$schema": { "const": "./order.schema.json" },
+    "mostUsed": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "description": "A preset code (BCP 47 language[-Script]), e.g. en or zh-Hans.",
+        "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?$"
+      }
+    }
+  }
+}

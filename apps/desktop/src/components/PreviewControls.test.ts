@@ -131,7 +131,9 @@ describe('PreviewControls', () => {
     await flushPromises();
     const language = selectLabelled(wrapper, 'Language');
     const before = await selectOptions(language);
-    expect(before.map(([code]) => code)).toEqual(mockLanguages.map((l) => l.code));
+    // In the API's order (E58.1): the list does not sort.
+    const api = await createMockClient().listLanguages();
+    expect(before.map(([code]) => code)).toEqual(api.map((l) => l.code));
     await pickOption(language, 'sr-Cyrl');
     expect(store.settingsFor('all')).toMatchObject({
       language: 'sr-Cyrl',

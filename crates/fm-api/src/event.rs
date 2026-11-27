@@ -147,6 +147,10 @@ pub enum Event {
     /// a check ran, or an update downloaded and waits for the quit. The UI
     /// reads `update_status` again.
     UpdateStatusChanged,
+    /// The order of `list_languages` changed (E58.1): the user's languages
+    /// (`Settings::my_languages`) changed, or the system's language the
+    /// shell handed to the core. The UI reads `list_languages` again.
+    LanguageOrderChanged,
     /// A cleanup plan is being applied (E56.7): `done` of the `total` files
     /// that leave, under the job `apply_cleanup` returned. The last event of
     /// the job has `finished` set; `cancelled` when `cancel_cleanup` stopped

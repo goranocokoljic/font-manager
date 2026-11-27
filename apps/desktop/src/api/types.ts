@@ -1923,6 +1923,12 @@ notice: UpdateNotice } |
  */
 { type: "updateStatusChanged" } | 
 /**
+ *  The order of `list_languages` changed (E58.1): the user's languages
+ *  (`Settings::my_languages`) changed, or the system's language the
+ *  shell handed to the core. The UI reads `list_languages` again.
+ */
+{ type: "languageOrderChanged" } | 
+/**
  *  A cleanup plan is being applied (E56.7): `done` of the `total` files
  *  that leave, under the job `apply_cleanup` returned. The last event of
  *  the job has `finished` set; `cancelled` when `cancel_cleanup` stopped
@@ -3364,6 +3370,24 @@ export type LanguageCoverage = {
 	hasLocl: boolean,
 };
 
+/**
+ *  The three parts of the `list_languages` order (E58.1, ADR 0028), in the
+ *  order they are listed.
+ */
+export type LanguageGroup = 
+/**
+ *  The user's languages (`Settings::my_languages`) in the user's order;
+ *  while none is set, the presets of the system's language.
+ */
+"mine" | 
+/**
+ *  The most used languages of `data/charsets/order.json` that are not
+ *  the user's, in the file's order.
+ */
+"mostUsed" | 
+/**  Every other preset, from A to Z by its English name. */
+"others";
+
 /**  A language preset that a text may be in. */
 export type LanguageHint = {
 	/**  Preset code from `list_languages`. */
@@ -3391,6 +3415,12 @@ export type LanguagePreset = {
 	 *  is in the preset's characters. `None` when the preset has none (E42.10).
 	 */
 	sampleGlyphs?: string | null,
+	/**
+	 *  Which part of the `list_languages` order the preset is in (E58.1,
+	 *  ADR 0028), so a list can draw a line between the parts without
+	 *  knowing the rule. `None` where no order was applied.
+	 */
+	group?: LanguageGroup | null,
 };
 
 /**
