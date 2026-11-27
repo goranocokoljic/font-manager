@@ -229,6 +229,44 @@ describe('problem rows', () => {
     });
   });
 
+  it('list a sync entry no conflict shows (a collection that cannot be joined) as a row', async () => {
+    const collection: Problem = {
+      kind: 'sidecarConflict',
+      face: 2,
+      path: '/Users/demo/Fonts/Inter-Bold.ttf',
+      other: '/Users/demo/Fonts/.fontlibrary/5d1c0a7e9b3f2468.json',
+      message: 'The collection "Client brand" from the other computer cannot be joined here.',
+    };
+    setClient({
+      ...client,
+      listProblems: async () => [...(await client.listProblems()), collection],
+    });
+    const store = useProblemsStore();
+    await store.load();
+    const [sidecar] = store.sections('sidecar');
+    // Every counted entry is listed: the conflict with both values, and the collection.
+    expect(sidecar!.count).toBe(2);
+    expect(sidecar!.rows.map((r) => r.type)).toEqual(['conflict', 'problem']);
+    expect(sidecar!.rows[1]).toMatchObject({ name: 'Inter-Bold.ttf', message: collection.message });
+    expect(store.sections(undefined).find((s) => s.group.id === 'sidecar')!.rows).toHaveLength(2);
+  });
+
+  it('hide one entry per conflict when two conflicts share a face and sync file', async () => {
+    setClient(
+      createMockClient({
+        sidecarConflicts: [
+          ...mockSidecarConflicts,
+          { ...mockSidecarConflicts[0]!, id: 2, field: 'notes', mine: 'Bold', theirs: 'Light' },
+        ],
+      }),
+    );
+    const store = useProblemsStore();
+    await store.load();
+    const [sidecar] = store.sections('sidecar');
+    expect(sidecar!.count).toBe(2);
+    expect(sidecar!.rows.map((r) => r.type)).toEqual(['conflict', 'conflict']);
+  });
+
   it('drop a resolved sync conflict from the rows', async () => {
     const store = useProblemsStore();
     await store.load();

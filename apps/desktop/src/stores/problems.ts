@@ -239,11 +239,26 @@ export const useProblemsStore = defineStore('problems', () => {
   }
 
   /**
+   * The sync entries of `list_problems` that no `list_sidecar_conflicts` entry shows: each
+   * conflict hides the one entry about the same face and sync file. The rest (a sync file
+   * that cannot be read, a collection or pinned virtual style that cannot be joined here)
+   * are plain rows, so every counted entry is listed.
+   */
+  function unlisted(entries: Problem[]): Problem[] {
+    const shown = sidecarConflicts.value.map((c) => `${c.face}\u0000${c.sidecarPath}`);
+    return entries.filter((p) => {
+      const i = p.face === null ? -1 : shown.indexOf(`${p.face}\u0000${p.other ?? ''}`);
+      if (i >= 0) shown.splice(i, 1);
+      return i < 0;
+    });
+  }
+
+  /**
    * The groups the Problems view lists (E57.9): every group with a problem, or the one
    * group `filter` names (even with none). A sync conflict fm-core can resolve is one
    * `list_sidecar_conflicts` entry, shown with both values; its `list_problems` entry (the
-   * one with a face) is the same conflict and is not listed again. An entry without a face
-   * (a sync file that cannot be read) is a plain row.
+   * one about the same face and sync file) is the same conflict and is not listed again;
+   * every other sync entry is a plain row (`unlisted`).
    */
   function sections(filter: ProblemGroupId | undefined): ProblemSection[] {
     const shown = filter ? PROBLEM_GROUPS.filter((g) => g.id === filter) : PROBLEM_GROUPS;
@@ -252,10 +267,7 @@ export const useProblemsStore = defineStore('problems', () => {
         const entries = inGroup(g.id);
         const rows: ProblemListRow[] =
           g.id === 'sidecar'
-            ? [
-                ...sidecarConflicts.value.map(conflictRow),
-                ...entries.filter((p) => p.face === null).map(problemRow),
-              ]
+            ? [...sidecarConflicts.value.map(conflictRow), ...unlisted(entries).map(problemRow)]
             : entries.map(problemRow);
         return { group: g, count: counts.value[g.id], rows };
       })

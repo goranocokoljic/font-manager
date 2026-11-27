@@ -211,6 +211,38 @@ describe('Problems view (board 16)', () => {
     wrapper.unmount();
   });
 
+  it('resolves a sync conflict and moves the focus to the next row', async () => {
+    client({
+      sidecarConflicts: [
+        ...mockSidecarConflicts,
+        { ...mockSidecarConflicts[0]!, id: 2, field: 'notes', mine: 'Bold', theirs: 'Light' },
+      ],
+    });
+    const { wrapper } = await mountAt('/problems?kind=sidecar');
+    expect(wrapper.findAll('[data-testid="sidecar-conflict"]')).toHaveLength(2);
+    await wrapper.get('button[aria-label^="Use theirs: Rating of Inter"]').trigger('click');
+    await flushPromises();
+    const left = wrapper.findAll('[data-testid="sidecar-conflict"]');
+    expect(left).toHaveLength(1);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Keep mine: Notes of Inter on this computer, Bold',
+    );
+    wrapper.unmount();
+  });
+
+  it('in All, moves the focus to the next group when the last conflict of its group goes', async () => {
+    client();
+    const { wrapper } = await mountAt('/problems');
+    await wrapper.get('button[aria-label^="Keep mine: Rating of Inter"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-group="sidecar"]').exists()).toBe(false);
+    // Sync conflicts stood before Activation conflicts, which took its place.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Decide: JetBrainsMono-Regular.ttf',
+    );
+    wrapper.unmount();
+  });
+
   it('is the neutral "All good." panel without problems, the navigation still there', async () => {
     client({ problems: false, sidecarConflicts: [] });
     const { wrapper } = await mountAt('/problems');

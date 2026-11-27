@@ -213,20 +213,35 @@ async function act(row: ProblemRow): Promise<void> {
   }
 }
 
+/** The first row's action of a group, else its heading. */
+function groupStart(id: ProblemGroupId): HTMLElement | null {
+  return rowAction(id, 0) ?? document.getElementById(`problems-group-${id}`);
+}
+
 /**
  * Keeps one value of a sync conflict. Its row goes; the focus moves to the row that takes
- * its place, else to the group's heading, else (the group is gone) to the panel's heading.
+ * its place (or the row before it), else to the group's heading. When the group is gone
+ * ("All" lists only groups with problems), it moves to the group that took its place, else
+ * the one before, else the panel's heading.
  */
 async function resolve(s: ProblemSection, index: number, keep: ConflictSide): Promise<void> {
   const row = shown(s)[index];
   if (row?.type !== 'conflict') return;
+  const at = sections.value.findIndex((x) => x.group.id === s.group.id);
   await store.resolveConflict(row.conflict.id, keep);
   await nextTick();
   if (store.sidecarConflicts.some((c) => c.id === row.conflict.id)) return;
   const id = s.group.id;
-  const next = rowAction(id, index) ?? rowAction(id, index - 1);
-  const heading = document.getElementById(`problems-group-${id}`);
-  (next ?? heading ?? document.getElementById('problems-heading'))?.focus();
+  const inGroup =
+    rowAction(id, index) ??
+    rowAction(id, index - 1) ??
+    document.getElementById(`problems-group-${id}`);
+  const after = sections.value[at] ?? sections.value[at - 1];
+  (
+    inGroup ??
+    (after && groupStart(after.group.id)) ??
+    document.getElementById('problems-heading')
+  )?.focus();
 }
 
 // --- Closing: × and Esc, as in Settings. ---
