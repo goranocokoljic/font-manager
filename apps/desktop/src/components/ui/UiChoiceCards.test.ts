@@ -29,7 +29,7 @@ function mountCards(start: V | null = 'session', columns?: 1 | 2 | 3) {
             'onUpdate:modelValue': (v: V) => (model.value = v),
             options: OPTIONS,
             name: 'activation-mode',
-            ariaLabel: 'The Activate button activates fonts',
+            label: 'The Activate button activates fonts',
             columns,
           },
           { figure: ({ option }: { option: ChoiceCard<V> }) => h('i', { class: option.value }) },

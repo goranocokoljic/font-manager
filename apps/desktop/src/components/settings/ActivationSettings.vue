@@ -1,38 +1,71 @@
 <script setup lang="ts">
-// Settings › Activation: how the Activate button activates, what happens on a name clash,
-// and what the app does while it runs. Moved out of SettingsView in E57.3 as it was;
-// E57.4 draws it with choice cards and setting rows (board 15).
-import { computed } from 'vue';
+// Settings › Activation (board 15): how the Activate button activates and what happens on a
+// name clash, as choice cards; what the app does while it runs, as setting rows with switches.
+// Every choice saves at once.
+import { computed, ref } from 'vue';
 import type { FullSettings } from '../../api/client';
 import type { SettingsUpdate } from '../../api/types';
 import { errorMessage, t } from '../../i18n';
 import { useSettingsStore } from '../../stores/settings';
-import { useToastStore } from '../../stores/toast';
+import UiChoiceCards, { type ChoiceCard } from '../ui/UiChoiceCards.vue';
+import UiSettingGroup from '../ui/UiSettingGroup.vue';
+import UiSettingRow from '../ui/UiSettingRow.vue';
+import UiSwitch from '../ui/UiSwitch.vue';
 import SettingsSection from './SettingsSection.vue';
 
+type Mode = FullSettings['activationMode'];
+type Conflict = FullSettings['onConflict'];
+
 const store = useSettingsStore();
-const toast = useToastStore();
 const s = computed(() => store.settings);
 
-/** Radio choices; each change is saved at once. */
 function choose(patch: SettingsUpdate): void {
   void store.update(patch);
 }
 
-/**
- * "Start at login": the OS may refuse the login entry; then a toast says so and
- * the switch shows the state fm-api reports again.
- */
-async function saveStartAtLogin(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  if (await store.update({ startAtLogin: input.checked })) return;
-  toast.show(store.error ? errorMessage(store.error) : t('settings.activation.startAtLoginFailed'));
-  input.checked = store.settings?.startAtLogin ?? false;
-}
+const modes = computed<ChoiceCard<Mode>[]>(() => [
+  {
+    value: 'session',
+    title: t('settings.activation.modeSession'),
+    line: t('settings.activation.modeSessionLine'),
+  },
+  {
+    value: 'permanent',
+    title: t('settings.activation.modePermanent'),
+    line: t('settings.activation.modePermanentLine'),
+  },
+]);
 
-// Kept here: the catalog check (src/i18n/templates.test.ts) reads a camelCase literal in a
-// template as text.
-const KEEP_EXISTING = 'keepExisting' satisfies FullSettings['onConflict'];
+const conflicts = computed<ChoiceCard<Conflict>[]>(() => [
+  {
+    value: 'keepExisting',
+    title: t('settings.activation.conflictAsk'),
+    line: t('settings.activation.conflictAskLine'),
+  },
+  {
+    value: 'replace',
+    title: t('settings.activation.conflictReplace'),
+    line: t('settings.activation.conflictReplaceLine'),
+  },
+]);
+
+/** The message of a failed "Start at login" change, said on its row until the next change. */
+const startAtLoginError = ref<string>();
+
+/**
+ * "Start at login": the OS may refuse the login entry; then the row says so (in place of the
+ * toast it was before E57.4) and the switch shows the state fm-api reports again: it follows
+ * the store, which changes only on fm-api's answer.
+ */
+async function toggleStartAtLogin(): Promise<void> {
+  startAtLoginError.value = undefined;
+  if (await store.update({ startAtLogin: !s.value?.startAtLogin })) return;
+  startAtLoginError.value = store.error
+    ? errorMessage(store.error)
+    : t('settings.activation.startAtLoginFailed');
+  // The row says it; the panel's alert above the section would say it a second time.
+  store.error = null;
+}
 </script>
 
 <template>
@@ -42,120 +75,110 @@ const KEEP_EXISTING = 'keepExisting' satisfies FullSettings['onConflict'];
     :lead="t('settings.lead.activation')"
   >
     <template v-if="s">
-      <fieldset class="group">
-        <legend>{{ t('settings.activation.modeLegend') }}</legend>
-        <label class="choice">
-          <input
-            type="radio"
-            name="activation-mode"
-            :checked="s.activationMode === 'session'"
-            @change="choose({ activationMode: 'session' })"
-          />
-          {{ t('settings.activation.modeSession') }}
-        </label>
-        <label class="choice">
-          <input
-            type="radio"
-            name="activation-mode"
-            :checked="s.activationMode === 'permanent'"
-            @change="choose({ activationMode: 'permanent' })"
-          />
-          {{ t('settings.activation.modePermanent') }}
-        </label>
-      </fieldset>
-      <fieldset class="group">
-        <legend>{{ t('settings.activation.conflictLegend') }}</legend>
-        <label class="choice">
-          <input
-            type="radio"
-            name="on-conflict"
-            :checked="s.onConflict === KEEP_EXISTING"
-            @change="choose({ onConflict: KEEP_EXISTING })"
-          />
-          {{ t('settings.activation.conflictAsk') }}
-        </label>
-        <label class="choice">
-          <input
-            type="radio"
-            name="on-conflict"
-            :checked="s.onConflict === 'replace'"
-            @change="choose({ onConflict: 'replace' })"
-          />
-          {{ t('settings.activation.conflictReplace') }}
-        </label>
-      </fieldset>
-      <label class="choice">
-        <input
-          type="checkbox"
-          name="reactivate-on-launch"
-          :checked="s.reactivateOnLaunch"
-          @change="choose({ reactivateOnLaunch: ($event.target as HTMLInputElement).checked })"
+      <section class="choices" aria-labelledby="activation-mode-heading">
+        <h3 id="activation-mode-heading" class="heading">
+          {{ t('settings.activation.modeLegend') }}
+        </h3>
+        <UiChoiceCards
+          name="activation-mode"
+          :label="t('settings.activation.modeLegend')"
+          :model-value="s.activationMode"
+          :options="modes"
+          @update:model-value="choose({ activationMode: $event })"
+        >
+          <template #figure="{ option }">
+            <!-- A bar that ends at the quit, a bar that goes on. -->
+            <span class="bar" :class="option.value" data-testid="activation-figure" />
+          </template>
+        </UiChoiceCards>
+      </section>
+      <section class="choices" aria-labelledby="on-conflict-heading">
+        <h3 id="on-conflict-heading" class="heading">
+          {{ t('settings.activation.conflictLegend') }}
+        </h3>
+        <UiChoiceCards
+          name="on-conflict"
+          :label="t('settings.activation.conflictLegend')"
+          :model-value="s.onConflict"
+          :options="conflicts"
+          @update:model-value="choose({ onConflict: $event })"
         />
-        {{ t('settings.activation.reactivateOnLaunch') }}
-      </label>
-      <label class="choice">
-        <input
-          type="checkbox"
-          name="keep-in-tray"
-          aria-describedby="keep-in-tray-hint"
-          :checked="s.keepInTray"
-          @change="choose({ keepInTray: ($event.target as HTMLInputElement).checked })"
-        />
-        {{ t('settings.activation.keepInTray') }}
-      </label>
-      <p id="keep-in-tray-hint" class="note hint">
-        {{ t('settings.activation.keepInTrayHint') }}
-      </p>
-      <!-- fm-api reports null where the system does not offer it (ADR 0011). -->
-      <template v-if="s.startAtLogin != null">
-        <label class="choice start-at-login">
-          <input
-            type="checkbox"
+      </section>
+      <UiSettingGroup :heading="t('settings.activation.whileRunning')">
+        <UiSettingRow
+          v-slot="{ control }"
+          :title="t('settings.activation.reactivateOnLaunch')"
+          :line="t('settings.activation.reactivateOnLaunchLine')"
+        >
+          <UiSwitch
+            v-bind="control"
+            name="reactivate-on-launch"
+            :checked="s.reactivateOnLaunch"
+            @click="choose({ reactivateOnLaunch: !s.reactivateOnLaunch })"
+          />
+        </UiSettingRow>
+        <UiSettingRow
+          v-slot="{ control }"
+          :title="t('settings.activation.keepInTray')"
+          :line="t('settings.activation.keepInTrayHint')"
+        >
+          <UiSwitch
+            v-bind="control"
+            name="keep-in-tray"
+            :checked="s.keepInTray"
+            @click="choose({ keepInTray: !s.keepInTray })"
+          />
+        </UiSettingRow>
+        <!-- fm-api reports null where the system does not offer it (ADR 0011). -->
+        <UiSettingRow
+          v-if="s.startAtLogin != null"
+          v-slot="{ control }"
+          :title="t('settings.activation.startAtLogin')"
+          :line="t('settings.activation.startAtLoginHint')"
+          :error="startAtLoginError"
+        >
+          <UiSwitch
+            v-bind="control"
             name="start-at-login"
-            aria-describedby="start-at-login-hint"
             :checked="s.startAtLogin"
-            @change="saveStartAtLogin"
+            @click="toggleStartAtLogin"
           />
-          {{ t('settings.activation.startAtLogin') }}
-        </label>
-        <p id="start-at-login-hint" class="note hint">
-          {{ t('settings.activation.startAtLoginHint') }}
-        </p>
-      </template>
+        </UiSettingRow>
+      </UiSettingGroup>
     </template>
   </SettingsSection>
 </template>
 
 <style scoped>
-.note {
-  margin: 0 0 12px;
+.choices {
+  margin: 0 0 var(--fm-space-5);
+}
+/* The small-caps heading of UiSettingGroup, over a set of choice cards. */
+.heading {
+  margin: 0 0 var(--fm-space-2);
   color: var(--fm-muted);
-}
-.hint {
-  margin-block: 4px 0;
-  margin-inline: 22px 0;
-}
-.start-at-login {
-  margin-top: 12px;
-}
-.choice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fm-gap);
-  margin: 0 0 16px;
-  padding: 0;
-  border: 0;
-}
-.group legend {
-  margin-bottom: 6px;
-  padding: 0;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-sm);
+  font-size: var(--fm-text-xs);
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bar {
+  box-sizing: border-box;
+  display: block;
+  width: 36px;
+  height: 20px;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+}
+/* For this session: the accent stops halfway, where the app quits. */
+.bar.session {
+  background: linear-gradient(to right, var(--fm-accent) 0 50%, var(--fm-surface-2) 50% 100%);
+}
+.bar.permanent {
+  border-color: var(--fm-accent);
+  background: var(--fm-accent);
+}
+[dir='rtl'] .bar.session {
+  background: linear-gradient(to left, var(--fm-accent) 0 50%, var(--fm-surface-2) 50% 100%);
 }
 </style>
