@@ -5616,10 +5616,15 @@ impl SettingsService for MockApi {
         };
         crate::update::check_settings_update(&req, Some(&support))?;
         let before = st.settings.my_languages.clone();
+        let size_before = st.settings.interface_size;
         st.settings = st.settings.apply(&req)?;
         // As fm-core: the order of `list_languages` follows the user's languages.
         if req.my_languages.is_some() && st.settings.my_languages != before {
             st.emit(Event::LanguageOrderChanged);
+        }
+        // As fm-core: a change of the interface size is announced (E58.5).
+        if let Some(event) = st.settings.interface_size_change(size_before) {
+            st.emit(event);
         }
         Ok(Settings {
             dropped_languages: dropped,
@@ -7377,6 +7382,44 @@ mod tests {
         })
         .expect("saved");
         assert!(rx.try_recv().is_err(), "the same list is no change");
+    }
+
+    /// E58.5: the mock saves the interface size as fm-core does and
+    /// announces a change with its factor.
+    #[test]
+    fn the_mock_saves_the_interface_size_and_announces_a_change() {
+        use crate::settings::{InterfaceSize, InterfaceSizeChoice};
+        let api = MockApi::new();
+        let rx = api.subscribe();
+        let first = api.get_settings().expect("read");
+        assert_eq!(first.interface_size, InterfaceSize::Default);
+        assert_eq!(first.interface_sizes, InterfaceSize::choices());
+        let set = |size| {
+            api.update_settings(SettingsUpdate {
+                interface_size: Some(size),
+                ..SettingsUpdate::default()
+            })
+            .expect("saved")
+        };
+        assert_eq!(
+            set(InterfaceSize::Large).interface_size,
+            InterfaceSize::Large
+        );
+        assert_eq!(
+            rx.try_recv(),
+            Ok(Event::InterfaceSizeChanged {
+                interface_size: InterfaceSizeChoice {
+                    size: InterfaceSize::Large,
+                    factor: 1.25,
+                },
+            })
+        );
+        set(InterfaceSize::Large);
+        assert!(rx.try_recv().is_err(), "the same size is no change");
+        assert_eq!(
+            api.get_settings().expect("read").interface_size,
+            InterfaceSize::Large
+        );
     }
 
     #[derive(serde::Deserialize)]

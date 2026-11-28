@@ -8294,6 +8294,7 @@ mod cleanup;
 mod cleanup_draft;
 mod cleanup_plan_draft;
 mod folder_pairs;
+mod interface_size;
 mod keeper_policy;
 mod my_languages;
 mod setup;

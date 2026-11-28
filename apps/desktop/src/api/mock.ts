@@ -63,6 +63,7 @@ import {
   type CatalogId,
   type AvailableUpdate,
   type InstallUpdateRequest,
+  type InterfaceSizeChoice,
   type UpdateNotice,
   type UpdateCheckOutcome,
   type UpdateLevel,
@@ -668,6 +669,13 @@ export function mockOpenSetupSteps(f: MockSetupFacts): SetupStep[] {
   return SETUP_STEPS.filter(open);
 }
 
+/** `InterfaceSize::choices()` in fm-api (E58.5): every size with its factor. */
+const MOCK_INTERFACE_SIZES: InterfaceSizeChoice[] = [
+  { size: 'default', factor: 1 },
+  { size: 'large', factor: 1.25 },
+  { size: 'extraLarge', factor: 1.5 },
+];
+
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
   activationMode: 'session',
@@ -702,6 +710,12 @@ export const defaultSettings: FullSettings = {
     formatOrder: ['otf', 'ttf', 'woff2', 'woff', 'type1'],
     preferredFolders: [],
   },
+  // The size of a new install (E58.5).
+  interfaceSize: 'default',
+  // `InterfaceSize::choices()` in fm-api: an answer, never saved.
+  interfaceSizes: MOCK_INTERFACE_SIZES,
+  // An answer of one read, never saved.
+  droppedInterfaceSize: null,
 };
 
 /** A token set of `data/themes` as the API answers it. */
@@ -1661,6 +1675,9 @@ function savedSettings(base: FullSettings, storage: MockOptions['settingsStorage
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
     // A system without a login entry stays without one.
     const next = { ...base, ...(saved as Partial<FullSettings>) };
+    // The factors are the mock's, never the saved copy's (E58.5).
+    next.interfaceSizes = base.interfaceSizes;
+    next.droppedInterfaceSize = null;
     return base.startAtLogin === null ? { ...next, startAtLogin: null } : next;
   } catch {
     return base;
@@ -3338,6 +3355,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
     }
     return dropped;
+  };
+  /**
+   * fm-core's settings store (E58.5): a saved interface size the mock does not have reads
+   * as `default`; the copy is saved with `default` and the size returned, so it is
+   * reported once.
+   */
+  const dropUnknownInterfaceSize = (): string | null => {
+    const size: unknown = settings.interfaceSize;
+    if (MOCK_INTERFACE_SIZES.some((c) => c.size === size)) return null;
+    settings = { ...settings, interfaceSize: 'default' };
+    options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
+    return typeof size === 'string' ? size : JSON.stringify(size);
   };
   /** The setup steps answered or skipped; kept with the mock, never in browser storage. */
   let setupAnswers: Partial<Record<SetupStep, SetupAnswer>> = {};
@@ -5885,7 +5914,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // and reported once.
     getSettings: async () => {
       const droppedLanguages = dropUnknownLanguages();
-      return { ...settings, droppedLanguages };
+      const droppedInterfaceSize = dropUnknownInterfaceSize();
+      return { ...settings, droppedLanguages, droppedInterfaceSize };
     },
     listThemes: async () => structuredClone(MOCK_THEMES),
     // The same ranges as `Settings::apply` in fm-api.
@@ -5934,7 +5964,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       if (req.keeperPolicy != null && relativeFolder(req.keeperPolicy))
         throw invalid('Choose each preferred folder with its full path.');
+      // The same refusal as serde in fm-api: a size it does not have.
+      if (
+        req.interfaceSize != null &&
+        !MOCK_INTERFACE_SIZES.some((c) => c.size === req.interfaceSize)
+      )
+        throw invalid('This interface size does not exist.');
       const dropped = dropUnknownLanguages();
+      const droppedInterfaceSize = dropUnknownInterfaceSize();
       const next = { ...settings };
       // The same rule as `Settings::apply`: a path with a root, or empty to forget it.
       const folder = req.downloadFolder?.trim();
@@ -5970,11 +6007,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const reordered =
         req.myLanguages != null &&
         JSON.stringify(next.myLanguages) !== JSON.stringify(settings.myLanguages);
+      // `Settings::interface_size_change` in fm-api (E58.5).
+      const resized = next.interfaceSize !== settings.interfaceSize;
       settings = next;
       if (reordered) emit({ type: 'languageOrderChanged' });
+      if (resized)
+        emit({
+          type: 'interfaceSizeChanged',
+          interfaceSize: MOCK_INTERFACE_SIZES.find((c) => c.size === next.interfaceSize)!,
+        });
       if (turnedOn) automaticCheckTurnedOn();
       options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
-      return { ...settings, droppedLanguages: dropped };
+      return { ...settings, droppedLanguages: dropped, droppedInterfaceSize };
     },
     getAppFolders: async () => ({ ...mockFolders }),
     setupStatus: async () => ({

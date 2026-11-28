@@ -2452,6 +2452,10 @@ impl SettingsService for CoreApi {
             Some(_) => Some(self.settings.read()?.my_languages),
             None => None,
         };
+        let size_before = match req.interface_size {
+            Some(_) => Some(self.settings.read()?.interface_size),
+            None => None,
+        };
         let settings = self.settings.update_settings(req)?;
         if let Some(previews) = &self.previews {
             previews.set_limit(cache::limit_from_mb(settings.cache_limit_mb));
@@ -2459,6 +2463,10 @@ impl SettingsService for CoreApi {
         // The order of `list_languages` follows the user's languages (E58.1).
         if before.is_some_and(|b| b != settings.my_languages) {
             self.events.send(&Event::LanguageOrderChanged);
+        }
+        // Every window applies the interface size at once (E58.5).
+        if let Some(event) = size_before.and_then(|b| settings.interface_size_change(b)) {
+            self.events.send(&event);
         }
         Ok(settings)
     }

@@ -621,7 +621,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E58.6 #717] apps/desktop/src/components/MainLayout.vue:51 — the palette action "Go to sidebar" does nothing, with no feedback, while the sidebar is folded (now reachable through a fold by room).
 
 ## 2026-11-28
-
+- [E58.5 #716] crates/fm-core/src/config.rs:30 — `Config` has no catch-all map, so every save drops keys this version does not know; ADR 0007's "an older or newer app can read the file" holds for reads only.
+- [E58.5 #716] crates/fm-core/src/settings.rs:775 — going back to an older version replaces a newer version's interface size with "default" for good (the dropped_languages precedent).
+- [E58.5 #716] apps/desktop/src-tauri/src/lib.rs:2097 — in the MockApi fallback (index cannot open), settings go straight to `SettingsStore`, which emits no events, so `InterfaceSizeChanged` and `LanguageOrderChanged` are never sent in that mode.
 - [E58.3 #714] apps/desktop/src/components/DuplicatesRules.vue:33 — the Duplicates › Rules "Add a language" picker lists `store.presets` without the hairline after the user's languages.
 - [E58.3 #714] apps/desktop/src/stores/search.ts:477 — if `onEvent` rejects, `languageEvents` stays a rejected promise and the language-order subscription is never retried.
 - [E58.3 #714] apps/desktop/src/components/ui/UiSelect.vue:316 — the listbox is named only by `aria-labelledby` pointing at the trigger, so a Select without a visible label names its menu by the chosen value.

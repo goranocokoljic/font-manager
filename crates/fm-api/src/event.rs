@@ -151,6 +151,13 @@ pub enum Event {
     /// (`Settings::my_languages`) changed, or the system's language the
     /// shell handed to the core. The UI reads `list_languages` again.
     LanguageOrderChanged,
+    /// The interface size changed (E58.5): `update_settings` saved another
+    /// `Settings::interface_size`. Every window applies the factor at once.
+    #[serde(rename_all = "camelCase")]
+    InterfaceSizeChanged {
+        /// The size now set, with its factor.
+        interface_size: crate::settings::InterfaceSizeChoice,
+    },
     /// A cleanup plan is being applied (E56.7): `done` of the `total` files
     /// that leave, under the job `apply_cleanup` returned. The last event of
     /// the job has `finished` set; `cancelled` when `cancel_cleanup` stopped
