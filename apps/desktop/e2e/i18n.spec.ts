@@ -91,7 +91,7 @@ test('choosing Deutsch relabels the main window, Settings and the palette at onc
 }) => {
   await page.goto('/#/settings?section=appearance');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  await selectOption(page.getByRole('combobox', { name: 'Language' }), 'de');
+  await selectOption(page.getByRole('combobox', { name: 'Language of the app' }), 'de');
 
   // No reload: the same page relabels.
   await expect(page.getByRole('heading', { name: 'Einstellungen', level: 1 })).toBeVisible();
@@ -117,7 +117,7 @@ test('choosing Deutsch relabels the main window, Settings and the palette at onc
 
   // And back.
   await page.goto('/#/settings?section=appearance');
-  await selectOption(page.getByRole('combobox', { name: 'Sprache' }), 'en');
+  await selectOption(page.getByRole('combobox', { name: 'Sprache der App' }), 'en');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
 });
 
@@ -130,7 +130,7 @@ test.describe('with a German OS', () => {
     await expectNoEnglish(page, 'the main window');
 
     await page.goto('/#/settings?section=appearance');
-    const language = page.getByRole('combobox', { name: 'Sprache' });
+    const language = page.getByRole('combobox', { name: 'Sprache der App' });
     await expect(language).toHaveAttribute('data-value', 'system');
     expect(await optionLabels(language)).toContain('System (Deutsch)');
     await selectOption(language, 'en');

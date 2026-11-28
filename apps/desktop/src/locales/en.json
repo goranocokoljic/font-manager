@@ -26,9 +26,12 @@
     "remove": "Remove"
   },
   "language": {
-    "label": "Language",
+    "label": "Language of the app",
     "system": "System ({name})",
     "hint": "System follows the language of your computer; English when the app does not have it."
+  },
+  "languagePicker": {
+    "add": "Add a language"
   },
   "errors": {
     "notFound": "{message}",
@@ -1429,6 +1432,7 @@
       "sources": "Sources",
       "activation": "Activation",
       "appearance": "Appearance",
+      "languages": "Languages",
       "catalogs": "Online catalogs",
       "advanced": "Advanced",
       "localApi": "Local API",
@@ -1628,7 +1632,27 @@
     "lead": {
       "activation": "How the Activate button behaves, and what happens to active fonts when the window closes.",
       "appearance": "Colours and language. Specimens always draw in the theme’s text colour on its paper.",
+      "languages": "The languages you work in come first wherever languages are listed: in the filters, in the sample text menu and in Duplicates.",
       "advanced": "Limits and maintenance. The defaults suit most libraries."
+    },
+    "languages": {
+      "mineHeading": "Languages I work in",
+      "mineNote": "Drag to put the ones you use most on top.",
+      "remove": "Remove {name}",
+      "emptySystem": "None yet. Until you add one, the language of your system comes first: {names}.",
+      "emptyNone": "None yet. The language of your system is not in the list, so the most used languages come first.",
+      "restHeading": "Then the rest",
+      "restNote": "Languages you have not picked follow: the most used first, then all others from A to Z. The first ten of the whole list show in the filters; the others are behind “Show more”.",
+      "firstLabel": "The rest of the first ten",
+      "behind": "Behind “Show more”",
+      "others": {
+        "one": "then {count} more: {names}",
+        "other": "then {count} more, A to Z: {names}"
+      },
+      "othersMore": "then {count} more, A to Z: {names} …",
+      "duplicatesTitle": "Duplicates uses this list too",
+      "duplicatesLine": "A copy that is the only one covering one of your languages is never recommended for removal.",
+      "openRules": "Open the rules"
     }
   },
   "updates": {
@@ -2413,7 +2437,8 @@
     "languages": {
       "heading": "Languages I work in",
       "none": "None set",
-      "link": "Change languages and rules"
+      "link": "Change languages",
+      "rules": "Rules for the copy to keep"
     },
     "trash": {
       "windows": "Recycle Bin",
@@ -2832,9 +2857,8 @@
     "rules": {
       "heading": "Languages I work in",
       "body": "A copy that alone covers one of these languages is never recommended for removal.",
-      "add": "Add a language",
-      "remove": "Remove {name}",
-      "none": "No language is set."
+      "none": "No language is set.",
+      "change": "Change them under Settings › Languages"
     },
     "policy": {
       "heading": "Which copy to keep",
@@ -2844,7 +2868,7 @@
         "title": "Language guard",
         "on": "Always on",
         "body": "A copy that is the only one to cover one of your languages is never recommended for removal.",
-        "notSet": "Set your languages above, so that the guard can protect them."
+        "notSet": "Set your languages under Settings › Languages, so that the guard can protect them."
       },
       "rule": {
         "myLanguages": "Covers more of my languages",

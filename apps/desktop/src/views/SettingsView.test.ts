@@ -53,12 +53,13 @@ const labelOf = (el: { attributes: (k: string) => string | undefined }, attr = '
   document.getElementById(el.attributes(attr)!.split(' ')[0]!)?.textContent?.trim();
 
 describe('Settings window', () => {
-  it('has the eight sections as tabs and opens Sources first', async () => {
+  it('has the nine sections as tabs and opens Sources first', async () => {
     const { wrapper } = await mountAt('/settings');
     expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
       'Sources',
       'Activation',
       'Appearance',
+      'Languages',
       'Online catalogs',
       'Advanced',
       'Local API',
@@ -307,8 +308,11 @@ describe('Settings window', () => {
     const spy = vi.spyOn(client, 'updateSettings');
     const { wrapper } = await mountAt('/settings?section=appearance');
     const select = wrapper.get('[role="combobox"][name="language"]');
-    expect(labelOf(select)).toBe('Language');
-    expect(labelOf(select, 'aria-describedby')).toContain('System follows the language');
+    // E58.2: "Language of the app", never "Language" alone; the hint is unchanged.
+    expect(labelOf(select)).toBe('Language of the app');
+    expect(labelOf(select, 'aria-describedby')).toBe(
+      'System follows the language of your computer; English when the app does not have it.',
+    );
     const options = await selectOptions(select);
     expect(options.map(([value]) => value)).toEqual(['system', 'en', 'de']);
     expect(options.map(([, label]) => label)).toEqual(['System (English)', 'English', 'Deutsch']);
@@ -321,6 +325,7 @@ describe('Settings window', () => {
       expect((await client.getSettings()).language).toBe('de');
       expect(wrapper.get('h2').text()).toBe('Darstellung');
       expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Darstellung');
+      expect(labelOf(wrapper.get('[role="combobox"][name="language"]'))).toBe('Sprache der App');
       expect(shellLocale.value, 'the Help menu and tray follow the choice').toBe('de');
     } finally {
       wrapper.unmount();
@@ -548,7 +553,7 @@ describe('Settings window', () => {
     expect(wrapper.findAll('button').some((b) => b.text() === 'Close')).toBe(false);
     const nav = wrapper.get('nav.nav');
     expect(nav.get('h1').text()).toBe('Settings');
-    expect(nav.findAll('[role="tab"] .ui-icon')).toHaveLength(8);
+    expect(nav.findAll('[role="tab"] .ui-icon')).toHaveLength(9);
     const panel = wrapper.get('[role="tabpanel"]');
     expect(panel.attributes('id')).toBe('panel-activation');
     expect(panel.get('h2').text()).toBe('Activation');
