@@ -2367,8 +2367,8 @@
           "depends": [],
           "criteria": [
             "a test build shows the interface at 100, 125 and 150 per cent in two ways: the webview's own zoom (Tauri's `set_zoom`) and a CSS zoom on the root; in both, every surface that shows a font takes the zoom back, so its content is laid out in true pixels",
-            "measured on Windows, macOS and Linux, at each size and for each way: the rendered size of a specimen on the wall, the family page's hero, the waterfall's 10 to 96 px ladder, a glyph cell, Compare's overlay and the Studio paper is the same as at 100 per cent, to the pixel; the numbers are in the PR",
-            "checked in the same build, for each way: a popover and a tooltip open where their button is, the drag ghost follows the pointer, a virtualized list shows no gap and no overlap while it scrolls, the text field menu opens at the pointer, and a PDF from the Studio (ADR 0013) has the same page size and the same text sizes as at 100 per cent",
+            "measured on Windows, macOS and Linux by a test the CI matrix runs, at each size and for each way: the rendered size of a specimen on the wall, the family page's hero, the waterfall's 10 to 96 px ladder, a glyph cell, Compare's overlay and the Studio paper is the same as at 100 per cent, to the pixel; the numbers of each system are in the PR, from the CI logs",
+            "checked in the same build on Windows, in the real app window, for each way: a popover and a tooltip open where their button is, the drag ghost follows the pointer, a virtualized list shows no gap and no overlap while it scrolls, the text field menu opens at the pointer, and a PDF from the Studio (ADR 0013) has the same page size and the same text sizes as at 100 per cent; the same checks by hand on macOS and Linux are E58.11 and do not hold this story; the ADR lists them as open",
             "a new ADR, 'Interface size', records the way chosen and why, what each surface that shows a font must do, what does not scale because the system draws it (native menus, the tray, dialogs of the system), and what is given up; if neither way holds on all three systems the story ends blocked with the measurements, for the owner to decide",
             "the test build's code is not merged as a feature: what stays is the ADR and an integration test per system that renders one specimen at each size and asserts its size (rule 5: all three or none)",
             "cold start stays under 1 s with a size other than the default set"
@@ -2468,6 +2468,22 @@
             "DESIGN.md's rule for the first-run setup names the control and says why it is in the head and not a step (the user must be able to read the setup itself; a step would come too late or delay the first question); ADR 0026 gets the same sentence",
             "strings in en and de; keyboard-complete; the a11y and contrast specs pass in both themes at all three sizes; the screenshots of the story are taken at the default size",
             "a Playwright spec on the mock opens a first start, chooses Large, asserts the size of the setup's text and that the choice is pressed, finishes the setup, and finds Large chosen under Settings › Appearance; a second run at 667 × 467 asserts no horizontal overflow on each step"
+          ]
+        },
+        {
+          "id": "E58.11",
+          "title": "Interface size: the checks by hand on macOS and Linux",
+          "size": "S",
+          "track": "platform",
+          "human": true,
+          "depends": [
+            "E58.7"
+          ],
+          "criteria": [
+            "a person with a Mac and a person with a Linux desktop open a nightly build that has E58.7 and set the interface to 125 and to 150 per cent under Settings › Appearance",
+            "at each size, on each system: a popover and a tooltip open where their button is, the drag ghost follows the pointer, a virtualized list shows no gap and no overlap while it scrolls, the text field menu opens at the pointer, and a PDF from the Studio (ADR 0013) has the same page size and the same text sizes as at 100 per cent",
+            "the result is a comment on this issue per system, with the build, the version of the system and a screenshot of what is wrong, if anything is",
+            "a fault becomes an issue of its own; a fault of the way itself (not of one surface) reopens the decision of the ADR 'Interface size', and the ADR's list of open checks is closed when both systems are done"
           ]
         }
       ]

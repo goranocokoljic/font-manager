@@ -1,4 +1,9 @@
 {
+  "E58.10": {
+    "number": 721,
+    "id": 6652804979,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/721"
+  },
   "E58.9": {
     "number": 720,
     "id": 6652711357,
@@ -1879,9 +1884,9 @@
     "id": 5857317171,
     "url": "https://github.com/goranocokoljic/font-manager/issues/1"
   },
-  "E58.10": {
-    "number": 721,
-    "id": 6652804979,
-    "url": "https://github.com/goranocokoljic/font-manager/issues/721"
+  "E58.11": {
+    "number": 726,
+    "id": 6662480948,
+    "url": "https://github.com/goranocokoljic/font-manager/issues/726"
   }
 }
