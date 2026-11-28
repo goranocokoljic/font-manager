@@ -628,3 +628,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E58.3 #714] apps/desktop/src/stores/search.ts:477 — if `onEvent` rejects, `languageEvents` stays a rejected promise and the language-order subscription is never retried.
 - [E58.3 #714] apps/desktop/src/components/ui/UiSelect.vue:316 — the listbox is named only by `aria-labelledby` pointing at the trigger, so a Select without a visible label names its menu by the chosen value.
 - [E58.3 #714] apps/desktop/src/components/DuplicatesRules.vue:28 — `languagePresets` follows the order of `myLanguages`, not `store.presets` (the user's own list; likely intended).
+- [E58.4 #715] crates/fm-mcp/src/tools.rs:1114 — fm-mcp and fm-core (crates/fm-core/src/specimen.rs:650) each keep their own base64 encoder; the interface-size test adds a third, as fm-platform cannot depend on fm-core.

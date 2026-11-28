@@ -34,6 +34,8 @@ mod show_folder;
 #[cfg(target_os = "linux")]
 mod trash;
 mod tray;
+#[cfg(target_os = "linux")]
+pub(crate) mod webview_probe;
 
 #[cfg(target_os = "linux")]
 pub use activator::LinuxActivator;

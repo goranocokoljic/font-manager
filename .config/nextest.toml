@@ -1,0 +1,6 @@
+# E58.4 (ADR 0029): the interface-size test prints what it measured in the
+# webview of each OS; CI shows it for a passing run too, so the numbers of
+# every system are in the logs.
+[[profile.default.overrides]]
+filter = 'binary(interface_size)'
+success-output = "immediate"

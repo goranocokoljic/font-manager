@@ -45,6 +45,9 @@ mod show_folder;
 #[allow(unsafe_code)] // Shell and security FFI; every block has a SAFETY note.
 mod trash;
 mod tray;
+#[cfg(windows)]
+#[allow(unsafe_code)] // WebView2 COM calls and WIC decoding; every block has a SAFETY note.
+pub(crate) mod webview_probe;
 
 #[cfg(windows)]
 pub use activator::{FONTS_KEY, LEDGER_KEY, WindowsActivator};

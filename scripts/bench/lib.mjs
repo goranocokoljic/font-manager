@@ -26,11 +26,14 @@ export const SCHEMA = 1;
  * of its folders copied beside it, under 500 ms (ADR 0027);
  * copy_comparison: E56.2, compare_copies on the two copies of a duplicate set that hold the
  * most bytes, both files read and parsed, under 150 ms (ADR 0027)).
+ * cold_start_sized: E58.4, the cold start with an interface size other than the default in
+ * config.json, under the same 1 s (ADR 0029).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
 export const BUDGETS = {
   cold_start: { unit: 'ms', target: 1000 },
+  cold_start_sized: { unit: 'ms', target: 1000 },
   first_scan: { unit: 'ms', target: 10000 },
   incremental_update: { unit: 'ms', target: null },
   search: { unit: 'ms', target: 50 },
@@ -423,4 +426,14 @@ function positiveInt(flag, v) {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 1) throw new Error(`${flag} needs a positive integer`);
   return n;
+}
+
+/**
+ * The text of `config.json` with the interface size set to `size` (E58.4): the
+ * cold start is measured again with a size other than the default. `text` is the
+ * file as the start left it, or null when there is none yet; every other key stays.
+ */
+export function withInterfaceSize(text, size) {
+  const config = text ? JSON.parse(text) : {};
+  return JSON.stringify({ ...config, interfaceSize: size }, null, 2) + '\n';
 }
