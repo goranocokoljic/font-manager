@@ -47,6 +47,12 @@ function textStyle(px: number) {
 /** Sets `ch` for the columns inside: the face at the caption size. */
 const rowStyle = computed(() => ({ ...props.faceStyle, fontSize: `${READING_SIZES[0].px}px` }));
 const columnWidth = computed(() => `${page.textMeasure}ch`);
+/**
+ * A column's label is chrome and grows with the interface size; its passage takes the
+ * size back (E58.7). The measure is set inside the surface that takes it back, in the
+ * face at the caption size, so the column is the measure in true pixels.
+ */
+const measureStyle = computed(() => ({ ...rowStyle.value, width: columnWidth.value }));
 
 const measureLabel = computed(() => t('family.textMeasureValue', { value: page.textMeasure }));
 const leadingLabel = computed(() => page.textLeading.toFixed(2));
@@ -107,32 +113,29 @@ const slid = (e: Event) => Number((e.target as HTMLInputElement).value);
       :aria-label="t('family.textColumns')"
       :style="rowStyle"
     >
-      <div
-        v-for="size in READING_SIZES"
-        :key="size.px"
-        class="column"
-        :style="{ width: columnWidth }"
-      >
+      <div v-for="size in READING_SIZES" :key="size.px" class="column">
         <p class="label">
           <span>{{ t('family.textSize', { size: size.px }) }}</span>
           <span>{{ t(`family.textRoles.${size.role}`) }}</span>
         </p>
-        <p
-          class="passage"
-          dir="auto"
-          data-testid="family-text-passage"
-          :data-px="size.px"
-          :class="{ loading: !faceStyle }"
-          :style="textStyle(size.px)"
-        >
-          {{ passage }}
-        </p>
+        <div class="measure fm-true-size" :style="measureStyle">
+          <p
+            class="passage fm-true-size"
+            dir="auto"
+            data-testid="family-text-passage"
+            :data-px="size.px"
+            :class="{ loading: !faceStyle }"
+            :style="textStyle(size.px)"
+          >
+            {{ passage }}
+          </p>
+        </div>
       </div>
     </div>
     <div class="ink" data-testid="family-text-ink">
       <p class="ink-label">{{ t('family.textInverted') }}</p>
       <p
-        class="passage"
+        class="passage fm-true-size"
         dir="auto"
         data-testid="family-text-ink-passage"
         :class="{ loading: !faceStyle }"

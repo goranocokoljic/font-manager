@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, watch, watchEffect } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import { useClient } from './api/client';
+import { applyInterfaceSize } from './api/interfaceSize';
 import CommandPalette from './components/CommandPalette.vue';
 import ShortcutSheet from './components/ShortcutSheet.vue';
 import TextFieldMenu from './components/TextFieldMenu.vue';
@@ -107,6 +108,20 @@ useActions([
 const watchNotice = useWatchNoticeStore();
 onMounted(() => void watchNotice.start(() => router.push({ name: 'home' })));
 onUnmounted(() => void watchNotice.stop());
+
+// The interface size applies at once on a change, without a restart (E58.7): the shell
+// zooms the webview, the page sets the factor the font surfaces take back.
+let stopInterfaceSize: (() => void) | undefined;
+onMounted(() => {
+  useClient()
+    .onEvent((event) => {
+      if (event.type === 'interfaceSizeChanged')
+        applyInterfaceSize(event.interfaceSize.factor ?? 1);
+    })
+    .then((stop) => (stopInterfaceSize = stop))
+    .catch((e: unknown) => console.warn('the interface size will not follow a change', e));
+});
+onUnmounted(() => stopInterfaceSize?.());
 
 // The automatic update check runs in the shell (E55.7); the UI only hears of what it found.
 onMounted(async () => {

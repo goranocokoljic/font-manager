@@ -58,6 +58,7 @@ import UiPopover from './ui/UiPopover.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 import { useCopy } from './useCopy';
 import { likeThisLabel } from '../search/like';
+import { localWidth, useInterfaceFactor } from '../preview/trueSize';
 import type { TraitTag } from '../search/traits';
 
 const props = withDefaults(
@@ -162,8 +163,13 @@ onBeforeUnmount(detach);
 const cell = computed(() => gridSetup.settingsFor(GRID_VIEW).cell);
 const lines = computed(() => gridSetup.settingsFor(GRID_VIEW).lines);
 const detailsOnClick = computed(() => gridSetup.settingsFor(GRID_VIEW).details);
-const columns = computed(() => glyphColumns(width.value, cell.value));
-const rowHeight = computed(() => glyphRowHeight(width.value, columns.value));
+// The interface size (E58.7): the grid's rows (`.sizer`) take it back, so the cell slider
+// is true pixels. The grid and the page around it are measured in interface pixels; the
+// rows are laid out in true ones, `factor` times as many.
+const factor = useInterfaceFactor();
+const trueWidth = computed(() => width.value * factor.value);
+const columns = computed(() => glyphColumns(trueWidth.value, cell.value));
+const rowHeight = computed(() => glyphRowHeight(trueWidth.value, columns.value));
 const rowCount = computed(() => glyphRowCount(glyphs.total, columns.value));
 const rowStyle = computed(() => ({
   gridTemplateColumns: cellTemplate(cell.value),
@@ -199,7 +205,8 @@ function fitSpecimen(): void {
   const line = specimenLine.value;
   const text = specimenText.value;
   if (!line || !text) return;
-  const drawn = text.getBoundingClientRect().width;
+  // Both in the specimen's own (true) pixels: it takes the interface size back.
+  const drawn = localWidth(text, line, factor.value);
   specimenPx.value = fitSpecimenSize(drawn / specimenPx.value, line.clientWidth);
 }
 let specimenObserver: ResizeObserver | undefined;
@@ -223,7 +230,13 @@ onBeforeUnmount(() => {
   fontSet?.removeEventListener?.('loadingdone', fitSpecimen);
 });
 const range = computed(() =>
-  windowRange(scrollTop.value, height.value, rowHeight.value, props.overscan, rowCount.value),
+  windowRange(
+    scrollTop.value * factor.value,
+    height.value * factor.value,
+    rowHeight.value,
+    props.overscan,
+    rowCount.value,
+  ),
 );
 
 /** The cursor: a list index, or -1 before the user moves into the grid. */
@@ -272,12 +285,14 @@ const activeId = computed(() => {
 async function reveal(i: number): Promise<void> {
   const el = grid.value;
   const s = scroller.value;
-  const row = rowOf(i, columns.value) * rowHeight.value;
+  // In the page's pixels: the rows are in true ones.
+  const row = (rowOf(i, columns.value) * rowHeight.value) / factor.value;
+  const tall = rowHeight.value / factor.value;
   if (el && s && s.clientHeight > 0) {
     const top = s.scrollTop + el.getBoundingClientRect().top - s.getBoundingClientRect().top + row;
     if (top < s.scrollTop) s.scrollTop = top - REVEAL_MARGIN;
-    else if (top + rowHeight.value > s.scrollTop + s.clientHeight)
-      s.scrollTop = top + rowHeight.value - s.clientHeight + REVEAL_MARGIN;
+    else if (top + tall > s.scrollTop + s.clientHeight)
+      s.scrollTop = top + tall - s.clientHeight + REVEAL_MARGIN;
     measure();
   } else {
     scrollTop.value = row;
@@ -763,7 +778,7 @@ const noResults = computed(
       </div>
       <div
         v-if="specimen"
-        class="specimen"
+        class="specimen fm-true-size"
         data-testid="glyph-specimen"
         role="img"
         :aria-label="t('glyphs.specimenLabel')"
@@ -814,7 +829,7 @@ const noResults = computed(
         tabindex="0"
         @keydown="onKeyDown"
       >
-        <div class="sizer" :style="{ height: `${rowCount * rowHeight}px` }">
+        <div class="sizer fm-true-size" :style="{ height: `${rowCount * rowHeight}px` }">
           <div
             v-for="v in visible"
             :key="v.r"

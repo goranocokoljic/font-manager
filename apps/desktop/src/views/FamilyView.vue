@@ -458,7 +458,7 @@ onBeforeUnmount(() => {
             </p>
           </div>
           <p
-            class="specimen"
+            class="specimen fm-true-size"
             data-testid="family-specimen"
             :class="{ loading: !heldFamily, scrubbable: scrubAxis }"
             :style="specimenStyle"

@@ -190,14 +190,14 @@ const arcStyle = computed(() => {
     <template v-if="mode === 'waterfall'">
       <span v-for="size in WATERFALL_SIZES" :key="size" class="line">
         <span class="size">{{ t('catalogs.sizePx', { size }) }}</span>
-        <span class="sample" dir="auto" :style="sizeStyle(size)"
+        <span class="sample fm-true-size" dir="auto" :style="sizeStyle(size)"
           ><SpecimenText :text="text" :missing="tofu"
         /></span>
       </span>
     </template>
     <span
       v-else
-      class="sample"
+      class="sample fm-true-size"
       dir="auto"
       :style="mode === 'grid' ? sizeStyle(Math.min(preview.sizePx, 40)) : sampleStyle"
       ><SpecimenText :text="shown" :missing="tofu"

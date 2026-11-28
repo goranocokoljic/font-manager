@@ -285,7 +285,7 @@ function onKeyDown(e: KeyboardEvent): void {
       <p v-else-if="lacks" class="missing" role="status">
         {{ t('glyphCompare.lacks', { face: faceName(compare.other), codePoint: cpLabel }) }}
       </p>
-      <div class="stage">
+      <div class="stage fm-true-size">
         <svg
           class="drawing"
           role="img"

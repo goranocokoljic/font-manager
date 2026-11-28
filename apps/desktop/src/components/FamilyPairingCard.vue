@@ -31,13 +31,13 @@ const reasons = computed(() => props.card.suggestion.reasons.join(' · '));
     @click="emit('open', card)"
   >
     <span
-      class="headline"
+      class="headline fm-true-size"
       :class="{ loading: !headlineFamily }"
       :style="{ fontFamily: headlineFamily ? `'${headlineFamily}'` : undefined }"
       >{{ headlineText }}</span
     >
     <span
-      class="body"
+      class="body fm-true-size"
       :class="{ loading: !bodyFamily }"
       :style="{ fontFamily: bodyFamily ? `'${bodyFamily}'` : undefined }"
       >{{ bodyText }}</span

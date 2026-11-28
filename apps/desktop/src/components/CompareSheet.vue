@@ -482,7 +482,7 @@ function onFocusIn(e: FocusEvent): void {
                 />
               </label>
             </div>
-            <div class="stage">
+            <div class="stage fm-true-size">
               <svg
                 class="drawing"
                 role="img"
@@ -570,7 +570,7 @@ function onFocusIn(e: FocusEvent): void {
                 </span>
               </div>
               <p
-                class="sample"
+                class="sample fm-true-size"
                 dir="auto"
                 :style="{
                   fontFamily: fontOf(f),

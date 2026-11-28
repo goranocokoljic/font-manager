@@ -40,7 +40,7 @@ const SAMPLE = 'Ag';
       :checked="checked"
       @change="emit('choose', theme.id)"
     />
-    <span class="wall" aria-hidden="true" data-testid="theme-wall">
+    <span class="wall fm-true-size" aria-hidden="true" data-testid="theme-wall">
       <span
         v-for="(kind, i) in SPECIMENS"
         :key="kind"

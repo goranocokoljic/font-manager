@@ -26,7 +26,7 @@ const shown = useSpecimen(
 
 <template>
   <span
-    class="family-sample"
+    class="family-sample fm-true-size"
     :class="{ loading: !family }"
     :style="{
       fontFamily: family ? `'${family}'` : undefined,

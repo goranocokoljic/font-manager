@@ -347,7 +347,7 @@ function onKey(e: KeyboardEvent): void {
         </p>
         <p
           v-else
-          class="specimen"
+          class="specimen fm-true-size"
           :style="h.family ? { fontFamily: h.family } : undefined"
           :data-loaded="h.family ? 'true' : 'false'"
           :lang="sampleLang"
@@ -433,7 +433,9 @@ function onKey(e: KeyboardEvent): void {
           </p>
           <ul class="glyphs" :style="familyB ? { fontFamily: familyB } : undefined">
             <li v-for="g in added" :key="g.label" :title="g.label">
-              <span v-if="g.char" class="glyph" role="img" :aria-label="g.label">{{ g.char }}</span>
+              <span v-if="g.char" class="glyph fm-true-size" role="img" :aria-label="g.label">{{
+                g.char
+              }}</span>
               <span v-else class="glyph-name">{{ g.label }}</span>
             </li>
             <li v-if="more(d.glyphsAdded) > 0" class="more">
@@ -452,7 +454,9 @@ function onKey(e: KeyboardEvent): void {
           </p>
           <ul class="glyphs" :style="familyA ? { fontFamily: familyA } : undefined">
             <li v-for="g in removed" :key="g.label" :title="g.label">
-              <span v-if="g.char" class="glyph" role="img" :aria-label="g.label">{{ g.char }}</span>
+              <span v-if="g.char" class="glyph fm-true-size" role="img" :aria-label="g.label">{{
+                g.char
+              }}</span>
               <span v-else class="glyph-name">{{ g.label }}</span>
             </li>
             <li v-if="more(d.glyphsRemoved) > 0" class="more">

@@ -26,7 +26,10 @@ test build with both ways and measured them.
    default), so the user's size is the only zoom.
 2. **Every surface that shows a font takes the zoom back**: its root element
    gets `zoom: calc(1 / var(--fm-interface-factor))`, inside `@media screen`
-   only, so its content is laid out in true pixels. The surfaces:
+   only, so its content is laid out in true pixels. That rule is the class
+   `fm-true-size` in `styles/theme.css`, the one shared piece (E58.7); the page
+   sets `--fm-interface-factor` on the root before its first paint and on
+   `interfaceSizeChanged` (`src/api/interfaceSize.ts`). The surfaces:
 
    | Surface | Root that takes the zoom back |
    |---|---|
@@ -36,6 +39,17 @@ test build with both ways and measured them.
    | A glyph cell and the glyph grid | the grid (the cell slider's sizes stay true pixels) |
    | Compare's overlay (HTML and SVG text) | the overlay box, the SVG inside it |
    | The Studio paper | the paper |
+
+   E58.7 put the class on every surface of the app that shows a font: the
+   list row's sample (the wall's list and waterfall, the family waterfall,
+   the preview strips), the card's live text and thumbnail, the theme cards'
+   small wall, the family page's hero, styles and ramp (`FamilySample`), text
+   passages, waterfall, glyph grid and specimen, features, pairings and
+   metrics drawing, Quick Look, Compare's stage and samples, Similar's rows,
+   Compare copies and the Duplicates copy cards, the glyph compare stage, the
+   Studio paper, the letters picker's example and the catalog's samples.
+   Code that fits a specimen to the room the chrome gives it converts between
+   the two spaces in `src/preview/trueSize.ts`.
 
    The chrome around them (labels, buttons, the row's height, the gaps) grows
    with the interface. A surface inside another that already took the zoom
@@ -122,6 +136,18 @@ The same checks by hand in the real app window on macOS and Linux (pointer
 placement, drag ghost, list scrolling, text field menu, Studio PDF) are E58.11
 (#726), a story for a person. Until it is done, those two rows of evidence are
 the CI measurements above only.
+
+## Applied (E58.7)
+
+`fm_app_lib::interface_size`: the factor of the settings is read when the app
+is set up, every webview window is zoomed in the setup hook before the main
+window is shown, every page that starts or finishes loading is zoomed again
+(the help window, a reload), and `Event::InterfaceSizeChanged` zooms every
+window at once. The window keeps its size and position. Browser mode (the
+mock) has no shell: `applyInterfaceSize` puts a CSS zoom on the root instead,
+so the Playwright specs (`e2e/interface-size.spec.ts`) see the same sizes; the
+misplacement of popovers under a CSS zoom (above) is a browser-mode limit only.
+The screenshots of UI stories stay at the default size.
 
 ## Tests
 

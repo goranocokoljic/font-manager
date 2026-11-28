@@ -289,14 +289,14 @@ const deferredStyle = computed(() => ({
     </span>
     <span
       v-if="state === 'deferred'"
-      class="sample deferred"
+      class="sample deferred fm-true-size"
       data-testid="deferred-sample"
       :style="deferredStyle"
       ><bdi>{{ name }}</bdi></span
     >
     <span
       v-else
-      class="sample"
+      class="sample fm-true-size"
       :class="{ outline, scrubbable: wghtAxis }"
       dir="auto"
       :style="sampleStyle"
