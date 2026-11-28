@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import {
   BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, target, TRAIT_PASS_FACES, traitPass,
   nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe, touchesNative, changesNative,
+  withInterfaceSize,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
 
@@ -39,6 +40,15 @@ describe('metric', () => {
     assert.equal(metric('incremental_update', 99999).pass, null);
   });
 
+  test('the sized cold start sets the interface size and keeps every other key (E58.4)', () => {
+    assert.deepEqual(JSON.parse(withInterfaceSize('{"logLevel":"info","interfaceSize":"default"}', 'large')), {
+      logLevel: 'info',
+      interfaceSize: 'large',
+    });
+    assert.deepEqual(JSON.parse(withInterfaceSize(null, 'large')), { interfaceSize: 'large' });
+    assert.equal(BUDGETS.cold_start_sized.target, BUDGETS.cold_start.target);
+  });
+
   test('a metric not measured carries its reason and does not pass', () => {
     const m = metric('activation_100', null, 'no FontActivator yet (E6)', 'linux');
     assert.deepEqual(m, { value: null, unit: 'ms', target: 500, pass: null, note: 'no FontActivator yet (E6)' });
@@ -47,7 +57,7 @@ describe('metric', () => {
 
   test('every budget of CLAUDE.md rule 8 is in the report', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
-      'activation_100', 'cold_start', 'copy_comparison', 'duplicate_sets', 'first_scan', 'fonts_needed_100', 'glyph_geometry', 'idle_memory',
+      'activation_100', 'cold_start', 'cold_start_sized', 'copy_comparison', 'duplicate_sets', 'first_scan', 'fonts_needed_100', 'glyph_geometry', 'idle_memory',
       'incremental_update', 'layout_png', 'pairings', 'preview_cache_hit', 'search', 'similar', 'similar_glyph',
       'smart_collections', 'trait_pass', 'trait_search',
     ]);

@@ -38,7 +38,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   COMMENT_MARKER, SCHEMA, activation100, blocking, failures, firstScan, fontsNeeded100, traitPass, gate, median, merge, metric, nightlyRunsArgs, osName,
-  parseCli, parseRss, reason, renderTable, renderTrend, rssProbe,
+  parseCli, parseRss, reason, renderTable, renderTrend, rssProbe, withInterfaceSize,
 } from './lib.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -108,6 +108,25 @@ function gitSha() {
   }
 }
 
+/**
+ * E58.4: `runs` cold starts with the interface size at 125 per cent in the home's
+ * config.json; the file is put back as it was afterwards.
+ */
+async function startsWithInterfaceSize(bin, home, runs) {
+  const file = join(home, 'config', 'config.json');
+  const before = existsSync(file) ? readFileSync(file, 'utf8') : null;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, withInterfaceSize(before, 'large'));
+  try {
+    const out = [];
+    for (let i = 0; i < runs; i++) out.push((await startProcess(bin, ['start', '--home', home])).ms);
+    return out;
+  } finally {
+    if (before == null) rmSync(file, { force: true });
+    else writeFileSync(file, before);
+  }
+}
+
 async function run(opts) {
   if (!opts.library) {
     throw usage('no library: pass --library DIR or set FM_REFERENCE_LIBRARY (scripts/build-reference-library.sh downloads it)');
@@ -130,6 +149,7 @@ async function run(opts) {
     const inc = bench(bin, ['incremental', '--library', library, '--home', home]);
     const starts = [];
     for (let i = 0; i < opts.runs; i++) starts.push((await startProcess(bin, ['start', '--home', home])).ms);
+    const sizedStarts = await startsWithInterfaceSize(bin, home, opts.runs);
     const search = bench(bin, ['search', '--home', home, '--rounds', String(opts.rounds)]);
     const smart = bench(bin, ['smart', '--home', home, '--rounds', String(opts.rounds)]);
     const similar = bench(bin, ['similar', '--home', home, '--rounds', String(opts.rounds)]);
@@ -160,6 +180,7 @@ async function run(opts) {
       library: { path: library, files: scan.files, faces: scan.faces, unreadable: scan.failed },
       metrics: {
         cold_start: metric('cold_start', median(starts)),
+        cold_start_sized: metric('cold_start_sized', median(sizedStarts)),
         first_scan: firstScan(scan.ms, scan.files),
         incremental_update: metric('incremental_update', inc.ms),
         search: metric('search', search.p95_ms),
@@ -186,7 +207,7 @@ async function run(opts) {
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits, trait_search: traitSearch, similar_glyph: glyphSimilar, duplicate_sets: dupes, copy_comparison: compared },
+      detail: { cold_start_runs: starts, cold_start_sized_runs: sizedStarts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, glyph_geometry: geometry, preview_cache: previewCache, activation, fonts_needed: needed, trait_pass: traits, trait_search: traitSearch, similar_glyph: glyphSimilar, duplicate_sets: dupes, copy_comparison: compared },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');
