@@ -1877,6 +1877,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            test_cdp,
+            test_report,
             get_app_info,
             get_face,
             list_glyphs,
@@ -2147,7 +2149,7 @@ pub fn run() {
         Some(startup) => state.with_ipc(startup.paths.ipc_name()),
         None => state,
     };
-    let app = match setup_state(builder, state).build(tauri::generate_context!()) {
+    let app = match test_interface_size(setup_state(builder, state)).build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(e) => {
             tracing::error!(error = %e, "Font Fu failed to start");
@@ -2182,4 +2184,115 @@ pub fn on_exit(core: Option<&CoreApi>) {
     {
         tracing::warn!(error = %e, "session fonts not deactivated at exit");
     }
+}
+
+
+/// E58.4 TEST BUILD ONLY (never merged): `FM_TEST_INTERFACE=webview:1.25`
+/// zooms the webview (`set_zoom`), `css:1.25` puts `zoom` on the root; in
+/// both, every element that shows a user font takes the zoom back.
+fn test_interface_size<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    let Some((way, z)) = std::env::var("FM_TEST_INTERFACE").ok().and_then(|v| {
+        let (way, z) = v.split_once(':')?;
+        Some((way.to_string(), z.parse::<f64>().ok()?))
+    }) else {
+        return test_checks_only(builder);
+    };
+    let root = if way == "css" { format!("html{{zoom:{z}}}") } else { String::new() };
+    // Print is laid out at 100 per cent whatever the screen zoom: take the zoom back on screen only.
+    let screen_only = std::env::var("FM_TEST_PRINT_ZOOM").is_err();
+    let back = 1.0 / z;
+    let css = format!(
+        "{root} [style*=\"font-family\"]:not([style*=\"font-family\"] *):not([data-fm-paper] *), svg:has([font-family]):not([style*=\"font-family\"] *):not([data-fm-paper] *){{zoom:{back:.10}}} [data-fm-paper]{{zoom:{back:.10}}}"
+    );
+    let css = if screen_only { format!("@media screen{{{css}}}") } else { css };
+    let js = format!(
+        "(()=>{{const s=document.createElement('style');s.id='fm-test-interface';s.textContent={css:?};document.head.appendChild(s);window.__fmTestInterface={{way:{way:?},z:{z}}};}})()"
+    );
+    let webview_zoom = (way == "webview").then_some(z);
+    let checks = std::env::var("FM_TEST_CHECKS").ok().and_then(|p| std::fs::read_to_string(p).ok());
+    let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    builder
+        .on_page_load(move |webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                let _ = webview.eval(&js);
+                if let Some(checks) = &checks {
+                    if !ran.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                        let _ = webview.eval(checks);
+                    }
+                }
+                if let Some(z) = webview_zoom {
+                    let _ = webview.set_zoom(z);
+                }
+            }
+        })
+}
+
+fn test_checks_only<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    let Some(checks) = std::env::var("FM_TEST_CHECKS").ok().and_then(|p| std::fs::read_to_string(p).ok()) else {
+        return builder;
+    };
+    let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    builder.on_page_load(move |webview, payload| {
+        if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+            && !ran.swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            let _ = webview.eval("window.__fmTestInterface={way:'none',z:1}");
+            let _ = webview.eval(&checks);
+        }
+    })
+}
+
+#[allow(unsafe_code)]
+/// E58.4 TEST BUILD ONLY: calls a DevTools protocol method on this webview
+/// (WebView2 `CallDevToolsProtocolMethod`) and answers its JSON result.
+#[tauri::command]
+async fn test_cdp<R: Runtime>(webview: Webview<R>, method: String, params: String) -> Result<String, String> {
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+    webview
+        .with_webview(move |pw| {
+            #[cfg(windows)]
+            {
+                use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
+                let tx2 = tx.clone();
+                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |hr, json| {
+                    let _ = tx2.send(hr.map(|()| json).map_err(|e| e.to_string()));
+                    Ok(())
+                }));
+                // SAFETY: test build; live interfaces on the UI thread.
+                let r = unsafe {
+                    pw.controller().CoreWebView2().and_then(|core| {
+                        core.CallDevToolsProtocolMethod(
+                            &windows_core::HSTRING::from(method.as_str()),
+                            &windows_core::HSTRING::from(params.as_str()),
+                            &handler,
+                        )
+                    })
+                };
+                if let Err(e) = r {
+                    let _ = tx.send(Err(e.to_string()));
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = (pw, method, params);
+                let _ = tx.send(Err("windows only".into()));
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        rx.recv_timeout(std::time::Duration::from_secs(60))
+            .map_err(|e| e.to_string())
+            .and_then(|r| r)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// E58.4 TEST BUILD ONLY: writes the checks' report to `FM_TEST_REPORT` and quits.
+#[tauri::command]
+fn test_report<R: Runtime>(app: tauri::AppHandle<R>, json: String) -> Result<(), String> {
+    let path = std::env::var("FM_TEST_REPORT").map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok(())
 }

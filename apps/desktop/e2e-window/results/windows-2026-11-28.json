@@ -1,0 +1,1358 @@
+[
+ {
+  "run": "none:1",
+  "mode": {
+   "way": "none",
+   "z": 1
+  },
+  "errors": [],
+  "setup": {
+   "dpr": 1,
+   "innerWidth": 1280,
+   "innerHeight": 780
+  },
+  "input": {
+   "sent": [
+    [
+     100,
+     100
+    ],
+    [
+     300,
+     200
+    ]
+   ],
+   "seen": [
+    {
+     "x": 100,
+     "y": 100
+    },
+    {
+     "x": 300,
+     "y": 200
+    }
+   ],
+   "scale": 1
+  },
+  "tooltip": {
+   "button": {
+    "left": 181,
+    "top": 207,
+    "right": 205,
+    "bottom": 231,
+    "width": 24,
+    "height": 24
+   },
+   "tip": {
+    "left": 83.5,
+    "top": 176,
+    "right": 302.328125,
+    "bottom": 201.390625,
+    "width": 218.828125,
+    "height": 25.390625
+   },
+   "gap": 5.609375,
+   "overlapH": 24,
+   "ok": true
+  },
+  "popover": {
+   "button": {
+    "left": 181,
+    "top": 207,
+    "right": 205,
+    "bottom": 231,
+    "width": 24,
+    "height": 24
+   },
+   "menu": {
+    "left": 186,
+    "top": 240,
+    "right": 422,
+    "bottom": 459.90625,
+    "width": 236,
+    "height": 219.90625
+   },
+   "below": 9,
+   "above": -252.90625,
+   "nearH": 5,
+   "ok": true
+  },
+  "textFieldMenu": {
+   "pointer": {
+    "x": 389,
+    "y": 23
+   },
+   "menu": {
+    "left": 394,
+    "top": 32,
+    "right": 574,
+    "bottom": 144,
+    "width": 180,
+    "height": 112
+   },
+   "dx": 5,
+   "dy": 9,
+   "ok": false
+  },
+  "listProbe": {
+   "box": {
+    "left": 233,
+    "top": 144,
+    "right": 1280,
+    "bottom": 755,
+    "width": 1047,
+    "height": 611
+   },
+   "cover": null,
+   "wheelAt": [
+    756.5,
+    154
+   ]
+  },
+  "list": {
+   "steps": [
+    {
+     "scrollTop": 173,
+     "rows": 11,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 346,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 519,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 692,
+     "rows": 11,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 865,
+     "rows": 11,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1038,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1211,
+     "rows": 11,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1384,
+     "rows": 11,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1557,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1730,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1903,
+     "rows": 11,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 2076,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    }
+   ],
+   "moved": true,
+   "ok": true
+  },
+  "dragGhost": {
+   "ghosts": [
+    {
+     "pointer": [
+      333,
+      334
+     ],
+     "ghost": [
+      273,
+      302
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    },
+    {
+     "pointer": [
+      413,
+      264
+     ],
+     "ghost": [
+      353,
+      232
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    },
+    {
+     "pointer": [
+      513,
+      214
+     ],
+     "ghost": [
+      453,
+      182
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    }
+   ],
+   "spread": 0,
+   "ok": true
+  },
+  "pdf": {
+   "paper": {
+    "left": 300,
+    "top": 73,
+    "right": 1280,
+    "bottom": 780,
+    "width": 980,
+    "height": 707
+   },
+   "bytes": 14044,
+   "pages": 1,
+   "boxes": [
+    "0.00 0.00 595.92 841.92"
+   ],
+   "sizes": {
+    "Tf 13.00": 18,
+    "Tm 1.00": 1
+   }
+  },
+  "pdfSameAsBase": true
+ },
+ {
+  "run": "webview:1.25",
+  "mode": {
+   "way": "webview",
+   "z": 1.25
+  },
+  "errors": [],
+  "setup": {
+   "dpr": 1.25,
+   "innerWidth": 1024,
+   "innerHeight": 624
+  },
+  "input": {
+   "sent": [
+    [
+     100,
+     100
+    ],
+    [
+     300,
+     200
+    ]
+   ],
+   "seen": [
+    {
+     "x": 100,
+     "y": 100
+    },
+    {
+     "x": 300,
+     "y": 200
+    }
+   ],
+   "scale": 1
+  },
+  "tooltip": {
+   "button": {
+    "left": 184,
+    "top": 207,
+    "right": 208,
+    "bottom": 231,
+    "width": 24,
+    "height": 24
+   },
+   "tip": {
+    "left": 87,
+    "top": 176,
+    "right": 305.4250030517578,
+    "bottom": 201,
+    "width": 218.4250030517578,
+    "height": 25
+   },
+   "gap": 6,
+   "overlapH": 24,
+   "ok": true
+  },
+  "popover": {
+   "button": {
+    "left": 184,
+    "top": 207,
+    "right": 208,
+    "bottom": 231,
+    "width": 24,
+    "height": 24
+   },
+   "menu": {
+    "left": 188.8000030517578,
+    "top": 239.8000030517578,
+    "right": 424.8000030517578,
+    "bottom": 459.75,
+    "width": 236,
+    "height": 219.9499969482422
+   },
+   "below": 8.800003051757812,
+   "above": -252.75,
+   "nearH": 4.8000030517578125,
+   "ok": true
+  },
+  "textFieldMenu": {
+   "pointer": {
+    "x": 481,
+    "y": 22
+   },
+   "menu": {
+    "left": 485.8000183105469,
+    "top": 30.80000114440918,
+    "right": 665.8000183105469,
+    "bottom": 142.80000114440918,
+    "width": 180,
+    "height": 112
+   },
+   "dx": 4.800018310546875,
+   "dy": 8.80000114440918,
+   "ok": false
+  },
+  "listProbe": {
+   "box": {
+    "left": 233,
+    "top": 206.40000915527344,
+    "right": 1024,
+    "bottom": 599.2000274658203,
+    "width": 791,
+    "height": 392.8000183105469
+   },
+   "cover": null,
+   "wheelAt": [
+    628.5,
+    216.40000915527344
+   ]
+  },
+  "list": {
+   "steps": [
+    {
+     "scrollTop": 172.8000030517578,
+     "rows": 7,
+     "worst": 0.000030517578125,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 346.3999938964844,
+     "rows": 7,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 519.2000122070312,
+     "rows": 7,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 692,
+     "rows": 7,
+     "worst": 0.000030517578125,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 864.7999877929688,
+     "rows": 7,
+     "worst": 0.000030517578125,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1038.4000244140625,
+     "rows": 7,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1211.199951171875,
+     "rows": 8,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1384,
+     "rows": 7,
+     "worst": 0.000030517578125,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1556.800048828125,
+     "rows": 7,
+     "worst": 0.000030517578125,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1730.4000244140625,
+     "rows": 7,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1903.199951171875,
+     "rows": 7,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 2076,
+     "rows": 7,
+     "worst": 0.000030517578125,
+     "covered": true,
+     "atEnd": false
+    }
+   ],
+   "moved": true,
+   "ok": true
+  },
+  "dragGhost": {
+   "ghosts": [
+    {
+     "pointer": [
+      333,
+      396.3999938964844
+     ],
+     "ghost": [
+      273,
+      364.3999938964844
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    },
+    {
+     "pointer": [
+      413,
+      326.3999938964844
+     ],
+     "ghost": [
+      353,
+      294.3999938964844
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    },
+    {
+     "pointer": [
+      513,
+      276.3999938964844
+     ],
+     "ghost": [
+      453,
+      244.40000915527344
+     ],
+     "offset": [
+      -60,
+      -31.999984741210938
+     ]
+    }
+   ],
+   "spread": 0.0000152587890625,
+   "ok": true
+  },
+  "pdf": {
+   "paper": {
+    "left": 300,
+    "top": 88.80000305175781,
+    "right": 1012,
+    "bottom": 624.0000152587891,
+    "width": 712,
+    "height": 535.2000122070312
+   },
+   "bytes": 14044,
+   "pages": 1,
+   "boxes": [
+    "0.00 0.00 595.92 841.92"
+   ],
+   "sizes": {
+    "Tf 13.00": 18,
+    "Tm 1.00": 1
+   }
+  },
+  "pdfSameAsBase": true
+ },
+ {
+  "run": "webview:1.5",
+  "mode": {
+   "way": "webview",
+   "z": 1.5
+  },
+  "errors": [],
+  "setup": {
+   "dpr": 1.5,
+   "innerWidth": 853,
+   "innerHeight": 520
+  },
+  "input": {
+   "sent": [
+    [
+     100,
+     100
+    ],
+    [
+     300,
+     200
+    ]
+   ],
+   "seen": [
+    {
+     "x": 100,
+     "y": 100
+    },
+    {
+     "x": 300,
+     "y": 200
+    }
+   ],
+   "scale": 1
+  },
+  "tooltip": {
+   "button": {
+    "left": 186,
+    "top": 207,
+    "right": 210,
+    "bottom": 231,
+    "width": 24,
+    "height": 24
+   },
+   "tip": {
+    "left": 89,
+    "top": 176,
+    "right": 307.15625,
+    "bottom": 200.72916793823242,
+    "width": 218.15625,
+    "height": 24.729167938232422
+   },
+   "gap": 6.270832061767578,
+   "overlapH": 24,
+   "ok": true
+  },
+  "popover": {
+   "button": {
+    "left": 186,
+    "top": 207,
+    "right": 210,
+    "bottom": 231,
+    "width": 24,
+    "height": 24
+   },
+   "menu": {
+    "left": 190.6666717529297,
+    "top": 239.6666717529297,
+    "right": 426.6666717529297,
+    "bottom": 459.5729217529297,
+    "width": 236,
+    "height": 219.90625
+   },
+   "below": 8.666671752929688,
+   "above": -252.5729217529297,
+   "nearH": 4.6666717529296875,
+   "ok": true
+  },
+  "textFieldMenu": {
+   "pointer": {
+    "x": 434,
+    "y": 22
+   },
+   "menu": {
+    "left": 438.66668701171875,
+    "top": 30.666667938232422,
+    "right": 618.6666870117188,
+    "bottom": 142.66666793823242,
+    "width": 180,
+    "height": 112
+   },
+   "dx": 4.66668701171875,
+   "dy": 8.666667938232422,
+   "ok": false
+  },
+  "listProbe": {
+   "box": {
+    "left": 233,
+    "top": 267.75,
+    "right": 843.3333740234375,
+    "bottom": 495.3333435058594,
+    "width": 610.3333740234375,
+    "height": 227.58334350585938
+   },
+   "cover": {
+    "cls": "message",
+    "text": "fonts added · 200 fonts4 files are copies of fonts you have",
+    "rect": {
+     "left": 503.3645935058594,
+     "top": 379.09375,
+     "right": 702.1354370117188,
+     "bottom": 417.33333587646484,
+     "width": 198.77084350585938,
+     "height": 38.239585876464844
+    }
+   },
+   "wheelAt": [
+    538.1666870117188,
+    277.75
+   ]
+  },
+  "list": {
+   "steps": [
+    {
+     "scrollTop": 173.3333282470703,
+     "rows": 5,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 346,
+     "rows": 4,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 519.3333129882812,
+     "rows": 4,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 692,
+     "rows": 5,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 865.3333129882812,
+     "rows": 5,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1038,
+     "rows": 4,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1211.3333740234375,
+     "rows": 5,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1384,
+     "rows": 5,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1557.3333740234375,
+     "rows": 4,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1730,
+     "rows": 4,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1903.3333740234375,
+     "rows": 5,
+     "worst": 0.0000152587890625,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 2076,
+     "rows": 4,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    }
+   ],
+   "moved": true,
+   "ok": true
+  },
+  "dragGhost": {
+   "ghosts": [
+    {
+     "pointer": [
+      333,
+      457.75
+     ],
+     "ghost": [
+      273,
+      425.75
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    },
+    {
+     "pointer": [
+      413,
+      387.75
+     ],
+     "ghost": [
+      353,
+      355.75
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    },
+    {
+     "pointer": [
+      513,
+      337.75
+     ],
+     "ghost": [
+      453,
+      305.75
+     ],
+     "offset": [
+      -60,
+      -32
+     ]
+    }
+   ],
+   "spread": 0,
+   "ok": true
+  },
+  "pdf": {
+   "paper": {
+    "left": 0,
+    "top": 261.19793701171875,
+    "right": 843.3333740234375,
+    "bottom": 520.0000305175781,
+    "width": 843.3333740234375,
+    "height": 258.8020935058594
+   },
+   "bytes": 14044,
+   "pages": 1,
+   "boxes": [
+    "0.00 0.00 595.92 841.92"
+   ],
+   "sizes": {
+    "Tf 13.00": 18,
+    "Tm 1.00": 1
+   }
+  },
+  "pdfSameAsBase": true
+ },
+ {
+  "run": "css:1.25",
+  "mode": {
+   "way": "css",
+   "z": 1.25
+  },
+  "errors": [],
+  "setup": {
+   "dpr": 1,
+   "innerWidth": 1280,
+   "innerHeight": 780
+  },
+  "input": {
+   "sent": [
+    [
+     100,
+     100
+    ],
+    [
+     300,
+     200
+    ]
+   ],
+   "seen": [
+    {
+     "x": 100,
+     "y": 100
+    },
+    {
+     "x": 300,
+     "y": 200
+    }
+   ],
+   "scale": 1
+  },
+  "tooltip": {
+   "button": {
+    "left": 230,
+    "top": 258.75,
+    "right": 260,
+    "bottom": 288.75,
+    "width": 30,
+    "height": 30
+   },
+   "tip": {
+    "left": 170,
+    "top": 284.6875,
+    "right": 443.03125,
+    "bottom": 315.9375,
+    "width": 273.03125,
+    "height": 31.25
+   },
+   "gap": 4.0625,
+   "overlapH": 30,
+   "ok": true
+  },
+  "popover": {
+   "button": {
+    "left": 230,
+    "top": 258.75,
+    "right": 260,
+    "bottom": 288.75,
+    "width": 30,
+    "height": 30
+   },
+   "menu": {
+    "left": 293.5,
+    "top": 371.9375,
+    "right": 588.5,
+    "bottom": 646.875,
+    "width": 295,
+    "height": 274.9375
+   },
+   "below": 83.1875,
+   "above": -388.125,
+   "nearH": 63.5,
+   "ok": false
+  },
+  "textFieldMenu": {
+   "pointer": {
+    "x": 581,
+    "y": 28
+   },
+   "menu": {
+    "left": 732.25,
+    "top": 46,
+    "right": 957.25,
+    "bottom": 186,
+    "width": 225,
+    "height": 140
+   },
+   "dx": 151.25,
+   "dy": 18,
+   "ok": false
+  },
+  "listProbe": {
+   "box": {
+    "left": 291.25,
+    "top": 258,
+    "right": 1265,
+    "bottom": 944,
+    "width": 973.75,
+    "height": 686
+   },
+   "cover": null,
+   "wheelAt": [
+    778.125,
+    268
+   ]
+  },
+  "list": {
+   "steps": [
+    {
+     "scrollTop": 138.39999389648438,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 276.79998779296875,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 415.20001220703125,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 553.5999755859375,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 692,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 830.4000244140625,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 968.7999877929688,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1107.199951171875,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1245.5999755859375,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1384,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1522.4000244140625,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1660.800048828125,
+     "rows": 10,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    }
+   ],
+   "moved": true,
+   "ok": true
+  },
+  "dragGhost": {
+   "ghosts": [
+    {
+     "pointer": [
+      391.25,
+      488
+     ],
+     "ghost": [
+      414.0625,
+      560
+     ],
+     "offset": [
+      22.8125,
+      72
+     ]
+    },
+    {
+     "pointer": [
+      471.25,
+      418
+     ],
+     "ghost": [
+      514.0625,
+      472.5
+     ],
+     "offset": [
+      42.8125,
+      54.5
+     ]
+    },
+    {
+     "pointer": [
+      571.25,
+      368
+     ],
+     "ghost": [
+      639.0625,
+      410
+     ],
+     "offset": [
+      67.8125,
+      42
+     ]
+    }
+   ],
+   "spread": 54.08326913195984,
+   "ok": false
+  },
+  "pdf": {
+   "paper": {
+    "left": 375,
+    "top": 111,
+    "right": 1265,
+    "bottom": 975,
+    "width": 890,
+    "height": 864
+   },
+   "bytes": 14044,
+   "pages": 1,
+   "boxes": [
+    "0.00 0.00 595.92 841.92"
+   ],
+   "sizes": {
+    "Tf 13.00": 18,
+    "Tm 1.00": 1
+   }
+  },
+  "pdfSameAsBase": true
+ },
+ {
+  "run": "css:1.5",
+  "mode": {
+   "way": "css",
+   "z": 1.5
+  },
+  "errors": [],
+  "setup": {
+   "dpr": 1,
+   "innerWidth": 1280,
+   "innerHeight": 780
+  },
+  "input": {
+   "sent": [
+    [
+     100,
+     100
+    ],
+    [
+     300,
+     200
+    ]
+   ],
+   "seen": [
+    {
+     "x": 100,
+     "y": 100
+    },
+    {
+     "x": 300,
+     "y": 200
+    }
+   ],
+   "scale": 1
+  },
+  "tooltip": {
+   "button": {
+    "left": 279,
+    "top": 310.5,
+    "right": 315,
+    "bottom": 346.5,
+    "width": 36,
+    "height": 36
+   },
+   "tip": {
+    "left": 282,
+    "top": 419.25,
+    "right": 609.234375,
+    "bottom": 456.34375,
+    "width": 327.234375,
+    "height": 37.09375
+   },
+   "gap": 72.75,
+   "overlapH": 33,
+   "ok": false
+  },
+  "popover": {
+   "button": {
+    "left": 279,
+    "top": 310.5,
+    "right": 315,
+    "bottom": 346.5,
+    "width": 36,
+    "height": 36
+   },
+   "menu": {
+    "left": 425.5,
+    "top": 532.75,
+    "right": 779.5,
+    "bottom": 862.609375,
+    "width": 354,
+    "height": 329.859375
+   },
+   "below": 186.25,
+   "above": -552.109375,
+   "nearH": 146.5,
+   "ok": false
+  },
+  "textFieldMenu": {
+   "pointer": {
+    "x": 642,
+    "y": 34
+   },
+   "menu": {
+    "left": 970,
+    "top": 64,
+    "right": 1240,
+    "bottom": 232,
+    "width": 270,
+    "height": 168
+   },
+   "dx": 328,
+   "dy": 30,
+   "ok": false
+  },
+  "listProbe": {
+   "box": {
+    "left": 349.5,
+    "top": 401.625,
+    "right": 1265,
+    "bottom": 1133,
+    "width": 915.5,
+    "height": 731.375
+   },
+   "cover": null,
+   "wheelAt": [
+    807.25,
+    411.625
+   ]
+  },
+  "list": {
+   "steps": [
+    {
+     "scrollTop": 115.33333587646484,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 230.6666717529297,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 346,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 461.3333435058594,
+     "rows": 8,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 576.6666870117188,
+     "rows": 8,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 692,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 807.3333129882812,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 922.6666870117188,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1038,
+     "rows": 8,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1153.3333740234375,
+     "rows": 8,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1268.6666259765625,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    },
+    {
+     "scrollTop": 1384,
+     "rows": 9,
+     "worst": 0,
+     "covered": true,
+     "atEnd": false
+    }
+   ],
+   "moved": true,
+   "ok": true
+  },
+  "dragGhost": {
+   "ghosts": [
+    {
+     "pointer": [
+      449.5,
+      671.625
+     ],
+     "ghost": [
+      584.25,
+      935.4375
+     ],
+     "offset": [
+      134.75,
+      263.8125
+     ]
+    },
+    {
+     "pointer": [
+      529.5,
+      601.625
+     ],
+     "ghost": [
+      704.25,
+      830.4375
+     ],
+     "offset": [
+      174.75,
+      228.8125
+     ]
+    },
+    {
+     "pointer": [
+      629.5,
+      551.625
+     ],
+     "ghost": [
+      854.25,
+      755.4375
+     ],
+     "offset": [
+      224.75,
+      203.8125
+     ]
+    }
+   ],
+   "spread": 108.16653826391968,
+   "ok": false
+  },
+  "pdf": {
+   "paper": {
+    "left": 450,
+    "top": 133,
+    "right": 1265,
+    "bottom": 1170,
+    "width": 815,
+    "height": 1037
+   },
+   "bytes": 14044,
+   "pages": 1,
+   "boxes": [
+    "0.00 0.00 595.92 841.92"
+   ],
+   "sizes": {
+    "Tf 13.00": 18,
+    "Tm 1.00": 1
+   }
+  },
+  "pdfSameAsBase": true
+ }
+]

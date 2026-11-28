@@ -225,6 +225,7 @@ onMounted(() => {
         />
       </FmSlide>
       <FontLayout
+        data-fm-paper
         :class="{ 'fm-paper-in': paperOpening }"
         :layout="layouts.draft"
         :face="face"

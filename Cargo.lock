@@ -1173,7 +1173,9 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-updater",
  "tracing",
+ "webview2-com",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

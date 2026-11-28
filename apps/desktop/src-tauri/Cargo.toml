@@ -33,6 +33,11 @@ tauri = { version = "2", features = ["test"] }
 [lints]
 workspace = true
 
+# E58.4 TEST BUILD ONLY: the in-app DevTools bridge of the window checks.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows-core = "0.62"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
