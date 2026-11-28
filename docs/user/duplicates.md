@@ -23,7 +23,11 @@ name at a time, and your documents ask for the name, not for the version.
 
 ## Which copy stays
 
-The **keeper policy** chooses the copy to keep. You set it in the app. The default is:
+Your languages are the languages you work in. You set them in **Settings › Languages**.
+The same list puts your languages first in the filters and in the sample text menu.
+
+The **keeper policy** chooses the copy to keep. You set it in the app, under the rules of
+**Duplicates**. The default is:
 the copy that covers more of your languages, then the newest version, then the format,
 then the copy in the library folder, then the path from A to Z.
 

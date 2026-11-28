@@ -10,16 +10,16 @@ import { optionLabels, selectOption, showPreviewOptions } from './select';
 
 const MORE = '/?mockLanguages=more';
 
+/** Sets the user's languages under Settings › Languages (E58.2), in this order. */
 async function setMyLanguages(page: Page, names: string[]): Promise<void> {
-  await page.goto(`${MORE}&mockDuplicates=1#/duplicates?section=rules`);
-  await expect(page.getByTestId('duplicates-rules')).toBeVisible();
+  await page.goto(`${MORE}#/settings?section=languages`);
   for (const name of names) {
     const picker = page.getByRole('combobox', { name: 'Add a language' });
     await picker.click();
     await page.keyboard.type(name.slice(0, 4));
     await page.getByRole('option', { name, exact: true }).click();
   }
-  await expect(page.getByTestId('dup-languages')).toHaveText(names.join(', '));
+  await expect(page.getByTestId('my-languages').locator('.name')).toHaveText(names);
 }
 
 const languageChips = (page: Page) =>
