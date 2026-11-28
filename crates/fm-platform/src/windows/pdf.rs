@@ -72,7 +72,7 @@ impl PdfPrinter for WindowsPdfPrinter {
 }
 
 /// A hidden top-level window, destroyed on drop.
-struct Window(HWND);
+pub(crate) struct Window(pub(crate) HWND);
 
 impl Drop for Window {
     fn drop(&mut self) {
@@ -82,7 +82,7 @@ impl Drop for Window {
 }
 
 /// The controller, closed on drop so the browser process ends.
-struct Controller(ICoreWebView2Controller);
+pub(crate) struct Controller(pub(crate) ICoreWebView2Controller);
 
 impl Drop for Controller {
     fn drop(&mut self) {
@@ -136,7 +136,7 @@ fn print_on_this_thread(dir: &Path, html: &Path, out: &Path) -> Result<(), Print
     print(&env, &webview, out)
 }
 
-fn environment(dir: &Path) -> Result<ICoreWebView2Environment, PrintError> {
+pub(crate) fn environment(dir: &Path) -> Result<ICoreWebView2Environment, PrintError> {
     let (tx, rx) = mpsc::channel();
     let folder = HSTRING::from(dir.as_os_str());
     CreateCoreWebView2EnvironmentCompletedHandler::wait_for_async_operation(
@@ -164,7 +164,7 @@ fn environment(dir: &Path) -> Result<ICoreWebView2Environment, PrintError> {
         .map_err(|e| PrintError::new(format!("WebView2 environment: {e}")))
 }
 
-fn controller(
+pub(crate) fn controller(
     env: &ICoreWebView2Environment,
     hwnd: HWND,
 ) -> Result<ICoreWebView2Controller, PrintError> {
@@ -189,7 +189,7 @@ fn controller(
 }
 
 /// Loads `url` and waits for its `NavigationCompleted`; a failed load is an error.
-fn navigate(webview: &ICoreWebView2, url: &str) -> Result<(), PrintError> {
+pub(crate) fn navigate(webview: &ICoreWebView2, url: &str) -> Result<(), PrintError> {
     let (tx, rx) = mpsc::channel();
     let handler = NavigationCompletedEventHandler::create(Box::new(move |_, args| {
         let mut ok = BOOL(0);
@@ -221,7 +221,7 @@ fn navigate(webview: &ICoreWebView2, url: &str) -> Result<(), PrintError> {
 }
 
 /// Polls `document.fonts.status` until every face is loaded.
-fn wait_for_fonts(webview: &ICoreWebView2) -> Result<(), PrintError> {
+pub(crate) fn wait_for_fonts(webview: &ICoreWebView2) -> Result<(), PrintError> {
     let deadline = Instant::now() + PRINT_TIMEOUT;
     loop {
         let (tx, rx) = mpsc::channel();

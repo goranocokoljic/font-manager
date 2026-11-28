@@ -16,6 +16,12 @@ interprocess = "2.4"
 [lints]
 workspace = true
 
+# E58.4 (ADR 0029): the interface size measured in the OS webview. AppKit
+# needs the main thread, so the test has its own `main`.
+[[test]]
+name = "interface_size"
+harness = false
+
 [target.'cfg(windows)'.dependencies]
 # WebView2's PrintToPdf (ADR 0013); the bindings wry (Tauri) already uses.
 webview2-com = "0.39"
@@ -23,6 +29,8 @@ windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Graphics_DirectWrite",
   "Win32_Graphics_Gdi",
+  # WIC decodes the WebView2 capture of the interface-size probe (E58.4).
+  "Win32_Graphics_Imaging",
   "Win32_Security",
   "Win32_Security_Authorization",
   "Win32_Storage_FileSystem",
@@ -49,6 +57,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
   "objc2-core-foundation",
   "NSApplication",
+  "NSBitmapImageRep",
   "NSDragging",
   "NSDraggingItem",
   "NSDraggingSession",
@@ -56,6 +65,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSGraphics",
   "NSGraphicsContext",
   "NSImage",
+  "NSImageRep",
   "NSPasteboard",
   "NSPasteboardItem",
   "NSPrintInfo",
@@ -80,6 +90,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSRunLoop",
   "NSString",
   "NSURL",
+  "NSValue",
 ] }
 objc2-web-kit = { version = "0.3", default-features = false, features = [
   "std",
@@ -87,6 +98,7 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
   "objc2-app-kit",
   "objc2-core-foundation",
   "WKNavigation",
+  "WKSnapshotConfiguration",
   "WKWebView",
   "WKWebViewConfiguration",
 ] }

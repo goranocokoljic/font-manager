@@ -25,6 +25,7 @@ mod show_folder;
 pub mod trash;
 pub mod tray;
 pub mod updater;
+pub mod webview_probe;
 mod windows;
 
 pub use activator::{

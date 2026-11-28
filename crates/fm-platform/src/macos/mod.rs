@@ -38,6 +38,9 @@ mod show_folder;
 #[allow(unsafe_code)] // Objective-C runtime and CoreFoundation FFI; every block has a SAFETY note.
 mod trash;
 mod tray;
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)] // AppKit and WebKit FFI; every block has a SAFETY note.
+pub(crate) mod webview_probe;
 
 #[cfg(target_os = "macos")]
 pub use activator::MacosActivator;
