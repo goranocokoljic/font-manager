@@ -55,20 +55,20 @@ test build with both ways and measured them.
 an offscreen webview per OS, `fm_platform::webview_probe`): six surfaces at 125
 and 150 per cent, both ways, measured as ink in the pixels the webview drew at a
 scale of 1. Each control page without the take-back grew by the zoom (1.245 to
-1.505×), so the zoom happened.
+1.505×, CI run 46131007586), so the zoom happened.
 
 | Surface (ink at 100 %, px) | Windows | macOS | Linux |
 |---|---|---|---|
-| Wall specimen, 40 px | 328 × 37 | MACOS | 327 × 36 |
-| Family hero, 96 px | 420 × 86 | MACOS | 422 × 87 |
-| Waterfall ladder, 10 lines | 571 × 493 | MACOS | 570 × 492 |
-| Glyph cell, 96 px box | 98 × 98 | MACOS | 98 × 98 |
-| Compare overlay, 120 px | 325 × 135 | MACOS | 325 × 133 |
-| Studio paper, 420 × 594 | 420 × 594 | MACOS | 420 × 594 |
-| Difference at 125 and 150 %, both ways | 0 × 0 | MACOS | 0 × 0 |
+| Wall specimen, 40 px | 328 × 37 | 328 × 37 | 327 × 36 |
+| Family hero, 96 px | 420 × 86 | 419 × 86 | 422 × 87 |
+| Waterfall ladder, 10 lines | 571 × 493 | 571 × 492 | 570 × 492 |
+| Glyph cell, 96 px box | 98 × 98 | 98 × 98 | 98 × 98 |
+| Compare overlay, 120 px | 325 × 135 | 325 × 135 | 325 × 133 |
+| Studio paper, 420 × 594 | 420 × 594 | 420 × 594 | 420 × 594 |
+| Difference at 125 and 150 %, both ways | 0 × 0 | 0 × 0 | 0 × 0 |
 
 Each waterfall line was the same at every size too. `innerWidth` of a 1000 px
-view was 800 and 667 (666 on WebKitGTK) under the webview's zoom, 1000 under the
+view was 800 and 667 (666 on WebKit, macOS and Linux) under the webview's zoom, 1000 under the
 CSS zoom. Both ways hold the fonts on all three systems.
 
 **In the real app window on Windows** (WebView2, the E58.4 test build; input
