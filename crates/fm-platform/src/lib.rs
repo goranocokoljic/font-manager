@@ -4,7 +4,8 @@
 //! implementation per OS under `src/{windows,macos,linux}/`, the app-paths
 //! helpers, the file-system calls that differ per OS (symbolic links, the
 //! trash), the tray, the login entry, the default browser, how the app was installed (updates),
-//! the PDF printer, the file drag out of the window, the clipboard read and the IPC transport. Platform differences are
+//! the PDF printer, the file drag out of the window, the clipboard read, the IPC transport and
+//! the webview probe the interface-size test measures with (ADR 0029). Platform differences are
 //! documented in an ADR, never hidden in `cfg` branches elsewhere.
 
 pub mod activator;

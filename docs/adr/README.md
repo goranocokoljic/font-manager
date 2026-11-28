@@ -33,5 +33,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0026](0026-first-run-setup.md) | First-run setup: at first launch, the steps and when each is open, answers in `config.json` | Accepted |
 | [0027](0027-duplicates.md) | Duplicates: three levels of sameness, two versions are a set, scope and pages, what differs between two copies, the budgets | Accepted |
 | [0028](0028-language-order.md) | One order of languages: the user's, the most used (`data/charsets/order.json`), then A to Z; the system's language leads while none is set | Accepted |
+| [0029](0029-interface-size.md) | Interface size: the webview's own zoom; every surface that shows a font takes it back on screen | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.
