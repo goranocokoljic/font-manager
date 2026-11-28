@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// The Duplicates module's "Languages and rules" page (E56.14). First the languages the user
-// works in (a searchable picker over `listLanguages`; each change saves at once through
-// `updateSettings`). Then the keeper policy (E56.4, ADR 0027): the language guard stands
+// The Duplicates module's rules page (E56.14). First the languages the user works in, as
+// chips that only show them: they are edited under Settings › Languages (E58.2), and the
+// link goes there. Then the keeper policy (E56.4, ADR 0027): the language guard stands
 // above the rules as always on — it is not a rule and cannot be moved or turned off — and
 // the rules follow in order, each turned on or off, reordered by drag or from its grip by
 // the keyboard. The format and preferred-folder rules open their own short lists. The path
@@ -9,9 +9,11 @@
 // edited policy would do; nothing is saved until Save, and "Back to the default" loads the
 // default policy as the API reads an empty one.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { RouterLink } from 'vue-router';
 import { useClient } from '../api/client';
 import type { FontFormat, KeeperPolicy, KeeperPolicyPreview, KeeperRule } from '../api/types';
 import { errorMessage, t, type MessageKey } from '../i18n';
+import { presetsIn } from '../search/languages';
 import { useDuplicatesStore } from '../stores/duplicates';
 import { useSettingsStore } from '../stores/settings';
 import UiButton from './ui/UiButton.vue';
@@ -23,24 +25,9 @@ import UiSwitch from './ui/UiSwitch.vue';
 const store = useDuplicatesStore();
 const settings = useSettingsStore();
 
-// ---- Languages ----
+// ---- Languages (shown only; Settings › Languages edits them) ----
 const myLanguages = computed(() => settings.settings?.myLanguages ?? []);
-const languagePresets = computed(() =>
-  myLanguages.value
-    .map((code) => store.presets.find((p) => p.code === code))
-    .filter((p) => p != null),
-);
-const languageOptions = computed(() =>
-  store.presets
-    .filter((p) => !myLanguages.value.includes(p.code))
-    .map((p) => ({ value: p.code, label: p.name })),
-);
-async function setLanguages(codes: string[]): Promise<void> {
-  if (await settings.update({ myLanguages: codes })) {
-    await store.load();
-    void runPreview();
-  }
-}
+const languagePresets = computed(() => presetsIn(store.presets, myLanguages.value));
 
 // ---- The policy being edited ----
 /** Every rule a user can place, in the order the ADR lists them; `path` always ends. */
@@ -199,27 +186,18 @@ async function backToDefault(): Promise<void> {
       v-if="languagePresets.length"
       class="chips"
       :aria-label="t('duplicatesModule.rules.heading')"
+      data-testid="dup-rules-languages"
     >
-      <li v-for="p in languagePresets" :key="p.code" class="language-chip">
-        {{ p.name }}
-        <UiIconButton
-          icon="close"
-          size="sm"
-          :label="t('duplicatesModule.rules.remove', { name: p.name })"
-          @click="setLanguages(myLanguages.filter((c) => c !== p.code))"
-        />
-      </li>
+      <li v-for="p in languagePresets" :key="p.code" class="language-chip">{{ p.name }}</li>
     </ul>
     <p v-else class="muted">{{ t('duplicatesModule.rules.none') }}</p>
-    <UiSelect
-      :model-value="null"
-      :options="languageOptions"
-      :placeholder="t('duplicatesModule.rules.add')"
-      :aria-label="t('duplicatesModule.rules.add')"
-      :fit="false"
-      searchable
-      @update:model-value="$event && setLanguages([...myLanguages, $event as string])"
-    />
+    <RouterLink
+      :to="{ name: 'settings', query: { section: 'languages' } }"
+      class="link"
+      data-testid="dup-rules-change-languages"
+    >
+      {{ t('duplicatesModule.rules.change') }}
+    </RouterLink>
 
     <section class="policy" aria-labelledby="dup-policy-heading" data-testid="dup-policy">
       <h2 id="dup-policy-heading" class="heading">{{ t('duplicatesModule.policy.heading') }}</h2>
@@ -394,10 +372,13 @@ async function backToDefault(): Promise<void> {
   align-items: center;
   gap: var(--fm-space-1);
   height: 28px;
-  padding-block: 0;
-  padding-inline: var(--fm-space-3) var(--fm-space-1);
+  padding: 0 var(--fm-space-3);
   border: 1px solid var(--fm-control-border);
   border-radius: 999px;
+}
+.link {
+  color: var(--fm-fg);
+  text-decoration: underline;
 }
 .policy {
   margin-top: var(--fm-space-8);

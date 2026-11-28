@@ -26,9 +26,12 @@
     "remove": "Entfernen"
   },
   "language": {
-    "label": "Sprache",
+    "label": "Sprache der App",
     "system": "System ({name})",
     "hint": "System folgt der Sprache deines Computers; Englisch, wenn die App sie nicht hat."
+  },
+  "languagePicker": {
+    "add": "Sprache hinzufügen"
   },
   "errors": {
     "notFound": "Das Gesuchte wurde nicht gefunden.",
@@ -1429,6 +1432,7 @@
       "sources": "Quellen",
       "activation": "Aktivierung",
       "appearance": "Darstellung",
+      "languages": "Sprachen",
       "catalogs": "Online-Kataloge",
       "advanced": "Erweitert",
       "localApi": "Lokale API",
@@ -1628,7 +1632,27 @@
     "lead": {
       "activation": "Wie die Schaltfläche „Aktivieren“ arbeitet und was mit aktiven Schriften geschieht, wenn das Fenster schließt.",
       "appearance": "Farben und Sprache. Schriftmuster zeichnen immer in der Textfarbe des Themas auf seinem Papier.",
+      "languages": "Die Sprachen, in denen du arbeitest, stehen überall zuerst, wo Sprachen aufgelistet sind: in den Filtern, im Menü der Beispieltexte und im Modul Duplikate.",
       "advanced": "Grenzen und Wartung. Die Vorgaben passen zu den meisten Bibliotheken."
+    },
+    "languages": {
+      "mineHeading": "Meine Sprachen",
+      "mineNote": "Zieh die Sprachen, die du am meisten nutzt, nach oben.",
+      "remove": "{name} entfernen",
+      "emptySystem": "Noch keine. Bis du eine hinzufügst, steht die Sprache deines Systems vorn: {names}.",
+      "emptyNone": "Noch keine. Die Sprache deines Systems ist nicht in der Liste, daher stehen die meistgenutzten Sprachen vorn.",
+      "restHeading": "Danach der Rest",
+      "restNote": "Sprachen, die du nicht gewählt hast, folgen: zuerst die meistgenutzten, dann alle anderen von A bis Z. Die ersten zehn der ganzen Liste stehen in den Filtern; die anderen hinter „Mehr zeigen“.",
+      "firstLabel": "Der Rest der ersten zehn",
+      "behind": "Hinter „Mehr zeigen“",
+      "others": {
+        "one": "dann {count} weitere: {names}",
+        "other": "dann {count} weitere, von A bis Z: {names}"
+      },
+      "othersMore": "dann {count} weitere, von A bis Z: {names} …",
+      "duplicatesTitle": "Duplikate nutzt diese Liste auch",
+      "duplicatesLine": "Eine Kopie, die als einzige eine deiner Sprachen abdeckt, wird nie zum Entfernen empfohlen.",
+      "openRules": "Regeln öffnen"
     }
   },
   "updates": {
@@ -2413,7 +2437,8 @@
     "languages": {
       "heading": "Meine Sprachen",
       "none": "Keine festgelegt",
-      "link": "Sprachen und Regeln ändern"
+      "link": "Sprachen ändern",
+      "rules": "Regeln für die Kopie, die bleibt"
     },
     "trash": {
       "windows": "Papierkorb",
@@ -2832,9 +2857,8 @@
     "rules": {
       "heading": "Meine Sprachen",
       "body": "Eine Kopie, die als einzige eine dieser Sprachen abdeckt, wird nie zum Entfernen empfohlen.",
-      "add": "Sprache hinzufügen",
-      "remove": "{name} entfernen",
-      "none": "Keine Sprache festgelegt."
+      "none": "Keine Sprache festgelegt.",
+      "change": "Unter Einstellungen › Sprachen ändern"
     },
     "policy": {
       "heading": "Welche Kopie bleibt",
@@ -2844,7 +2868,7 @@
         "title": "Sprachschutz",
         "on": "Immer an",
         "body": "Eine Kopie, die als einzige eine Ihrer Sprachen abdeckt, wird nie zum Entfernen empfohlen.",
-        "notSet": "Legen Sie oben Ihre Sprachen fest, damit der Schutz sie bewahren kann."
+        "notSet": "Lege deine Sprachen unter Einstellungen › Sprachen fest, damit der Schutz sie bewahren kann."
       },
       "rule": {
         "myLanguages": "Deckt mehr meiner Sprachen ab",

@@ -10,13 +10,14 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('Ctrl/Cmd+, opens Settings with its eight sections; Escape closes it', async ({ page }) => {
+test('Ctrl/Cmd+, opens Settings with its nine sections; Escape closes it', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+,');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   for (const name of [
     'Sources',
     'Activation',
     'Appearance',
+    'Languages',
     'Online catalogs',
     'Advanced',
     'Local API',
@@ -205,7 +206,10 @@ for (const scheme of ['light', 'dark'] as const) {
     for (const name of ['Preview cache size (MB)', 'Rescan sources every (minutes)'])
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);
     await tab(page, 'Appearance').click();
-    expect(await borderContrast(page, 'Language')).toBeGreaterThanOrEqual(3);
+    expect(await borderContrast(page, 'Language of the app')).toBeGreaterThanOrEqual(3);
+    // E58.2: the picker of Settings › Languages.
+    await tab(page, 'Languages').click();
+    expect(await borderContrast(page, 'Add a language')).toBeGreaterThanOrEqual(3);
   });
 }
 

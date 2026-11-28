@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Settings (boards 11 and 15, E57.3): the shell alone. A 232 px navigation on the surface
-// colour with the title and the eight sections as a vertical tab list, and beside it the
+// colour with the title and the nine sections as a vertical tab list, and beside it the
 // panel: the open section (a component of its own under components/settings/), at most
 // 760 px wide (Sources keeps its 920). No top bar: the x icon button in the panel's top
 // corner and Esc close the view. The open section is in the URL
@@ -12,6 +12,7 @@ import ActivationSettings from '../components/settings/ActivationSettings.vue';
 import AdvancedSettings from '../components/settings/AdvancedSettings.vue';
 import AppearanceSettings from '../components/settings/AppearanceSettings.vue';
 import CatalogsSettings from '../components/settings/CatalogsSettings.vue';
+import LanguagesSettings from '../components/settings/LanguagesSettings.vue';
 import LocalApiSettings from '../components/settings/LocalApiSettings.vue';
 import McpSettings from '../components/settings/McpSettings.vue';
 import SourcesSettings from '../components/settings/SourcesSettings.vue';
@@ -40,6 +41,7 @@ const sections = [
   { id: 'sources', icon: 'folder', component: SourcesSettings },
   { id: 'activation', icon: 'power', component: ActivationSettings },
   { id: 'appearance', icon: 'sun', component: AppearanceSettings },
+  { id: 'languages', icon: 'languages', component: LanguagesSettings },
   { id: 'catalogs', icon: 'globe', component: CatalogsSettings },
   { id: 'advanced', icon: 'sliders', component: AdvancedSettings },
   { id: 'localApi', icon: 'code', component: LocalApiSettings },

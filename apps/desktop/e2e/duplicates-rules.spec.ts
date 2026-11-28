@@ -15,20 +15,25 @@ const rules = (page: Page) => page.getByRole('list', { name: 'Rules, most import
 const order = (page: Page) => rules(page).locator(':scope > li .rule-name').allTextContents();
 const preview = (page: Page) => page.getByTestId('dup-policy-preview');
 
-test('sets a language through the searchable picker', async ({ page }) => {
+test('the rules page shows the languages but does not edit them; its link opens Settings › Languages', async ({
+  page,
+}) => {
   await open(page);
-  const picker = page.getByRole('combobox', { name: 'Add a language' });
-  await picker.click();
+  // E58.2: the editor moved to Settings › Languages.
+  await expect(page.getByRole('combobox', { name: 'Add a language' })).toHaveCount(0);
+  await expect(page.getByTestId('dup-guard')).toContainText(
+    'Set your languages under Settings › Languages',
+  );
+  await page.getByTestId('dup-rules-change-languages').click();
+  await expect(page).toHaveURL(/#\/settings\?section=languages/);
+  await page.getByRole('combobox', { name: 'Add a language' }).click();
   await page.keyboard.type('Serb');
   await page.getByRole('option', { name: 'Serbian (Cyrillic)', exact: true }).click();
-  await expect(page.getByTestId('duplicates-rules').getByRole('list').first()).toContainText(
-    'Serbian (Cyrillic)',
-  );
+  await page.getByRole('button', { name: 'Open the rules' }).click();
+  await expect(page.getByTestId('dup-rules-languages')).toHaveText('Serbian (Cyrillic)');
+  await expect(page.getByTestId('dup-rules-languages').getByRole('button')).toHaveCount(0);
   await expect(page.getByTestId('dup-languages')).toHaveText('Serbian (Cyrillic)');
-  await expect(page.getByTestId('dup-guard')).not.toContainText('Set your languages above');
-  // Saved through the API at once: a reload keeps it.
-  await page.reload();
-  await expect(page.getByTestId('dup-languages')).toHaveText('Serbian (Cyrillic)');
+  await expect(page.getByTestId('dup-guard')).not.toContainText('Set your languages under');
 });
 
 test('the guard stands above the rules, always on and not a row', async ({ page }) => {

@@ -2,14 +2,15 @@
 // The Duplicates module (E56.11, board 14): a full view of its own, like Studio. A
 // 232 px navigation on the surface colour ("Library" to go back, then Overview,
 // Folders, Sets, Plan, History, Hidden copies and Remembered decisions with their counts, and at its foot
-// the languages the user works in with the link to the rules, E56.14); the section is in the
+// the languages the user works in, the link to edit them under Settings › Languages (E58.2)
+// and the link to the rules, E56.14); the section is in the
 // URL (`#/duplicates?section=sets`). The overview leads with the identical copies as
 // one decision, then the levels still to decide, then the top folder pairs. Every
 // number comes from the API; nothing moves until a plan is applied. The Plan, History,
 // Hidden copies and Remembered decisions are E56.15's; `#/duplicates?family=<id>` opens the
 // queue on the sets of one family (the "N copies" mark of a wall card or the family page).
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import type { DuplicateLevel, FolderPair } from '../api/types';
 import DuplicatesFolders from '../components/DuplicatesFolders.vue';
 import DuplicatesHistory from '../components/DuplicatesHistory.vue';
@@ -83,6 +84,9 @@ const sizeText = (bytes: number) =>
         maximumFractionDigits: 1,
       })
     : fileSizeText(bytes);
+
+/** Where the languages are edited (E58.2): Settings › Languages. */
+const LANGUAGE_SETTINGS = { name: 'settings', query: { section: 'languages' } } as const;
 
 const o = computed(() => store.overview);
 const myLanguages = computed(() => settings.settings?.myLanguages ?? []);
@@ -218,13 +222,17 @@ onMounted(async () => {
         <p class="foot-languages" data-testid="dup-languages">
           {{ languageNames || t('duplicatesModule.languages.none') }}
         </p>
+        <RouterLink :to="LANGUAGE_SETTINGS" class="link" data-testid="dup-change-languages">
+          {{ t('duplicatesModule.languages.link') }}
+        </RouterLink>
         <a
           href="#"
           class="link"
           :aria-current="section === 'rules' ? 'page' : undefined"
+          data-testid="dup-open-rules"
           @click.prevent="open('rules')"
         >
-          {{ t('duplicatesModule.languages.link') }}
+          {{ t('duplicatesModule.languages.rules') }}
         </a>
       </div>
     </nav>
@@ -249,9 +257,9 @@ onMounted(async () => {
           </p>
           <p v-if="o.myLanguages === 'notSet'" class="offer" data-testid="dup-offer-languages">
             {{ t('duplicatesModule.overview.noLanguages') }}
-            <a href="#" class="link" @click.prevent="open('rules')">
+            <RouterLink :to="LANGUAGE_SETTINGS" class="link">
               {{ t('duplicatesModule.overview.setLanguages') }}
-            </a>
+            </RouterLink>
           </p>
           <section
             v-if="o.identical.sets > 0"
@@ -437,6 +445,14 @@ onMounted(async () => {
 }
 .foot-languages {
   margin: 0 0 var(--fm-space-2);
+}
+/* Two links, one per line: edit the languages (Settings), open the rules. */
+.foot .link {
+  display: block;
+  width: fit-content;
+}
+.foot .link + .link {
+  margin-top: var(--fm-space-1);
 }
 .link {
   color: var(--fm-fg);

@@ -87,7 +87,7 @@ test('Appearance works by keyboard: themes, light or dark, and the language', as
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   await page.keyboard.press('Tab');
-  const language = page.getByRole('combobox', { name: 'Language' });
+  const language = page.getByRole('combobox', { name: 'Language of the app', exact: true });
   await expect(language).toBeFocused();
   await expect(language).toHaveAccessibleDescription(
     'System follows the language of your computer; English when the app does not have it.',

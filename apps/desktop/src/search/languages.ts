@@ -48,3 +48,29 @@ export function sampleLanguages(
 ): LanguagePreset[] {
   return presetsIn(presets, codes).filter((p) => !!(p.pangram ?? p.sampleGlyphs));
 }
+
+/** What follows the user's languages in the API's answer (Settings › Languages, E58.2). */
+export interface LanguageRest {
+  /** The languages that complete the first `LANGUAGES_SHOWN`, each with its place (1-based). */
+  first: { preset: LanguagePreset; place: number }[];
+  /** After the first ten: the most used ones, by name in the answer's order. */
+  more: LanguagePreset[];
+  /** After those: every other language, A to Z as the API answers them. */
+  others: LanguagePreset[];
+}
+
+/**
+ * Splits the API's answer after the user's languages (`group: 'mine'`): what completes the
+ * first `LANGUAGES_SHOWN` (the ten the filter drawer shows), then what is behind "Show
+ * more". It reads only each preset's place and `group`; it never sorts.
+ */
+export function languageRest(list: readonly LanguagePreset[]): LanguageRest {
+  const rest: LanguageRest = { first: [], more: [], others: [] };
+  list.forEach((preset, i) => {
+    if (preset.group === 'mine') return;
+    if (i < LANGUAGES_SHOWN) rest.first.push({ preset, place: i + 1 });
+    else if (preset.group === 'mostUsed') rest.more.push(preset);
+    else rest.others.push(preset);
+  });
+  return rest;
+}

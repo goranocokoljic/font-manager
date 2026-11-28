@@ -77,6 +77,7 @@ const SETTINGS_TABS = [
   'Sources',
   'Activation',
   'Appearance',
+  'Languages',
   'Online catalogs',
   'Advanced',
   'Local API',

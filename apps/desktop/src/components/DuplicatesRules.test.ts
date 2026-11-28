@@ -5,6 +5,7 @@ import { setClient, type FmClient } from '../api/client';
 import { createMockClient } from '../api/mock';
 import type { KeeperPolicy, PreviewKeeperPolicyRequest } from '../api/types';
 import { setLocale } from '../i18n';
+import { createAppRouter } from '../router';
 import { useDuplicatesStore } from '../stores/duplicates';
 import { useSettingsStore } from '../stores/settings';
 import DuplicatesRules from './DuplicatesRules.vue';
@@ -41,7 +42,12 @@ async function mountIt(policy?: KeeperPolicy) {
   if (policy) await client.updateSettings({ keeperPolicy: policy });
   await useSettingsStore().load();
   await useDuplicatesStore().load();
-  const wrapper = mount(DuplicatesRules, { attachTo: document.body });
+  const router = createAppRouter();
+  await router.push('/duplicates?section=rules');
+  const wrapper = mount(DuplicatesRules, {
+    global: { plugins: [router] },
+    attachTo: document.body,
+  });
   await settle();
   return wrapper;
 }
@@ -257,21 +263,21 @@ describe('Duplicates › languages and rules (E56.14)', () => {
     w.unmount();
   });
 
-  it('sets a language through the searchable picker and saves it at once', async () => {
-    const w = await mountIt();
-    expect(w.text()).toContain('Set your languages above');
-    const presets = await client.listLanguages();
-    const serbian = presets.find((p) => p.code === 'sr-Cyrl')!;
-    await w.get('[aria-label="Add a language"]').trigger('click');
-    await flushPromises();
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (o) => o.textContent?.trim() === serbian.name,
-    ) as HTMLElement;
-    option.click();
-    await settle();
-    expect((await client.getSettings()).myLanguages).toEqual(['sr-Cyrl']);
-    expect(w.text()).toContain(serbian.name);
-    expect(w.text()).not.toContain('Set your languages above');
+  it('shows the languages without editing them, and links to Settings › Languages (E58.2)', async () => {
+    let w = await mountIt();
+    expect(w.text()).toContain('No language is set.');
+    expect(w.text()).toContain('Set your languages under Settings › Languages');
+    w.unmount();
+    await client.updateSettings({ myLanguages: ['sr-Latn', 'pl'] });
+    w = await mountIt();
+    const chips = w.get('[data-testid="dup-rules-languages"]');
+    expect(chips.findAll('li').map((li) => li.text())).toEqual(['Serbian (Latin)', 'Polish']);
+    // No editor: no picker, no remove buttons among the languages.
+    expect(w.find('[aria-label="Add a language"]').exists()).toBe(false);
+    expect(chips.findAll('button')).toHaveLength(0);
+    const link = w.get('[data-testid="dup-rules-change-languages"]');
+    expect(link.attributes('href')).toBe('#/settings?section=languages');
+    expect(w.text()).not.toContain('Set your languages under');
     w.unmount();
   });
 });

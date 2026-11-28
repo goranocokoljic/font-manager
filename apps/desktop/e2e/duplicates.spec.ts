@@ -42,7 +42,12 @@ test('the module is a view of its own with its navigation and the overview', asy
   await expect(n.getByTestId('dup-count-sets')).toHaveText('2');
   await expect(n.getByTestId('dup-count-plan')).toHaveText('0');
   await expect(n.getByTestId('dup-languages')).toHaveText('None set');
-  await expect(n.getByRole('link', { name: 'Change languages and rules' })).toBeVisible();
+  // E58.2: the foot names the languages; one link edits them in Settings, one opens the rules.
+  await expect(n.getByRole('link', { name: 'Change languages' })).toHaveAttribute(
+    'href',
+    '#/settings?section=languages',
+  );
+  await expect(n.getByRole('link', { name: 'Rules for the copy to keep' })).toBeVisible();
 
   const overview = page.getByTestId('duplicates-overview');
   await expect(overview.getByRole('heading', { level: 2 })).toHaveText(
@@ -68,7 +73,7 @@ test('the module is a view of its own with its navigation and the overview', asy
   await expect(page).toHaveURL(/#\/$/);
 });
 
-test('with a language set the offer is gone and the languages stand at the foot', async ({
+test('the offer to set languages opens Settings › Languages; set there, the offer is gone and the languages stand at the foot', async ({
   page,
 }) => {
   await open(page);
@@ -76,9 +81,12 @@ test('with a language set the offer is gone and the languages stand at the foot'
     .getByTestId('dup-offer-languages')
     .getByRole('link', { name: 'Set languages' })
     .click();
-  const rules = page.getByTestId('duplicates-rules');
-  await rules.getByRole('combobox', { name: 'Add a language' }).click();
+  await expect(page).toHaveURL(/#\/settings\?section=languages/);
+  await page.getByRole('combobox', { name: 'Add a language' }).click();
   await page.getByRole('option', { name: 'Serbian (Cyrillic)', exact: true }).click();
+  await expect(page.getByTestId('my-languages')).toContainText('Serbian (Cyrillic)');
+  await page.getByRole('button', { name: 'Open the rules' }).click();
+  await expect(page).toHaveURL(/#\/duplicates\?section=rules/);
   await expect(nav(page).getByTestId('dup-languages')).toHaveText('Serbian (Cyrillic)');
   await nav(page).getByRole('button', { name: 'Overview' }).click();
   await expect(
