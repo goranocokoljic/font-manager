@@ -52,6 +52,7 @@ import { useSamplesStore } from '../stores/samples';
 import { specimenOf } from '../preview/tofu';
 import LayoutBlock from './LayoutBlock.vue';
 import { crossfade } from '../motion';
+import { localWidth } from '../preview/trueSize';
 
 const props = defineProps<{
   /** The layout to show; null while the presets load. */
@@ -257,8 +258,9 @@ async function toggleWidthLock(): Promise<void> {
   if (!props.setWidthLock || !props.layout) return;
   if (locked.value) return props.setWidthLock(false, null);
   const cell = page.value?.querySelector<HTMLElement>('.cell');
-  // Floored, so the locked track (same grid as now) fits the row it was measured in.
-  const now = cell ? Math.floor(cell.getBoundingClientRect().width) : null;
+  // Floored, so the locked track (same grid as now) fits the row it was measured in. In the
+  // paper's own pixels: it takes the interface size back (E58.7), the lock is true pixels.
+  const now = cell && page.value ? Math.floor(localWidth(cell, page.value)) : null;
   return props.setWidthLock(true, now);
 }
 
@@ -380,7 +382,7 @@ function blockFamily(i: number): string {
       </p>
       <div
         ref="page"
-        class="page"
+        class="page fm-true-size"
         :class="{ locked: pageStyle !== undefined, 'with-tools': hasTools, sheet: sheet !== null }"
         data-testid="layout-page"
         :data-page-width="sheet?.widthPx"

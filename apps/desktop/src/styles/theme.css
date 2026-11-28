@@ -182,6 +182,27 @@
 }
 
 /* Row and spacing metrics (one density: the compact one left in E51.5). */
+/*
+ * The interface size (E58.7, ADR 0029). The webview zooms everything by
+ * --fm-interface-factor (1, 1.25 or 1.5; set on the root by src/api/interfaceSize.ts);
+ * a surface that shows a font takes the zoom back with the one class fm-true-size,
+ * so its content is laid out in true pixels. Screen only: print is laid out at
+ * 100 per cent. A surface inside another one that took it back does not take it
+ * back again. DESIGN.md › Interface size names this class; no component writes
+ * its own rule.
+ */
+:root {
+  --fm-interface-factor: 1;
+}
+@media screen {
+  .fm-true-size {
+    zoom: calc(1 / var(--fm-interface-factor));
+  }
+  .fm-true-size .fm-true-size {
+    zoom: 1;
+  }
+}
+
 :root {
   --fm-row-height: 32px;
   --fm-side-row: 30px;

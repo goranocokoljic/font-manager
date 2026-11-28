@@ -205,8 +205,11 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   as choice cards under Appearance. A size enlarges everything the app draws except the fonts
   on show: a preview, a specimen, the waterfall, a glyph cell, Compare and the Studio paper
   are drawn at exactly the size the user set, at every interface size. Every such surface
-  takes the zoom back through the one shared piece the ADR "Interface size" names; a surface
-  that scales a specimen by a rule of its own is a bug. The chrome around a specimen scales
+  takes the zoom back through the one shared piece the ADR "Interface size" names: the class
+  `fm-true-size` (styles/theme.css) on the surface's root, screen only; a surface that scales
+  a specimen by a rule of its own is a bug, and `styles/trueSize.test.ts` fails on it. A
+  font's name or a glyph drawn at the size of the chrome (a menu option, the Studio rail, the
+  sort chip) is chrome and grows. The chrome around a specimen scales
   with the interface (a card's label and actions), so a wall shows fewer columns at a larger
   size. A larger interface is a smaller window: at 150% the smallest window has the room of
   667 x 467, so the inspector, then the sidebar, fold by themselves when there is no room

@@ -172,7 +172,7 @@ function onFocusIn(e: FocusEvent): void {
             @click="quickLook.close"
           />
         </header>
-        <div ref="body" class="body" :style="{ fontFamily: font }">
+        <div ref="body" class="body fm-true-size" :style="{ fontFamily: font }">
           <p class="sample" dir="auto">
             <SpecimenText :text="text" :missing="sampleShown.tofu" />
           </p>

@@ -9,6 +9,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
+import { localWidth, toTruePx, useInterfaceFactor } from '../preview/trueSize';
 import SpecimenText from './SpecimenText';
 
 const props = defineProps<{
@@ -73,12 +74,28 @@ const fit = ref(1);
 const MAX_REFITS = 8;
 let refits = 0;
 
-/** The text's exact width: `offsetWidth` rounds, and half a pixel is enough to cut it. */
-const lineWidth = () => line.value?.getBoundingClientRect().width ?? 0;
+const root = ref<HTMLElement | null>(null);
+const factor = useInterfaceFactor();
+/**
+ * The text's exact width in true pixels (the card takes the interface size back, E58.7):
+ * `offsetWidth` rounds, and half a pixel is enough to cut it.
+ */
+const lineWidth = () =>
+  line.value && root.value ? localWidth(line.value, root.value, factor.value) : 0;
+/** The width to fit in true pixels: `fitWidth` is the card's, in interface pixels. */
+const fitPx = () => (props.fitWidth ? toTruePx(props.fitWidth, factor.value) : 0);
 
 // Measured once the text has its face. Without layout (no width to measure) it stays 1.
 watch(
-  () => [props.text, props.sizePx, props.fitWidth, props.trackingEm, state.value] as const,
+  () =>
+    [
+      props.text,
+      props.sizePx,
+      props.fitWidth,
+      props.trackingEm,
+      state.value,
+      factor.value,
+    ] as const,
   () => {
     refits = 0;
     // A deferred card draws no text, a loading one draws it in the fallback: nothing worth
@@ -94,7 +111,7 @@ watch(
       return;
     }
     // The width is the text at the size it has now: take that size out first.
-    fit.value = Math.min(1, (props.fitWidth * fit.value) / width);
+    fit.value = Math.min(1, (fitPx() * fit.value) / width);
   },
   { flush: 'post', immediate: true },
 );
@@ -106,9 +123,9 @@ watch(
   fit,
   () => {
     const width = lineWidth();
-    if (!props.fitWidth || width <= props.fitWidth || refits >= MAX_REFITS) return;
+    if (!props.fitWidth || width <= fitPx() || refits >= MAX_REFITS) return;
     refits += 1;
-    fit.value *= Math.min(0.99, props.fitWidth / width);
+    fit.value *= Math.min(0.99, fitPx() / width);
   },
   { flush: 'post' },
 );
@@ -125,7 +142,8 @@ const style = computed(() => ({
 
 <template>
   <div
-    class="live"
+    ref="root"
+    class="live fm-true-size"
     :class="{ outline, wrap: wrapLines !== undefined }"
     dir="auto"
     data-testid="card-live-text"

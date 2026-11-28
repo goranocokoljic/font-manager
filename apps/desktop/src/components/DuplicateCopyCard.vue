@@ -91,7 +91,7 @@ const line = computed(() =>
   >
     <div class="head">
       <p
-        class="specimen"
+        class="specimen fm-true-size"
         :style="family ? { fontFamily: family } : undefined"
         :data-loaded="family ? 'true' : 'false'"
         dir="auto"

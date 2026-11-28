@@ -192,7 +192,7 @@ const xHeight = computed(() => {
       <div class="metrics">
         <svg
           v-if="specimen"
-          class="specimen"
+          class="specimen fm-true-size"
           data-testid="metrics-specimen"
           :width="SPECIMEN_WIDTH"
           :height="specimen.height"

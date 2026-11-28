@@ -113,7 +113,7 @@ function onToggle(face: FaceSummary): void {
           >
             <div class="text">
               <p
-                class="row-sample"
+                class="row-sample fm-true-size"
                 dir="auto"
                 :style="{
                   fontFamily: fontOf(r.face),

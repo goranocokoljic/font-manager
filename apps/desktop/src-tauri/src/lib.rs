@@ -72,6 +72,7 @@ use tauri_plugin_dialog::DialogExt;
 
 pub mod auto_update;
 pub mod help;
+pub mod interface_size;
 pub mod menu;
 pub mod quit_install;
 pub mod shell_text;
@@ -1802,8 +1803,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     // from the start (E58.1); `set_shell_locale` updates it. Handed over
     // before the subscription: nothing has read the order yet, so the UI's
     // stream does not start with a `languageOrderChanged`.
-    let locale = shell_text::initial_locale(state.current_settings().language);
+    let settings = state.current_settings();
+    let locale = shell_text::initial_locale(settings.language);
     state.set_system_language(&locale);
+    // The interface size (E58.7, ADR 0029): the webview's zoom from the start.
+    let zoom = settings.interface_size.factor();
     // Subscribe before the first command can run, so no event is missed; a
     // thread forwards the stream to the webview until the API drops it.
     let events = state.api.subscribe();
@@ -1811,7 +1815,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let tray = state.tray.clone();
     let core = state.core.clone();
     let on_quit = quit_install::OnQuit::new(state.quit_install.clone());
-    builder
+    interface_size::wire(builder, zoom)
         .manage(shell_text::ShellLocale::new(locale))
         .manage(on_quit)
         .manage(state)
@@ -1853,6 +1857,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             if let Some(core) = &core {
                 core.set_file_drag_support(fm_platform::drag::system().support());
             }
+            // Zoomed before the window is shown: the first paint is at the
+            // size set, with no jump (E58.7).
+            interface_size::apply_current(app.handle());
             launch(app.handle(), &support, std::env::args_os().skip(1));
             // The check at start and once a day, when the user turned it on
             // (E55.7); off its own thread, so the window never waits for it.
@@ -1870,6 +1877,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
                             if let Err(e) = handle.emit(EVENT_CHANNEL, event) {
                                 tracing::warn!(error = %e, "could not forward an event to the UI");
                             }
+                            interface_size::on_app_event(&handle, event);
                             window_raise::on_app_event(&handle, event, &batch[i + 1..]);
                         }
                     }

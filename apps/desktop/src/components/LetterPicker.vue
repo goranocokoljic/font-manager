@@ -128,7 +128,7 @@ function chooseAndClose(value: string | null, e?: MouseEvent): void {
             @change="choose(o.id)"
             @keydown.enter.prevent="chooseAndClose(o.id)"
           />
-          <svg v-if="o.example" class="example" viewBox="0 0 56 56" aria-hidden="true">
+          <svg v-if="o.example" class="example fm-true-size" viewBox="0 0 56 56" aria-hidden="true">
             <path :d="o.example" />
           </svg>
           <span class="label">{{ o.label }}</span>

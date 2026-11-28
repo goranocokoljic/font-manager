@@ -27,7 +27,7 @@ const to = FAMILY_WATERFALL_SIZES[FAMILY_WATERFALL_SIZES.length - 1];
     <p class="hint">{{ t('family.waterfallHint', { from, to }) }}</p>
     <div
       v-if="face"
-      class="lines"
+      class="lines fm-true-size"
       role="group"
       :aria-label="t('family.waterfallLines', { from, to })"
     >

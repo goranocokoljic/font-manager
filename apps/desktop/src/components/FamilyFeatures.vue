@@ -79,12 +79,18 @@ function reset(): void {
             {{ f.name ?? f.tag }}
             <span v-if="f.name" class="tag">{{ f.tag }}</span>
           </span>
-          <span class="sample off" :class="{ loading: !family }" :style="sampleStyle(f, 0)">{{
-            sample(f)
-          }}</span>
-          <span class="sample on" :class="{ loading: !family }" :style="sampleStyle(f, 1)">{{
-            sample(f)
-          }}</span>
+          <span
+            class="sample off fm-true-size"
+            :class="{ loading: !family }"
+            :style="sampleStyle(f, 0)"
+            >{{ sample(f) }}</span
+          >
+          <span
+            class="sample on fm-true-size"
+            :class="{ loading: !family }"
+            :style="sampleStyle(f, 1)"
+            >{{ sample(f) }}</span
+          >
           <UiSwitch :checked="on(f)" :aria-label="label(f)" :data-tag="f.tag" @click="toggle(f)" />
         </li>
       </ul>
@@ -106,12 +112,18 @@ function reset(): void {
               <span v-if="f.name" class="tag">{{ f.tag }}</span>
             </span>
             <template v-if="!f.automatic">
-              <span class="sample off" :class="{ loading: !family }" :style="sampleStyle(f, 0)">{{
-                sample(f)
-              }}</span>
-              <span class="sample on" :class="{ loading: !family }" :style="sampleStyle(f, 1)">{{
-                sample(f)
-              }}</span>
+              <span
+                class="sample off fm-true-size"
+                :class="{ loading: !family }"
+                :style="sampleStyle(f, 0)"
+                >{{ sample(f) }}</span
+              >
+              <span
+                class="sample on fm-true-size"
+                :class="{ loading: !family }"
+                :style="sampleStyle(f, 1)"
+                >{{ sample(f) }}</span
+              >
               <UiSwitch
                 :checked="on(f)"
                 :aria-label="label(f)"

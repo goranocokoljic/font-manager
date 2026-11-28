@@ -86,6 +86,7 @@ import {
   type PreviewSettings,
 } from '../stores/preview';
 import { sampleTextFor } from '../preview/sampleText';
+import { useInterfaceFactor } from '../preview/trueSize';
 import { deviceScale, useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
 import { t } from '../i18n';
 import { weightRangeText } from '../list/columns';
@@ -185,6 +186,13 @@ const specimenPx = computed(() =>
   rows.value ? props.preview.bodySizePx : wallSpecimenPx(sizePx.value, preset.value),
 );
 const wrapped = computed(() => WALL_PRESETS[preset.value].wrapped);
+/**
+ * The interface size (E58.7): the card is chrome and grows with it, the specimen inside
+ * takes it back (`.fm-true-size`) and is drawn at `specimenPx` true pixels. Laid out in
+ * the card, the specimen takes `specimenPx / factor` of the card's pixels.
+ */
+const factor = useInterfaceFactor();
+const specimenInCardPx = computed(() => specimenPx.value / factor.value);
 
 const columns = computed(() =>
   rows.value ? rowsColumns(width.value) : wallColumns(width.value, layoutPx.value, preset.value),
@@ -193,11 +201,15 @@ const cardWidth = computed(() => wallCardWidth(width.value, columns.value));
 /** The text of the reading rows, for the lines they give it. */
 const rowsText = computed(() => sampleTextFor(props.preview, '', previewStore.pangramText));
 const rowsLineCount = computed(() =>
-  rowsLines(rowsText.value, Math.max(0, cardWidth.value - 2 * WALL.paddingPx), specimenPx.value),
+  rowsLines(
+    rowsText.value,
+    Math.max(0, cardWidth.value - 2 * WALL.paddingPx),
+    specimenInCardPx.value,
+  ),
 );
 const cardHeight = computed(() =>
   rows.value
-    ? rowsCardHeight(rowsLineCount.value, specimenPx.value, props.preview.bodyLineHeight)
+    ? rowsCardHeight(rowsLineCount.value, specimenInCardPx.value, props.preview.bodyLineHeight)
     : wallCardHeight(layoutPx.value, preset.value),
 );
 const linePx = computed(() => cardHeight.value + WALL.gap);
@@ -381,14 +393,14 @@ const box = computed(() =>
   rows.value
     ? {
         width: Math.max(0, cardWidth.value - 2 * WALL.paddingPx),
-        height: rowsLineCount.value * specimenPx.value * wrapLineHeight.value,
+        height: rowsLineCount.value * specimenInCardPx.value * wrapLineHeight.value,
       }
     : specimenBox(cardWidth.value, layoutPx.value, preset.value),
 );
 const wrapLines = computed(() =>
   rows.value
     ? rowsLineCount.value
-    : wrappedLines(box.value.height, specimenPx.value, wrapLineHeight.value),
+    : wrappedLines(box.value.height, specimenInCardPx.value, wrapLineHeight.value),
 );
 
 /** A thumbnail, the size it was rendered at, and the sample it was cut from. */
@@ -405,7 +417,11 @@ const visible = computed(() => {
     const text =
       wrapped.value || preset.value === 'letters'
         ? p.text.trim()
-        : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
+        : specimenText(
+            p.text,
+            textWidth.value * factor.value,
+            wallSpecimenPx(textPx.value, preset.value),
+          );
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     const usesThumb = !!face && !palette && !liveText.value && !p.tofu.length;
@@ -469,7 +485,8 @@ function thumbStyle(thumb: HeldThumbnail | undefined) {
   const scale = specimenPx.value / thumb.renderPx;
   const w = thumb.width * scale;
   const h = thumb.height * scale;
-  const fit = specimenScale(w, h, box.value);
+  // `w` and `h` are true pixels, the box is the card's: fit in the card's pixels.
+  const fit = specimenScale(w / factor.value, h / factor.value, box.value);
   const size = `${w * fit}px ${h * fit}px`;
   return {
     maskImage: image,
@@ -728,7 +745,7 @@ function onToggle(row: ListRow): void {
             />
             <div
               v-else
-              class="thumb"
+              class="thumb fm-true-size"
               data-testid="thumbnail"
               :data-state="thumbState(item)"
               :style="thumbStyle(item.thumb)"
